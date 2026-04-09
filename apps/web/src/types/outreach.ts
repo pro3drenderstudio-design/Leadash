@@ -254,3 +254,9 @@ export interface CampaignStats {
   reply_rate: number;
   click_rate: number;
 }
+
+export interface CampaignAnalytics {
+  stats: CampaignStats;
+  daily: { date: string; sent: number; opened: number; replied: number }[];
+}
+

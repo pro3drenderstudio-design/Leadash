@@ -2,7 +2,7 @@ import { wsFetch } from "@/lib/workspace/client";
 import type {
   OutreachInboxSafe, OutreachList, OutreachCampaign, OutreachSequenceStep,
   ImportResult, CrmThread, OutreachTemplate, OutreachReply, OutreachCrmFilter,
-  CampaignEnrollmentRow,
+  CampaignEnrollmentRow, CampaignAnalytics,
 } from "@/types/outreach";
 
 const base = "/api/outreach";
@@ -71,6 +71,12 @@ export async function cloneCampaign(id: string): Promise<OutreachCampaign> {
 }
 
 // ─── Sequences ────────────────────────────────────────────────────────────────
+export const getSequence = (campaignId: string) =>
+  get<OutreachSequenceStep[]>(`${base}/sequences?campaign_id=${campaignId}`);
+
+export const saveSequence = (campaignId: string, steps: Partial<OutreachSequenceStep>[]) =>
+  saveSequenceSteps(campaignId, steps);
+
 export async function saveSequenceSteps(campaignId: string, steps: Partial<OutreachSequenceStep>[]): Promise<OutreachSequenceStep[]> {
   // Delete all existing and recreate
   const existing = await get<OutreachSequenceStep[]>(`${base}/sequences?campaign_id=${campaignId}`).catch(() => []);
@@ -106,6 +112,28 @@ export const ignoreReply      = (replyId: string)                         =>
 // ─── Warmup ───────────────────────────────────────────────────────────────────
 export const getWarmup         = () => get<{ inboxes: OutreachInboxSafe[]; stats: Record<string, number> }>(`${base}/warmup`);
 export const getWarmupActivity = (limit = 100) => get<unknown[]>(`${base}/warmup/activity?limit=${limit}`);
+
+// ─── Analytics & Triggers ─────────────────────────────────────────────────────
+export const getCampaignAnalytics = (campaignId: string) =>
+  get<CampaignAnalytics>(`${base}/campaigns/${campaignId}/analytics`);
+
+export const triggerSendBatch = (campaignId?: string) =>
+  post<{ queued: number }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
+
+export const sendTestEmail = (inboxId: string, to: string, subject: string, body: string) =>
+  post<{ ok: boolean }>(`${base}/inboxes/${inboxId}/test`, { to, subject, body });
+
+export const generateSequence = (campaignId: string, prompt: string) =>
+  post<OutreachSequenceStep[]>(`${base}/sequences/generate`, { campaign_id: campaignId, prompt });
+
+// ─── CRM extras ───────────────────────────────────────────────────────────────
+export const addNote           = (enrollmentId: string, note: string) =>
+  post(`${base}/crm/${enrollmentId}/notes`, { note });
+export const suggestReply      = (enrollmentId: string) =>
+  post<{ suggestion: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
+export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
+export const sendCrmReply      = (enrollmentId: string, body: string) =>
+  post<{ ok: boolean }>(`${base}/crm/${enrollmentId}/reply`, { body });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 export const getSettings    = () => get<Record<string, unknown>>(`${base}/settings`);
