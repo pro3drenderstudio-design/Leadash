@@ -120,11 +120,15 @@ export const getCampaignAnalytics = (campaignId: string) =>
 export const triggerSendBatch = (campaignId?: string) =>
   post<{ queued: number }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
 
-export const sendTestEmail = (inboxId: string, to: string, subject: string, body: string) =>
-  post<{ ok: boolean }>(`${base}/inboxes/${inboxId}/test`, { to, subject, body });
+export const sendTestEmail = (opts: {
+  inbox_id: string; to_email: string; subject_template: string;
+  body_template: string; lead_id?: string;
+}) => post<{ ok: boolean; error?: string }>(`${base}/inboxes/${opts.inbox_id}/test`, opts);
 
-export const generateSequence = (campaignId: string, prompt: string) =>
-  post<OutreachSequenceStep[]>(`${base}/sequences/generate`, { campaign_id: campaignId, prompt });
+export const generateSequence = (opts: {
+  product_name: string; target_audience: string; value_prop: string;
+  tone?: string; num_emails?: number; wait_days_between?: number;
+}) => post<{ steps?: { type: string; subject?: string; body?: string; wait_days?: number }[]; error?: string }>(`${base}/sequences/generate`, opts);
 
 // ─── CRM extras ───────────────────────────────────────────────────────────────
 export const addNote           = (enrollmentId: string, note: string) =>
