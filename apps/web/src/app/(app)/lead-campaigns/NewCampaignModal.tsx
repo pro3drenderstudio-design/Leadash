@@ -703,13 +703,17 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   ) : scrapeCampaigns.length === 0 ? (
                     <p className="text-white/30 text-sm py-2">No completed scrape campaigns yet. Run a Scrape Only campaign first.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="overflow-y-auto space-y-1.5 pr-0.5" style={{ maxHeight: 168 }}>
                       {scrapeCampaigns.map(c => (
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => set("sourceCampaignId", c.id)}
-                          className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                          onClick={() => {
+                            set("sourceCampaignId", c.id);
+                            // Clamp totalResults to campaign's lead count
+                            if (form.totalResults > c.total_scraped) set("totalResults", c.total_scraped);
+                          }}
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl border transition-colors ${
                             form.sourceCampaignId === c.id
                               ? "bg-blue-500/10 border-blue-500/40 text-white"
                               : "bg-white/4 border-white/10 text-white/70 hover:border-white/20"
