@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/api/track",
   "/api/outreach/unsubscribe",
   "/api/auth/callback",
+  "/api/cron",
 ];
 
 function isPublic(path: string) {
