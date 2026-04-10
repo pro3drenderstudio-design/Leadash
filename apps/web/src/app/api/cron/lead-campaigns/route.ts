@@ -4,9 +4,27 @@ import { processLeadCampaign } from "@/lib/lead-campaigns/processor";
 
 export const maxDuration = 60;
 
+function isAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  // Accept Bearer header (Vercel cron) OR ?secret= query param (cronjobs.org)
+  const header = req.headers.get("authorization");
+  if (header === `Bearer ${secret}`) return true;
+  const param = new URL(req.url).searchParams.get("secret");
+  if (param === secret) return true;
+  return false;
+}
+
+export async function GET(req: NextRequest) {
+  return handler(req);
+}
+
 export async function POST(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  return handler(req);
+}
+
+async function handler(req: NextRequest) {
+  if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
