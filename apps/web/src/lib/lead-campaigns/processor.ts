@@ -91,6 +91,78 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
     const { data: fresh } = await db.from("lead_campaigns").select("*").eq("id", campaignId).single();
     if (!fresh) return;
 
+    // ── Step 1b: Copy leads for verify_personalize if none exist yet ──────────
+    if (
+      (fresh.mode === "verify_personalize" || fresh.mode === "verify") &&
+      (fresh.source_campaign_id || fresh.source_list_id)
+    ) {
+      const { count: leadCount } = await db
+        .from("lead_campaign_leads")
+        .select("*", { count: "exact", head: true })
+        .eq("campaign_id", campaignId);
+
+      if ((leadCount ?? 0) === 0) {
+        if (fresh.source_campaign_id) {
+          const { data: sourceLeads } = await db
+            .from("lead_campaign_leads")
+            .select("email, first_name, last_name, company, title, website, linkedin_url, phone, location, industry, department, seniority, org_city, org_state, org_country, org_size, org_linkedin_url, org_description, org_founded_year")
+            .eq("campaign_id", fresh.source_campaign_id)
+            .eq("workspace_id", fresh.workspace_id)
+            .limit(fresh.max_leads);
+
+          if (sourceLeads?.length) {
+            type SrcLead = Record<string, unknown>;
+            await db.from("lead_campaign_leads").insert(
+              (sourceLeads as SrcLead[]).map(({ id: _id, created_at: _ca, ...l }) => ({
+                ...l,
+                workspace_id:        fresh.workspace_id,
+                campaign_id:         campaignId,
+                verification_status: fresh.verify_enabled ? "pending" : null,
+                personalized_line:   null,
+                added_to_list_id:    null,
+                added_at:            null,
+              })),
+            );
+
+            await db.from("lead_campaigns")
+              .update({ total_scraped: sourceLeads.length })
+              .eq("id", campaignId);
+          }
+        } else if (fresh.source_list_id) {
+          const { data: sourceLeads } = await db
+            .from("outreach_leads")
+            .select("email, first_name, last_name, company, title, website")
+            .eq("list_id", fresh.source_list_id)
+            .eq("status", "active")
+            .limit(fresh.max_leads);
+
+          if (sourceLeads?.length) {
+            type SrcLead = { email: string; first_name: string | null; last_name: string | null; company: string | null; title: string | null; website: string | null };
+            await db.from("lead_campaign_leads").insert(
+              (sourceLeads as SrcLead[]).map(l => ({
+                workspace_id:        fresh.workspace_id,
+                campaign_id:         campaignId,
+                email:               l.email,
+                first_name:          l.first_name,
+                last_name:           l.last_name,
+                company:             l.company,
+                title:               l.title,
+                website:             l.website,
+                verification_status: fresh.verify_enabled ? "pending" : null,
+              })),
+            );
+
+            await db.from("lead_campaigns")
+              .update({ total_scraped: sourceLeads.length })
+              .eq("id", campaignId);
+          }
+        }
+
+        // Leads just copied — let next cron tick handle verification
+        return;
+      }
+    }
+
     // ── Step 2: Email verification ────────────────────────────────────────────
     if (fresh.verify_enabled && reoonKey) {
       const { data: pending } = await db
