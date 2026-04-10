@@ -40,7 +40,7 @@ async function getStats(workspaceId: string) {
   const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [campaigns, inboxes, sends, replies, chartSends, chartReplies, recentEnrollments] = await Promise.all([
+  const [campaigns, inboxes, sends, replies, chartSends, chartReplies, recentReplies] = await Promise.all([
     db.from("outreach_campaigns").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).eq("status", "active"),
     db.from("outreach_inboxes").select("id", { count: "exact", head: true })
@@ -53,13 +53,19 @@ async function getStats(workspaceId: string) {
       .eq("workspace_id", workspaceId).gte("created_at", thirtyDaysAgo),
     db.from("outreach_replies").select("received_at")
       .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo),
-    // Recent CRM threads with replies for activity panel
-    db.from("outreach_enrollments")
-      .select(`id, crm_status, lead:outreach_leads!lead_id(email, first_name, last_name, company, title), campaign:outreach_campaigns!campaign_id(name)`)
+    // Recent replies joined to enrollment → lead + campaign in one query
+    db.from("outreach_replies")
+      .select(`
+        from_name, body_text, received_at, ai_category,
+        enrollment:outreach_enrollments!enrollment_id(
+          id, crm_status,
+          lead:outreach_leads!lead_id(email, first_name, last_name, company),
+          campaign:outreach_campaigns!campaign_id(name)
+        )
+      `)
       .eq("workspace_id", workspaceId)
-      .not("status", "eq", "active")
-      .order("enrolled_at", { ascending: false })
-      .limit(12),
+      .order("received_at", { ascending: false })
+      .limit(8),
   ]);
 
   const sentData    = sends.data ?? [];
