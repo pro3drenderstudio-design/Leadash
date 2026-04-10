@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getInboxes, deleteInbox, updateInbox, importInboxes } from "@/lib/outreach/api";
-import type { OutreachInboxSafe, InboxImportResult } from "@/types/outreach";
+import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
 
 // ─── CSV column mapping ────────────────────────────────────────────────────────
 
