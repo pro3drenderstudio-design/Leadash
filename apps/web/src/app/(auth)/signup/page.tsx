@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const [email, setEmail]       = useState("");
@@ -15,7 +15,7 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const supabase = createBrowserClient();
+    const supabase = createClient();
     const { error } = await supabase.auth.signUp({
       email, password,
       options: { data: { full_name: name }, emailRedirectTo: `${location.origin}/api/auth/callback` },

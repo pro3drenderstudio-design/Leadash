@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -19,7 +19,7 @@ export default function InvitePage() {
 
   async function accept() {
     setAccepting(true);
-    const supabase = createBrowserClient();
+    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       window.location.href = `/signup?inviteToken=${token}`;

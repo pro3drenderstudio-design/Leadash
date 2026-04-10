@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -12,7 +12,7 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const supabase = createBrowserClient();
+    const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setError(error.message); setLoading(false); }
     else setDone(true);
