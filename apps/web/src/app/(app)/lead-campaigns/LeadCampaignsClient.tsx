@@ -156,7 +156,11 @@ export default function LeadCampaignsClient() {
                       {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-white/70">{c.total_scraped.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-white/70">
+                    {c.mode === "verify_personalize"
+                      ? `${c.total_verified.toLocaleString()} verified`
+                      : c.total_scraped.toLocaleString()}
+                  </td>
                   <td className="px-4 py-3 text-right text-white/70">{c.credits_used.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-white/40 text-xs">
                     {new Date(c.created_at).toLocaleDateString()}
