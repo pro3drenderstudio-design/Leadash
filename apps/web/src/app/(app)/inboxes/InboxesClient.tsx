@@ -73,6 +73,16 @@ function remapCsv(text: string, mapping: Record<string, string>): string {
   return [headerLine, ...dataLines].join("\n");
 }
 
+function parseCsvRows(text: string): Record<string, string>[] {
+  const lines = text.split("\n").filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  return lines.slice(1).map((line) => {
+    const cells = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""]));
+  });
+}
+
 const CSV_TEMPLATE_HEADERS = "email,smtp_host,smtp_user,smtp_pass,label,smtp_port,imap_host,imap_port,daily_limit,timezone,send_window_start,send_window_end,warmup_target";
 const CSV_TEMPLATE_ROWS = [
   "you@gmail.com,smtp.gmail.com,you@gmail.com,your-app-password,My Gmail,587,,993,50,America/New_York,09:00,17:00,50",
@@ -248,15 +258,13 @@ export default function InboxesClient() {
     setImporting(true);
     setImportResult(null);
 
-    let fileToSend = importFile;
-    // If mapping is active, remap CSV columns before uploading
-    if (showMapping && Object.keys(colMapping).length > 0) {
-      const text = await importFile.text();
-      const remapped = remapCsv(text, colMapping);
-      fileToSend = new File([remapped], importFile.name, { type: "text/csv" });
-    }
+    const rawText = await importFile.text();
+    const csvText = (showMapping && Object.keys(colMapping).length > 0)
+      ? remapCsv(rawText, colMapping)
+      : rawText;
+    const rows = parseCsvRows(csvText);
 
-    const result = await importInboxes(fileToSend);
+    const result = await importInboxes(rows);
     setImportResult(result);
     setImporting(false);
     if (result.imported > 0) {
