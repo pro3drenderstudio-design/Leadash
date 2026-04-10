@@ -344,7 +344,7 @@ export default function InboxesClient() {
           >
             Import CSV
           </button>
-          <Link href="/admin/outreach/inboxes/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+          <Link href="/inboxes/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
             + Add Inbox
           </Link>
         </div>

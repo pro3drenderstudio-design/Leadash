@@ -179,7 +179,7 @@ export default function CampaignWizardClient() {
     })));
     await enrollLeads(campaign.id, selectedLists);
 
-    router.push(`/admin/outreach/campaigns/${campaign.id}?enrolled=1`);
+    router.push(`/campaigns/${campaign.id}?enrolled=1`);
   }
 
   const STEP_LABELS = ["Settings", "Leads", "Sequence", "Review"];
@@ -222,7 +222,7 @@ export default function CampaignWizardClient() {
                   </div>
                 </label>
               ))}
-              {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/admin/outreach/inboxes/new" className="text-blue-400">Add one first.</a></p>}
+              {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/inboxes/new" className="text-blue-400">Add one first.</a></p>}
             </div>
           </div>
 
@@ -313,7 +313,7 @@ export default function CampaignWizardClient() {
               </div>
             </label>
           ))}
-          {!lists.length && <p className="text-white/30 text-sm">No lead lists. <a href="/admin/outreach/leads" className="text-blue-400">Create one first.</a></p>}
+          {!lists.length && <p className="text-white/30 text-sm">No lead lists. <a href="/leads" className="text-blue-400">Create one first.</a></p>}
         </div>
       )}
 

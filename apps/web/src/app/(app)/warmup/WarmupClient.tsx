@@ -102,7 +102,7 @@ export default function WarmupClient() {
 
       {inboxes.length === 0 ? (
         <div className="text-center py-16 text-white/30">
-          <p>No inboxes yet. <a href="/admin/outreach/inboxes/new" className="text-blue-400">Add an inbox first.</a></p>
+          <p>No inboxes yet. <a href="/inboxes/new" className="text-blue-400">Add an inbox first.</a></p>
         </div>
       ) : (
         <>

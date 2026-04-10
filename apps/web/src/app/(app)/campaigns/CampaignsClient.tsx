@@ -59,7 +59,7 @@ export default function CampaignsClient() {
           <h1 className="text-xl font-bold text-white">Campaigns</h1>
           <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
         </div>
-        <Link href="/admin/outreach/campaigns/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+        <Link href="/campaigns/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
           + New Campaign
         </Link>
       </div>
@@ -120,7 +120,7 @@ export default function CampaignsClient() {
             return (
               <div key={c.id} className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px] gap-4 items-center px-5 py-4 border-b border-white/4 last:border-0 ${i % 2 === 0 ? "" : "bg-white/1"}`}>
                 <div>
-                  <Link href={`/admin/outreach/campaigns/${c.id}`} className="text-white font-medium text-sm hover:text-blue-300 transition-colors">{c.name}</Link>
+                  <Link href={`/campaigns/${c.id}`} className="text-white font-medium text-sm hover:text-blue-300 transition-colors">{c.name}</Link>
                   <div className="text-white/30 text-xs mt-0.5">{c.send_days?.join(", ")} · {c.send_start_time}–{c.send_end_time}</div>
                   {c.status === "active" && enrolled > 0 && (
                     <div className="mt-1.5 flex items-center gap-2">
@@ -155,7 +155,7 @@ export default function CampaignsClient() {
                   )}
                   {/* Edit */}
                   <Link
-                    href={`/admin/outreach/campaigns/${c.id}`}
+                    href={`/campaigns/${c.id}`}
                     title="Edit"
                     className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
                   >

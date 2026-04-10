@@ -465,7 +465,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Link href="/admin/outreach/campaigns" className="text-white/30 text-sm hover:text-white/60 transition-colors">Campaigns</Link>
+            <Link href="/campaigns" className="text-white/30 text-sm hover:text-white/60 transition-colors">Campaigns</Link>
             <span className="text-white/20">›</span>
             <span className="text-white/60 text-sm">{campaign.name}</span>
           </div>
