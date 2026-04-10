@@ -123,7 +123,7 @@ export default function CrmClient() {
   const loadThreads = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     const data = await getCrmThreads();
-    setThreads(data);
+    setThreads(data.threads);
     if (!silent) setLoading(false); else setRefreshing(false);
   }, []);
 
