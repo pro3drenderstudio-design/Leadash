@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
   {
@@ -33,7 +33,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
   const pathname = usePathname();
 
   async function signOut() {
-    const supabase = createBrowserClient();
+    const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
   }

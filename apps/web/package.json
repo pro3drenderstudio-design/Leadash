@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@azure/msal-node": "^5.1.2",
     "@google/generative-ai": "^0.24.1",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
     "bullmq": "^5.73.3",
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

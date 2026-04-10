@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     db.from("outreach_unsubscribes").select("email").eq("workspace_id", workspaceId),
     db.from("outreach_blacklist_domains").select("domain").eq("workspace_id", workspaceId),
   ]);
-  const unsubEmails   = new Set((unsubRes.data ?? []).map(u => u.email.toLowerCase()));
-  const blacklisted   = new Set((blacklistRes.data ?? []).map(b => b.domain.toLowerCase()));
+  const unsubEmails   = new Set((unsubRes.data ?? []).map((u: { email: string }) => u.email.toLowerCase()));
+  const blacklisted   = new Set((blacklistRes.data ?? []).map((b: { domain: string }) => b.domain.toLowerCase()));
 
   const result = { imported: 0, skipped_unsubscribed: 0, skipped_duplicate: 0, errors: [] as string[] };
   const toInsert: Record<string, unknown>[] = [];

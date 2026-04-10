@@ -52,12 +52,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .select("lead_id")
     .eq("campaign_id", campaignId);
 
-  const enrolledIds = new Set((existing ?? []).map(e => e.lead_id));
-  const toEnroll = leads.filter(l => !enrolledIds.has(l.id));
+  const enrolledIds = new Set((existing ?? []).map((e: { lead_id: string }) => e.lead_id));
+  const toEnroll = leads.filter((l: { id: string }) => !enrolledIds.has(l.id));
 
   if (!toEnroll.length) return NextResponse.json({ enrolled: 0 });
 
-  const rows = toEnroll.map(l => ({
+  const rows = toEnroll.map((l: { id: string }) => ({
     workspace_id: workspaceId,
     campaign_id:  campaignId,
     lead_id:      l.id,

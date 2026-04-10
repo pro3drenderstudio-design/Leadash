@@ -36,6 +36,7 @@ export interface OutreachInbox {
   warmup_ramp_per_week: number;
   status: InboxStatus;
   last_error?: string | null;
+  ms_subscription_id?: string | null;
   created_at: string;
   updated_at: string;
 }

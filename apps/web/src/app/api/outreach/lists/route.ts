@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Attach lead counts
-  const enriched = await Promise.all((data ?? []).map(async list => {
+  const enriched = await Promise.all((data ?? []).map(async (list: { id: string; [key: string]: unknown }) => {
     const { count } = await db
       .from("outreach_leads")
       .select("id", { count: "exact", head: true })

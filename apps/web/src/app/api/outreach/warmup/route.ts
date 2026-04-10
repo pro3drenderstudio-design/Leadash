@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
   ]);
 
   const sends7d        = stats.data ?? [];
-  const replied7d      = sends7d.filter(s => s.replied_at).length;
-  const rescuedFromSpam = sends7d.filter(s => s.rescued_from_spam).length;
+  const replied7d      = sends7d.filter((s: { replied_at?: string | null; rescued_from_spam?: boolean }) => s.replied_at).length;
+  const rescuedFromSpam = sends7d.filter((s: { replied_at?: string | null; rescued_from_spam?: boolean }) => s.rescued_from_spam).length;
 
   return NextResponse.json({
     inboxes: inboxes.data ?? [],

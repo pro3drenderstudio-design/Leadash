@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!workspaces?.length) return NextResponse.json({ workspaces: 0 });
 
   const results = await Promise.all(
-    workspaces.map(async ({ id }) => {
+    workspaces.map(async ({ id }: { id: string }) => {
       const r = await runSendBatch(id, 50, 1_000, 3_000).catch(e => ({ workspace_id: id, error: String(e) }));
       return { workspace_id: id, ...r };
     })

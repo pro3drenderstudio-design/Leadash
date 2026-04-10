@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .eq("status", "active")
     .in("lead_id",
-      (await db.from("outreach_leads").select("id").eq("workspace_id", workspaceId).eq("email", email)).data?.map(l => l.id) ?? []
+      (await db.from("outreach_leads").select("id").eq("workspace_id", workspaceId).eq("email", email)).data?.map((l: { id: string }) => l.id) ?? []
     );
 
   return new NextResponse(

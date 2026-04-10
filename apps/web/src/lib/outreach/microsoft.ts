@@ -76,14 +76,14 @@ export async function exchangeCode(code: string): Promise<MsTokens> {
 
 function getGraphClientFromToken(accessToken: string): GraphClient {
   return GraphClient.init({
-    authProvider: (done) => done(null, accessToken),
+    authProvider: (done: (err: Error | null, token: string) => void) => done(null, accessToken),
   });
 }
 
 export async function getGraphClient(inbox: OutreachInbox): Promise<GraphClient> {
   const accessToken  = inbox.oauth_access_token  ? decrypt(inbox.oauth_access_token)  : "";
   const refreshToken = inbox.oauth_refresh_token ? decrypt(inbox.oauth_refresh_token) : "";
-  const expiresAt    = inbox.oauth_expires_at ? new Date(inbox.oauth_expires_at) : new Date(0);
+  const expiresAt    = inbox.oauth_expiry ? new Date(inbox.oauth_expiry) : new Date(0);
 
   let token = accessToken;
 
@@ -98,7 +98,7 @@ export async function getGraphClient(inbox: OutreachInbox): Promise<GraphClient>
       token = result.accessToken;
       const updates = {
         oauth_access_token: encrypt(result.accessToken),
-        oauth_expires_at:   result.expiresOn?.toISOString() ?? null,
+        oauth_expiry:   result.expiresOn?.toISOString() ?? null,
         ...(((result as { refreshToken?: string }).refreshToken)
           ? { oauth_refresh_token: encrypt((result as { refreshToken?: string }).refreshToken!) }
           : {}),

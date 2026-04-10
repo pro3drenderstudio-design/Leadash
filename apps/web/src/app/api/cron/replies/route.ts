@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     .select("workspace_id")
     .eq("status", "active");
 
-  const uniqueIds: string[] = [...new Set((workspaces ?? []).map((r: { workspace_id: string }) => r.workspace_id))];
+  const uniqueIds: string[] = Array.from(new Set((workspaces ?? []).map((r: { workspace_id: string }) => r.workspace_id)));
   if (!uniqueIds.length) return NextResponse.json({ workspaces: 0 });
 
   const results = await Promise.all(

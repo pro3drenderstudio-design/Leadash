@@ -51,7 +51,7 @@ export async function getGmailClient(inbox: OutreachInbox) {
   oauth2.setCredentials({
     access_token:  accessToken,
     refresh_token: refreshToken,
-    expiry_date:   inbox.oauth_expires_at ? new Date(inbox.oauth_expires_at).getTime() : undefined,
+    expiry_date:   inbox.oauth_expiry ? new Date(inbox.oauth_expiry).getTime() : undefined,
   });
 
   // Refresh listener — persist new tokens back to Supabase
@@ -59,7 +59,7 @@ export async function getGmailClient(inbox: OutreachInbox) {
     const updates: Record<string, string | null> = {};
     if (tokens.access_token) {
       updates.oauth_access_token = encrypt(tokens.access_token);
-      updates.oauth_expires_at   = tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null;
+      updates.oauth_expiry   = tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null;
     }
     if (tokens.refresh_token) {
       updates.oauth_refresh_token = encrypt(tokens.refresh_token);

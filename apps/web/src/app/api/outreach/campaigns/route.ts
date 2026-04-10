@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Attach counts
-  const enriched = await Promise.all((campaigns ?? []).map(async (c) => {
+  const enriched = await Promise.all((campaigns ?? []).map(async (c: { id: string; [key: string]: unknown }) => {
     const [enrolled, sent, opened, replied] = await Promise.all([
       db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", c.id),
       db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).in("status", ["sent","opened"]).eq("enrollment_id", c.id),
