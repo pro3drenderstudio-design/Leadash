@@ -7,7 +7,7 @@ import {
   type ToneOfVoice, type PersonalizationDepth,
   type LeadCampaign,
 } from "@/types/lead-campaigns";
-import { wsGet, wsPost } from "@/lib/workspace/client";
+import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 
 interface Props {
   onClose:   () => void;
