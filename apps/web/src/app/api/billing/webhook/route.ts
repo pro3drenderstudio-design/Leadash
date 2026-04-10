@@ -3,9 +3,8 @@ import Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/billing/plans";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
 export async function POST(req: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
   const body      = await req.text();
   const signature = req.headers.get("stripe-signature")!;
 

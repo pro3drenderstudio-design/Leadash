@@ -3,9 +3,10 @@ import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { PLANS } from "@/lib/billing/plans";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+function getStripe() { return new Stripe(process.env.STRIPE_SECRET_KEY!); }
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
