@@ -247,6 +247,13 @@ export interface OutreachBlacklistDomain {
   created_at: string;
 }
 
+export interface WarmupPoolStats {
+  pool_size: number;
+  sent_today: number;
+  rescued_from_spam_7d: number;
+  reply_rate_7d: number;
+}
+
 export interface CsvFieldMapping {
   csv_column: string;
   db_field: string;
