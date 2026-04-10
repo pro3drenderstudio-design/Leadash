@@ -131,6 +131,24 @@ export default function LeadCampaignDetailClient() {
             </button>
           )}
           {campaign.status === "completed" && leads.length > 0 && (
+            <a
+              href={`/api/lead-campaigns/${id}/csv`}
+              onClick={e => {
+                // Attach workspace header via fetch, trigger download
+                e.preventDefault();
+                wsFetch(`/api/lead-campaigns/${id}/csv`).then(r => r.blob()).then(blob => {
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `leads-${id.slice(0,8)}.csv`;
+                  a.click();
+                });
+              }}
+              className="px-3 py-1.5 text-xs font-medium text-white/60 border border-white/15 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              Download CSV
+            </a>
+          )}
+          {campaign.status === "completed" && leads.length > 0 && (
             <button
               onClick={() => setShowExport(true)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"

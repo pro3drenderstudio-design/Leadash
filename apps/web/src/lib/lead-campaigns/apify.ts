@@ -10,57 +10,32 @@ export interface ApifyRunStatus {
   datasetId: string | null;
 }
 
-// All possible field names the actor may return (Apollo-style snake_case + camelCase fallbacks)
+// Exact field definitions from actor output schema
 export interface ApifyLeadRecord {
-  // Name — actor returns full_name or first_name/last_name
-  full_name?:                   string;
-  first_name?:                  string;
-  last_name?:                   string;
-  firstName?:                   string;  // camelCase fallback
-  lastName?:                    string;
-  name?:                        string;
-  // Title
-  person_title?:                string;
-  title?:                       string;
-  headline?:                    string;
-  // Company
-  organization_name?:           string;
-  company_name?:                string;
-  company?:                     string;
-  // Industry
-  organization_industry?:       string;
-  industry?:                    string;
-  // Website
-  organization_website_url?:    string;
-  website_url?:                 string;
-  website?:                     string;
-  // LinkedIn
-  person_linkedin_url?:         string;
-  linkedin_url?:                string;
-  linkedinUrl?:                 string;
-  // Company LinkedIn
-  organization_linkedin_url?:   string;
-  company_linkedin_url?:        string;
-  // Contact
-  email?:                       string;
-  phone?:                       string;
-  sanitized_phone?:             string;
-  // Location
-  city?:                        string;
-  state?:                       string;
-  country?:                     string;
-  location?:                    string;
+  // Person
+  firstName?:     string;   // Prospect's First Name
+  lastName?:      string;   // Prospect's Last Name
+  fullName?:      string;   // Prospect's Full Name
+  position?:      string;   // Job Title
+  seniority?:     string;   // Seniority Level
+  functional?:    string;   // Department
+  linkedinUrl?:   string;   // Prospect's LinkedIn
+  email?:         string;   // Prospect's Work Email
+  phone?:         string;   // Phone Number
+  city?:          string;   // Prospect's City
+  country?:       string;   // Prospect's Country
+  // Company (org)
+  orgName?:       string;   // Company Name
+  orgIndustry?:   string;   // Company Industry
+  orgWebsite?:    string;   // Company Website
+  orgLinkedinUrl?: string;  // Company LinkedIn
+  orgCity?:       string;   // Company City
+  orgState?:      string;   // Company State
+  orgCountry?:    string;   // Company Country
+  orgSize?:       string;   // Company Size (employee count)
+  orgDescription?: string;  // Company Description
+  orgFoundedYear?: string;  // Company Founded Year
   [key: string]: unknown;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-export function resolveField<T>(record: ApifyLeadRecord, ...keys: (keyof ApifyLeadRecord)[]): T | null {
-  for (const k of keys) {
-    const v = record[k];
-    if (v !== undefined && v !== null && v !== "") return v as T;
-  }
-  return null;
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────
@@ -130,33 +105,37 @@ export async function previewLeads(
 }
 
 export function mapApifyRecord(
-  record:        ApifyLeadRecord,
+  r:             ApifyLeadRecord,
   workspaceId:   string,
   campaignId:    string,
   verifyEnabled: boolean,
 ): Record<string, unknown> {
-  const firstName = resolveField<string>(record, "first_name", "firstName")
-    ?? resolveField<string>(record, "full_name", "name")?.split(" ")[0]
-    ?? null;
-  const lastName  = resolveField<string>(record, "last_name", "lastName")
-    ?? (resolveField<string>(record, "full_name", "name")?.split(" ").slice(1).join(" ") || null);
-
-  const location = resolveField<string>(record, "location", "city", "state", "country") ?? null;
+  const location = [r.city, r.country].filter(Boolean).join(", ") || null;
 
   return {
     workspace_id:        workspaceId,
     campaign_id:         campaignId,
-    email:               String(record.email ?? "").toLowerCase().trim(),
-    first_name:          firstName,
-    last_name:           lastName,
-    company:             resolveField(record, "organization_name", "company_name", "company"),
-    title:               resolveField(record, "person_title", "title", "headline"),
-    website:             resolveField(record, "organization_website_url", "website_url", "website"),
-    linkedin_url:        resolveField(record, "person_linkedin_url", "linkedin_url", "linkedinUrl"),
-    phone:               resolveField(record, "phone", "sanitized_phone"),
+    email:               String(r.email ?? "").toLowerCase().trim(),
+    first_name:          r.firstName ?? r.fullName?.split(" ")[0] ?? null,
+    last_name:           r.lastName  ?? r.fullName?.split(" ").slice(1).join(" ") || null,
+    company:             r.orgName   ?? null,
+    title:               r.position  ?? null,
+    website:             r.orgWebsite ?? null,
+    linkedin_url:        r.linkedinUrl ?? null,
+    phone:               r.phone     ?? null,
     location,
-    industry:            resolveField(record, "organization_industry", "industry"),
-    raw_data:            record,
+    industry:            r.orgIndustry ?? null,
+    // New fields
+    department:          r.functional  ?? null,
+    seniority:           r.seniority   ?? null,
+    org_city:            r.orgCity     ?? null,
+    org_state:           r.orgState    ?? null,
+    org_country:         r.orgCountry  ?? null,
+    org_size:            r.orgSize     ?? null,
+    org_linkedin_url:    r.orgLinkedinUrl ?? null,
+    org_description:     r.orgDescription ?? null,
+    org_founded_year:    r.orgFoundedYear ?? null,
+    raw_data:            r,
     verification_status: verifyEnabled ? "pending" : null,
   };
 }

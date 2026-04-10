@@ -45,6 +45,17 @@ export interface LeadCampaignLead {
   phone?:               string | null;
   location?:            string | null;
   industry?:            string | null;
+  // Extended fields
+  department?:          string | null;
+  seniority?:           string | null;
+  org_city?:            string | null;
+  org_state?:           string | null;
+  org_country?:         string | null;
+  org_size?:            string | null;
+  org_linkedin_url?:    string | null;
+  org_description?:     string | null;
+  org_founded_year?:    string | null;
+  // Enrichment
   verification_status?: VerificationStatus | null;
   verification_score?:  number | null;
   personalized_line?:   string | null;

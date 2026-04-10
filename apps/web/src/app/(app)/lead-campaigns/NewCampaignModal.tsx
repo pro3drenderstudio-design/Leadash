@@ -14,7 +14,7 @@ interface Props {
   balance:   number;
 }
 
-type Step = 1 | 2 | 3;
+type Step = 0 | 1 | 2 | 3;
 type TargetTab = "person" | "company" | "location" | "advanced";
 
 interface WizardState {
@@ -210,23 +210,15 @@ function StepBar({ step }: { step: Step }) {
 
 // ─── Preview table ────────────────────────────────────────────────────────────
 
-// Handles both camelCase and Apollo snake_case field names
+// Matches exact actor output field names
 interface PreviewLead {
-  // name
-  full_name?: string; first_name?: string; last_name?: string;
-  firstName?: string; lastName?: string; name?: string;
-  // title
-  person_title?: string; title?: string; headline?: string;
-  // company
-  organization_name?: string; company_name?: string; company?: string;
-  // industry
-  organization_industry?: string; industry?: string;
-  // location
-  location?: string; city?: string; state?: string; country?: string;
-  // links
-  person_linkedin_url?: string; linkedin_url?: string; linkedinUrl?: string;
-  organization_linkedin_url?: string; company_linkedin_url?: string;
-  organization_website_url?: string; website_url?: string; website?: string;
+  firstName?: string; lastName?: string; fullName?: string;
+  position?: string; seniority?: string; functional?: string;
+  linkedinUrl?: string; email?: string; phone?: string;
+  city?: string; country?: string;
+  orgName?: string; orgIndustry?: string; orgWebsite?: string;
+  orgLinkedinUrl?: string; orgCity?: string; orgState?: string;
+  orgCountry?: string; orgSize?: string;
   [key: string]: unknown;
 }
 
@@ -295,17 +287,17 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
         </thead>
         <tbody>
           {leads.map((l, i) => {
-            const firstName = pick(l, "first_name", "firstName") || pick(l, "full_name", "name").split(" ")[0];
-            const lastName  = pick(l, "last_name",  "lastName")  || pick(l, "full_name", "name").split(" ").slice(1).join(" ");
+            const firstName = pick(l, "firstName") || pick(l, "fullName").split(" ")[0];
+            const lastName  = pick(l, "lastName")  || pick(l, "fullName").split(" ").slice(1).join(" ");
             const name      = [firstName, lastName].filter(Boolean).join(" ") || "—";
             const initials  = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-            const title     = pick(l, "person_title", "title", "headline");
-            const company   = pick(l, "organization_name", "company_name", "company");
-            const industry  = pick(l, "organization_industry", "industry");
-            const location  = pick(l, "location", "city", "state", "country");
-            const personLi  = pick(l, "person_linkedin_url", "linkedin_url", "linkedinUrl");
-            const companyLi = pick(l, "organization_linkedin_url", "company_linkedin_url");
-            const website   = pick(l, "organization_website_url", "website_url", "website");
+            const title     = pick(l, "position");
+            const company   = pick(l, "orgName");
+            const industry  = pick(l, "orgIndustry");
+            const location  = [pick(l, "city"), pick(l, "country")].filter(Boolean).join(", ");
+            const personLi  = pick(l, "linkedinUrl");
+            const companyLi = pick(l, "orgLinkedinUrl");
+            const website   = pick(l, "orgWebsite");
 
             return (
               <tr key={i} className={`${i !== leads.length - 1 ? "border-b border-white/5" : ""}`}>
@@ -341,7 +333,7 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 export default function NewCampaignModal({ onClose, onCreated, balance }: Props) {
-  const [step, setStep]         = useState<Step>(1);
+  const [step, setStep]         = useState<Step>(0);
   const [tab, setTab]           = useState<TargetTab>("person");
   const [form, setForm]         = useState<WizardState>({ ...DEFAULT });
   const [previewing, setPreviewing] = useState(false);
@@ -384,9 +376,8 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
     setSaving(true);
     setError(null);
     try {
-      const mode: LeadCampaignMode = form.aiEnabled
-        ? (form.mode === "scrape" ? "full_suite" : "verify_personalize")
-        : form.mode;
+      // This wizard always scrapes; AI enrichment upgrades to full_suite
+      const mode: LeadCampaignMode = form.aiEnabled ? "full_suite" : "scrape";
 
       const data = await wsPost<{ id: string }>("/api/lead-campaigns", {
         name:                form.name,
@@ -423,7 +414,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             <div>
               <h2 className="text-lg font-bold text-white">New Lead Campaign</h2>
               <p className="text-white/40 text-sm mt-0.5">
-                Step {step} of 3: {step === 1 ? "Targeting Criteria" : step === 2 ? "AI Enrichment" : "Preview & Launch"}
+                {step === 0 ? "Choose your campaign type" : `Step ${step} of 3: ${step === 1 ? "Targeting Criteria" : step === 2 ? "AI Enrichment" : "Preview & Launch"}`}
               </p>
             </div>
             <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors mt-0.5">
@@ -432,11 +423,69 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
               </svg>
             </button>
           </div>
-          <StepBar step={step} />
+          {step > 0 && <StepBar step={step} />}
         </div>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* ── Step 0: Mode picker ── */}
+          {step === 0 && (
+            <div className="space-y-3">
+              <p className="text-white/50 text-sm">Select how you want to build your lead list.</p>
+
+              {/* Scrape Only */}
+              <button
+                type="button"
+                onClick={() => { set("mode", "scrape"); set("aiEnabled", false); setStep(1); }}
+                className="w-full text-left p-4 bg-white/4 border border-white/10 rounded-xl hover:border-blue-500/40 hover:bg-blue-500/5 transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/8 group-hover:bg-blue-500/15 flex items-center justify-center flex-shrink-0 transition-colors">
+                    <svg className="w-5 h-5 text-white/60 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-white font-semibold text-sm">Scrape Only</p>
+                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">1 cr / lead</span>
+                    </div>
+                    <p className="text-white/40 text-xs mt-1 leading-relaxed">
+                      Find new prospects matching your targeting criteria. Scrape emails, job titles, company info, and LinkedIn profiles.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Full Suite */}
+              <button
+                type="button"
+                onClick={() => { set("mode", "full_suite"); set("aiEnabled", true); setStep(1); }}
+                className="w-full text-left p-4 bg-blue-500/6 border border-blue-500/20 rounded-xl hover:border-blue-500/50 hover:bg-blue-500/10 transition-all group relative"
+              >
+                <div className="absolute top-3 right-3">
+                  <span className="text-xs font-bold text-blue-300 bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 rounded-full">Most Popular</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0 pr-24">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-white font-semibold text-sm">Scrape + AI Personalize</p>
+                      <span className="text-xs text-blue-400 font-medium bg-blue-500/15 px-2 py-0.5 rounded-full flex-shrink-0">4 cr / lead</span>
+                    </div>
+                    <p className="text-white/40 text-xs mt-1 leading-relaxed">
+                      Scrape leads then auto-generate a personalized first line for each prospect using AI — ready to drop into your sequences.
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
 
           {/* ── Step 1: Targeting ── */}
           {step === 1 && (
@@ -714,23 +763,25 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
 
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-white/8 px-6 py-4 flex items-center justify-between">
-          {/* Credit estimate */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+          {/* Credit estimate (hidden on step 0) */}
+          {step > 0 ? (
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <p className={`text-sm font-bold ${canAfford ? "text-white" : "text-red-400"}`}>
+                  {estimatedCost.toLocaleString()} Credits
+                </p>
+                <p className="text-white/30 text-xs">Estimated cost</p>
+              </div>
             </div>
-            <div>
-              <p className={`text-sm font-bold ${canAfford ? "text-white" : "text-red-400"}`}>
-                {estimatedCost.toLocaleString()} Credits
-              </p>
-              <p className="text-white/30 text-xs">Estimated cost</p>
-            </div>
-          </div>
+          ) : <div />}
 
           <div className="flex items-center gap-3">
-            {step > 1 && (
+            {step > 0 && (
               <button
                 type="button"
                 onClick={() => setStep(s => (s - 1) as Step)}
@@ -739,7 +790,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 Back
               </button>
             )}
-            {step < 3 ? (
+            {step === 0 ? null : step < 3 ? (
               <button
                 type="button"
                 onClick={() => { if (step === 1 && !form.name) { setError("Campaign name is required"); return; } setError(null); setStep(s => (s + 1) as Step); }}
