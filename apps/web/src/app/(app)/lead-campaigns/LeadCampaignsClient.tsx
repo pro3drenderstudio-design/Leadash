@@ -53,7 +53,7 @@ export default function LeadCampaignsClient() {
     return () => clearInterval(t);
   }, [campaigns]);
 
-  const totalScraped    = campaigns.reduce((s, c) => s + c.total_scraped, 0);
+  const totalScraped    = campaigns.filter(c => c.mode !== "verify_personalize").reduce((s, c) => s + c.total_scraped, 0);
   const totalValid      = campaigns.reduce((s, c) => s + c.total_valid, 0);
   const totalPersonalized = campaigns.reduce((s, c) => s + c.total_personalized, 0);
 
