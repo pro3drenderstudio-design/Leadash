@@ -56,11 +56,11 @@ export default function CampaignsClient() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white">Campaigns</h1>
+          <h1 className="text-xl font-bold text-white">Sequences</h1>
           <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
         </div>
         <Link href="/campaigns/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
-          + New Campaign
+          + New Sequence
         </Link>
       </div>
 
