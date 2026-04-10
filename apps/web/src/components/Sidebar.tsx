@@ -66,9 +66,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                 </linearGradient>
               </defs>
               <rect width="40" height="40" rx="10" fill="url(#sb)"/>
-              <rect x="10" y="8" width="6" height="24" rx="3" fill="white" opacity="0.95"/>
-              <rect x="10" y="26" width="16" height="6" rx="3" fill="white" opacity="0.95"/>
-              <path d="M23 8 L16.5 20 H21.5 L15 32" stroke="url(#sa)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white"/>
             </svg>
           </div>
           {/* Wordmark */}
