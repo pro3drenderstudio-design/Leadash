@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { LeadCampaign } from "@/types/lead-campaigns";
+import { wsGet } from "@/lib/workspace/client";
 import NewCampaignModal from "./NewCampaignModal";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -33,12 +34,12 @@ export default function LeadCampaignsClient() {
   const [showModal, setShowModal] = useState(false);
 
   async function load() {
-    const [cRes, bRes] = await Promise.all([
-      fetch("/api/lead-campaigns"),
-      fetch("/api/lead-campaigns/credits"),
-    ]);
-    if (cRes.ok) setCampaigns(await cRes.json());
-    if (bRes.ok) { const d = await bRes.json(); setBalance(d.balance); }
+    const [campaigns, credits] = await Promise.all([
+      wsGet<LeadCampaign[]>("/api/lead-campaigns"),
+      wsGet<{ balance: number }>("/api/lead-campaigns/credits"),
+    ]).catch(() => [[], { balance: 0 }] as const);
+    setCampaigns(campaigns as LeadCampaign[]);
+    setBalance((credits as { balance: number }).balance ?? 0);
     setLoading(false);
   }
 

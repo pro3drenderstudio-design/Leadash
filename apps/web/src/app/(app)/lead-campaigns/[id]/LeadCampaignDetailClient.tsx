@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { LeadCampaign, LeadCampaignLead } from "@/types/lead-campaigns";
+import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   "bg-white/8 text-white/50",
@@ -42,21 +43,21 @@ export default function LeadCampaignDetailClient() {
   const [cancelling, setCancelling]      = useState(false);
 
   const loadCampaign = useCallback(async () => {
-    const res = await fetch(`/api/lead-campaigns/${id}`);
-    if (res.ok) setCampaign(await res.json());
+    wsGet<LeadCampaign>(`/api/lead-campaigns/${id}`).then(setCampaign).catch(() => {});
   }, [id]);
 
   const loadLeads = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), limit: "50", filter, search });
-    const res = await fetch(`/api/lead-campaigns/${id}/leads?${params}`);
-    if (res.ok) { const d = await res.json(); setLeads(d.leads); setTotal(d.total); }
-    setLoading(false);
+    wsGet<{ leads: LeadCampaignLead[]; total: number }>(`/api/lead-campaigns/${id}/leads?${params}`)
+      .then(d => { setLeads(d.leads); setTotal(d.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [id, page, filter, search]);
 
   useEffect(() => {
     loadCampaign();
     loadLeads();
-    fetch("/api/outreach/lists").then(r => r.json()).then(d => setLists(d ?? []));
+    wsGet<{ id: string; name: string }[]>("/api/outreach/lists").then(d => setLists(d ?? [])).catch(() => {});
   }, [loadCampaign, loadLeads]);
 
   // Poll while running
@@ -75,23 +76,19 @@ export default function LeadCampaignDetailClient() {
     if (newListName) body.create_list_name = newListName;
     else body.list_id = exportListId;
 
-    const res  = await fetch(`/api/lead-campaigns/${id}/export`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
-    });
-    const data = await res.json();
-    setExportResult(res.ok
-      ? `Exported ${data.exported} leads (${data.skipped_duplicate} duplicates skipped)`
-      : `Error: ${data.error}`
-    );
+    try {
+      const data = await wsPost<{ exported: number; skipped_duplicate: number }>(`/api/lead-campaigns/${id}/export`, body);
+      setExportResult(`Exported ${data.exported} leads (${data.skipped_duplicate} duplicates skipped)`);
+      loadLeads(); setSelected(new Set());
+    } catch (e) {
+      setExportResult(`Error: ${e instanceof Error ? e.message : "Export failed"}`);
+    }
     setExporting(false);
-    if (res.ok) { loadLeads(); setSelected(new Set()); }
   }
 
   async function handleCancel() {
     setCancelling(true);
-    await fetch(`/api/lead-campaigns/${id}/cancel`, { method: "POST" });
+    await wsPost(`/api/lead-campaigns/${id}/cancel`, {}).catch(() => {});
     setCancelling(false);
     loadCampaign();
   }

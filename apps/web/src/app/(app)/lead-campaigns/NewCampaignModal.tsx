@@ -6,6 +6,7 @@ import {
   type LeadCampaignMode, type ApifyLeadScraperInput,
   type ToneOfVoice, type PersonalizationDepth,
 } from "@/types/lead-campaigns";
+import { wsPost } from "@/lib/workspace/client";
 
 interface Props {
   onClose:   () => void;
@@ -299,13 +300,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
     setPreviewDone(false);
     setError(null);
     try {
-      const res = await fetch("/api/lead-campaigns/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body:   JSON.stringify(buildApifyInput(form)),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Preview failed");
+      const data = await wsPost<{ leads: PreviewLead[] }>("/api/lead-campaigns/preview", buildApifyInput(form));
       setPreviewLeads(data.leads ?? []);
       setPreviewDone(true);
     } catch (err) {
@@ -326,22 +321,16 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
         ? (form.mode === "scrape" ? "full_suite" : "verify_personalize")
         : form.mode;
 
-      const res = await fetch("/api/lead-campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name:               form.name,
-          mode,
-          max_leads:          form.totalResults,
-          apify_actor_id:     "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
-          apify_input:        buildApifyInput(form),
-          verify_enabled:     false,
-          personalize_enabled: form.aiEnabled,
-          personalize_prompt:  form.aiEnabled ? form.offerAngle : null,
-        }),
+      const data = await wsPost<{ id: string }>("/api/lead-campaigns", {
+        name:                form.name,
+        mode,
+        max_leads:           form.totalResults,
+        apify_actor_id:      "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
+        apify_input:         buildApifyInput(form),
+        verify_enabled:      false,
+        personalize_enabled: form.aiEnabled,
+        personalize_prompt:  form.aiEnabled ? form.offerAngle : null,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to create campaign");
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create campaign");
