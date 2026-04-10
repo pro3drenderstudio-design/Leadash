@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
         .from("outreach_campaigns")
         .select("workspace_id")
         .eq("status", "active")
-      ).data?.map(r => r.workspace_id) ?? []
+      ).data?.map((r: { workspace_id: string }) => r.workspace_id) ?? []
     );
 
   if (!workspaces?.length) return NextResponse.json({ workspaces: 0 });
