@@ -277,7 +277,9 @@ export interface CampaignAnalytics {
   daily_activity: { date: string; sent: number; opened: number; replied: number }[];
   recent_activity: {
     send_id: string; status: string; opened_at?: string | null;
-    replied_at?: string | null; lead_name: string; lead_email: string;
+    replied_at?: string | null; sent_at: string; lead_name: string;
+    lead_email: string; company?: string | null; subject?: string | null;
+    step_order: number;
   }[];
   upcoming_queue: {
     enrollment_id: string; lead_name: string; lead_email: string;
