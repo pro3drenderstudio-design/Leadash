@@ -134,7 +134,7 @@ export const generateSequence = (opts: {
 export const addNote           = (enrollmentId: string, note: string) =>
   post(`${base}/crm/${enrollmentId}/notes`, { note });
 export const suggestReply      = (enrollmentId: string) =>
-  post<{ suggestion: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
+  post<{ suggestion: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
 export const sendCrmReply      = (enrollmentId: string, body: string) =>
   post<{ ok: boolean }>(`${base}/crm/${enrollmentId}/reply`, { body });
