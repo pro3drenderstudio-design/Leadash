@@ -817,8 +817,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                           <span className="text-white/50 text-xs">{formatDateTime(q.next_send_at)}</span>
                         )}
                       </div>
-                      <div className={`text-xs font-medium capitalize ${CRM_COLORS[q.crm_status] ?? "text-white/30"}`}>
-                        {q.crm_status.replace(/_/g, " ")}
+                      <div className={`text-xs font-medium capitalize ${CRM_COLORS[q.crm_status ?? ""] ?? "text-white/30"}`}>
+                        {(q.crm_status ?? "—").replace(/_/g, " ")}
                       </div>
                     </div>
                   );
