@@ -251,6 +251,7 @@ export interface ImportResult {
   imported: number;
   skipped_unsubscribed: number;
   skipped_duplicate: number;
+  failed_verification?: number;
   errors: string[];
 }
 
