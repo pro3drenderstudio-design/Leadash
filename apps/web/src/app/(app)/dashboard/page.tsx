@@ -96,34 +96,30 @@ async function getStats(workspaceId: string) {
   const firstNonZero = chartData.findIndex(d => d.sent > 0 || d.opened > 0 || d.replies > 0);
   const trimmed     = firstNonZero > 0 ? chartData.slice(firstNonZero) : chartData;
 
-  // Fetch latest reply for each recent enrollment
-  const rows = recentEnrollments.data ?? [];
-  const recentThreads: RecentThread[] = await Promise.all(
-    rows.map(async (row: Record<string, unknown>) => {
-      const { data: reply } = await db
-        .from("outreach_replies")
-        .select("from_name, body_text, received_at, ai_category")
-        .eq("enrollment_id", row.id as string)
-        .eq("is_filtered", false)
-        .order("received_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return {
-        enrollment_id: row.id as string,
-        crm_status:    (row.crm_status as string) ?? "neutral",
-        lead:          row.lead as RecentThread["lead"],
-        campaign:      row.campaign as RecentThread["campaign"],
-        latest_reply:  reply ?? null,
-        replied_at:    reply?.received_at ?? null,
-      };
-    }),
-  );
+  // Map flat reply rows into RecentThread shape — already sorted by received_at desc
+  type RawReply = {
+    from_name: string | null;
+    body_text: string | null;
+    received_at: string;
+    ai_category: string | null;
+    enrollment: {
+      id: string;
+      crm_status: string;
+      lead: { email: string; first_name: string | null; last_name: string | null; company: string | null } | null;
+      campaign: { name: string } | null;
+    } | null;
+  };
 
-  // Keep only threads with actual replies, sorted by most recent
-  const withReplies = recentThreads
-    .filter(t => t.latest_reply)
-    .sort((a, b) => new Date(b.replied_at!).getTime() - new Date(a.replied_at!).getTime())
-    .slice(0, 8);
+  const withReplies: RecentThread[] = (recentReplies.data ?? [])
+    .filter((r: RawReply) => r.enrollment)
+    .map((r: RawReply) => ({
+      enrollment_id: r.enrollment!.id,
+      crm_status:    r.enrollment!.crm_status ?? "neutral",
+      lead:          r.enrollment!.lead ? { ...r.enrollment!.lead, title: null } : null,
+      campaign:      r.enrollment!.campaign,
+      latest_reply:  { from_name: r.from_name, body_text: r.body_text, received_at: r.received_at, ai_category: r.ai_category },
+      replied_at:    r.received_at,
+    }));
 
   return {
     activeCampaigns: campaigns.count ?? 0,
