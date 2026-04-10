@@ -604,7 +604,7 @@ export default function InboxesClient() {
                   {importResult.errors.length > 0 && (
                     <div className="bg-red-500/8 border border-red-500/20 rounded-xl p-3 max-h-48 overflow-y-auto space-y-1">
                       <p className="text-red-400 text-xs font-semibold mb-1.5">{importResult.errors.length} error{importResult.errors.length !== 1 ? "s" : ""}:</p>
-                      {importResult.errors.map((e, i) => (
+                      {(importResult.errors as { row: number; email: string; message: string }[]).map((e, i) => (
                         <div key={i} className="text-red-300/70 text-xs">
                           {e.row > 0 ? `Row ${e.row}` : "Batch"} · <span className="text-red-300/50">{e.email}</span> — {e.message}
                         </div>

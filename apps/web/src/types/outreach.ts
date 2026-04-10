@@ -247,12 +247,18 @@ export interface OutreachBlacklistDomain {
   created_at: string;
 }
 
+export interface ImportError {
+  row: number;
+  email: string;
+  message: string;
+}
+
 export interface ImportResult {
   imported: number;
   skipped_unsubscribed: number;
   skipped_duplicate: number;
   failed_verification?: number;
-  errors: string[];
+  errors: (ImportError | string)[];
 }
 
 export interface CampaignStats {
