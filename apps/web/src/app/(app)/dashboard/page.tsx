@@ -18,8 +18,8 @@ async function getStats(workspaceId: string) {
       .eq("workspace_id", workspaceId).gte("received_at", startOfMonth),
   ]);
 
-  const sentCount   = sends.data?.filter(s => s.status === "sent" || s.status === "opened").length ?? 0;
-  const openedCount = sends.data?.filter(s => s.status === "opened").length ?? 0;
+  const sentCount   = sends.data?.filter((s: { status: string }) => s.status === "sent" || s.status === "opened").length ?? 0;
+  const openedCount = sends.data?.filter((s: { status: string }) => s.status === "opened").length ?? 0;
   const openRate    = sentCount > 0 ? Math.round((openedCount / sentCount) * 100) : 0;
 
   return {
