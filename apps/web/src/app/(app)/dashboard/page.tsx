@@ -282,7 +282,7 @@ export default async function DashboardPage() {
                 <p className="text-white/15 text-xs mt-1">Replies will appear here once prospects respond</p>
               </div>
             ) : (
-              <div className="divide-y" style={{ "--tw-divide-opacity": 1 } as React.CSSProperties}>
+              <div className="divide-y divide-white/5">
                 {stats.recentActivity.map(t => {
                   const lead    = t.lead;
                   const name    = lead ? [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.email.split("@")[0] : "Unknown";
