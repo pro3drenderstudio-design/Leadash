@@ -76,7 +76,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const lines: string[] = [
     CSV_HEADERS.join(","),
-    ...rows.map(r => CSV_HEADERS.map(h => escapeCell(r[h])).join(",")),
+    ...rows.map((r: Record<string, unknown>) => CSV_HEADERS.map(h => escapeCell(r[h])).join(",")),
   ];
 
   return new NextResponse(lines.join("\n"), {
