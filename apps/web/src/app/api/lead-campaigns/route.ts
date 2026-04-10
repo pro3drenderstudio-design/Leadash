@@ -8,11 +8,20 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const { data, error } = await db
+  const url    = new URL(req.url);
+  const mode   = url.searchParams.get("mode");
+  const status = url.searchParams.get("status");
+
+  let query = db
     .from("lead_campaigns")
     .select("*")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
+
+  if (mode)   query = query.eq("mode",   mode);
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
@@ -28,6 +37,7 @@ export async function POST(req: NextRequest) {
     name, mode, max_leads = 100,
     apify_actor_id, apify_input,
     source_list_id,
+    source_campaign_id,
     verify_enabled = false,
     personalize_enabled = false,
     personalize_prompt,
@@ -95,6 +105,37 @@ export async function POST(req: NextRequest) {
     description:      `Reserved for campaign "${name}"`,
     lead_campaign_id: campaign.id,
   });
+
+  // For verify_personalize mode from a previous campaign: copy its leads
+  if (mode === "verify_personalize" && source_campaign_id) {
+    const { data: sourceLeads } = await db
+      .from("lead_campaign_leads")
+      .select("email, first_name, last_name, company, title, website, linkedin_url, phone, location, industry, department, seniority, org_city, org_state, org_country, org_size, org_linkedin_url, org_description, org_founded_year")
+      .eq("campaign_id", source_campaign_id)
+      .eq("workspace_id", workspaceId)
+      .limit(max_leads);
+
+    if (sourceLeads?.length) {
+      type SrcLead = Record<string, unknown>;
+      await db.from("lead_campaign_leads").insert(
+        (sourceLeads as SrcLead[]).map(l => ({
+          ...l,
+          id:                  undefined,
+          workspace_id:        workspaceId,
+          campaign_id:         campaign.id,
+          verification_status: verify_enabled ? "pending" : null,
+          personalized_line:   null,
+          added_to_list_id:    null,
+          added_at:            null,
+          created_at:          undefined,
+        })),
+      );
+
+      await db.from("lead_campaigns")
+        .update({ status: "running", started_at: new Date().toISOString(), total_scraped: sourceLeads.length })
+        .eq("id", campaign.id);
+    }
+  }
 
   // For verify_personalize mode: load source list leads immediately
   if (mode === "verify_personalize" && source_list_id) {

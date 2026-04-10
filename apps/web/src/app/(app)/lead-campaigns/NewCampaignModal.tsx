@@ -5,8 +5,9 @@ import {
   INDUSTRIES, EMPLOYEE_SIZES, COUNTRIES,
   type LeadCampaignMode, type ApifyLeadScraperInput,
   type ToneOfVoice, type PersonalizationDepth,
+  type LeadCampaign,
 } from "@/types/lead-campaigns";
-import { wsPost } from "@/lib/workspace/client";
+import { wsGet, wsPost } from "@/lib/workspace/client";
 
 interface Props {
   onClose:   () => void;
@@ -48,6 +49,10 @@ interface WizardState {
   emailStatus:                   "verified" | "unverified" | "";
   hasEmail:                      boolean;
   hasPhone:                      boolean;
+  // Source (verify_personalize mode)
+  sourceType:       "upload" | "campaign";
+  sourceCampaignId: string;
+  uploadedFile:     File | null;
   // Enrichment
   aiEnabled:           boolean;
   offerAngle:          string;
@@ -70,6 +75,7 @@ const DEFAULT: WizardState = {
   personLocationStateIncludes: "", personLocationStateExcludes: "",
   personLocationCityIncludes: "", personLocationCityExcludes: "",
   totalResults: 20, startOffset: 0, emailStatus: "", hasEmail: true, hasPhone: false,
+  sourceType: "campaign", sourceCampaignId: "", uploadedFile: null,
   aiEnabled: true, offerAngle: "", toneOfVoice: "professional", personalizationDepth: "standard",
 };
 
@@ -341,15 +347,26 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
   const [previewDone, setPreviewDone]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [scrapeCampaigns, setScrapeCampaigns] = useState<LeadCampaign[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+
+  // Fetch previous scrape campaigns when user picks verify_personalize
+  useEffect(() => {
+    if (form.mode !== "verify_personalize" || step !== 1) return;
+    setLoadingCampaigns(true);
+    wsGet<LeadCampaign[]>("/api/lead-campaigns?mode=scrape&status=completed")
+      .then(d => setScrapeCampaigns(Array.isArray(d) ? d : []))
+      .catch(() => setScrapeCampaigns([]))
+      .finally(() => setLoadingCampaigns(false));
+  }, [form.mode, step]);
 
   function set<K extends keyof WizardState>(key: K, value: WizardState[K]) {
     setForm(f => ({ ...f, [key]: value }));
   }
 
   const costPerLead = form.mode === "scrape" ? CREDIT_COSTS.scrape
-    : form.aiEnabled && form.mode === "full_suite" ? CREDIT_COSTS.full_suite
-    : form.aiEnabled ? CREDIT_COSTS.verify_personalize
-    : CREDIT_COSTS.scrape;
+    : form.mode === "verify_personalize" ? CREDIT_COSTS.verify_personalize
+    : CREDIT_COSTS.full_suite;
 
   const estimatedCost = form.totalResults * costPerLead;
   const canAfford     = balance >= estimatedCost;
@@ -373,22 +390,53 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
 
   async function handleLaunch() {
     if (!form.name) { setError("Campaign name is required"); return; }
+    if (form.mode === "verify_personalize") {
+      if (form.sourceType === "campaign" && !form.sourceCampaignId) {
+        setError("Please select a source campaign"); return;
+      }
+      if (form.sourceType === "upload" && !form.uploadedFile) {
+        setError("Please upload a CSV file"); return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
-      // This wizard always scrapes; AI enrichment upgrades to full_suite
-      const mode: LeadCampaignMode = form.aiEnabled ? "full_suite" : "scrape";
-
-      const data = await wsPost<{ id: string }>("/api/lead-campaigns", {
-        name:                form.name,
-        mode,
-        max_leads:           form.totalResults,
-        apify_actor_id:      "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
-        apify_input:         buildApifyInput(form),
-        verify_enabled:      false,
-        personalize_enabled: form.aiEnabled,
-        personalize_prompt:  form.aiEnabled ? form.offerAngle : null,
-      });
+      if (form.mode === "verify_personalize") {
+        // For file upload, POST multipart; for campaign source, POST JSON
+        if (form.sourceType === "upload" && form.uploadedFile) {
+          const fd = new FormData();
+          fd.append("name", form.name);
+          fd.append("mode", "verify_personalize");
+          fd.append("max_leads", String(form.totalResults));
+          fd.append("personalize_enabled", "true");
+          fd.append("personalize_prompt", form.offerAngle);
+          fd.append("file", form.uploadedFile);
+          await wsPost<{ id: string }>("/api/lead-campaigns/upload", fd as unknown as Record<string, unknown>);
+        } else {
+          await wsPost<{ id: string }>("/api/lead-campaigns", {
+            name:                form.name,
+            mode:                "verify_personalize",
+            max_leads:           form.totalResults,
+            source_campaign_id:  form.sourceCampaignId,
+            verify_enabled:      true,
+            personalize_enabled: true,
+            personalize_prompt:  form.offerAngle,
+          });
+        }
+      } else {
+        // scrape or full_suite
+        const mode: LeadCampaignMode = form.aiEnabled ? "full_suite" : "scrape";
+        await wsPost<{ id: string }>("/api/lead-campaigns", {
+          name:                form.name,
+          mode,
+          max_leads:           form.totalResults,
+          apify_actor_id:      "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
+          apify_input:         buildApifyInput(form),
+          verify_enabled:      false,
+          personalize_enabled: form.aiEnabled,
+          personalize_prompt:  form.aiEnabled ? form.offerAngle : null,
+        });
+      }
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create campaign");
@@ -414,7 +462,9 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             <div>
               <h2 className="text-lg font-bold text-white">New Lead Campaign</h2>
               <p className="text-white/40 text-sm mt-0.5">
-                {step === 0 ? "Choose your campaign type" : `Step ${step} of 3: ${step === 1 ? "Targeting Criteria" : step === 2 ? "AI Enrichment" : "Preview & Launch"}`}
+                {step === 0 ? "Choose your campaign type"
+                  : step === 1 && form.mode === "verify_personalize" ? "Step 1 of 3: Lead Source"
+                  : `Step ${step} of 3: ${step === 1 ? "Targeting Criteria" : step === 2 ? "AI Enrichment" : "Preview & Launch"}`}
               </p>
             </div>
             <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors mt-0.5">
@@ -484,11 +534,160 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   </div>
                 </div>
               </button>
+
+              {/* Verify + Personalize */}
+              <button
+                type="button"
+                onClick={() => { set("mode", "verify_personalize"); set("aiEnabled", true); setStep(1); }}
+                className="w-full text-left p-4 bg-white/4 border border-white/10 rounded-xl hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/8 group-hover:bg-purple-500/15 flex items-center justify-center flex-shrink-0 transition-colors">
+                    <svg className="w-5 h-5 text-white/60 group-hover:text-purple-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-white font-semibold text-sm">Verify + Personalize</p>
+                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">3 cr / lead</span>
+                    </div>
+                    <p className="text-white/40 text-xs mt-1 leading-relaxed">
+                      Upload your own leads or use a previous scrape campaign. Verify emails and generate AI personalization lines.
+                    </p>
+                  </div>
+                </div>
+              </button>
             </div>
           )}
 
-          {/* ── Step 1: Targeting ── */}
-          {step === 1 && (
+          {/* ── Step 1: Source picker (verify_personalize only) ── */}
+          {step === 1 && form.mode === "verify_personalize" && (
+            <div className="space-y-5">
+              <div>
+                <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Campaign Name (required)</label>
+                <input
+                  value={form.name}
+                  onChange={e => set("name", e.target.value)}
+                  placeholder="e.g. Verified SaaS Founders"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                />
+              </div>
+
+              {/* Source type toggle */}
+              <div>
+                <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-2">Lead Source</label>
+                <div className="flex gap-2">
+                  {(["campaign", "upload"] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => set("sourceType", type)}
+                      className={`flex-1 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider border transition-colors ${
+                        form.sourceType === type
+                          ? "bg-white/10 border-white/30 text-white"
+                          : "bg-transparent border-white/10 text-white/40 hover:border-white/20"
+                      }`}
+                    >
+                      {type === "campaign" ? "Previous Campaign" : "Upload CSV"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* From campaign */}
+              {form.sourceType === "campaign" && (
+                <div>
+                  <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Select Scrape Campaign</label>
+                  {loadingCampaigns ? (
+                    <div className="flex items-center gap-2 text-white/30 text-sm py-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Loading campaigns...
+                    </div>
+                  ) : scrapeCampaigns.length === 0 ? (
+                    <p className="text-white/30 text-sm py-2">No completed scrape campaigns yet. Run a Scrape Only campaign first.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {scrapeCampaigns.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => set("sourceCampaignId", c.id)}
+                          className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                            form.sourceCampaignId === c.id
+                              ? "bg-blue-500/10 border-blue-500/40 text-white"
+                              : "bg-white/4 border-white/10 text-white/70 hover:border-white/20"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{c.name}</span>
+                            <span className="text-xs text-white/40">{c.total_scraped.toLocaleString()} leads</span>
+                          </div>
+                          <p className="text-xs text-white/30 mt-0.5">{new Date(c.created_at).toLocaleDateString()}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upload CSV */}
+              {form.sourceType === "upload" && (
+                <div>
+                  <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Upload CSV</label>
+                  <label className={`flex flex-col items-center justify-center gap-2 w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                    form.uploadedFile ? "border-blue-500/40 bg-blue-500/5" : "border-white/15 hover:border-white/25 bg-white/3"
+                  }`}>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      className="sr-only"
+                      onChange={e => set("uploadedFile", e.target.files?.[0] ?? null)}
+                    />
+                    {form.uploadedFile ? (
+                      <>
+                        <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-white text-sm font-medium">{form.uploadedFile.name}</p>
+                        <p className="text-white/30 text-xs">{(form.uploadedFile.size / 1024).toFixed(1)} KB — click to replace</p>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-8 h-8 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p className="text-white/50 text-sm">Drop a CSV or click to browse</p>
+                        <p className="text-white/25 text-xs">Must include an <code className="text-white/40">email</code> column</p>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
+
+              {/* Lead count */}
+              <div>
+                <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">
+                  Max Leads to Process ({form.totalResults.toLocaleString()})
+                </label>
+                <input
+                  type="range" min={10} max={1000} step={10}
+                  value={form.totalResults}
+                  onChange={e => set("totalResults", parseInt(e.target.value))}
+                  className="w-full accent-blue-500"
+                />
+                <div className="flex justify-between text-white/30 text-xs mt-1">
+                  <span>10</span><span>1,000</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 1: Targeting (scrape / full_suite only) ── */}
+          {step === 1 && form.mode !== "verify_personalize" && (
             <>
               <div>
                 <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Campaign Name (required)</label>
@@ -793,7 +992,16 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             {step === 0 ? null : step < 3 ? (
               <button
                 type="button"
-                onClick={() => { if (step === 1 && !form.name) { setError("Campaign name is required"); return; } setError(null); setStep(s => (s + 1) as Step); }}
+                onClick={() => {
+                  if (step === 1 && !form.name) { setError("Campaign name is required"); return; }
+                  if (step === 1 && form.mode === "verify_personalize" && form.sourceType === "campaign" && !form.sourceCampaignId) {
+                    setError("Please select a source campaign"); return;
+                  }
+                  if (step === 1 && form.mode === "verify_personalize" && form.sourceType === "upload" && !form.uploadedFile) {
+                    setError("Please upload a CSV file"); return;
+                  }
+                  setError(null); setStep(s => (s + 1) as Step);
+                }}
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 Next Step
