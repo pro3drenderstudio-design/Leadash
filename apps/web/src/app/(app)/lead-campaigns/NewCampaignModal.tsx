@@ -902,9 +902,17 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
               {tab === "advanced" && (
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">
-                      Number of Leads to Scrape ({form.totalResults.toLocaleString()})
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-white/40 text-xs font-semibold uppercase tracking-wider">
+                        Leads to Scrape ({form.totalResults.toLocaleString()})
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold tabular-nums ${canAfford ? "text-amber-400" : "text-red-400"}`}>
+                          {estimatedCost.toLocaleString()} cr
+                        </span>
+                        <span className="text-white/20 text-xs">/ {balance.toLocaleString()} available</span>
+                      </div>
+                    </div>
                     <input
                       type="range" min={10} max={1000} step={10}
                       value={form.totalResults}
@@ -912,9 +920,14 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       className="w-full accent-blue-500"
                     />
                     <div className="flex justify-between text-white/30 text-xs mt-1">
-                      <span>10 Leads</span>
-                      <span>1,000 Leads</span>
+                      <span>10</span>
+                      <span>1,000</span>
                     </div>
+                    {!canAfford && (
+                      <p className="text-xs text-red-400 mt-1.5">
+                        Insufficient credits — <a href="/lead-campaigns/credits" className="underline">buy more</a>
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
