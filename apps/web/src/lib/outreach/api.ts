@@ -121,7 +121,7 @@ export const triggerSendBatch = (campaignId?: string) =>
   post<{
     queued: number;
     sends: { sent: number; failed: number };
-    replies: { matched: number; details?: { error?: string }[] };
+    replies: { matched: number; details?: { email: string; fetched: number; matched: number; unmatched: number; error?: string }[] };
   }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
 
 export const sendTestEmail = (opts: {
