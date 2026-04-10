@@ -842,15 +842,15 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     </div>
                     <div>
                       <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Email Status</label>
-                      <select
+                      <SingleSelect
+                        options={[
+                          { value: "",           label: "Any" },
+                          { value: "verified",   label: "Verified Only" },
+                          { value: "unverified", label: "Unverified" },
+                        ]}
                         value={form.emailStatus}
-                        onChange={e => set("emailStatus", e.target.value as "" | "verified" | "unverified")}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
-                      >
-                        <option value="">Any</option>
-                        <option value="verified">Verified Only</option>
-                        <option value="unverified">Unverified</option>
-                      </select>
+                        onChange={v => set("emailStatus", v as "" | "verified" | "unverified")}
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
