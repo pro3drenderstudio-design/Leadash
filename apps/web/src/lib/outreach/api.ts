@@ -123,7 +123,7 @@ export const triggerSendBatch = (campaignId?: string) =>
 export const sendTestEmail = (opts: {
   inbox_id: string; to_email: string; subject_template: string;
   body_template: string; lead_id?: string;
-}) => post<{ ok: boolean; error?: string }>(`${base}/inboxes/${opts.inbox_id}/test`, opts);
+}) => post<{ ok: boolean; message?: string; error?: string }>(`${base}/inboxes/${opts.inbox_id}/test`, opts);
 
 export const generateSequence = (opts: {
   product_name: string; target_audience: string; value_prop: string;
