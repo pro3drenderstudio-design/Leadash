@@ -598,7 +598,7 @@ export default function InboxesClient() {
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-green-400 font-semibold">{importResult.imported} imported</span>
                     {importResult.skipped_duplicate > 0 && <span className="text-white/40">{importResult.skipped_duplicate} duplicate{importResult.skipped_duplicate !== 1 ? "s" : ""} skipped</span>}
-                    {importResult.failed_verification > 0 && <span className="text-amber-400">{importResult.failed_verification} failed verification</span>}
+                    {(importResult.failed_verification ?? 0) > 0 && <span className="text-amber-400">{importResult.failed_verification} failed verification</span>}
                   </div>
 
                   {importResult.errors.length > 0 && (
