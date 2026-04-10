@@ -129,27 +129,41 @@ function MultiSelect({
   label: string; options: readonly string[]; selected: string[];
   onChange: (v: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState("");
+  const ref       = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+    else setSearch("");
+  }, [open]);
+
   function toggle(v: string) {
     onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
   }
+
+  const filtered = search.trim()
+    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
 
   return (
     <div ref={ref} className="relative">
       <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">{label}</label>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm hover:border-white/20 transition-colors text-left"
       >
         <span className="text-white/40 truncate">
@@ -170,18 +184,32 @@ function MultiSelect({
         </div>
       )}
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-gray-900 border border-white/15 rounded-xl shadow-2xl">
-          {options.map(opt => (
-            <label key={opt} className="flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 cursor-pointer text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(opt)}
-                onChange={() => toggle(opt)}
-                className="w-3.5 h-3.5 accent-blue-500"
-              />
-              <span className={selected.includes(opt) ? "text-white" : "text-white/60"}>{opt}</span>
-            </label>
-          ))}
+        <div className="absolute z-50 mt-1 w-full bg-gray-900 border border-white/15 rounded-xl shadow-2xl">
+          <div className="p-2 border-b border-white/8">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition-colors"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-3 text-white/30 text-xs text-center">No results for "{search}"</p>
+            ) : filtered.map(opt => (
+              <label key={opt} className="flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={() => toggle(opt)}
+                  className="w-3.5 h-3.5 accent-blue-500"
+                />
+                <span className={selected.includes(opt) ? "text-white" : "text-white/60"}>{opt}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>

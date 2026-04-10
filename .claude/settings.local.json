@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(where jq:*)",
+      "Bash(where git:*)",
+      "Bash(git -C \"/c/Users/Abdul Malik/leadash\" status --short)",
+      "Bash(python -c \"import json; json.load\\(open\\('.claude/settings.local.json'\\)\\); print\\('JSON valid'\\)\")"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"/c/Users/Abdul Malik/leadash\" && git add -A && (git diff --cached --quiet || (git commit -m \"auto-deploy\" && git push origin main)) 2>/dev/null || true",
+            "statusMessage": "Deploying to Vercel...",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
