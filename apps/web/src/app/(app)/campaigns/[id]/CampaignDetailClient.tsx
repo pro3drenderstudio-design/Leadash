@@ -857,7 +857,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               onClick={async () => {
                 if (!addListId) return;
                 setAddingLeads(true); setAddLeadsResult(null);
-                const res = await enrollLeads(campaignId, addListId);
+                const res = await enrollLeads(campaignId, [addListId]);
                 setAddLeadsResult(`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`);
                 setAddingLeads(false);
                 setAddListId("");
