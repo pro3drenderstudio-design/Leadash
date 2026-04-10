@@ -122,6 +122,59 @@ function buildApifyInput(s: WizardState): ApifyLeadScraperInput {
   return input;
 }
 
+// ─── Single-select dropdown ───────────────────────────────────────────────────
+function SingleSelect({
+  options, value, onChange,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const selected = options.find(o => o.value === value) ?? options[0];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm hover:border-white/20 transition-colors text-left"
+      >
+        <span className="text-white/70">{selected.label}</span>
+        <svg className="w-4 h-4 text-white/30 flex-shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-gray-900 border border-white/15 rounded-xl shadow-2xl overflow-hidden">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-white/5 ${
+                opt.value === value ? "text-white bg-white/5" : "text-white/60"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Multi-select pill component ─────────────────────────────────────────────
 function MultiSelect({
   label, options, selected, onChange,
