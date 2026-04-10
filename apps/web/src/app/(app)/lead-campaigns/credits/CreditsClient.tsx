@@ -1,8 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CREDIT_PACKS } from "@/lib/billing/plans";
 import type { LeadCreditTransaction } from "@/types/lead-campaigns";
+
+// Static display data — no env vars, safe for client bundle
+const CREDIT_PACKS = [
+  { id: "pack_500",   credits: 500,   price_usd: 19,  label: "Starter pack" },
+  { id: "pack_2000",  credits: 2000,  price_usd: 59,  label: "Growth pack"  },
+  { id: "pack_5000",  credits: 5000,  price_usd: 129, label: "Best value"   },
+  { id: "pack_10000", credits: 10000, price_usd: 249, label: "Scale pack"   },
+] as const;
 
 const TX_LABELS: Record<string, string> = {
   grant:    "Monthly Grant",
@@ -29,7 +36,8 @@ export default function CreditsClient() {
   useEffect(() => {
     fetch("/api/lead-campaigns/credits")
       .then(r => r.json())
-      .then(d => { setBalance(d.balance); setTransactions(d.transactions ?? []); setLoading(false); });
+      .then(d => { setBalance(d.balance ?? 0); setTransactions(d.transactions ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   async function handlePurchase(packId: string) {
