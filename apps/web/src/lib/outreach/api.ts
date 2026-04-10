@@ -102,7 +102,7 @@ export const updateCrmStatus  = (enrollmentId: string, crm_status: string) =>
 export const getCrmUnmatched  = () =>
   get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/unmatched`);
 export const getCrmFilters    = ()                                         => get<OutreachCrmFilter[]>(`${base}/crm/filters`);
-export const createCrmFilter  = (d: Omit<OutreachCrmFilter, "id" | "workspace_id" | "created_at">) => post<OutreachCrmFilter>(`${base}/crm/filters`, d);
+export const createCrmFilter  = (d: Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">) => post<OutreachCrmFilter>(`${base}/crm/filters`, d);
 export const deleteCrmFilter  = (id: string)                              => del(`${base}/crm/filters`, { id });
 export const matchReply       = (replyId: string, enrollmentId: string)   =>
   patch(`${base}/crm/replies/${replyId}`, { enrollment_id: enrollmentId });

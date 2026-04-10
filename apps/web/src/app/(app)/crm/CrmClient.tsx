@@ -27,7 +27,7 @@ const FILTER_TYPES = [
   { value: "sender_domain",  label: "Sender domain" },
 ];
 
-const QUICK_FILTERS: Array<Omit<OutreachCrmFilter, "id" | "created_at">> = [
+const QUICK_FILTERS: Array<Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">> = [
   { name: "Auto-reply",    type: "phrase",         value: "auto-reply",     action: "exclude",      auto_status: null },
   { name: "Out of office", type: "phrase",         value: "out of office",  action: "auto_status",  auto_status: "ooo" },
   { name: "Unsubscribe",   type: "phrase",         value: "unsubscribe",    action: "exclude",      auto_status: null },
@@ -242,7 +242,7 @@ export default function CrmClient() {
   }
 
   // ── Filter actions ────────────────────────────────────────────────────────
-  async function handleAddFilter(data: Omit<OutreachCrmFilter, "id" | "created_at">) {
+  async function handleAddFilter(data: Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">) {
     setSavingFilter(true);
     const created = await createCrmFilter(data);
     setFilters((prev) => [...prev, created]);
