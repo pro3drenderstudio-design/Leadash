@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     .eq("status", "active")
     .eq("warmup_enabled", true);
 
-  const uniqueIds = [...new Set((workspaces ?? []).map((r: { workspace_id: string }) => r.workspace_id))];
+  const uniqueIds: string[] = [...new Set((workspaces ?? []).map((r: { workspace_id: string }) => r.workspace_id))];
   if (!uniqueIds.length) return NextResponse.json({ workspaces: 0 });
 
   // Run ramp on Mondays
