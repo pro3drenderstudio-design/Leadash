@@ -1,5 +1,5 @@
-import { Suspense } from "react";
-import CreditsClient from "./CreditsClient";
+import { redirect } from "next/navigation";
+
 export default function CreditsPage() {
-  return <Suspense fallback={null}><CreditsClient /></Suspense>;
+  redirect("/settings?tab=billing");
 }

@@ -19,8 +19,7 @@ const NAV = [
   {
     label: "Lead Gen",
     items: [
-      { href: "/lead-campaigns",         label: "Campaigns",  icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" },
-      { href: "/lead-campaigns/credits", label: "Credits",    icon: "M13 10V3L4 14h7v7l9-11h-7z" },
+      { href: "/lead-campaigns", label: "Campaigns", icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" },
     ],
   },
   {
