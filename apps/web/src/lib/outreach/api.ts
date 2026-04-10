@@ -22,7 +22,7 @@ export const createSmtpInbox  = (d: Record<string, unknown>) => post<OutreachInb
 export const updateInbox      = (id: string, d: Record<string, unknown>) => patch<OutreachInboxSafe>(`${base}/inboxes/${id}`, d);
 export const deleteInbox      = (id: string)                 => del(`${base}/inboxes/${id}`);
 
-export async function importInboxes(rows: Record<string, string>[]): Promise<{ imported: number; errors: string[] }> {
+export async function importInboxes(rows: Record<string, string>[]): Promise<ImportResult> {
   return post(`${base}/inboxes/bulk`, { rows });
 }
 
