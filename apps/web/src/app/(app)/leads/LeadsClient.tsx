@@ -90,11 +90,18 @@ export default function LeadsClient() {
       .map(([csv_column, db_field]) => ({ csv_column, db_field: db_field as CsvFieldMapping["db_field"] }));
 
     setImportResult(null);
-    const result = await importLeads(csvFile, listId, fieldMapping);
+    const text = await csvFile.text();
+    const lines = text.split("\n").filter(Boolean);
+    const headers = lines[0]?.split(",").map((h) => h.trim().replace(/^"|"$/g, "")) ?? [];
+    const rows: Record<string, string>[] = lines.slice(1).map((line) => {
+      const cells = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+      return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""]));
+    });
+    const result = await importLeads(rows, listId, fieldMapping);
     const parts = [`Imported ${result.imported} leads.`];
     if (result.skipped_unsubscribed) parts.push(`${result.skipped_unsubscribed} unsubscribed skipped.`);
     if (result.skipped_duplicate)   parts.push(`${result.skipped_duplicate} duplicates skipped.`);
-    if (result.errors?.length)      parts.push(`${result.errors.length} error(s): ${result.errors.slice(0, 3).join(" | ")}`);
+    if (result.errors?.length)      parts.push(`${result.errors.length} error(s): ${result.errors.slice(0, 3).map(e => typeof e === "string" ? e : e.message).join(" | ")}`);
     setImportResult(parts.join(" "));
     setCsvFile(null); setCsvHeaders([]); setMapping({}); setCustomNames({}); setImporting(null);
     if (fileRef.current) fileRef.current.value = "";
