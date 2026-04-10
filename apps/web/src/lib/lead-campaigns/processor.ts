@@ -112,12 +112,18 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
 
     // ── Step 3: AI Personalization ────────────────────────────────────────────
     if (fresh2.personalize_enabled && fresh2.personalize_prompt) {
-      const { data: unpersonalized } = await db
+      let personQuery = db
         .from("lead_campaign_leads")
         .select("id, first_name, last_name, title, company, industry, website")
         .eq("campaign_id", campaignId)
-        .is("personalized_line", null)
-        .limit(50);
+        .is("personalized_line", null);
+
+      // Optionally restrict to valid emails only
+      if (fresh2.personalize_valid_only) {
+        personQuery = personQuery.in("verification_status", ["valid", "catch_all"]);
+      }
+
+      const { data: unpersonalized } = await personQuery.limit(50);
 
       if (unpersonalized?.length) {
         const lines = await personalizeLeads(unpersonalized, fresh2.personalize_prompt);

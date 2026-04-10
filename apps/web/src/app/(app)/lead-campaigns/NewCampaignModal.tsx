@@ -54,10 +54,11 @@ interface WizardState {
   sourceCampaignId: string;
   uploadedFile:     File | null;
   // Enrichment
-  aiEnabled:           boolean;
-  offerAngle:          string;
-  toneOfVoice:         ToneOfVoice;
-  personalizationDepth: PersonalizationDepth;
+  aiEnabled:             boolean;
+  personalizeValidOnly:  boolean;
+  offerAngle:            string;
+  toneOfVoice:           ToneOfVoice;
+  personalizationDepth:  PersonalizationDepth;
 }
 
 const DEFAULT: WizardState = {
@@ -76,11 +77,16 @@ const DEFAULT: WizardState = {
   personLocationCityIncludes: "", personLocationCityExcludes: "",
   totalResults: 20, startOffset: 0, emailStatus: "", hasEmail: true, hasPhone: false,
   sourceType: "campaign", sourceCampaignId: "", uploadedFile: null,
-  aiEnabled: true, offerAngle: "", toneOfVoice: "professional", personalizationDepth: "standard",
+  aiEnabled: true, personalizeValidOnly: false, offerAngle: "", toneOfVoice: "professional", personalizationDepth: "standard",
 };
 
 function csvToArr(s: string): string[] {
   return s.split(",").map(x => x.trim()).filter(Boolean);
+}
+
+function cleanVal(v: string | null | undefined): string {
+  if (!v) return "";
+  return v.replace(/^\[['"]?|['"]?\]$/g, "").replace(/['"]/g, "").trim();
 }
 
 function buildApifyInput(s: WizardState): ApifyLeadScraperInput {
@@ -241,7 +247,7 @@ function IconLink({ href, title, children }: { href: string; title: string; chil
     <a
       href={href} target="_blank" rel="noopener noreferrer" title={title}
       onClick={e => e.stopPropagation()}
-      className="text-white/25 hover:text-white/60 transition-colors"
+      className="w-6 h-6 rounded-md bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 flex items-center justify-center text-blue-400 hover:text-blue-300 transition-all flex-shrink-0"
     >
       {children}
     </a>
@@ -299,7 +305,7 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
             const initials  = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
             const title     = pick(l, "position");
             const company   = pick(l, "orgName");
-            const industry  = pick(l, "orgIndustry");
+            const industry  = cleanVal(pick(l, "orgIndustry"));
             const location  = [pick(l, "city"), pick(l, "country")].filter(Boolean).join(", ");
             const personLi  = pick(l, "linkedinUrl");
             const companyLi = pick(l, "orgLinkedinUrl");
@@ -309,25 +315,25 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
               <tr key={i} className={`${i !== leads.length - 1 ? "border-b border-white/5" : ""}`}>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs text-white/50 flex-shrink-0">{initials}</div>
-                    <div>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center text-xs font-semibold text-white/60 flex-shrink-0">{initials}</div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-white font-medium">{name}</p>
-                        {personLi && <IconLink href={personLi} title="LinkedIn"><LinkedInIcon /></IconLink>}
+                        <p className="text-white font-medium text-xs truncate">{name}</p>
+                        {personLi && <IconLink href={personLi} title="LinkedIn Profile"><LinkedInIcon /></IconLink>}
                       </div>
-                      <p className="text-white/40">{title || <span className="text-white/20 italic">No title</span>}</p>
+                      <p className="text-white/40 text-xs truncate">{title || <span className="text-white/20 italic">No title</span>}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-white/70">{company || <span className="text-white/25 italic">Unknown</span>}</p>
+                    <p className="text-white/70 text-xs font-medium truncate max-w-[130px]">{company || <span className="text-white/25 italic">Unknown</span>}</p>
                     {companyLi && <IconLink href={companyLi} title="Company LinkedIn"><LinkedInIcon /></IconLink>}
                     {website   && <IconLink href={website.startsWith("http") ? website : `https://${website}`} title="Website"><GlobeIcon /></IconLink>}
                   </div>
-                  <p className="text-white/40">{industry || <span className="text-white/20 italic">Unknown industry</span>}</p>
+                  <p className="text-white/35 text-xs">{industry || <span className="text-white/20 italic">Unknown industry</span>}</p>
                 </td>
-                <td className="px-3 py-2.5 text-white/50">{location || "—"}</td>
+                <td className="px-3 py-2.5 text-white/40 text-xs">{location || "—"}</td>
               </tr>
             );
           })}
@@ -414,27 +420,29 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
           await wsPost<{ id: string }>("/api/lead-campaigns/upload", fd as unknown as Record<string, unknown>);
         } else {
           await wsPost<{ id: string }>("/api/lead-campaigns", {
-            name:                form.name,
-            mode:                "verify_personalize",
-            max_leads:           form.totalResults,
-            source_campaign_id:  form.sourceCampaignId,
-            verify_enabled:      true,
-            personalize_enabled: true,
-            personalize_prompt:  form.offerAngle,
+            name:                   form.name,
+            mode:                   "verify_personalize",
+            max_leads:              form.totalResults,
+            source_campaign_id:     form.sourceCampaignId,
+            verify_enabled:         true,
+            personalize_enabled:    true,
+            personalize_prompt:     form.offerAngle,
+            personalize_valid_only: form.personalizeValidOnly,
           });
         }
       } else {
         // scrape or full_suite
         const mode: LeadCampaignMode = form.aiEnabled ? "full_suite" : "scrape";
         await wsPost<{ id: string }>("/api/lead-campaigns", {
-          name:                form.name,
+          name:                   form.name,
           mode,
-          max_leads:           form.totalResults,
-          apify_actor_id:      "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
-          apify_input:         buildApifyInput(form),
-          verify_enabled:      false,
-          personalize_enabled: form.aiEnabled,
-          personalize_prompt:  form.aiEnabled ? form.offerAngle : null,
+          max_leads:              form.totalResults,
+          apify_actor_id:         "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
+          apify_input:            buildApifyInput(form),
+          verify_enabled:         mode === "full_suite",
+          personalize_enabled:    form.aiEnabled,
+          personalize_prompt:     form.aiEnabled ? form.offerAngle : null,
+          personalize_valid_only: form.personalizeValidOnly,
         });
       }
       onCreated();
@@ -877,6 +885,20 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     <p className="text-white/30 text-xs mt-1">Craft a compelling hook that the AI will use to personalize each first line. 200 chars max.</p>
                   </div>
 
+                  {/* Personalize which leads */}
+                  <div className="flex items-center justify-between p-3.5 bg-white/3 border border-white/8 rounded-xl">
+                    <div>
+                      <p className="text-white/70 text-sm font-medium">Personalize valid leads only</p>
+                      <p className="text-white/30 text-xs mt-0.5">Skip leads with invalid or unknown email status</p>
+                    </div>
+                    <div
+                      onClick={() => set("personalizeValidOnly", !form.personalizeValidOnly)}
+                      className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ml-4 ${form.personalizeValidOnly ? "bg-blue-600" : "bg-white/15"}`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${form.personalizeValidOnly ? "translate-x-5" : "translate-x-0"}`} />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Tone of Voice</label>
@@ -916,8 +938,8 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             </div>
           )}
 
-          {/* ── Step 3: Preview & Launch ── */}
-          {step === 3 && (
+          {/* ── Step 3: Preview & Launch (scrape/full_suite) ── */}
+          {step === 3 && form.mode !== "verify_personalize" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-white/4 border border-white/8 rounded-xl">
                 <div className="flex items-center gap-3">
@@ -927,7 +949,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     </svg>
                   </div>
                   <div>
-                    <p className="text-white font-medium text-sm">Previewing Leads</p>
+                    <p className="text-white font-medium text-sm">Preview Leads</p>
                     <p className="text-white/40 text-xs">Verify your search criteria before launching</p>
                   </div>
                 </div>
@@ -936,24 +958,56 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   onClick={() => { setStep(1); setPreviewLeads([]); setPreviewDone(false); }}
                   className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 rounded-lg px-3 py-1.5"
                 >
-                  Modify Search Filters
+                  Modify Filters
                 </button>
               </div>
 
               {!previewDone ? (
-                <div>
-                  <button
-                    type="button"
-                    onClick={handlePreview}
-                    disabled={previewing}
-                    className="w-full py-2.5 bg-white/6 hover:bg-white/10 border border-white/10 rounded-xl text-white/70 text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    {previewing ? "Fetching preview..." : "Fetch Preview (5 leads)"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={previewing}
+                  className="w-full py-2.5 bg-white/6 hover:bg-white/10 border border-white/10 rounded-xl text-white/70 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {previewing ? "Fetching preview..." : "Fetch Preview (5 leads)"}
+                </button>
               ) : (
                 <PreviewTable leads={previewLeads} loading={previewing} />
               )}
+
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+            </div>
+          )}
+
+          {/* ── Step 3: Confirm & Launch (verify_personalize) ── */}
+          {step === 3 && form.mode === "verify_personalize" && (
+            <div className="space-y-3">
+              <p className="text-white/50 text-sm">Review your campaign before launching.</p>
+
+              {/* Summary card */}
+              <div className="bg-white/3 border border-white/8 rounded-xl divide-y divide-white/6">
+                {[
+                  { label: "Campaign name", value: form.name },
+                  {
+                    label: "Lead source",
+                    value: form.sourceType === "campaign"
+                      ? (scrapeCampaigns.find(c => c.id === form.sourceCampaignId)?.name ?? "Previous campaign")
+                      : form.uploadedFile?.name ?? "Uploaded CSV",
+                  },
+                  { label: "Max leads",    value: `${form.totalResults.toLocaleString()} leads` },
+                  { label: "Operations",  value: "Email verification + AI personalization" },
+                  {
+                    label: "Personalize",
+                    value: form.personalizeValidOnly ? "Valid emails only" : "All leads",
+                  },
+                  { label: "Offer angle", value: form.offerAngle || "—" },
+                ].map(row => (
+                  <div key={row.label} className="flex items-start justify-between gap-4 px-4 py-2.5">
+                    <span className="text-white/35 text-xs">{row.label}</span>
+                    <span className="text-white/70 text-xs text-right">{row.value}</span>
+                  </div>
+                ))}
+              </div>
 
               {error && <p className="text-red-400 text-xs">{error}</p>}
             </div>
@@ -1021,7 +1075,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Start Scrape
+                    {form.mode === "verify_personalize" ? "Start Processing" : "Start Scrape"}
                   </>
                 )}
               </button>

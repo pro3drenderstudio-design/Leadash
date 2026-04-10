@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     verify_enabled = false,
     personalize_enabled = false,
     personalize_prompt,
+    personalize_valid_only = false,
   } = body;
 
   if (!name || !mode) {
@@ -82,9 +83,11 @@ export async function POST(req: NextRequest) {
       source_list_id:     source_list_id ?? null,
       verify_enabled,
       personalize_enabled,
-      personalize_prompt: personalize_prompt ?? null,
-      credits_reserved:   creditsNeeded,
-      status:             "pending",
+      personalize_prompt:     personalize_prompt ?? null,
+      personalize_valid_only: personalize_valid_only ?? false,
+      source_campaign_id:     source_campaign_id ?? null,
+      credits_reserved:       creditsNeeded,
+      status:                 "pending",
     })
     .select()
     .single();

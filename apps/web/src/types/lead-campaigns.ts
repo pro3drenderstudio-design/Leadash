@@ -25,6 +25,8 @@ export interface LeadCampaign {
   total_valid:         number;
   credits_reserved:    number;
   credits_used:        number;
+  personalize_valid_only: boolean;
+  source_campaign_id?: string | null;
   error_message?:      string | null;
   started_at?:         string | null;
   completed_at?:       string | null;
