@@ -192,14 +192,9 @@ export default async function DashboardPage() {
           <Link
             key={c.label}
             href={c.href}
-            className="group relative rounded-xl p-4 space-y-3 overflow-hidden transition-all hover:scale-[1.02]"
+            className="group relative rounded-xl p-4 space-y-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
-            onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 0 0 1px ${c.glow}, 0 8px 32px ${c.glow}`)}
-            onMouseLeave={e => (e.currentTarget.style.boxShadow = "")}
           >
-            {/* Glow blob */}
-            <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-2xl"
-              style={{ background: c.glow }} />
             <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={{ background: "rgba(255,255,255,0.05)" }}>
               <svg className={`w-4 h-4 ${c.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={c.icon} />
