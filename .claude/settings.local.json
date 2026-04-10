@@ -6,7 +6,8 @@
       "Bash(where jq:*)",
       "Bash(where git:*)",
       "Bash(git -C \"/c/Users/Abdul Malik/leadash\" status --short)",
-      "Bash(python -c \"import json; json.load\\(open\\('.claude/settings.local.json'\\)\\); print\\('JSON valid'\\)\")"
+      "Bash(python -c \"import json; json.load\\(open\\('.claude/settings.local.json'\\)\\); print\\('JSON valid'\\)\")",
+      "Bash(xargs grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
