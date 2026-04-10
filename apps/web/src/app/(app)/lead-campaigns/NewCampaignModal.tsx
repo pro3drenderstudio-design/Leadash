@@ -209,11 +209,61 @@ function StepBar({ step }: { step: Step }) {
 }
 
 // ─── Preview table ────────────────────────────────────────────────────────────
+
+// Handles both camelCase and Apollo snake_case field names
 interface PreviewLead {
+  // name
+  full_name?: string; first_name?: string; last_name?: string;
   firstName?: string; lastName?: string; name?: string;
-  title?: string; company?: string; industry?: string;
-  location?: string; city?: string; country?: string;
-  linkedinUrl?: string; website?: string;
+  // title
+  person_title?: string; title?: string; headline?: string;
+  // company
+  organization_name?: string; company_name?: string; company?: string;
+  // industry
+  organization_industry?: string; industry?: string;
+  // location
+  location?: string; city?: string; state?: string; country?: string;
+  // links
+  person_linkedin_url?: string; linkedin_url?: string; linkedinUrl?: string;
+  organization_linkedin_url?: string; company_linkedin_url?: string;
+  organization_website_url?: string; website_url?: string; website?: string;
+  [key: string]: unknown;
+}
+
+function pick(lead: PreviewLead, ...keys: (keyof PreviewLead)[]): string {
+  for (const k of keys) {
+    const v = lead[k];
+    if (v && typeof v === "string") return v;
+  }
+  return "";
+}
+
+function IconLink({ href, title, children }: { href: string; title: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href} target="_blank" rel="noopener noreferrer" title={title}
+      onClick={e => e.stopPropagation()}
+      className="text-white/25 hover:text-white/60 transition-colors"
+    >
+      {children}
+    </a>
+  );
+}
+
+function LinkedInIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253M3 12a8.96 8.96 0 00.284 2.253" />
+    </svg>
+  );
 }
 
 function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boolean }) {
@@ -245,24 +295,41 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
         </thead>
         <tbody>
           {leads.map((l, i) => {
-            const name = [l.firstName ?? l.name?.split(" ")[0], l.lastName ?? l.name?.split(" ").slice(1).join(" ")].filter(Boolean).join(" ") || "—";
-            const initials = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+            const firstName = pick(l, "first_name", "firstName") || pick(l, "full_name", "name").split(" ")[0];
+            const lastName  = pick(l, "last_name",  "lastName")  || pick(l, "full_name", "name").split(" ").slice(1).join(" ");
+            const name      = [firstName, lastName].filter(Boolean).join(" ") || "—";
+            const initials  = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+            const title     = pick(l, "person_title", "title", "headline");
+            const company   = pick(l, "organization_name", "company_name", "company");
+            const industry  = pick(l, "organization_industry", "industry");
+            const location  = pick(l, "location", "city", "state", "country");
+            const personLi  = pick(l, "person_linkedin_url", "linkedin_url", "linkedinUrl");
+            const companyLi = pick(l, "organization_linkedin_url", "company_linkedin_url");
+            const website   = pick(l, "organization_website_url", "website_url", "website");
+
             return (
               <tr key={i} className={`${i !== leads.length - 1 ? "border-b border-white/5" : ""}`}>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs text-white/50 flex-shrink-0">{initials}</div>
                     <div>
-                      <p className="text-white font-medium">{name}</p>
-                      <p className="text-white/40">{l.title || "No Title"}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-white font-medium">{name}</p>
+                        {personLi && <IconLink href={personLi} title="LinkedIn"><LinkedInIcon /></IconLink>}
+                      </div>
+                      <p className="text-white/40">{title || <span className="text-white/20 italic">No title</span>}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <p className="text-white/70">{l.company || "No Company"}</p>
-                  <p className="text-white/40">{l.industry || "Unknown Industry"}</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-white/70">{company || <span className="text-white/25 italic">Unknown</span>}</p>
+                    {companyLi && <IconLink href={companyLi} title="Company LinkedIn"><LinkedInIcon /></IconLink>}
+                    {website   && <IconLink href={website.startsWith("http") ? website : `https://${website}`} title="Website"><GlobeIcon /></IconLink>}
+                  </div>
+                  <p className="text-white/40">{industry || <span className="text-white/20 italic">Unknown industry</span>}</p>
                 </td>
-                <td className="px-3 py-2.5 text-white/50">{l.location ?? l.city ?? l.country ?? "—"}</td>
+                <td className="px-3 py-2.5 text-white/50">{location || "—"}</td>
               </tr>
             );
           })}

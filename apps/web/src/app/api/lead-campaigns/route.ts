@@ -141,8 +141,11 @@ export async function POST(req: NextRequest) {
           status:       "running",
           started_at:   new Date().toISOString(),
         }).eq("id", campaign.id);
-      } catch {
-        // Apify start failed — cron will retry
+      } catch (e) {
+        // Surface error but don't fail the whole request — processor will retry
+        await db.from("lead_campaigns").update({
+          error_message: e instanceof Error ? e.message : "Failed to start Apify run",
+        }).eq("id", campaign.id);
       }
     }
   }

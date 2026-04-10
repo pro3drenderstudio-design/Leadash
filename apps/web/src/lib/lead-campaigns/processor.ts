@@ -1,7 +1,7 @@
 // ─── Lead campaign background processor ──────────────────────────────────────
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { getApifyRunStatus, fetchApifyDataset, mapApifyRecord } from "./apify";
+import { startLeadScraperRun, getApifyRunStatus, fetchApifyDataset, mapApifyRecord } from "./apify";
 import { verifyEmails } from "./reoon";
 import { personalizeLeads } from "./gemini";
 import type { ApifyLeadScraperInput } from "@/types/lead-campaigns";
@@ -23,44 +23,49 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
 
   try {
     // ── Step 1: Check Apify run & ingest results ──────────────────────────────
-    if (
-      (campaign.mode === "scrape" || campaign.mode === "full_suite") &&
-      campaign.apify_run_id &&
-      campaign.total_scraped === 0
-    ) {
+    if (campaign.mode === "scrape" || campaign.mode === "full_suite") {
       if (!apifyKey) throw new Error("APIFY_API_KEY not configured");
 
-      const { status, datasetId } = await getApifyRunStatus(apifyKey, campaign.apify_run_id);
-
-      if (status === "RUNNING") return; // Check again next tick
-
-      if (status !== "SUCCEEDED" || !datasetId) {
-        throw new Error(`Apify run ended with status: ${status}`);
+      // If no run started yet, start one now (route may have failed silently)
+      if (!campaign.apify_run_id) {
+        const input = (campaign.apify_input ?? {}) as ApifyLeadScraperInput;
+        const runId = await startLeadScraperRun(apifyKey, { ...input, totalResults: campaign.max_leads });
+        await db.from("lead_campaigns")
+          .update({ apify_run_id: runId, status: "running", started_at: new Date().toISOString() })
+          .eq("id", campaignId);
+        return; // Poll again next tick
       }
 
-      // Fetch and insert leads
-      const items = await fetchApifyDataset(apifyKey, datasetId, campaign.max_leads);
-      const validItems = items
-        .filter(item => item.email && String(item.email).includes("@"))
-        .slice(0, campaign.max_leads);
+      if (campaign.total_scraped === 0) {
+        const { status, datasetId } = await getApifyRunStatus(apifyKey, campaign.apify_run_id);
 
-      if (validItems.length > 0) {
-        const rows = validItems.map(item =>
-          mapApifyRecord(item, campaign.workspace_id, campaignId, campaign.verify_enabled),
-        );
+        if (status === "RUNNING" || status === "TIMING-OUT") return; // Still running
 
-        // Insert in batches of 100
-        for (let i = 0; i < rows.length; i += 100) {
-          await db.from("lead_campaign_leads").insert(rows.slice(i, i + 100));
+        if (status !== "SUCCEEDED" || !datasetId) {
+          throw new Error(`Apify run ended with status: ${status}`);
         }
+
+        // Fetch and insert leads
+        const items = await fetchApifyDataset(apifyKey, datasetId, campaign.max_leads);
+        const validItems = items
+          .filter(item => item.email && String(item.email).includes("@"))
+          .slice(0, campaign.max_leads);
+
+        if (validItems.length > 0) {
+          const rows = validItems.map(item =>
+            mapApifyRecord(item, campaign.workspace_id, campaignId, campaign.verify_enabled),
+          );
+          for (let i = 0; i < rows.length; i += 100) {
+            await db.from("lead_campaign_leads").insert(rows.slice(i, i + 100));
+          }
+        }
+
+        await db.from("lead_campaigns")
+          .update({ total_scraped: validItems.length })
+          .eq("id", campaignId);
+
+        await consumeCredits(db, campaign, validItems.length, "scrape");
       }
-
-      await db.from("lead_campaigns")
-        .update({ total_scraped: validItems.length })
-        .eq("id", campaignId);
-
-      // Consume scrape credits
-      await consumeCredits(db, campaign, validItems.length, "scrape");
     }
 
     // Re-fetch for latest counts
