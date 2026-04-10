@@ -766,20 +766,44 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
               )}
 
               {/* Lead count */}
-              <div>
-                <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">
-                  Max Leads to Process ({form.totalResults.toLocaleString()})
-                </label>
-                <input
-                  type="range" min={10} max={1000} step={10}
-                  value={form.totalResults}
-                  onChange={e => set("totalResults", parseInt(e.target.value))}
-                  className="w-full accent-blue-500"
-                />
-                <div className="flex justify-between text-white/30 text-xs mt-1">
-                  <span>10</span><span>1,000</span>
-                </div>
-              </div>
+              {(() => {
+                const selectedCampaign = scrapeCampaigns.find(c => c.id === form.sourceCampaignId);
+                const sliderMax = form.mode === "verify_personalize" && selectedCampaign
+                  ? selectedCampaign.total_scraped
+                  : 1000;
+                const sliderStep = sliderMax <= 100 ? 1 : sliderMax <= 500 ? 5 : 10;
+                const cost = form.totalResults * costPerLead;
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-white/40 text-xs font-semibold uppercase tracking-wider">
+                        Max Leads ({form.totalResults.toLocaleString()}{selectedCampaign ? ` of ${selectedCampaign.total_scraped.toLocaleString()}` : ""})
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold tabular-nums ${canAfford ? "text-amber-400" : "text-red-400"}`}>
+                          {cost.toLocaleString()} cr
+                        </span>
+                        <span className="text-white/20 text-xs">/ {balance.toLocaleString()} available</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range" min={Math.min(10, sliderMax)} max={sliderMax} step={sliderStep}
+                      value={Math.min(form.totalResults, sliderMax)}
+                      onChange={e => set("totalResults", parseInt(e.target.value))}
+                      className="w-full accent-blue-500"
+                    />
+                    <div className="flex justify-between text-white/30 text-xs mt-1">
+                      <span>{Math.min(10, sliderMax)}</span>
+                      <span>{sliderMax.toLocaleString()}</span>
+                    </div>
+                    {!canAfford && (
+                      <p className="text-xs text-red-400 mt-1.5">
+                        Insufficient credits — <a href="/lead-campaigns/credits" className="underline">buy more</a>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
