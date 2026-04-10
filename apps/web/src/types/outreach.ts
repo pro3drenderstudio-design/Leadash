@@ -257,6 +257,28 @@ export interface CampaignStats {
 
 export interface CampaignAnalytics {
   stats: CampaignStats;
-  daily: { date: string; sent: number; opened: number; replied: number }[];
+  funnel: {
+    enrolled: number; sent: number; opened: number;
+    replied: number; completed: number; bounced: number; unsubscribed: number;
+  };
+  per_step: {
+    type: string; subject_template: string; subject_template_b?: string;
+    sent: number; open_rate: number; reply_rate: number; bounced: number;
+  }[];
+  ab_test: {
+    enabled: boolean;
+    a: { sent: number; open_rate: number; reply_rate: number };
+    b: { sent: number; open_rate: number; reply_rate: number };
+  };
+  daily_activity: { date: string; sent: number; opened: number; replied: number }[];
+  recent_activity: {
+    send_id: string; status: string; opened_at?: string | null;
+    replied_at?: string | null; lead_name: string; lead_email: string;
+  }[];
+  upcoming_queue: {
+    enrollment_id: string; lead_name: string; lead_email: string;
+    company?: string | null; current_step: number; next_send_at?: string | null;
+    crm_status?: string | null;
+  }[];
 }
 
