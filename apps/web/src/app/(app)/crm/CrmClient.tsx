@@ -570,7 +570,7 @@ export default function CrmClient() {
                   <h3 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Notes</h3>
                   {(selected.notes?.length ?? 0) > 0 && (
                     <div className="space-y-2 mb-3">
-                      {selected.notes.map((n) => (
+                      {(selected.notes ?? []).map((n) => (
                         <div key={n.id} className="bg-amber-500/8 border border-amber-500/15 rounded-xl p-4">
                           <p className="text-white/80 text-sm whitespace-pre-wrap">{n.body}</p>
                           <p className="text-white/25 text-[10px] mt-2">{new Date(n.created_at).toLocaleString()}</p>
