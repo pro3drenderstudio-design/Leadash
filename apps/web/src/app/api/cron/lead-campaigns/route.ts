@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { processLeadCampaign } from "@/lib/lead-campaigns/processor";
+
+export const maxDuration = 60;
+
+export async function POST(req: NextRequest) {
+  const auth = req.headers.get("authorization");
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const db = createAdminClient();
+  const { data: campaigns } = await db
+    .from("lead_campaigns")
+    .select("id")
+    .in("status", ["pending", "running"])
+    .order("created_at")
+    .limit(10);
+
+  if (!campaigns?.length) return NextResponse.json({ processed: 0 });
+
+  const results = await Promise.allSettled(
+    campaigns.map((c: { id: string }) => processLeadCampaign(c.id)),
+  );
+
+  const succeeded = results.filter(r => r.status === "fulfilled").length;
+  const failed    = results.filter(r => r.status === "rejected").length;
+
+  return NextResponse.json({ processed: campaigns.length, succeeded, failed });
+}

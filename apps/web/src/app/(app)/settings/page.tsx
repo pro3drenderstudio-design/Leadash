@@ -11,6 +11,8 @@ const DEFAULTS = {
   default_timezone:     "America/New_York",
   default_send_start:   "09:00",
   default_send_end:     "17:00",
+  apify_api_key:        "",
+  reoon_api_key:        "",
 };
 
 type Settings = typeof DEFAULTS;
@@ -161,6 +163,34 @@ export default function OutreachSettingsPage() {
           <div>
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Send window end</label>
             <input type="time" value={settings.default_send_end} onChange={(e) => set("default_send_end", e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Lead Gen API Keys ──────────────────────────────────────────────────── */}
+      <section className="bg-white/4 border border-white/8 rounded-2xl p-6 space-y-4">
+        <h2 className="text-white font-semibold">Lead Generation</h2>
+        <p className="text-white/40 text-xs -mt-2">API keys for Apify scraping and Reoon email verification. Used by Lead Campaigns.</p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Apify API Key</label>
+            <input
+              type="password"
+              value={settings.apify_api_key}
+              onChange={(e) => set("apify_api_key", e.target.value)}
+              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+              placeholder="apify_api_…"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Reoon API Key</label>
+            <input
+              type="password"
+              value={settings.reoon_api_key}
+              onChange={(e) => set("reoon_api_key", e.target.value)}
+              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+              placeholder="reoon_…"
+            />
           </div>
         </div>
       </section>
