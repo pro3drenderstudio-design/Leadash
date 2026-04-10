@@ -117,7 +117,7 @@ export function mapApifyRecord(
     campaign_id:         campaignId,
     email:               String(r.email ?? "").toLowerCase().trim(),
     first_name:          r.firstName ?? r.fullName?.split(" ")[0] ?? null,
-    last_name:           r.lastName  ?? r.fullName?.split(" ").slice(1).join(" ") || null,
+    last_name:           r.lastName  ?? (r.fullName?.split(" ").slice(1).join(" ") || null),
     company:             r.orgName   ?? null,
     title:               r.position  ?? null,
     website:             r.orgWebsite ?? null,
