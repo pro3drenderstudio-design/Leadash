@@ -204,14 +204,22 @@ export interface OutreachWarmupSend {
   rescued_from_spam: boolean;
 }
 
+export interface CrmNote {
+  id: string;
+  lead_id: string;
+  body: string;
+  created_at: string;
+}
+
 export interface CrmThread {
   enrollment_id: string;
   lead: OutreachLead;
   campaign: Pick<OutreachCampaign, "id" | "name">;
-  latest_send: OutreachSend;
+  latest_send: OutreachSend | null;
   latest_reply: OutreachReply | null;
-  replied_at: string;
+  replied_at: string | null;
   crm_status: CrmStatus;
+  notes?: CrmNote[];
 }
 
 export interface CampaignEnrollmentRow {
