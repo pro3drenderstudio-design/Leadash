@@ -267,19 +267,9 @@ export default function LeadDrawer({ lead, campaignId, hasPersonalizePrompt, onC
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/25">Intelligence</span>
               </div>
 
-              {/* Company description */}
-              {lead.org_description && (
-                <div
-                  className="rounded-xl p-3.5 mb-3 text-xs leading-relaxed text-white/55"
-                  style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}
-                >
-                  {lead.org_description}
-                </div>
-              )}
-
               {/* Metrics grid */}
               {(lead.org_size || industry || orgLocation || lead.org_founded_year) && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 mb-3">
                   {[
                     { label: "Industry",    value: industry },
                     { label: "Company Size", value: lead.org_size ? `${lead.org_size} employees` : null },
@@ -295,6 +285,16 @@ export default function LeadDrawer({ lead, campaignId, hasPersonalizePrompt, onC
                       <p className="text-white/70 text-xs font-medium leading-snug">{m.value}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Company description */}
+              {lead.org_description && (
+                <div
+                  className="rounded-xl p-3.5 text-xs leading-relaxed text-white/55"
+                  style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  {lead.org_description}
                 </div>
               )}
             </div>
