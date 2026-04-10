@@ -118,7 +118,11 @@ export const getCampaignAnalytics = (campaignId: string) =>
   get<CampaignAnalytics>(`${base}/campaigns/${campaignId}/analytics`);
 
 export const triggerSendBatch = (campaignId?: string) =>
-  post<{ queued: number; sends: { sent: number; failed: number }; replies: { matched: number } }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
+  post<{
+    queued: number;
+    sends: { sent: number; failed: number };
+    replies: { matched: number; details?: { error?: string }[] };
+  }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
 
 export const sendTestEmail = (opts: {
   inbox_id: string; to_email: string; subject_template: string;
@@ -137,7 +141,7 @@ export const suggestReply      = (enrollmentId: string) =>
   post<{ suggestion: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
 export const sendCrmReply      = (enrollmentId: string, body: string) =>
-  post<{ ok: boolean }>(`${base}/crm/${enrollmentId}/reply`, { body });
+  post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 export const getSettings    = () => get<Record<string, unknown>>(`${base}/settings`);
