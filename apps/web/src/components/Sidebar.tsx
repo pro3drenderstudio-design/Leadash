@@ -60,10 +60,6 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                   <stop offset="0%" stopColor="#1d4ed8"/>
                   <stop offset="100%" stopColor="#6d28d9"/>
                 </linearGradient>
-                <linearGradient id="sa" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#34d399"/>
-                  <stop offset="100%" stopColor="#60a5fa"/>
-                </linearGradient>
               </defs>
               <rect width="40" height="40" rx="10" fill="url(#sb)"/>
               <path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white"/>
