@@ -177,7 +177,7 @@ export default function CampaignWizardClient() {
       ...s,
       subject_template_b: s.subject_template_b || null,
     })));
-    await Promise.all(selectedLists.map((lid) => enrollLeads(campaign.id, lid)));
+    await enrollLeads(campaign.id, selectedLists);
 
     router.push(`/admin/outreach/campaigns/${campaign.id}?enrolled=1`);
   }
