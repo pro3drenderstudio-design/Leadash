@@ -20,10 +20,12 @@ export async function wsFetch(path: string, init?: RequestInit): Promise<Respons
   const wsId = getWorkspaceId();
   if (!wsId) throw new Error("No workspace selected");
 
+  // Don't set Content-Type for FormData — the browser must set it (with boundary)
+  const isFormData = init?.body instanceof FormData;
   return fetch(path, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(init?.headers ?? {}),
       "x-workspace-id": wsId,
     },
