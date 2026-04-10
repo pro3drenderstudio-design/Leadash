@@ -118,7 +118,7 @@ export const getCampaignAnalytics = (campaignId: string) =>
   get<CampaignAnalytics>(`${base}/campaigns/${campaignId}/analytics`);
 
 export const triggerSendBatch = (campaignId?: string) =>
-  post<{ queued: number }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
+  post<{ queued: number; sends: { sent: number; failed: number }; replies: { matched: number } }>(`${base}/campaigns/trigger`, campaignId ? { campaign_id: campaignId } : undefined);
 
 export const sendTestEmail = (opts: {
   inbox_id: string; to_email: string; subject_template: string;
