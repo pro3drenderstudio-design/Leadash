@@ -106,16 +106,14 @@ export async function POST(req: NextRequest) {
     if (sourceLeads?.length) {
       type SrcLead = Record<string, unknown>;
       await db.from("lead_campaign_leads").insert(
-        (sourceLeads as SrcLead[]).map(l => ({
+        (sourceLeads as SrcLead[]).map(({ id: _id, created_at: _ca, ...l }) => ({
           ...l,
-          id:                  undefined,
           workspace_id:        workspaceId,
           campaign_id:         campaign.id,
           verification_status: verify_enabled ? "pending" : null,
           personalized_line:   null,
           added_to_list_id:    null,
           added_at:            null,
-          created_at:          undefined,
         })),
       );
 
