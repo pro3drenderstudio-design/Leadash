@@ -65,10 +65,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Deduct credits upfront
-  await db.from("workspaces")
-    .update({ lead_credits_balance: workspace.lead_credits_balance - creditsNeeded })
-    .eq("id", workspaceId);
+  // Credits are NOT deducted upfront. The processor deducts per-lead as they are processed.
+  // credits_reserved is stored for display/estimation only.
 
   // Create campaign
   const { data: campaign, error } = await db
@@ -93,21 +91,8 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    // Refund on failure
-    await db.from("workspaces")
-      .update({ lead_credits_balance: workspace.lead_credits_balance })
-      .eq("id", workspaceId);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  // Log credit transaction
-  await db.from("lead_credit_transactions").insert({
-    workspace_id:     workspaceId,
-    amount:           -creditsNeeded,
-    type:             "reserve",
-    description:      `Reserved for campaign "${name}"`,
-    lead_campaign_id: campaign.id,
-  });
 
   // For verify_personalize mode from a previous campaign: copy its leads
   if (mode === "verify_personalize" && source_campaign_id) {

@@ -18,34 +18,34 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
   if (error || !campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (campaign.status === "completed" || campaign.status === "cancelled") return;
 
-  const apifyKey  = process.env.APIFY_API_KEY;
-  const reoonKey  = process.env.REOON_API_KEY;
+  const apifyKey = process.env.APIFY_API_KEY;
+  const reoonKey = process.env.REOON_API_KEY;
 
   try {
-    // ── Step 1: Check Apify run & ingest results ──────────────────────────────
+    // ── Step 1: Scrape via Apify ──────────────────────────────────────────────
     if (campaign.mode === "scrape" || campaign.mode === "full_suite") {
       if (!apifyKey) throw new Error("APIFY_API_KEY not configured");
 
-      // If no run started yet, start one now (route may have failed silently)
+      // Start run if not yet kicked off
       if (!campaign.apify_run_id) {
         const input = (campaign.apify_input ?? {}) as ApifyLeadScraperInput;
         const runId = await startLeadScraperRun(apifyKey, { ...input, totalResults: campaign.max_leads });
         await db.from("lead_campaigns")
           .update({ apify_run_id: runId, status: "running", started_at: new Date().toISOString() })
           .eq("id", campaignId);
-        return; // Poll again next tick
+        return;
       }
 
+      // Check status and ingest dataset once run completes
       if (campaign.total_scraped === 0) {
         const { status, datasetId } = await getApifyRunStatus(apifyKey, campaign.apify_run_id);
 
-        if (status === "RUNNING" || status === "TIMING-OUT") return; // Still running
+        if (status === "RUNNING" || status === "TIMING-OUT") return;
 
         if (status !== "SUCCEEDED" || !datasetId) {
           throw new Error(`Apify run ended with status: ${status}`);
         }
 
-        // Fetch and insert leads
         const items = await fetchApifyDataset(apifyKey, datasetId, campaign.max_leads);
         const validItems = items
           .filter(item => item.email && String(item.email).includes("@"))
@@ -55,20 +55,39 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           const rows = validItems.map(item =>
             mapApifyRecord(item, campaign.workspace_id, campaignId, campaign.verify_enabled),
           );
+
+          let inserted = 0;
           for (let i = 0; i < rows.length; i += 100) {
-            await db.from("lead_campaign_leads").insert(rows.slice(i, i + 100));
+            const { error: insertErr } = await db.from("lead_campaign_leads").insert(rows.slice(i, i + 100));
+            if (insertErr) {
+              // Surface error but continue with whatever was inserted
+              await db.from("lead_campaigns")
+                .update({ error_message: `Lead insert error: ${insertErr.message}` })
+                .eq("id", campaignId);
+              break;
+            }
+            inserted += rows.slice(i, i + 100).length;
           }
+
+          // Deduct scrape credits for what was actually inserted
+          if (inserted > 0) {
+            await deductCredits(db, campaign.workspace_id, campaignId, inserted, "scrape");
+          }
+
+          await db.from("lead_campaigns")
+            .update({ total_scraped: inserted })
+            .eq("id", campaignId);
+        } else {
+          // Nothing to process — complete immediately
+          await db.from("lead_campaigns")
+            .update({ status: "completed", completed_at: new Date().toISOString(), total_scraped: 0 })
+            .eq("id", campaignId);
+          return;
         }
-
-        await db.from("lead_campaigns")
-          .update({ total_scraped: validItems.length })
-          .eq("id", campaignId);
-
-        await consumeCredits(db, campaign, validItems.length, "scrape");
       }
     }
 
-    // Re-fetch for latest counts
+    // Re-fetch latest state
     const { data: fresh } = await db.from("lead_campaigns").select("*").eq("id", campaignId).single();
     if (!fresh) return;
 
@@ -84,7 +103,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       if (pending?.length) {
         type PendingLead = { id: string; email: string };
         const typedPending = pending as PendingLead[];
-        const results = await verifyEmails(reoonKey!, typedPending.map(l => l.email));
+        const results = await verifyEmails(reoonKey, typedPending.map(l => l.email));
 
         for (const result of results) {
           const lead = typedPending.find(l => l.email === result.email);
@@ -96,13 +115,12 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           }
         }
 
-        await consumeCredits(db, fresh, results.length, "verify");
+        await deductCredits(db, fresh.workspace_id, campaignId, results.length, "verify");
         await db.from("lead_campaigns")
-          .update({ total_verified: fresh.total_verified + results.length })
+          .update({ total_verified: (fresh.total_verified ?? 0) + results.length })
           .eq("id", campaignId);
 
-        // More pending? Don't finalize yet
-        if (pending.length === 100) return;
+        if (pending.length === 100) return; // More batches to process
       }
     }
 
@@ -118,7 +136,6 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
         .eq("campaign_id", campaignId)
         .is("personalized_line", null);
 
-      // Optionally restrict to valid emails only
       if (fresh2.personalize_valid_only) {
         personQuery = personQuery.in("verification_status", ["valid", "catch_all"]);
       }
@@ -126,22 +143,26 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       const { data: unpersonalized } = await personQuery.limit(50);
 
       if (unpersonalized?.length) {
-        const lines = await personalizeLeads(unpersonalized, fresh2.personalize_prompt);
+        type LeadRow = { id: string; first_name?: string | null; last_name?: string | null; title?: string | null; company?: string | null; industry?: string | null; website?: string | null };
+        const rows = unpersonalized as LeadRow[];
+        const lines = await personalizeLeads(rows, fresh2.personalize_prompt);
 
-        for (let i = 0; i < unpersonalized.length; i++) {
+        let personalized = 0;
+        for (let i = 0; i < rows.length; i++) {
           if (lines[i]) {
             await db.from("lead_campaign_leads")
               .update({ personalized_line: lines[i] })
-              .eq("id", unpersonalized[i].id);
+              .eq("id", rows[i].id);
+            personalized++;
           }
         }
 
-        await consumeCredits(db, fresh2, unpersonalized.length * 2, "personalize");
+        await deductCredits(db, fresh2.workspace_id, campaignId, personalized * 2, "personalize");
         await db.from("lead_campaigns")
-          .update({ total_personalized: fresh2.total_personalized + unpersonalized.length })
+          .update({ total_personalized: (fresh2.total_personalized ?? 0) + personalized })
           .eq("id", campaignId);
 
-        if (unpersonalized.length === 50) return; // More to process
+        if (unpersonalized.length === 50) return; // More batches
       }
     }
 
@@ -151,30 +172,6 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", campaignId)
       .in("verification_status", ["valid", "catch_all"]);
-
-    const { data: finalCampaign } = await db
-      .from("lead_campaigns").select("credits_reserved, credits_used, name, workspace_id")
-      .eq("id", campaignId).single();
-
-    if (finalCampaign) {
-      const refund = Math.max(0, finalCampaign.credits_reserved - finalCampaign.credits_used);
-      if (refund > 0) {
-        const { data: ws } = await db.from("workspaces")
-          .select("lead_credits_balance").eq("id", finalCampaign.workspace_id).single();
-        if (ws) {
-          await db.from("workspaces")
-            .update({ lead_credits_balance: ws.lead_credits_balance + refund })
-            .eq("id", finalCampaign.workspace_id);
-          await db.from("lead_credit_transactions").insert({
-            workspace_id:     finalCampaign.workspace_id,
-            amount:           refund,
-            type:             "refund",
-            description:      `Unused credit refund for "${finalCampaign.name}"`,
-            lead_campaign_id: campaignId,
-          });
-        }
-      }
-    }
 
     await db.from("lead_campaigns").update({
       status:       "completed",
@@ -191,21 +188,42 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
   }
 }
 
-async function consumeCredits(
-  db:       ReturnType<typeof createAdminClient>,
-  campaign: { id: string; workspace_id: string; credits_used: number },
-  amount:   number,
-  action:   string,
+// ─── Atomic credit deduction ──────────────────────────────────────────────────
+async function deductCredits(
+  db:          ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+  campaignId:  string,
+  amount:      number,
+  action:      string,
 ): Promise<void> {
-  await db.from("lead_campaigns")
-    .update({ credits_used: campaign.credits_used + amount })
-    .eq("id", campaign.id);
+  if (amount <= 0) return;
+
+  // Read current balance
+  const { data: ws } = await db.from("workspaces")
+    .select("lead_credits_balance").eq("id", workspaceId).single();
+  if (!ws) return;
+
+  const deduct = Math.min(amount, Math.max(0, ws.lead_credits_balance));
+  if (deduct === 0) return;
+
+  await db.from("workspaces")
+    .update({ lead_credits_balance: ws.lead_credits_balance - deduct })
+    .eq("id", workspaceId);
+
+  // Use rpc-style increment for credits_used to avoid stale reads
+  const { data: camp } = await db.from("lead_campaigns")
+    .select("credits_used").eq("id", campaignId).single();
+  if (camp) {
+    await db.from("lead_campaigns")
+      .update({ credits_used: camp.credits_used + deduct })
+      .eq("id", campaignId);
+  }
 
   await db.from("lead_credit_transactions").insert({
-    workspace_id:     campaign.workspace_id,
-    amount:           -amount,
+    workspace_id:     workspaceId,
+    amount:           -deduct,
     type:             "consume",
     description:      `${action} — ${amount} leads`,
-    lead_campaign_id: campaign.id,
+    lead_campaign_id: campaignId,
   });
 }
