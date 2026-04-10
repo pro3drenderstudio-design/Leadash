@@ -495,10 +495,14 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
           fd.append("name", form.name);
           fd.append("mode", "verify_personalize");
           fd.append("max_leads", String(form.totalResults));
-          fd.append("personalize_enabled", "true");
+          fd.append("verify_enabled", "true");
+          fd.append("personalize_enabled", form.aiEnabled ? "true" : "false");
           fd.append("personalize_prompt", form.offerAngle);
+          fd.append("personalize_valid_only", form.personalizeValidOnly ? "true" : "false");
           fd.append("file", form.uploadedFile);
-          await wsPost<{ id: string }>("/api/lead-campaigns/upload", fd as unknown as Record<string, unknown>);
+          // Use wsFetch directly — wsPost would JSON.stringify the FormData
+          const r = await wsFetch("/api/lead-campaigns/upload", { method: "POST", body: fd });
+          if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error ?? r.statusText); }
         } else {
           await wsPost<{ id: string }>("/api/lead-campaigns", {
             name:                   form.name,
