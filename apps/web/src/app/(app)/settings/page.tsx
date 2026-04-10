@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { wsGet, wsPost, wsPatch, wsDelete } from "@/lib/workspace/client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -77,16 +78,12 @@ function ProfileTab() {
   const [saved, setSaved]   = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings/profile").then(r => r.json()).then(setData);
+    wsGet<typeof data>("/api/settings/profile").then(setData).catch(() => {});
   }, []);
 
   async function save() {
     setSaving(true);
-    await fetch("/api/settings/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ full_name: data.full_name, workspace_name: data.workspace_name }),
-    });
+    await wsPatch("/api/settings/profile", { full_name: data.full_name, workspace_name: data.workspace_name });
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
@@ -145,15 +142,15 @@ function SecurityTab() {
     if (pw.next !== pw.confirm) { setMsg({ type: "err", text: "Passwords don't match" }); return; }
     if (pw.next.length < 8)     { setMsg({ type: "err", text: "Password must be at least 8 characters" }); return; }
     setSaving(true);
-    const res  = await fetch("/api/settings/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw.next }),
-    });
-    const data = await res.json();
-    setSaving(false);
-    if (data.ok) { setMsg({ type: "ok", text: "Password updated" }); setPw({ current: "", next: "", confirm: "" }); }
-    else          setMsg({ type: "err", text: data.error ?? "Failed" });
+    try {
+      await wsPost("/api/settings/password", { password: pw.next });
+      setSaving(false);
+      setMsg({ type: "ok", text: "Password updated" });
+      setPw({ current: "", next: "", confirm: "" });
+    } catch (e) {
+      setSaving(false);
+      setMsg({ type: "err", text: e instanceof Error ? e.message : "Failed" });
+    }
     setTimeout(() => setMsg(null), 3000);
   }
 
@@ -208,11 +205,11 @@ function TeamTab() {
 
   function load() {
     setLoading(true);
-    fetch("/api/settings/team").then(r => r.json()).then(d => {
+    wsGet<{ members: Member[]; invites: Invite[] }>("/api/settings/team").then(d => {
       setMembers(d.members ?? []);
       setInvites(d.invites ?? []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }
 
   useEffect(load, []);
@@ -220,24 +217,19 @@ function TeamTab() {
   async function sendInvite() {
     if (!inviteEmail) return;
     setInviting(true);
-    const res  = await fetch("/api/settings/team", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail }),
-    });
-    const data = await res.json();
-    setInviting(false);
-    if (res.ok) { setInviteEmail(""); load(); setMsg("Invite sent"); }
-    else        setMsg(data.error ?? "Failed to invite");
+    try {
+      await wsPost("/api/settings/team", { email: inviteEmail });
+      setInviting(false);
+      setInviteEmail(""); load(); setMsg("Invite sent");
+    } catch (e) {
+      setInviting(false);
+      setMsg(e instanceof Error ? e.message : "Failed to invite");
+    }
     setTimeout(() => setMsg(null), 3000);
   }
 
   async function removeMember(memberId: string) {
-    await fetch("/api/settings/team", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ member_id: memberId }),
-    });
+    await wsDelete("/api/settings/team", { member_id: memberId });
     load();
   }
 
@@ -349,8 +341,8 @@ function BillingTab() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings/profile").then(r => r.json()),
-      fetch("/api/lead-campaigns/credits").then(r => r.json()),
+      wsGet<{ plan_id: string }>("/api/settings/profile"),
+      wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits"),
     ]).then(([profile, credits]) => {
       setPlanId(profile.plan_id ?? "free");
       setBalance(credits.balance ?? 0);
@@ -361,14 +353,14 @@ function BillingTab() {
 
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
-    const res  = await fetch("/api/lead-campaigns/credits/purchase", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pack_id: packId }),
-    });
-    const data = await res.json();
-    if (data.url) window.location.href = data.url;
-    else { alert(data.error ?? "Purchase failed"); setPurchasing(null); }
+    try {
+      const data = await wsPost<{ url?: string }>("/api/lead-campaigns/credits/purchase", { pack_id: packId });
+      if (data.url) window.location.href = data.url;
+      else { alert("Purchase failed"); setPurchasing(null); }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Purchase failed");
+      setPurchasing(null);
+    }
   }
 
   const currentPlan = PLANS_DISPLAY.find(p => p.id === planId) ?? PLANS_DISPLAY[0];
@@ -493,10 +485,10 @@ function OutreachTab() {
   const [saved, setSaved]       = useState(false);
 
   useEffect(() => {
-    fetch("/api/outreach/settings").then(r => r.json()).then(data => {
+    wsGet<Partial<OutreachSettings>>("/api/outreach/settings").then(data => {
       setSettings(prev => ({ ...prev, ...data }));
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   function set(key: keyof OutreachSettings, value: string) {
@@ -505,7 +497,7 @@ function OutreachTab() {
 
   async function save() {
     setSaving(true);
-    await fetch("/api/outreach/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    await wsPost("/api/outreach/settings", settings);
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
