@@ -247,6 +247,11 @@ export interface OutreachBlacklistDomain {
   created_at: string;
 }
 
+export interface CsvFieldMapping {
+  csv_column: string;
+  db_field: string;
+}
+
 export interface ImportError {
   row: number;
   email: string;
