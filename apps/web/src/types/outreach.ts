@@ -94,6 +94,10 @@ export interface OutreachCampaign {
   total_sent?: number;
   total_opened?: number;
   total_replied?: number;
+  total_completed?: number;
+  total_bounced?: number;
+  total_unsubscribed?: number;
+  total_clicked?: number;
   sequence_steps?: OutreachSequenceStep[];
 }
 
