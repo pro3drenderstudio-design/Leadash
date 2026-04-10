@@ -6,22 +6,16 @@ import type { ApifyLeadScraperInput } from "@/types/lead-campaigns";
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
-  const { workspaceId, db } = auth;
+
+  const apifyKey = process.env.APIFY_API_KEY;
+  if (!apifyKey) {
+    return NextResponse.json({ error: "Apify not configured" }, { status: 503 });
+  }
 
   const input: ApifyLeadScraperInput = await req.json();
 
-  const { data: settings } = await db
-    .from("workspace_settings")
-    .select("apify_api_key")
-    .eq("workspace_id", workspaceId)
-    .single();
-
-  if (!settings?.apify_api_key) {
-    return NextResponse.json({ error: "Apify API key not configured in settings" }, { status: 400 });
-  }
-
   try {
-    const leads = await previewLeads(settings.apify_api_key, input);
+    const leads = await previewLeads(apifyKey, input);
     return NextResponse.json({ leads });
   } catch (err) {
     return NextResponse.json(

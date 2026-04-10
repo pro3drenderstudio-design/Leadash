@@ -127,17 +127,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // For scrape modes: kick off Apify run if API key available
+  // For scrape modes: kick off Apify run using backend API key
   if ((mode === "scrape" || mode === "full_suite") && apify_actor_id) {
-    const { data: settings } = await db
-      .from("workspace_settings")
-      .select("apify_api_key")
-      .eq("workspace_id", workspaceId)
-      .single();
-
-    if (settings?.apify_api_key) {
+    const apifyKey = process.env.APIFY_API_KEY;
+    if (apifyKey) {
       try {
-        const runId = await startLeadScraperRun(settings.apify_api_key, {
+        const runId = await startLeadScraperRun(apifyKey, {
           ...(apify_input ?? {}),
           totalResults: max_leads,
         });

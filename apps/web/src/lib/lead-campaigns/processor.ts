@@ -18,11 +18,8 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
   if (error || !campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (campaign.status === "completed" || campaign.status === "cancelled") return;
 
-  const { data: settings } = await db
-    .from("workspace_settings")
-    .select("apify_api_key, reoon_api_key")
-    .eq("workspace_id", campaign.workspace_id)
-    .single();
+  const apifyKey  = process.env.APIFY_API_KEY;
+  const reoonKey  = process.env.REOON_API_KEY;
 
   try {
     // ── Step 1: Check Apify run & ingest results ──────────────────────────────
@@ -31,8 +28,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       campaign.apify_run_id &&
       campaign.total_scraped === 0
     ) {
-      const apifyKey = settings?.apify_api_key;
-      if (!apifyKey) throw new Error("Apify API key not configured");
+      if (!apifyKey) throw new Error("APIFY_API_KEY not configured");
 
       const { status, datasetId } = await getApifyRunStatus(apifyKey, campaign.apify_run_id);
 
@@ -72,7 +68,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
     if (!fresh) return;
 
     // ── Step 2: Email verification ────────────────────────────────────────────
-    if (fresh.verify_enabled && settings?.reoon_api_key && fresh.total_verified < fresh.total_scraped) {
+    if (fresh.verify_enabled && reoonKey && fresh.total_verified < fresh.total_scraped) {
       const { data: pending } = await db
         .from("lead_campaign_leads")
         .select("id, email")
@@ -83,7 +79,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       if (pending?.length) {
         type PendingLead = { id: string; email: string };
         const typedPending = pending as PendingLead[];
-        const results = await verifyEmails(settings.reoon_api_key, typedPending.map(l => l.email));
+        const results = await verifyEmails(reoonKey!, typedPending.map(l => l.email));
 
         for (const result of results) {
           const lead = typedPending.find(l => l.email === result.email);
