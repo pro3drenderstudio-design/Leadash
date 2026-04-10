@@ -114,7 +114,7 @@ export default function CrmClient() {
   const [filters, setFilters]       = useState<OutreachCrmFilter[]>([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
   const [showAddFilter, setShowAddFilter]   = useState(false);
-  const [newFilter, setNewFilter]   = useState<Omit<OutreachCrmFilter, "id" | "created_at">>({
+  const [newFilter, setNewFilter]   = useState<Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">>({
     name: "", type: "phrase", value: "", action: "exclude", auto_status: null,
   });
   const [savingFilter, setSavingFilter] = useState(false);
