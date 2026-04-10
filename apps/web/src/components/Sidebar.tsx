@@ -50,20 +50,36 @@ export default function Sidebar({ workspaceName, plan }: Props) {
       className="w-56 flex-shrink-0 flex flex-col h-screen sticky top-0"
       style={{ background: "#060d1a", borderRight: "1px solid rgba(255,255,255,0.07)" }}
     >
-      {/* Workspace brand */}
-      <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)" }}
+      {/* Logo */}
+      <div className="px-4 py-4 flex items-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", minHeight: 56 }}>
+        <Link href="/dashboard" className="flex items-center gap-2.5 group">
+          {/* Mark */}
+          <div className="flex-shrink-0 w-8 h-8 relative">
+            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+              <defs>
+                <linearGradient id="sb" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#1d4ed8"/>
+                  <stop offset="100%" stopColor="#6d28d9"/>
+                </linearGradient>
+                <linearGradient id="sa" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#34d399"/>
+                  <stop offset="100%" stopColor="#60a5fa"/>
+                </linearGradient>
+              </defs>
+              <rect width="40" height="40" rx="10" fill="url(#sb)"/>
+              <rect x="10" y="8" width="6" height="24" rx="3" fill="white" opacity="0.95"/>
+              <rect x="10" y="26" width="16" height="6" rx="3" fill="white" opacity="0.95"/>
+              <path d="M23 8 L16.5 20 H21.5 L15 32" stroke="url(#sa)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          {/* Wordmark */}
+          <span
+            className="text-[17px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors select-none"
+            style={{ letterSpacing: "-0.02em" }}
           >
-            {workspaceName[0]?.toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white/90 truncate leading-tight">{workspaceName}</p>
-            <p className="text-[10px] text-white/30 capitalize mt-0.5">{plan} plan</p>
-          </div>
-        </div>
+            Leadash
+          </span>
+        </Link>
       </div>
 
       {/* Nav */}
