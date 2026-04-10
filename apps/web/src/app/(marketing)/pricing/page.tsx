@@ -30,7 +30,7 @@ export default function PricingPage() {
                 {plan.price > 0 && <span className="text-gray-400 text-sm">/mo</span>}
               </div>
               <ul className="space-y-2 text-sm text-gray-400 mb-6">
-                <li>{plan.maxInboxes === 999999 ? "Unlimited" : plan.maxInboxes} inboxes</li>
+                <li>{plan.maxInboxes} inboxes</li>
                 <li>{plan.maxMonthlySends.toLocaleString()} emails/month</li>
                 <li>{plan.maxSeats === 999999 ? "Unlimited" : plan.maxSeats} seat{plan.maxSeats !== 1 ? "s" : ""}</li>
                 <li>Inbox warmup</li>
