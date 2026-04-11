@@ -34,6 +34,8 @@ export interface OutreachInbox {
   warmup_current_daily: number;
   warmup_target_daily: number;
   warmup_ramp_per_week: number;
+  domain_id?: string | null;
+  warmup_ends_at?: string | null;
   status: InboxStatus;
   last_error?: string | null;
   gmail_history_id?: string | null;
