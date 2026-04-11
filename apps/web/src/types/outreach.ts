@@ -36,7 +36,10 @@ export interface OutreachInbox {
   warmup_ramp_per_week: number;
   status: InboxStatus;
   last_error?: string | null;
+  gmail_history_id?: string | null;
+  gmail_watch_expiry?: string | null;
   ms_subscription_id?: string | null;
+  ms_subscription_expiry?: string | null;
   created_at: string;
   updated_at: string;
 }
