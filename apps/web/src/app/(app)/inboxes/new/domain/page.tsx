@@ -6,6 +6,10 @@ import { getWorkspaceId } from "@/lib/workspace/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface RegistrantStatus {
+  complete: boolean;
+}
+
 interface DomainResult {
   domain: string;
   available: boolean;
