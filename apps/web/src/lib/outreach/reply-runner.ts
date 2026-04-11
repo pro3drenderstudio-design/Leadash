@@ -81,6 +81,8 @@ function stripQuotedReply(text: string): string {
 interface RawMessage {
   messageId: string; inReplyTo: string | null; fromEmail: string; fromName: string | null;
   subject: string | null; bodyText: string | null; receivedAt: string; warmupId: string | null;
+  /** Provider-level thread/conversation ID (Gmail threadId, Outlook conversationId) for fallback matching */
+  threadId?: string | null;
 }
 
 function deriveImapHost(smtpHost?: string | null): string | null {
