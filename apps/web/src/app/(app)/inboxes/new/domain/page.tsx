@@ -519,7 +519,7 @@ export default function BuyDomainPage() {
       )}
 
       {/* ── Step 3: Review & Pay ──────────────────────────────────────────────── */}
-      {step === "review" && selected && (
+      {step === "review" && selectedDomains.length > 0 && (
         <div>
           <h1 className="text-xl font-bold text-white mb-1">Review & pay</h1>
           <p className="text-white/40 text-sm mb-6">Your domain will be registered and inboxes provisioned automatically.</p>
