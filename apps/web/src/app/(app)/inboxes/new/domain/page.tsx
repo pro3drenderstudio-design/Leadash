@@ -619,14 +619,13 @@ export default function BuyDomainPage() {
             })}
           </div>
 
-          {provisionError && (
-            <div className="mt-4 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
-              <p className="text-red-300 text-sm font-medium mb-1">Error details</p>
-              <p className="text-red-300/60 text-xs">{provisionError}</p>
+          {Object.entries(provisionErrors).map(([id, msg]) => (
+            <div key={id} className="mt-4 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
+              <p className="text-red-300/60 text-xs">{msg}</p>
             </div>
-          )}
+          ))}
 
-          {provisionStatus === "active" && (
+          {overallStatus === "active" && (
             <div className="mt-8 flex items-center gap-3">
               <button
                 onClick={() => router.push("/inboxes")}
