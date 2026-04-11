@@ -508,17 +508,25 @@ export default function BuyDomainPage() {
 
             {/* Sending capacity stats */}
             {activePrefixes.length > 0 && selectedDomains.length > 0 && (
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Total inboxes", value: String(totalInboxes) },
-                  { label: "Sends / day", value: sendsPerDay.toLocaleString() },
-                  { label: "Sends / month", value: sendsPerMonth.toLocaleString() },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
-                    <p className="text-white font-bold text-xl">{value}</p>
-                    <p className="text-white/40 text-xs mt-0.5">{label}</p>
-                  </div>
-                ))}
+              <div className="rounded-xl border border-white/8 bg-white/3 overflow-hidden">
+                <div className="grid grid-cols-3 divide-x divide-white/8">
+                  {[
+                    { label: "Total inboxes", value: String(totalInboxes), sub: `${selectedDomains.length} domain${selectedDomains.length > 1 ? "s" : ""} × ${mailboxCount}` },
+                    { label: "Warmup sends/day", value: cap.warmupDay.toLocaleString(), sub: "first 21 days" },
+                    { label: "Full sends/day", value: cap.fullDay.toLocaleString(), sub: "after warmup" },
+                  ].map(({ label, value, sub }) => (
+                    <div key={label} className="p-3 text-center">
+                      <p className="text-white font-bold text-xl">{value}</p>
+                      <p className="text-white/50 text-xs mt-0.5">{label}</p>
+                      <p className="text-white/25 text-xs">{sub}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-white/8 px-4 py-2 text-center">
+                  <p className="text-white/40 text-xs">
+                    <span className="text-white/70 font-medium">{cap.fullMonth.toLocaleString()}</span> sends/month at full capacity
+                  </p>
+                </div>
               </div>
             )}
 
