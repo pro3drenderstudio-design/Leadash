@@ -567,8 +567,13 @@ export default function BuyDomainPage() {
               <Row label="Inboxes per domain" value={`${mailboxCount} (${activePrefixes.join(", ")})`} mono />
               <Row label="Total inboxes" value={String(totalInboxes)} />
             </div>
-            <div className="border-t border-white/8 pt-3 grid grid-cols-3 gap-2 text-center">
-              {[["Sends/day", sendsPerDay.toLocaleString()],["Sends/mo", sendsPerMonth.toLocaleString()],["Inboxes", totalInboxes.toString()]].map(([l,v])=>(
+            <div className="border-t border-white/8 pt-3 grid grid-cols-4 gap-2 text-center">
+              {[
+                ["Inboxes",      totalInboxes.toString()],
+                ["Warmup/day",   cap.warmupDay.toLocaleString()],
+                ["Full/day",     cap.fullDay.toLocaleString()],
+                ["Full/month",   cap.fullMonth.toLocaleString()],
+              ].map(([l,v])=>(
                 <div key={l}><p className="text-white font-semibold text-sm">{v}</p><p className="text-white/30 text-xs">{l}</p></div>
               ))}
             </div>
