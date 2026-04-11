@@ -52,12 +52,13 @@ export default function BuyDomainPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  // Detect post-Stripe/Paystack redirect
-  const returnedDomainId = searchParams.get("domain_id");
-  const returnedSessionId = searchParams.get("session_id");
-  const returnedRef       = searchParams.get("ref");
+  // Detect post-Stripe/Paystack redirect (multi-domain: domain_ids is comma-separated)
+  const returnedDomainIds  = searchParams.get("domain_ids");
+  const returnedSessionId  = searchParams.get("session_id");
+  const returnedRef        = searchParams.get("ref");
+  const returnedIdList     = returnedDomainIds ? returnedDomainIds.split(",").filter(Boolean) : [];
 
-  const [step, setStep]   = useState<Step>(returnedDomainId ? "provisioning" : "search");
+  const [step, setStep]   = useState<Step>(returnedIdList.length > 0 ? "provisioning" : "search");
 
   // ── Registrant check ────────────────────────────────────────────────────────
   const [registrantComplete, setRegistrantComplete] = useState<boolean | null>(null);
