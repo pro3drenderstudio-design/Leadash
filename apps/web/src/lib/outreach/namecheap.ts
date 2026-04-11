@@ -57,17 +57,10 @@ async function callApi(command: string, extra: Record<string, string> = {}): Pro
   const proxyUrl = process.env.NAMECHEAP_PROXY_URL;
   const fetchOptions: RequestInit = {};
   if (proxyUrl) {
-    // Node 18+ supports the undici dispatcher for proxying; use a simple
-    // approach via HTTPS_PROXY env var that Next.js/Node respects natively.
-    // If undici ProxyAgent is available, use it; otherwise fall back to env var.
-    try {
-      const { ProxyAgent, setGlobalDispatcher } = await import("undici");
-      setGlobalDispatcher(new ProxyAgent(proxyUrl));
-    } catch {
-      // undici not available — set env var as fallback (works in most Node runtimes)
-      process.env.HTTPS_PROXY = proxyUrl;
-      process.env.HTTP_PROXY  = proxyUrl;
-    }
+    // Route through a static proxy so Namecheap sees a whitelisted IP on Vercel.
+    // Node respects HTTPS_PROXY / HTTP_PROXY env vars natively.
+    process.env.HTTPS_PROXY = proxyUrl;
+    process.env.HTTP_PROXY  = proxyUrl;
   }
 
   const res = await fetch(url, fetchOptions);
