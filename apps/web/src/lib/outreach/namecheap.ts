@@ -54,7 +54,7 @@ async function callApi(command: string, extra: Record<string, string> = {}): Pro
   // If QUOTAGUARD_URL is set, route through the static proxy so Namecheap
   // sees a whitelisted IP even on Vercel serverless. Format:
   //   QUOTAGUARD_URL=http://user:pass@proxy.quotaguard.com:9293
-  const proxyUrl = process.env.QUOTAGUARD_URL;
+  const proxyUrl = process.env.NAMECHEAP_PROXY_URL;
   const fetchOptions: RequestInit = {};
   if (proxyUrl) {
     // Node 18+ supports the undici dispatcher for proxying; use a simple
