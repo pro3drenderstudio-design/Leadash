@@ -499,6 +499,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
           fd.append("personalize_enabled", form.aiEnabled ? "true" : "false");
           fd.append("personalize_prompt", form.offerAngle);
           fd.append("personalize_valid_only", form.personalizeValidOnly ? "true" : "false");
+          fd.append("personalize_depth", form.personalizationDepth);
           fd.append("file", form.uploadedFile);
           // Use wsFetch directly — wsPost would JSON.stringify the FormData
           const r = await wsFetch("/api/lead-campaigns/upload", { method: "POST", body: fd });
