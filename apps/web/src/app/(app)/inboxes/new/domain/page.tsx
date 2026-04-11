@@ -191,51 +191,50 @@ export default function BuyDomainPage() {
   }
 
   // ── Provision (called after payment redirect) ─────────────────────────────
-  const startProvision = useCallback(async (dId: string, sessionId?: string | null, ref?: string | null) => {
-    if (provisioning) return;
+  const startProvision = useCallback(async (ids: string[], sessionId?: string | null, ref?: string | null) => {
+    if (provisioning || !ids.length) return;
     setProvisioning(true);
-    try {
-      const wsId = getWorkspaceId() ?? "";
-      await fetch("/api/outreach/domains/provision", {
+    const wsId = getWorkspaceId() ?? "";
+    // Fire provision for each domain in parallel (fire-and-forget)
+    await Promise.all(ids.map(dId =>
+      fetch("/api/outreach/domains/provision", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
         body: JSON.stringify({
-          domain_record_id:  dId,
-          stripe_session_id: sessionId ?? undefined,
+          domain_record_id:   dId,
+          stripe_session_id:  sessionId ?? undefined,
           paystack_reference: ref ?? undefined,
         }),
-      });
-    } catch {
-      // Provision endpoint responds immediately; errors surface via polling
-    }
+      }).catch(() => {}),
+    ));
   }, [provisioning]);
 
   // Kick off provision on mount when returning from payment
   useEffect(() => {
-    if (returnedDomainId && !provisioning) {
-      startProvision(returnedDomainId, returnedSessionId, returnedRef);
+    if (returnedIdList.length && !provisioning) {
+      startProvision(returnedIdList, returnedSessionId, returnedRef);
     }
-  }, [returnedDomainId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Poll provision status ─────────────────────────────────────────────────
+  // ── Poll provision status for all domains ────────────────────────────────
   useEffect(() => {
-    if (step !== "provisioning" || !domainId) return;
-    if (provisionStatus === "active" || provisionStatus === "failed") return;
+    if (step !== "provisioning" || !domainIds.length) return;
+    if (allActive || (anyFailed && domainIds.every(id => ["active","failed"].includes(provisionStatuses[id] ?? "")))) return;
 
     const interval = setInterval(async () => {
-      try {
-        const wsId = getWorkspaceId() ?? "";
-        const res = await fetch(`/api/outreach/domains/${domainId}/status`, {
-          headers: { "x-workspace-id": wsId },
-        });
-        const data = await res.json();
-        setProvisionStatus(data.status ?? "pending");
-        if (data.error_message) setProvisionError(data.error_message);
-      } catch { /* silent */ }
+      const wsId = getWorkspaceId() ?? "";
+      await Promise.all(domainIds.map(async id => {
+        try {
+          const res  = await fetch(`/api/outreach/domains/${id}/status`, { headers: { "x-workspace-id": wsId } });
+          const data = await res.json();
+          setProvisionStatuses(prev => ({ ...prev, [id]: data.status ?? "pending" }));
+          if (data.error_message) setProvisionErrors(prev => ({ ...prev, [id]: data.error_message }));
+        } catch { /* silent */ }
+      }));
     }, 3_000);
 
     return () => clearInterval(interval);
-  }, [step, domainId, provisionStatus]);
+  }, [step, domainIds, allActive, anyFailed]);
 
   // ─────────────────────────────────────────────────────────────────────────────
 
