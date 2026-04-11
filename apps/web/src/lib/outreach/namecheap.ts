@@ -111,60 +111,53 @@ export async function checkDomains(names: string[]): Promise<NamecheapDomainChec
   return results;
 }
 
+export interface RegistrantContact {
+  firstName:  string;
+  lastName:   string;
+  address:    string;
+  city:       string;
+  state:      string;
+  zip:        string;
+  country:    string;
+  phone:      string;
+  email:      string;
+}
+
 /**
- * Register a domain. Uses Namecheap's registrant contact info from the API
- * account's default registrant, so no separate contact fields are needed here.
+ * Register a domain using the provided registrant contact info.
+ * Contact details come from the workspace's saved registrant profile.
  */
-export async function purchaseDomain(domain: string): Promise<void> {
+export async function purchaseDomain(domain: string, registrant: RegistrantContact): Promise<void> {
   const [sld, ...tldParts] = domain.split(".");
   const tld = tldParts.join(".");
 
-  // Namecheap requires registrant contact fields. We use placeholder values
-  // that must be pre-configured in the account, or passed here.
-  const xml = await callApi("namecheap.domains.create", {
-    DomainName:           domain,
-    Years:                "1",
-    AuxBillingFirstName:  process.env.NAMECHEAP_REGISTRANT_FIRST ?? "Admin",
-    AuxBillingLastName:   process.env.NAMECHEAP_REGISTRANT_LAST  ?? "User",
-    AuxBillingAddress1:   process.env.NAMECHEAP_REGISTRANT_ADDR  ?? "123 Main St",
-    AuxBillingCity:       process.env.NAMECHEAP_REGISTRANT_CITY  ?? "New York",
-    AuxBillingStateProvince: process.env.NAMECHEAP_REGISTRANT_STATE ?? "NY",
-    AuxBillingPostalCode: process.env.NAMECHEAP_REGISTRANT_ZIP   ?? "10001",
-    AuxBillingCountry:    process.env.NAMECHEAP_REGISTRANT_COUNTRY ?? "US",
-    AuxBillingPhone:      process.env.NAMECHEAP_REGISTRANT_PHONE ?? "+1.2125551234",
-    AuxBillingEmailAddress: process.env.NAMECHEAP_REGISTRANT_EMAIL ?? "admin@leadash.io",
-    // Copy aux billing to all contact fields
-    RegistrantFirstName:  process.env.NAMECHEAP_REGISTRANT_FIRST ?? "Admin",
-    RegistrantLastName:   process.env.NAMECHEAP_REGISTRANT_LAST  ?? "User",
-    RegistrantAddress1:   process.env.NAMECHEAP_REGISTRANT_ADDR  ?? "123 Main St",
-    RegistrantCity:       process.env.NAMECHEAP_REGISTRANT_CITY  ?? "New York",
-    RegistrantStateProvince: process.env.NAMECHEAP_REGISTRANT_STATE ?? "NY",
-    RegistrantPostalCode: process.env.NAMECHEAP_REGISTRANT_ZIP   ?? "10001",
-    RegistrantCountry:    process.env.NAMECHEAP_REGISTRANT_COUNTRY ?? "US",
-    RegistrantPhone:      process.env.NAMECHEAP_REGISTRANT_PHONE ?? "+1.2125551234",
-    RegistrantEmailAddress: process.env.NAMECHEAP_REGISTRANT_EMAIL ?? "admin@leadash.io",
-    TechFirstName:        process.env.NAMECHEAP_REGISTRANT_FIRST ?? "Admin",
-    TechLastName:         process.env.NAMECHEAP_REGISTRANT_LAST  ?? "User",
-    TechAddress1:         process.env.NAMECHEAP_REGISTRANT_ADDR  ?? "123 Main St",
-    TechCity:             process.env.NAMECHEAP_REGISTRANT_CITY  ?? "New York",
-    TechStateProvince:    process.env.NAMECHEAP_REGISTRANT_STATE ?? "NY",
-    TechPostalCode:       process.env.NAMECHEAP_REGISTRANT_ZIP   ?? "10001",
-    TechCountry:          process.env.NAMECHEAP_REGISTRANT_COUNTRY ?? "US",
-    TechPhone:            process.env.NAMECHEAP_REGISTRANT_PHONE ?? "+1.2125551234",
-    TechEmailAddress:     process.env.NAMECHEAP_REGISTRANT_EMAIL ?? "admin@leadash.io",
-    AdminFirstName:       process.env.NAMECHEAP_REGISTRANT_FIRST ?? "Admin",
-    AdminLastName:        process.env.NAMECHEAP_REGISTRANT_LAST  ?? "User",
-    AdminAddress1:        process.env.NAMECHEAP_REGISTRANT_ADDR  ?? "123 Main St",
-    AdminCity:            process.env.NAMECHEAP_REGISTRANT_CITY  ?? "New York",
-    AdminStateProvince:   process.env.NAMECHEAP_REGISTRANT_STATE ?? "NY",
-    AdminPostalCode:      process.env.NAMECHEAP_REGISTRANT_ZIP   ?? "10001",
-    AdminCountry:         process.env.NAMECHEAP_REGISTRANT_COUNTRY ?? "US",
-    AdminPhone:           process.env.NAMECHEAP_REGISTRANT_PHONE ?? "+1.2125551234",
-    AdminEmailAddress:    process.env.NAMECHEAP_REGISTRANT_EMAIL ?? "admin@leadash.io",
-    // Suppress unused params lint
-    _sld: sld,
-    _tld: tld,
-  });
+  // All four contact roles (Registrant, Tech, Admin, AuxBilling) use the same info
+  const contact = {
+    FirstName:        registrant.firstName,
+    LastName:         registrant.lastName,
+    Address1:         registrant.address,
+    City:             registrant.city,
+    StateProvince:    registrant.state,
+    PostalCode:       registrant.zip,
+    Country:          registrant.country,
+    Phone:            registrant.phone,
+    EmailAddress:     registrant.email,
+  };
+
+  const extra: Record<string, string> = {
+    DomainName: domain,
+    Years:      "1",
+    _sld:       sld,
+    _tld:       tld,
+  };
+
+  for (const prefix of ["Registrant", "Tech", "Admin", "AuxBilling"] as const) {
+    for (const [key, value] of Object.entries(contact)) {
+      extra[`${prefix}${key}`] = value;
+    }
+  }
+
+  const xml = await callApi("namecheap.domains.create", extra);
   checkApiErrors(xml);
 }
 
