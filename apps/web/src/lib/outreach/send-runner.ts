@@ -228,7 +228,7 @@ export async function runSendBatch(
 
 async function sendViaInbox(
   inbox: OutreachInbox,
-  opts: { to: string; subject: string; htmlBody: string; textBody: string },
+  opts: { to: string; subject: string; htmlBody: string; textBody: string; inReplyToMessageId?: string; replyToThreadId?: string },
 ): Promise<{ messageId: string; threadId?: string }> {
   if (inbox.provider === "gmail"   && inbox.oauth_refresh_token) return sendGmailMessage(inbox, opts);
   if (inbox.provider === "outlook" && inbox.oauth_refresh_token) return sendMicrosoftMessage(inbox, opts);
