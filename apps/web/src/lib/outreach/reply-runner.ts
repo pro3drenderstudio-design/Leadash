@@ -211,9 +211,11 @@ async function ingestMessages(
         .eq("workspace_id", workspaceId).eq("message_id", msg.inReplyTo).is("replied_at", null).limit(1).single();
       send = data ?? null;
     }
-    if (!send && msg.messageId) {
+    if (!send && msg.threadId) {
+      // Fallback: match by provider thread/conversation ID (Gmail threadId, Outlook conversationId)
       const { data } = await db.from("outreach_sends").select("id, enrollment_id")
-        .eq("workspace_id", workspaceId).eq("thread_id", msg.messageId).is("replied_at", null).limit(1).single();
+        .eq("workspace_id", workspaceId).eq("thread_id", msg.threadId).is("replied_at", null)
+        .order("sent_at", { ascending: false }).limit(1).single();
       send = data ?? null;
     }
     if (!send && msg.fromEmail) {
