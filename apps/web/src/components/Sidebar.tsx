@@ -39,6 +39,7 @@ interface Props {
 
 export default function Sidebar({ workspaceName, plan }: Props) {
   const pathname = usePathname();
+  const { currency, setCurrency, detected } = useCurrency();
 
   async function signOut() {
     const supabase = createClient();
