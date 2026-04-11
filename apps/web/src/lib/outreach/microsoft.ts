@@ -129,9 +129,18 @@ export async function sendMicrosoftMessage(
 ): Promise<{ messageId: string; threadId: string }> {
   const client = await getGraphClient(inbox);
 
-  const internetMessageHeaders = opts.customHeaders
-    ? Object.entries(opts.customHeaders).map(([name, value]) => ({ name, value }))
-    : undefined;
+  const internetMessageHeaders: Array<{ name: string; value: string }> = [];
+  if (opts.inReplyToMessageId) {
+    const mid = opts.inReplyToMessageId.startsWith("<") ? opts.inReplyToMessageId : `<${opts.inReplyToMessageId}>`;
+    const refs = opts.replyToThreadId && opts.replyToThreadId !== opts.inReplyToMessageId
+      ? `<${opts.replyToThreadId}> ${mid}`
+      : mid;
+    internetMessageHeaders.push({ name: "In-Reply-To", value: mid });
+    internetMessageHeaders.push({ name: "References",  value: refs });
+  }
+  if (opts.customHeaders) {
+    internetMessageHeaders.push(...Object.entries(opts.customHeaders).map(([name, value]) => ({ name, value })));
+  }
 
   const message: Record<string, unknown> = {
     subject: opts.subject,
@@ -145,7 +154,7 @@ export async function sendMicrosoftMessage(
       },
     ],
     ...(opts.fromName ? { from: { emailAddress: { name: opts.fromName, address: inbox.email_address } } } : {}),
-    ...(internetMessageHeaders ? { internetMessageHeaders } : {}),
+    ...(internetMessageHeaders.length ? { internetMessageHeaders } : {}),
   };
 
   // sendMail and get the sent message ID
