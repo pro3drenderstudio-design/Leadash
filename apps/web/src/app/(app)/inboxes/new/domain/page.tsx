@@ -384,6 +384,11 @@ export default function BuyDomainPage() {
                           </div>
                           <span className="text-white text-sm font-mono">{r.domain}</span>
                           {!r.available && <span className="text-white/30 text-xs">Taken</span>}
+                          {r.available && (
+                            <span className="text-white/25 text-xs hidden sm:inline">
+                              up to {(MAX_INBOXES_PER_DOMAIN * FULL_SENDS_PER_INBOX).toLocaleString()}/day
+                            </span>
+                          )}
                         </div>
                         <span className="text-white/50 text-sm">${r.price.toFixed(2)}/yr</span>
                       </div>
