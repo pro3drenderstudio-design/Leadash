@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { CREDIT_COSTS } from "@/types/lead-campaigns";
 import { startLeadScraperRun } from "@/lib/lead-campaigns/apify";
+import { enqueueLeadCampaign } from "@/lib/queue";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
