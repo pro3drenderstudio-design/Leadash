@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { workspaceId, db } = auth;
   const { id } = await params;
 
-  const { lead_ids, list_id, create_list_name } = await req.json();
+  const { lead_ids, list_id, create_list_name, valid_only } = await req.json();
 
   if (!list_id && !create_list_name) {
     return NextResponse.json({ error: "list_id or create_list_name required" }, { status: 400 });
