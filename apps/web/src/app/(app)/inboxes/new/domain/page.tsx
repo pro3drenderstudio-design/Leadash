@@ -391,7 +391,8 @@ export default function BuyDomainPage() {
                   })}
                 </div>
                 {selectedDomains.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between">
+                  <div className="mt-4 space-y-4">
+                    {/* Selected domains pills */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {selectedDomains.map(d => (
                         <span key={d.domain} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/15 border border-blue-500/30 rounded-full text-blue-300 text-xs font-mono">
@@ -400,12 +401,18 @@ export default function BuyDomainPage() {
                         </span>
                       ))}
                     </div>
-                    <button
-                      onClick={() => setStep("configure")}
-                      className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors whitespace-nowrap ml-4"
-                    >
-                      Configure {selectedDomains.length} domain{selectedDomains.length > 1 ? "s" : ""} →
-                    </button>
+
+                    {/* Capacity preview card */}
+                    <CapacityCard domainCount={selectedDomains.length} />
+
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setStep("configure")}
+                        className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                      >
+                        Configure {selectedDomains.length} domain{selectedDomains.length > 1 ? "s" : ""} →
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
