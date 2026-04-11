@@ -52,22 +52,22 @@ async function personalizeSingle(
   let maxTokens: number;
 
   if (depth === "deep") {
-    prompt = `You are an expert cold email copywriter. Write a complete, highly personalized cold email for the following prospect.
+    prompt = `You are an expert cold email copywriter. Write a complete, highly personalized cold email body for the following prospect.
 
 Prospect: ${name}${context ? `, ${context}` : ""}
 Offer/Product: ${productPrompt}
 
-Format your response EXACTLY as:
-Subject: [subject line]
-
-[email body — 3-4 short paragraphs, conversational tone, no fluff, specific to their role/industry, clear value prop, one soft CTA at the end]
-
 Rules:
-- Do NOT use generic openers like "I hope this finds you well"
+- 3-4 short paragraphs, conversational tone, no fluff
 - Reference their specific role, company, or industry naturally
-- Keep total email under 150 words
-- No placeholders like [your name] — write the full email as if ready to send
-- Respond with ONLY the formatted email, nothing else`;
+- Clear value proposition and one soft CTA at the end
+- Do NOT include a subject line
+- Do NOT include a greeting like "Hi [name]" at the start
+- Do NOT include a sign-off or signature at the end
+- Do NOT use generic openers like "I hope this finds you well"
+- No placeholders — write the full body ready to drop into a sequence
+- Keep it under 120 words
+- Respond with ONLY the email body, nothing else`;
     maxTokens = 400;
   } else {
     prompt = `You are a cold email expert. Write a single personalized icebreaker opening line (1-2 sentences, max 30 words) for a cold email to ${name}${context ? `, ${context}` : ""}.
