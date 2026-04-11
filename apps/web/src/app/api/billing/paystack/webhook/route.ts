@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPaystackSignature, verifyPaystackPayment } from "@/lib/billing/paystack";
-import { purchaseDomain } from "@/lib/outreach/namecheap";
+import { purchaseDomain, type RegistrantContact } from "@/lib/outreach/namecheap";
 import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
 import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
