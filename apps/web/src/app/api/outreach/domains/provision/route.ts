@@ -146,8 +146,14 @@ export async function POST(req: NextRequest) {
       const smtp = getSmtpCredentials();
       const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-      for (let i = 1; i <= domainRecord.mailbox_count; i++) {
-        const login = `${domainRecord.mailbox_prefix}${i}`;
+      // Use explicit prefixes if set (name-based), otherwise fall back to prefix+number pattern
+      const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
+        ? domainRecord.mailbox_prefixes as string[]
+        : null;
+      const logins = explicitPrefixes
+        ?? Array.from({ length: domainRecord.mailbox_count }, (_, i) => `${domainRecord.mailbox_prefix}${i + 1}`);
+
+      for (const login of logins) {
         const email = `${login}@${domainRecord.domain}`;
 
         await db.from("outreach_inboxes").insert({
