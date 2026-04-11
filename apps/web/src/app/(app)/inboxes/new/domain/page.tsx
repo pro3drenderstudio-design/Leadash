@@ -458,40 +458,19 @@ export default function BuyDomainPage() {
             </div>
           </div>
 
-          {/* Currency selector */}
-          <div className="mb-6">
-            <label className="block text-white/50 text-xs font-medium mb-3">Pay in</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setCurrency("stripe")}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  currency === "stripe"
-                    ? "border-blue-500/60 bg-blue-600/10"
-                    : "border-white/10 bg-white/4 hover:border-white/20"
-                }`}
-              >
-                <p className="text-white font-semibold text-sm">USD</p>
-                <p className="text-white/40 text-xs mt-0.5">via Stripe</p>
-                <p className="text-white/60 text-sm mt-2 font-mono">
-                  ${oneTimeUsd.toFixed(2)} + ${recurringUsd}/mo
-                </p>
-              </button>
-
-              <button
-                onClick={() => setCurrency("paystack")}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  currency === "paystack"
-                    ? "border-blue-500/60 bg-blue-600/10"
-                    : "border-white/10 bg-white/4 hover:border-white/20"
-                }`}
-              >
-                <p className="text-white font-semibold text-sm">NGN</p>
-                <p className="text-white/40 text-xs mt-0.5">via Paystack</p>
-                <p className="text-white/60 text-sm mt-2 font-mono">
-                  ₦{totalNgn.toLocaleString()}
-                </p>
-              </button>
+          {/* Currency — driven by sidebar toggle */}
+          <div className="mb-6 flex items-center justify-between px-4 py-3 bg-white/4 border border-white/8 rounded-xl">
+            <div>
+              <p className="text-white text-sm font-semibold">
+                {currency === "stripe" ? "USD · via Stripe" : "NGN · via Paystack"}
+              </p>
+              <p className="text-white/60 text-sm font-mono mt-0.5">
+                {currency === "stripe"
+                  ? `$${oneTimeUsd.toFixed(2)} one-time + $${recurringUsd}/mo`
+                  : `₦${totalNgn.toLocaleString()} one-time`}
+              </p>
             </div>
+            <p className="text-white/30 text-xs">Change in sidebar</p>
           </div>
 
           {payError && <p className="text-red-400 text-sm mb-4">{payError}</p>}
