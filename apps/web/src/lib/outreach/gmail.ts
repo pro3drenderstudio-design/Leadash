@@ -204,7 +204,7 @@ export async function fetchRecentMessages(
       userId:          "me",
       id:              item.id,
       format:          "full",
-      metadataHeaders: ["From", "Subject", "In-Reply-To", "References", "X-PP-Ref"],
+      metadataHeaders: ["From", "Subject", "In-Reply-To", "References", "X-LD-Ref"],
     });
 
     const headers  = msg.data.payload?.headers ?? [];
@@ -212,7 +212,7 @@ export async function fetchRecentMessages(
     const fromRaw  = getH("From") ?? "";
     const fromEmail = fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw;
     const inReplyTo = getH("In-Reply-To");
-    const warmupId  = getH("X-PP-Ref");
+    const warmupId  = getH("X-LD-Ref");
 
     // Extract plain-text body
     let bodyText: string | null = null;
