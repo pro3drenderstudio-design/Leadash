@@ -526,14 +526,21 @@ export default function BuyDomainPage() {
 
           {/* Summary card */}
           <div className="border border-white/8 rounded-xl p-5 mb-6 space-y-3">
-            <Row label="Domain" value={selected.domain} mono />
-            <Row label="Domain registration (1 yr)" value={`$${(selected.price + DOMAIN_SERVICE_FEE_USD).toFixed(2)}`} />
-            <Row label="Inboxes" value={`${mailboxCount} × ${prefix || "outreach"}N@${selected.domain}`} mono />
-            <div className="border-t border-white/8 pt-3 mt-3">
+            {selectedDomains.map(d => (
+              <Row key={d.domain} label={d.domain} value={`$${(d.price + DOMAIN_SERVICE_FEE_USD).toFixed(2)}/yr`} mono />
+            ))}
+            <div className="border-t border-white/8 pt-3 mt-1 space-y-1">
+              <Row label="Inboxes per domain" value={`${mailboxCount} (${activePrefixes.join(", ")})`} mono />
+              <Row label="Total inboxes" value={String(totalInboxes)} />
+            </div>
+            <div className="border-t border-white/8 pt-3 grid grid-cols-3 gap-2 text-center">
+              {[["Sends/day", sendsPerDay.toLocaleString()],["Sends/mo", sendsPerMonth.toLocaleString()],["Inboxes", totalInboxes.toString()]].map(([l,v])=>(
+                <div key={l}><p className="text-white font-semibold text-sm">{v}</p><p className="text-white/30 text-xs">{l}</p></div>
+              ))}
+            </div>
+            <div className="border-t border-white/8 pt-3">
               <Row label="Monthly subscription" value={`$${recurringUsd}/mo`} highlight />
-              <p className="text-white/30 text-xs mt-1 pl-0">
-                ${INBOX_PRICE_USD}/inbox × {mailboxCount} inbox{mailboxCount > 1 ? "es" : ""}
-              </p>
+              <p className="text-white/30 text-xs mt-1">${INBOX_PRICE_USD}/inbox × {totalInboxes} inboxes</p>
             </div>
           </div>
 
