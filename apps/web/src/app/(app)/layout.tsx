@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import AppHeader from "@/components/AppHeader";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
+import { CurrencyProvider } from "@/lib/currency";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Check auth first
