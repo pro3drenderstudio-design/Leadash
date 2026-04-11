@@ -1,7 +1,7 @@
 // ─── Gemini AI personalization ────────────────────────────────────────────────
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1/models";
-const MODEL       = "gemini-2.0-flash-001";
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const MODEL       = "gemini-2.0-flash";
 
 interface LeadData {
   first_name?: string | null;
