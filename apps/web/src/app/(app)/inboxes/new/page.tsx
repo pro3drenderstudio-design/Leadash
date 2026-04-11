@@ -65,7 +65,7 @@ export default function NewInboxPage() {
       <p className="text-white/40 text-sm mb-8">Connect a Gmail, Outlook, or custom SMTP account to send campaigns.</p>
 
       {!provider && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/gmail?workspace_id=${wsId}`; }}
             className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left"
@@ -96,6 +96,18 @@ export default function NewInboxPage() {
             <div>
               <p className="text-white font-medium text-sm">Custom SMTP</p>
               <p className="text-white/40 text-xs mt-0.5">Any mail provider</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push("/inboxes/new/domain")}
+            className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl transition-all text-left relative overflow-hidden"
+          >
+            <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">NEW</div>
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-xl">🌐</div>
+            <div>
+              <p className="text-white font-medium text-sm">Buy a domain</p>
+              <p className="text-white/40 text-xs mt-0.5">Auto-provision + DNS setup</p>
             </div>
           </button>
         </div>
