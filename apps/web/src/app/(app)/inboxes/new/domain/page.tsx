@@ -234,6 +234,26 @@ export default function BuyDomainPage() {
         </div>
       )}
 
+      {/* ── Registrant info banner ───────────────────────────────────────────── */}
+      {step !== "provisioning" && registrantComplete === false && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/25 mb-6">
+          <span className="text-amber-400 text-lg flex-shrink-0 mt-0.5">⚠</span>
+          <div className="flex-1">
+            <p className="text-amber-300 text-sm font-medium">Registrant info required</p>
+            <p className="text-amber-300/60 text-xs mt-0.5">
+              You need to fill in your domain registrant contact details before purchasing a domain.
+              This is required by ICANN and used only once per workspace.
+            </p>
+          </div>
+          <Link
+            href="/settings?tab=outreach"
+            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            Fill in now →
+          </Link>
+        </div>
+      )}
+
       {/* ── Step 1: Search ────────────────────────────────────────────────────── */}
       {step === "search" && (
         <div>
