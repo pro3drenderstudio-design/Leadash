@@ -5,6 +5,7 @@ import { processSend } from "./workers/send-worker";
 import { processReplyPoll } from "./workers/reply-worker";
 import { processWarmup } from "./workers/warmup-worker";
 import { processWebhook } from "./workers/webhook-worker";
+import { processLeadCampaign } from "./workers/lead-campaign-worker";
 import { startSchedulers } from "./schedulers";
 
 console.log("[Leadash Worker] Starting...");
