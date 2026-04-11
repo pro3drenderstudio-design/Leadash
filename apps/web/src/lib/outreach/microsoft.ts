@@ -236,7 +236,7 @@ export async function fetchNewReplies(
   for (const msg of result?.value ?? []) {
     const headers: Array<{ name: string; value: string }> = msg.internetMessageHeaders ?? [];
     const inReplyTo = headers.find((h) => h.name === "In-Reply-To")?.value ?? null;
-    const warmupId  = headers.find((h) => h.name === "X-PP-Ref")?.value ?? null;
+    const warmupId  = headers.find((h) => h.name === "X-LD-Ref")?.value ?? null;
 
     if (!inReplyTo && !warmupId) continue;
 
