@@ -582,21 +582,21 @@ export default function BuyDomainPage() {
       {step === "provisioning" && (
         <div>
           <h1 className="text-xl font-bold text-white mb-1">
-            {provisionStatus === "active" ? "All set!" : provisionStatus === "failed" ? "Setup failed" : "Setting up your domain…"}
+            {overallStatus === "active" ? "All set!" : overallStatus === "failed" ? "Setup failed" : `Setting up ${domainIds.length} domain${domainIds.length > 1 ? "s" : ""}…`}
           </h1>
           <p className="text-white/40 text-sm mb-8">
-            {provisionStatus === "active"
+            {overallStatus === "active"
               ? "Your inboxes are created and warming up. They'll be ready for campaigns in 21 days."
-              : provisionStatus === "failed"
+              : overallStatus === "failed"
               ? "Something went wrong during setup. Contact support if this persists."
               : "This usually takes under a minute. Don't close this tab."}
           </p>
 
           <div className="space-y-3">
             {PROVISION_STEPS.map((label, i) => {
-              const isDone   = provisionStatus !== "failed" && currentProvisionStep > i;
-              const isActive = provisionStatus !== "failed" && currentProvisionStep === i;
-              const isFailed = provisionStatus === "failed" && currentProvisionStep === i;
+              const isDone   = overallStatus !== "failed" && minStep > i;
+              const isActive = overallStatus !== "failed" && minStep === i;
+              const isFailed = overallStatus === "failed" && minStep === i;
 
               return (
                 <div key={label} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
