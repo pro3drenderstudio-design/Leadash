@@ -89,7 +89,8 @@ export default function BuyDomainPage() {
   const [lastName, setLastName]           = useState("");
 
   // ── Step 3: Review ──────────────────────────────────────────────────────────
-  const [currency, setCurrency]           = useState<PaymentProvider>("stripe");
+  const { currency: globalCurrency }      = useCurrency();
+  const currency: PaymentProvider         = globalCurrency === "NGN" ? "paystack" : "stripe";
   const [paying, setPaying]               = useState(false);
   const [payError, setPayError]           = useState<string | null>(null);
 
