@@ -7,11 +7,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { workspaceId, db } = auth;
   const { id } = await params;
 
-  const url    = new URL(req.url);
-  const page   = parseInt(url.searchParams.get("page") ?? "0", 10);
-  const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
-  const filter = url.searchParams.get("filter") ?? "all"; // all | valid | not_added
-  const search = url.searchParams.get("search") ?? "";
+  const url      = new URL(req.url);
+  const page     = parseInt(url.searchParams.get("page") ?? "0", 10);
+  const limit    = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
+  const filter   = url.searchParams.get("filter") ?? "all"; // all | valid | catch_all | invalid | pending | not_added
+  const search   = url.searchParams.get("search") ?? "";
+  const industry = url.searchParams.get("industry") ?? "";
+  const title    = url.searchParams.get("title") ?? "";
+  const country  = url.searchParams.get("country") ?? "";
 
   let query = db
     .from("lead_campaign_leads")
@@ -21,6 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (filter === "valid") {
     query = query.in("verification_status", ["valid", "catch_all"]);
+  } else if (filter === "catch_all") {
+    query = query.eq("verification_status", "catch_all");
+  } else if (filter === "invalid") {
+    query = query.eq("verification_status", "invalid");
+  } else if (filter === "pending") {
+    query = query.eq("verification_status", "pending");
   } else if (filter === "not_added") {
     query = query.is("added_to_list_id", null);
   }
@@ -28,6 +37,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (search) {
     query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,company.ilike.%${search}%`);
   }
+  if (industry) query = query.ilike("industry", `%${industry}%`);
+  if (title)    query = query.ilike("title",    `%${title}%`);
+  if (country)  query = query.or(`location.ilike.%${country}%,org_country.ilike.%${country}%`);
 
   const { data, count, error } = await query
     .order("created_at", { ascending: true })
