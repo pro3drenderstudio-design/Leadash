@@ -497,7 +497,8 @@ export default function BuyDomainPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleCheckout}
-              disabled={paying}
+              disabled={paying || registrantComplete === false}
+              title={registrantComplete === false ? "Fill in registrant info in Settings → Outreach first" : undefined}
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
             >
               {paying && <Spinner />}
