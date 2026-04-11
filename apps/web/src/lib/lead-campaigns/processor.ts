@@ -217,7 +217,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       if (unpersonalized?.length) {
         type LeadRow = { id: string; first_name?: string | null; last_name?: string | null; title?: string | null; company?: string | null; industry?: string | null; website?: string | null };
         const rows = unpersonalized as LeadRow[];
-        const lines = await personalizeLeads(rows, fresh2.personalize_prompt);
+        const lines = await personalizeLeads(rows, fresh2.personalize_prompt, fresh2.personalize_depth ?? "standard");
 
         let personalized = 0;
         for (let i = 0; i < rows.length; i++) {
