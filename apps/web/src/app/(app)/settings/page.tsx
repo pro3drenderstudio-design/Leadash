@@ -636,7 +636,8 @@ function OutreachTab() {
         </p>
       </Section>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-2">
+        {saveError && <p className="text-red-400 text-xs">{saveError}</p>}
         <SaveButton saving={saving} saved={saved} onClick={save} />
       </div>
     </div>
