@@ -28,6 +28,19 @@ const INBOX_PRICE_USD = 2;
 const DOMAIN_SERVICE_FEE_USD = 1;
 const NGN_PER_USD = 1600;
 
+// Sending limits
+const MAX_INBOXES_PER_DOMAIN = 5;
+const WARMUP_SENDS_PER_INBOX = 15;  // during 21-day warmup
+const FULL_SENDS_PER_INBOX   = 40;  // post-warmup
+
+function domainCapacity(domains: number, inboxes: number) {
+  return {
+    warmupDay:  domains * inboxes * WARMUP_SENDS_PER_INBOX,
+    fullDay:    domains * inboxes * FULL_SENDS_PER_INBOX,
+    fullMonth:  domains * inboxes * FULL_SENDS_PER_INBOX * 30,
+  };
+}
+
 const PROVISION_STEPS = [
   "Payment confirmed",
   "Registering domain",
