@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
       personalize_enabled,
       personalize_prompt:     personalize_prompt ?? null,
       personalize_valid_only: personalize_valid_only ?? false,
+      personalize_depth:      personalize_depth,
       source_campaign_id:     source_campaign_id ?? null,
       credits_reserved:       creditsNeeded,
       status:                 "pending",
