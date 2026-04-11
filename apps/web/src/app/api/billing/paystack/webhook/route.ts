@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPaystackSignature, verifyPaystackPayment } from "@/lib/billing/paystack";
-import { purchaseDomain, setDnsHosts } from "@/lib/outreach/namecheap";
-import { addDomain, verifyDomain, createSmtpCredential, getSmtpSettings, generatePassword } from "@/lib/outreach/mailgun";
+import { purchaseDomain } from "@/lib/outreach/namecheap";
+import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
+import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
-import type { DnsRecord } from "@/lib/outreach/namecheap";
 
 const WARMUP_DAYS = 21;
 
@@ -13,7 +13,7 @@ async function sleep(ms: number) {
 }
 
 export async function POST(req: NextRequest) {
-  const rawBody  = await req.text();
+  const rawBody   = await req.text();
   const signature = req.headers.get("x-paystack-signature") ?? "";
 
   if (!verifyPaystackSignature(rawBody, signature)) {
@@ -31,13 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  const reference        = event.data.reference;
-  const meta             = event.data.metadata ?? {};
-  const domainRecordId   = meta.domain_record_id as string | undefined;
-  const workspaceId      = meta.workspace_id     as string | undefined;
+  const reference      = event.data.reference;
+  const meta           = event.data.metadata ?? {};
+  const domainRecordId = meta.domain_record_id as string | undefined;
+  const workspaceId    = meta.workspace_id     as string | undefined;
 
   if (!domainRecordId || !workspaceId) {
-    // Not a domain purchase event — ignore
     return NextResponse.json({ received: true });
   }
 
@@ -53,11 +52,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Verify payment server-side
   const { paid } = await verifyPaystackPayment(reference);
   if (!paid) return NextResponse.json({ received: true });
 
-  // Run provision pipeline (same logic as the provision route)
   async function setStatus(status: string, errorMessage?: string) {
     await db
       .from("outreach_domains")
@@ -74,37 +71,31 @@ export async function POST(req: NextRequest) {
     await purchaseDomain(domainRecord.domain);
 
     await setStatus("dns_pending");
-    const { sendingRecords, receivingRecords } = await addDomain(domainRecord.domain);
+    const { dkimTokens } = await registerDomain(domainRecord.domain);
+
+    const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
+    await publishDnsRecords(domainRecord.domain, dnsRecords);
 
     await db
       .from("outreach_domains")
-      .update({ dns_records: { sending: sendingRecords, receiving: receivingRecords } })
+      .update({ dns_records: dnsRecords })
       .eq("id", domainRecordId);
 
-    const dmarcRecord: DnsRecord = {
-      type:  "TXT",
-      name:  "_dmarc",
-      value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domainRecord.domain}; pct=100`,
-      ttl:   1800,
-    };
-    await setDnsHosts(domainRecord.domain, [...sendingRecords, ...receivingRecords, dmarcRecord]);
-
     await setStatus("verifying");
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await sleep(5_000);
-      const result = await verifyDomain(domainRecord.domain);
-      if (result.valid) break;
+    let verified = false;
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      await sleep(10_000);
+      verified = await isDomainVerified(domainRecord.domain);
+      if (verified) break;
     }
+    if (verified) await enableDkimSigning(domainRecord.domain);
 
-    const smtp = getSmtpSettings();
+    const smtp = getSmtpCredentials();
     const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 1; i <= domainRecord.mailbox_count; i++) {
-      const login    = `${domainRecord.mailbox_prefix}${i}`;
-      const email    = `${login}@${domainRecord.domain}`;
-      const password = generatePassword(24);
-
-      await createSmtpCredential(domainRecord.domain, login, password);
+      const login = `${domainRecord.mailbox_prefix}${i}`;
+      const email = `${login}@${domainRecord.domain}`;
 
       await db.from("outreach_inboxes").insert({
         workspace_id:         workspaceId,
@@ -115,14 +106,15 @@ export async function POST(req: NextRequest) {
         status:               "active",
         smtp_host:            smtp.host,
         smtp_port:            smtp.port,
-        smtp_user:            email,
-        smtp_pass_encrypted:  encrypt(password),
-        imap_host:            smtp.imapHost,
-        imap_port:            smtp.imapPort,
+        smtp_user:            smtp.username,
+        smtp_pass_encrypted:  encrypt(smtp.password),
+        imap_host:            null,
+        imap_port:            null,
         daily_send_limit:     15,
         warmup_enabled:       true,
         warmup_target_daily:  40,
         warmup_ramp_per_week: 5,
+        warmup_ends_at:       warmupEndsAt,
         first_name:           domainRecord.first_name ?? null,
         last_name:            domainRecord.last_name  ?? null,
       });
