@@ -75,18 +75,45 @@ export default function BuyDomainPage() {
   }, [step]);
 
   // ── Step 1: Search ──────────────────────────────────────────────────────────
-  const [sld, setSld]           = useState("");
-  const [selectedTlds, setSelectedTlds] = useState<string[]>([".com"]);
-  const [checking, setChecking] = useState(false);
-  const [results, setResults]   = useState<DomainResult[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<DomainResult | null>(null);
+  const [sld, setSld]                     = useState("");
+  const [selectedTlds, setSelectedTlds]   = useState<string[]>([".com"]);
+  const [checking, setChecking]           = useState(false);
+  const [results, setResults]             = useState<DomainResult[]>([]);
+  const [searchError, setSearchError]     = useState<string | null>(null);
+  const [selectedDomains, setSelectedDomains] = useState<DomainResult[]>([]);
+
+  function toggleDomain(r: DomainResult) {
+    setSelectedDomains(prev =>
+      prev.some(d => d.domain === r.domain)
+        ? prev.filter(d => d.domain !== r.domain)
+        : [...prev, r],
+    );
+  }
 
   // ── Step 2: Configure ───────────────────────────────────────────────────────
-  const [mailboxCount, setMailboxCount]   = useState(3);
-  const [prefix, setPrefix]               = useState("outreach");
   const [firstName, setFirstName]         = useState("");
   const [lastName, setLastName]           = useState("");
+  const [selectedPrefixes, setSelectedPrefixes] = useState<string[]>([]);
+  const [customPrefix, setCustomPrefix]   = useState("");
+  const [prefixMode, setPrefixMode]       = useState<"generated" | "custom">("generated");
+
+  // Generate inbox local-parts from first/last name
+  function generateCombos(first: string, last: string): string[] {
+    const f = first.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const l = last.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!f && !l) return [];
+    if (f && !l) return [f, `${f}1`, `${f}2`, `${f}3`, `${f}4`].slice(0, 5);
+    if (!f && l) return [l, `${l}1`, `${l}2`, `${l}3`, `${l}4`].slice(0, 5);
+    return [
+      f,
+      `${f}.${l}`,
+      `${f[0]}.${l}`,
+      `${f[0]}${l}`,
+      `${f}${l}`,
+    ];
+  }
+
+  const combos = generateCombos(firstName, lastName);
 
   // ── Step 3: Review ──────────────────────────────────────────────────────────
   const { currency: globalCurrency }      = useCurrency();
