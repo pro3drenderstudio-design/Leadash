@@ -50,12 +50,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { workspaceId, db } = auth;
   const { id } = await params;
 
-  const { data: leads } = await db
+  const url      = new URL(req.url);
+  const statuses = url.searchParams.get("statuses"); // comma-separated, e.g. "valid,catch_all"
+
+  let query = db
     .from("lead_campaign_leads")
     .select("*")
     .eq("campaign_id", id)
     .eq("workspace_id", workspaceId)
     .order("created_at");
+
+  if (statuses) {
+    const statusList = statuses.split(",").map(s => s.trim()).filter(Boolean);
+    if (statusList.length) query = query.in("verification_status", statusList);
+  }
+
+  const { data: leads } = await query;
 
   if (!leads?.length) {
     return new NextResponse("No leads", { status: 404 });
