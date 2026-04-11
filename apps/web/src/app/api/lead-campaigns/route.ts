@@ -180,5 +180,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Immediately enqueue for processing (worker picks it up in < 1s vs waiting for next cron tick)
+  await enqueueLeadCampaign(campaign.id).catch(() => {});
+
   return NextResponse.json(campaign, { status: 201 });
 }
