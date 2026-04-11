@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
+    <CurrencyProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} />
         <div className="flex-1 flex flex-col overflow-hidden">
