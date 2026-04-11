@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
       personalize_enabled,
       personalize_prompt:      personalize_prompt || null,
       personalize_valid_only,
+      personalize_depth,
       credits_reserved:        creditsNeeded,
       status:                  "running",
       started_at:              new Date().toISOString(),
