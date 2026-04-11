@@ -123,10 +123,19 @@ export default function BuyDomainPage() {
   const [payError, setPayError]           = useState<string | null>(null);
 
   // ── Step 4: Provisioning ────────────────────────────────────────────────────
-  const [domainId, setDomainId]           = useState<string | null>(returnedDomainId);
-  const [provisionStatus, setProvisionStatus] = useState<string>("pending");
-  const [provisionError, setProvisionError]   = useState<string | null>(null);
-  const [provisioning, setProvisioning]       = useState(false);
+  // Track per-domain provision status: { [id]: status }
+  const [domainIds, setDomainIds]             = useState<string[]>(returnedIdList);
+  const [provisionStatuses, setProvisionStatuses] = useState<Record<string, string>>({});
+  const [provisionErrors, setProvisionErrors]     = useState<Record<string, string>>({});
+  const [provisioning, setProvisioning]           = useState(false);
+
+  // Derived: overall status = active when ALL domains active, failed if any failed
+  const allActive  = domainIds.length > 0 && domainIds.every(id => provisionStatuses[id] === "active");
+  const anyFailed  = domainIds.some(id => provisionStatuses[id] === "failed");
+  const overallStatus = allActive ? "active" : anyFailed ? "failed" : "pending";
+  // For progress steps: use the "least advanced" domain
+  const minStep = domainIds.length === 0 ? 0
+    : Math.min(...domainIds.map(id => STATUS_TO_STEP[provisionStatuses[id] ?? "pending"] ?? 0));
 
   // ── Domain search ───────────────────────────────────────────────────────────
   async function handleSearch() {
