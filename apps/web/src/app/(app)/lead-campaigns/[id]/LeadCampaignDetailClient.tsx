@@ -6,7 +6,6 @@ import type { LeadCampaign, LeadCampaignLead } from "@/types/lead-campaigns";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 import LeadDrawer from "./LeadDrawer";
 
-// Strip Python-style list notation returned by Apify actor
 function cleanVal(v: string | null | undefined): string {
   if (!v) return "";
   return v.replace(/^\[['"]?|['"]?\]$/g, "").replace(/['"]/g, "").trim();
@@ -29,6 +28,14 @@ const VERIFY_STYLES: Record<string, { bg: string; text: string; dot: string }> =
   pending:    { bg: "bg-white/5",        text: "text-white/25",    dot: "bg-white/15" },
 };
 
+const DL_STATUS_OPTIONS = [
+  { key: "valid",      label: "Valid",       dotCls: "bg-emerald-400" },
+  { key: "catch_all",  label: "Catch-all",   dotCls: "bg-amber-400" },
+  { key: "invalid",    label: "Invalid",     dotCls: "bg-red-400" },
+  { key: "unknown",    label: "Unknown",     dotCls: "bg-white/30" },
+  { key: "pending",    label: "Not verified",dotCls: "bg-white/15" },
+];
+
 function LinkedInIcon() {
   return (
     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -45,25 +52,46 @@ function GlobeIcon() {
   );
 }
 
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div
+      onClick={() => onChange(!value)}
+      className={`w-10 h-5.5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${value ? "bg-blue-600" : "bg-white/15"}`}
+      style={{ height: 22 }}
+    >
+      <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-5" : "translate-x-0"}`} />
+    </div>
+  );
+}
+
 export default function LeadCampaignDetailClient() {
   const { id } = useParams<{ id: string }>();
 
-  const [campaign, setCampaign]         = useState<LeadCampaign | null>(null);
-  const [leads, setLeads]               = useState<LeadCampaignLead[]>([]);
-  const [total, setTotal]               = useState(0);
-  const [page, setPage]                 = useState(0);
-  const [filter, setFilter]             = useState("all");
-  const [search, setSearch]             = useState("");
-  const [selected, setSelected]         = useState<Set<string>>(new Set());
-  const [loading, setLoading]           = useState(true);
-  const [exporting, setExporting]       = useState(false);
-  const [showExport, setShowExport]     = useState(false);
-  const [lists, setLists]               = useState<{ id: string; name: string }[]>([]);
-  const [exportListId, setExportListId] = useState("");
-  const [newListName, setNewListName]   = useState("");
-  const [exportResult, setExportResult] = useState<string | null>(null);
-  const [cancelling, setCancelling]     = useState(false);
-  const [drawerLead, setDrawerLead]     = useState<LeadCampaignLead | null>(null);
+  const [campaign, setCampaign]           = useState<LeadCampaign | null>(null);
+  const [leads, setLeads]                 = useState<LeadCampaignLead[]>([]);
+  const [total, setTotal]                 = useState(0);
+  const [page, setPage]                   = useState(0);
+  const [filter, setFilter]               = useState("all");
+  const [search, setSearch]               = useState("");
+  const [selected, setSelected]           = useState<Set<string>>(new Set());
+  const [loading, setLoading]             = useState(true);
+  const [exporting, setExporting]         = useState(false);
+  const [showExport, setShowExport]       = useState(false);
+  const [showDownload, setShowDownload]   = useState(false);
+  const [lists, setLists]                 = useState<{ id: string; name: string }[]>([]);
+  const [exportListId, setExportListId]   = useState("");
+  const [newListName, setNewListName]     = useState("");
+  const [exportResult, setExportResult]   = useState<string | null>(null);
+  const [validOnly, setValidOnly]         = useState(true);
+  const [dlStatuses, setDlStatuses]       = useState<string[]>(["valid", "catch_all"]);
+  const [cancelling, setCancelling]       = useState(false);
+  const [drawerLead, setDrawerLead]       = useState<LeadCampaignLead | null>(null);
+  const [showFilters, setShowFilters]     = useState(false);
+  const [industryFilter, setIndustryFilter] = useState("");
+  const [titleFilter, setTitleFilter]     = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
+
+  const activeFilterCount = [industryFilter, titleFilter, countryFilter].filter(Boolean).length;
 
   const loadCampaign = useCallback(async () => {
     wsGet<LeadCampaign>(`/api/lead-campaigns/${id}`).then(setCampaign).catch(() => {});
@@ -71,11 +99,14 @@ export default function LeadCampaignDetailClient() {
 
   const loadLeads = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), limit: "50", filter, search });
+    if (industryFilter) params.set("industry", industryFilter);
+    if (titleFilter)    params.set("title", titleFilter);
+    if (countryFilter)  params.set("country", countryFilter);
     wsGet<{ leads: LeadCampaignLead[]; total: number }>(`/api/lead-campaigns/${id}/leads?${params}`)
       .then(d => { setLeads(d.leads); setTotal(d.total); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id, page, filter, search]);
+  }, [id, page, filter, search, industryFilter, titleFilter, countryFilter]);
 
   useEffect(() => {
     loadCampaign();
@@ -98,7 +129,8 @@ export default function LeadCampaignDetailClient() {
     setExporting(true);
     setExportResult(null);
     const body: Record<string, unknown> = {
-      lead_ids: selected.size > 0 ? Array.from(selected) : undefined,
+      lead_ids:   selected.size > 0 ? Array.from(selected) : undefined,
+      valid_only: validOnly,
     };
     if (newListName) body.create_list_name = newListName;
     else body.list_id = exportListId;
@@ -112,6 +144,23 @@ export default function LeadCampaignDetailClient() {
     setExporting(false);
   }
 
+  function handleDownloadCsv() {
+    const params = new URLSearchParams();
+    if (dlStatuses.length > 0 && dlStatuses.length < DL_STATUS_OPTIONS.length) {
+      params.set("statuses", dlStatuses.join(","));
+    }
+    const qs = params.toString();
+    wsFetch(`/api/lead-campaigns/${id}/csv${qs ? `?${qs}` : ""}`)
+      .then(r => r.blob())
+      .then(blob => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `leads-${id.slice(0, 8)}.csv`;
+        a.click();
+      });
+    setShowDownload(false);
+  }
+
   async function handleCancel() {
     setCancelling(true);
     await wsPost(`/api/lead-campaigns/${id}/cancel`, {}).catch(() => {});
@@ -122,6 +171,10 @@ export default function LeadCampaignDetailClient() {
   function toggleSelect(lid: string, e: React.MouseEvent) {
     e.stopPropagation();
     setSelected(s => { const n = new Set(s); n.has(lid) ? n.delete(lid) : n.add(lid); return n; });
+  }
+
+  function toggleDlStatus(key: string) {
+    setDlStatuses(s => s.includes(key) ? s.filter(x => x !== key) : [...s, key]);
   }
 
   const progress = campaign
@@ -157,22 +210,18 @@ export default function LeadCampaignDetailClient() {
               {cancelling ? "Cancelling..." : "Cancel"}
             </button>
           )}
-          {campaign.status === "completed" && leads.length > 0 && (
+          {leads.length > 0 && (
             <button
-              onClick={() => {
-                wsFetch(`/api/lead-campaigns/${id}/csv`).then(r => r.blob()).then(blob => {
-                  const a = document.createElement("a");
-                  a.href = URL.createObjectURL(blob);
-                  a.download = `leads-${id.slice(0, 8)}.csv`;
-                  a.click();
-                });
-              }}
-              className="px-3 py-1.5 text-xs font-medium text-white/60 border border-white/15 rounded-lg hover:bg-white/5 transition-colors"
+              onClick={() => setShowDownload(true)}
+              className="px-3 py-1.5 text-xs font-medium text-white/60 border border-white/15 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1.5"
             >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
               Download CSV
             </button>
           )}
-          {campaign.status === "completed" && leads.length > 0 && (
+          {leads.length > 0 && (
             <button
               onClick={() => setShowExport(true)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
@@ -228,7 +277,7 @@ export default function LeadCampaignDetailClient() {
               </svg>
             </div>
             <div>
-              <p className="text-lg font-bold text-white leading-none">{s.value.toLocaleString()}</p>
+              <p className="text-lg font-bold text-white leading-none">{(s.value ?? 0).toLocaleString()}</p>
               <p className="text-white/35 text-xs mt-0.5">{s.label}</p>
             </div>
           </div>
@@ -236,47 +285,117 @@ export default function LeadCampaignDetailClient() {
       </div>
 
       {/* Filters + search */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex gap-0.5 bg-white/4 border border-white/8 rounded-xl p-1">
-          {[
-            { key: "all",       label: "All" },
-            { key: "valid",     label: "Valid" },
-            { key: "not_added", label: "Not Added" },
-          ].map(f => (
-            <button
-              key={f.key}
-              onClick={() => { setFilter(f.key); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filter === f.key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="relative flex-1">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search by name, email, company..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
-          />
-        </div>
-        {selected.size > 0 && (
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center gap-3">
+          {/* Status filter tabs */}
+          <div className="flex gap-0.5 bg-white/4 border border-white/8 rounded-xl p-1">
+            {[
+              { key: "all",       label: "All" },
+              { key: "valid",     label: "Valid" },
+              { key: "catch_all", label: "Catch-all" },
+              { key: "invalid",   label: "Invalid" },
+              { key: "not_added", label: "Not Added" },
+            ].map(f => (
+              <button
+                key={f.key}
+                onClick={() => { setFilter(f.key); setPage(0); }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filter === f.key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(0); }}
+              placeholder="Search by name, email, company..."
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+            />
+          </div>
+
+          {/* Advanced filters toggle */}
           <button
-            onClick={() => setShowExport(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+            onClick={() => setShowFilters(s => !s)}
+            className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-medium transition-colors ${
+              showFilters || activeFilterCount > 0
+                ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                : "border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
+            }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
             </svg>
-            Add {selected.size} to Pool
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
+
+          {selected.size > 0 && (
+            <button
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add {selected.size} to Pool
+            </button>
+          )}
+
+          <span className="text-white/30 text-xs ml-1 whitespace-nowrap">{total.toLocaleString()} leads</span>
+        </div>
+
+        {/* Advanced filters row */}
+        {showFilters && (
+          <div className="flex items-center gap-3 p-3 bg-white/3 border border-white/8 rounded-xl">
+            <div className="flex-1">
+              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Industry</p>
+              <input
+                value={industryFilter}
+                onChange={e => { setIndustryFilter(e.target.value); setPage(0); }}
+                placeholder="e.g. SaaS, Finance..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Job Title</p>
+              <input
+                value={titleFilter}
+                onChange={e => { setTitleFilter(e.target.value); setPage(0); }}
+                placeholder="e.g. CEO, Engineer..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Country</p>
+              <input
+                value={countryFilter}
+                onChange={e => { setCountryFilter(e.target.value); setPage(0); }}
+                placeholder="e.g. United States..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+              />
+            </div>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => { setIndustryFilter(""); setTitleFilter(""); setCountryFilter(""); setPage(0); }}
+                className="text-white/30 hover:text-white/70 text-xs transition-colors mt-4"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         )}
-        <span className="text-white/30 text-xs ml-1">{total.toLocaleString()} leads</span>
       </div>
 
       {/* Leads table */}
@@ -292,7 +411,7 @@ export default function LeadCampaignDetailClient() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
           </svg>
           {campaign.status === "pending" || campaign.status === "running"
-            ? "Leads are being scraped — check back shortly"
+            ? "Leads are being processed — check back shortly"
             : "No leads match the current filter"}
         </div>
       ) : (
@@ -331,7 +450,6 @@ export default function LeadCampaignDetailClient() {
                       onClick={() => setDrawerLead(l)}
                       className={`${i !== leads.length - 1 ? "border-b border-white/5" : ""} hover:bg-white/3 transition-colors cursor-pointer group`}
                     >
-                      {/* Checkbox */}
                       <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -341,8 +459,6 @@ export default function LeadCampaignDetailClient() {
                           onClick={e => toggleSelect(l.id, e)}
                         />
                       </td>
-
-                      {/* Prospect */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center text-xs font-semibold text-white/60 flex-shrink-0">
@@ -357,25 +473,17 @@ export default function LeadCampaignDetailClient() {
                           </div>
                         </div>
                       </td>
-
-                      {/* Company */}
                       <td className="px-4 py-3.5">
                         {l.company ? (
                           <div>
                             <p className="text-white/75 text-sm font-medium truncate max-w-[180px]">{l.company}</p>
-                            {industry && (
-                              <p className="text-white/30 text-xs truncate max-w-[180px]">{industry}</p>
-                            )}
-                            {l.org_size && (
-                              <p className="text-white/20 text-xs">{l.org_size} employees</p>
-                            )}
+                            {industry && <p className="text-white/30 text-xs truncate max-w-[180px]">{industry}</p>}
+                            {l.org_size && <p className="text-white/20 text-xs">{l.org_size} employees</p>}
                           </div>
                         ) : (
                           <span className="text-white/20 text-xs">—</span>
                         )}
                       </td>
-
-                      {/* Location */}
                       <td className="px-4 py-3.5">
                         {l.location ? (
                           <p className="text-white/50 text-xs">{l.location}</p>
@@ -383,8 +491,6 @@ export default function LeadCampaignDetailClient() {
                           <span className="text-white/20 text-xs">—</span>
                         )}
                       </td>
-
-                      {/* Verification */}
                       <td className="px-4 py-3.5">
                         {vs ? (
                           <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${vs.bg} ${vs.text}`}>
@@ -395,8 +501,6 @@ export default function LeadCampaignDetailClient() {
                           <span className="text-white/20 text-xs">—</span>
                         )}
                       </td>
-
-                      {/* AI Opener */}
                       <td className="px-4 py-3.5 max-w-[220px]">
                         {l.personalized_line ? (
                           <p className="text-white/50 text-xs italic truncate" title={l.personalized_line}>
@@ -406,42 +510,27 @@ export default function LeadCampaignDetailClient() {
                           <span className="text-white/15 text-xs">—</span>
                         )}
                       </td>
-
-                      {/* Links */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center justify-center gap-1.5">
                           {l.linkedin_url && (
-                            <a
-                              href={l.linkedin_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 flex items-center justify-center text-blue-400 transition-all"
-                              title="LinkedIn Profile"
-                            >
+                            <a href={l.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 flex items-center justify-center text-blue-400 transition-all" title="LinkedIn">
                               <LinkedInIcon />
                             </a>
                           )}
                           {l.website && (
-                            <a
-                              href={l.website.startsWith("http") ? l.website : `https://${l.website}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 flex items-center justify-center text-white/40 hover:text-white/70 transition-all"
-                              title="Company Website"
-                            >
+                            <a href={l.website.startsWith("http") ? l.website : `https://${l.website}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 flex items-center justify-center text-white/40 hover:text-white/70 transition-all" title="Website">
                               <GlobeIcon />
                             </a>
                           )}
                           {l.added_to_list_id && (
-                            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center" title="Added to pool">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center" title="Exported">
                               <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             </div>
                           )}
-                          {/* Open drawer indicator */}
                           <div className="w-7 h-7 rounded-lg bg-white/0 group-hover:bg-white/5 border border-transparent group-hover:border-white/10 flex items-center justify-center text-white/0 group-hover:text-white/30 transition-all">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -459,11 +548,17 @@ export default function LeadCampaignDetailClient() {
           {/* Pagination */}
           {total > 50 && (
             <div className="flex items-center justify-between mt-4 text-sm text-white/40">
-              <span>{((page * 50) + 1).toLocaleString()}–{Math.min((page + 1) * 50, total).toLocaleString()} of {total.toLocaleString()}</span>
-              <div className="flex gap-2">
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">← Prev</button>
-                <span className="px-3 py-1.5 text-xs">Page {page + 1}</span>
-                <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * 50 >= total} className="px-3 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">Next →</button>
+              <span className="text-xs">{((page * 50) + 1).toLocaleString()}–{Math.min((page + 1) * 50, total).toLocaleString()} of {total.toLocaleString()}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(0)} disabled={page === 0}
+                  className="px-2 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">«</button>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-3 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">← Prev</button>
+                <span className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg">Page {page + 1} of {Math.ceil(total / 50)}</span>
+                <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * 50 >= total}
+                  className="px-3 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">Next →</button>
+                <button onClick={() => setPage(Math.ceil(total / 50) - 1)} disabled={(page + 1) * 50 >= total}
+                  className="px-2 py-1.5 border border-white/10 rounded-lg disabled:opacity-30 hover:bg-white/5 transition-colors text-xs">»</button>
               </div>
             </div>
           )}
@@ -481,7 +576,59 @@ export default function LeadCampaignDetailClient() {
         />
       )}
 
-      {/* Export Modal */}
+      {/* Download CSV Modal */}
+      {showDownload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowDownload(false)} />
+          <div className="relative w-full max-w-sm bg-gray-950 border border-white/10 rounded-2xl p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-1">Download CSV</h3>
+            <p className="text-white/40 text-sm mb-5">Choose which leads to include</p>
+
+            <div className="space-y-2 mb-5">
+              <div
+                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${
+                  dlStatuses.length === DL_STATUS_OPTIONS.length
+                    ? "border-blue-500/40 bg-blue-500/8"
+                    : "border-white/8 bg-white/3 hover:border-white/15"
+                }`}
+                onClick={() => setDlStatuses(
+                  dlStatuses.length === DL_STATUS_OPTIONS.length ? [] : DL_STATUS_OPTIONS.map(o => o.key)
+                )}
+              >
+                <input type="checkbox" className="accent-blue-500" readOnly
+                  checked={dlStatuses.length === DL_STATUS_OPTIONS.length} />
+                <span className="text-white text-sm font-medium">All leads</span>
+              </div>
+
+              {DL_STATUS_OPTIONS.map(opt => (
+                <div
+                  key={opt.key}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${
+                    dlStatuses.includes(opt.key)
+                      ? "border-blue-500/40 bg-blue-500/8"
+                      : "border-white/8 bg-white/3 hover:border-white/15"
+                  }`}
+                  onClick={() => toggleDlStatus(opt.key)}
+                >
+                  <input type="checkbox" className="accent-blue-500" readOnly checked={dlStatuses.includes(opt.key)} />
+                  <span className={`w-2 h-2 rounded-full ${opt.dotCls} flex-shrink-0`} />
+                  <span className="text-white/80 text-sm">{opt.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleDownloadCsv}
+              disabled={dlStatuses.length === 0}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              Download CSV
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Export to Leads Pool Modal */}
       {showExport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => { setShowExport(false); setExportResult(null); }} />
@@ -490,12 +637,22 @@ export default function LeadCampaignDetailClient() {
             <p className="text-white/40 text-sm mb-5">
               {selected.size > 0 ? `${selected.size} selected leads` : "All unexported leads"} will be added to your chosen list
             </p>
+
             {exportResult ? (
               <div className={`p-3 rounded-xl text-sm mb-4 ${exportResult.startsWith("Error") ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"}`}>
                 {exportResult}
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Valid only toggle — pre-checked */}
+                <div className="flex items-center justify-between p-3.5 bg-white/4 border border-white/8 rounded-xl">
+                  <div>
+                    <p className="text-white text-sm font-medium">Valid emails only</p>
+                    <p className="text-white/35 text-xs mt-0.5">Only export verified valid + catch-all emails</p>
+                  </div>
+                  <Toggle value={validOnly} onChange={setValidOnly} />
+                </div>
+
                 <div>
                   <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Add to existing list</label>
                   <select
