@@ -161,7 +161,10 @@ export default function BuyDomainPage() {
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
   async function handleCheckout() {
-    if (!selected) return;
+    const prefixes = prefixMode === "custom"
+      ? customPrefix.split(",").map(p => p.trim().toLowerCase()).filter(Boolean).slice(0, 5)
+      : selectedPrefixes;
+    if (!selectedDomains.length || !prefixes.length) return;
     setPaying(true);
     setPayError(null);
     try {
@@ -170,9 +173,8 @@ export default function BuyDomainPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
         body: JSON.stringify({
-          domain:           selected.domain,
-          mailbox_count:    mailboxCount,
-          mailbox_prefix:   prefix,
+          domains:          selectedDomains.map(d => ({ domain: d.domain, price: d.price })),
+          mailbox_prefixes: prefixes,
           first_name:       firstName || undefined,
           last_name:        lastName  || undefined,
           payment_provider: currency,
