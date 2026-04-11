@@ -105,7 +105,7 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
     names.map(async (domain): Promise<DomainCheckResult> => {
       const tld = domain.split(".").slice(1).join(".");
       const tldPrice = pricing[tld]?.registration;
-      const price = tldPrice ? parseFloat(tldPrice) : 12.00;
+      const price = tldPrice ? parseFloat(tldPrice) : (FALLBACK_PRICES[tld] ?? 12.00);
 
       // Cloudflare DoH: Status 3 = NXDOMAIN = domain not registered = available
       let available = false;
