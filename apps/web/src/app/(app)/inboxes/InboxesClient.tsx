@@ -437,6 +437,11 @@ export default function InboxesClient() {
                       {inbox.status}
                     </span>
                     {inbox.has_oauth && <span className="text-[10px] text-green-400/60 flex-shrink-0">● OAuth</span>}
+                    {inbox.warmup_ends_at && new Date(inbox.warmup_ends_at) > new Date() && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 flex-shrink-0">
+                        Warming · {Math.ceil((new Date(inbox.warmup_ends_at).getTime() - Date.now()) / 86_400_000)}d left
+                      </span>
+                    )}
                     {inbox.warmup_enabled && (
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
