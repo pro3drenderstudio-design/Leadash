@@ -14,7 +14,7 @@ interface LeadData {
 
 // Generates personalized content for a batch of leads.
 // standard = icebreaker opening line (1-2 sentences)
-// deep     = full personalized cold email (subject + body)
+// deep     = full personalized cold email body (no subject, no signature)
 // Returns array in same order as input leads.
 export async function personalizeLeads(
   leads:         LeadData[],
