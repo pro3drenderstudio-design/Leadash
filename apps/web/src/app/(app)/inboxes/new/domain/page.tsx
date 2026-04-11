@@ -238,11 +238,17 @@ export default function BuyDomainPage() {
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const oneTimeUsd  = selected ? (selected.price + DOMAIN_SERVICE_FEE_USD) : 0;
-  const recurringUsd = INBOX_PRICE_USD * mailboxCount;
-  const totalNgn    = Math.round((oneTimeUsd + recurringUsd) * NGN_PER_USD);
+  const activePrefixes = prefixMode === "custom"
+    ? customPrefix.split(",").map(p => p.trim()).filter(Boolean).slice(0, 5)
+    : selectedPrefixes;
+  const mailboxCount   = activePrefixes.length || 1;
+  const totalInboxes   = selectedDomains.length * mailboxCount;
+  const sendsPerDay    = totalInboxes * 15;
+  const sendsPerMonth  = sendsPerDay * 30;
 
-  const currentProvisionStep = STATUS_TO_STEP[provisionStatus] ?? 0;
+  const oneTimeUsd   = selectedDomains.reduce((s, d) => s + d.price + DOMAIN_SERVICE_FEE_USD, 0);
+  const recurringUsd = INBOX_PRICE_USD * totalInboxes;
+  const totalNgn     = Math.round((oneTimeUsd + recurringUsd) * NGN_PER_USD);
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
