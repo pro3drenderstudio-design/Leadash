@@ -466,15 +466,25 @@ function BillingTab() {
 // ── Outreach Tab ───────────────────────────────────────────────────────────────
 
 const OUTREACH_DEFAULTS = {
-  footer_enabled:       "true",
-  footer_address:       "123 Main Street, New York, NY 10001",
-  footer_custom_text:   "You received this email because you or your company expressed interest in our services.",
-  track_opens_default:  "true",
-  track_clicks_default: "true",
-  default_daily_limit:  "30",
-  default_timezone:     "America/New_York",
-  default_send_start:   "09:00",
-  default_send_end:     "17:00",
+  footer_enabled:          "true",
+  footer_address:          "123 Main Street, New York, NY 10001",
+  footer_custom_text:      "You received this email because you or your company expressed interest in our services.",
+  track_opens_default:     "true",
+  track_clicks_default:    "true",
+  default_daily_limit:     "30",
+  default_timezone:        "America/New_York",
+  default_send_start:      "09:00",
+  default_send_end:        "17:00",
+  // Domain registrant info (used when purchasing domains via Namecheap)
+  registrant_first_name:   "",
+  registrant_last_name:    "",
+  registrant_email:        "",
+  registrant_phone:        "",
+  registrant_address:      "",
+  registrant_city:         "",
+  registrant_state:        "",
+  registrant_zip:          "",
+  registrant_country:      "US",
 };
 type OutreachSettings = typeof OUTREACH_DEFAULTS;
 
