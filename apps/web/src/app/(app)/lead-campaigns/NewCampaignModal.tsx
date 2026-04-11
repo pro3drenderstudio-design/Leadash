@@ -514,6 +514,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             personalize_enabled:    true,
             personalize_prompt:     form.offerAngle,
             personalize_valid_only: form.personalizeValidOnly,
+            personalize_depth:      form.personalizationDepth,
           });
         }
       } else {
@@ -529,6 +530,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
           personalize_enabled:    form.aiEnabled,
           personalize_prompt:     form.aiEnabled ? form.offerAngle : null,
           personalize_valid_only: form.personalizeValidOnly,
+          personalize_depth:      form.personalizationDepth,
         });
       }
       onCreated();
