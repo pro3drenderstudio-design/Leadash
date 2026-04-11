@@ -26,12 +26,30 @@ export interface SendRunResult {
 
 interface InboxSlot { inbox: OutreachInbox; remaining: number; used: number; }
 
+const DOMAIN_MAX_DAILY = 15; // hard cap for Leadash-provisioned inboxes
+
 async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: OutreachCampaign): Promise<InboxSlot[]> {
   if (!campaign.inbox_ids?.length) return [];
-  const { data: rows } = await db.from("outreach_inboxes").select("*").in("id", campaign.inbox_ids).eq("status", "active");
+  const { data: rows } = await db
+    .from("outreach_inboxes")
+    .select("*, outreach_domains(warmup_ends_at)")
+    .in("id", campaign.inbox_ids)
+    .eq("status", "active");
+
   const slots: InboxSlot[] = [];
   for (const row of rows ?? []) {
-    const remaining = await checkDailyLimits(row.id, row.daily_send_limit);
+    // Block inboxes that are still in the 21-day warmup period
+    const domainWarmupEndsAt = (row as Record<string, unknown>).outreach_domains
+      ? ((row as Record<string, unknown>).outreach_domains as Record<string, unknown>).warmup_ends_at as string | null
+      : null;
+    const inboxWarmupEndsAt = (row as Record<string, unknown>).warmup_ends_at as string | null;
+    const effectiveWarmupEnd = domainWarmupEndsAt ?? inboxWarmupEndsAt;
+    if (effectiveWarmupEnd && new Date(effectiveWarmupEnd) > new Date()) continue;
+
+    // Enforce hard cap for Leadash-provisioned inboxes
+    const sendLimit = row.domain_id ? Math.min(row.daily_send_limit, DOMAIN_MAX_DAILY) : row.daily_send_limit;
+
+    const remaining = await checkDailyLimits(row.id, sendLimit);
     if (remaining > 0) slots.push({ inbox: row as OutreachInbox, remaining, used: 0 });
   }
   return slots;
