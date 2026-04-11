@@ -160,9 +160,28 @@ export async function runSendBatch(
 
       await db.from("outreach_sends").update({ subject: rendered.subject, body: rendered.body }).eq("id", sendRecord.id);
 
+      // For follow-up steps, thread the email onto the previous send in this enrollment
+      let inReplyToMessageId: string | undefined;
+      let replyToThreadId: string | undefined;
+      if (seqStep.step_order > 1) {
+        const { data: prevSend } = await db
+          .from("outreach_sends")
+          .select("message_id, thread_id")
+          .eq("enrollment_id", enrollment.id)
+          .eq("status", "sent")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .single();
+        if (prevSend?.message_id) {
+          inReplyToMessageId = prevSend.message_id;
+          replyToThreadId    = prevSend.thread_id ?? prevSend.message_id;
+        }
+      }
+
       try {
         const sendResult = await sendViaInbox(slot.inbox, {
           to: lead.email, subject: rendered.subject, htmlBody: rendered.body, textBody: rendered.textBody,
+          inReplyToMessageId, replyToThreadId,
         });
 
         await db.from("outreach_sends").update({
