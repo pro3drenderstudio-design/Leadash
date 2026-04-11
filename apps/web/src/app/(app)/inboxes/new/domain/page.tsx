@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceId } from "@/lib/workspace/client";
+import { useCurrency } from "@/lib/currency";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
