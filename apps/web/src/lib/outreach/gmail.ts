@@ -288,7 +288,7 @@ export async function fetchNewMessages(
         userId: "me",
         id:     msgId,
         format: "metadata",
-        metadataHeaders: ["From", "In-Reply-To", "References", "X-PP-Ref"],
+        metadataHeaders: ["From", "In-Reply-To", "References", "X-LD-Ref"],
       });
 
       const headers = msg.data.payload?.headers ?? [];
@@ -296,7 +296,7 @@ export async function fetchNewMessages(
         headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? null;
 
       const inReplyTo = getHeader("In-Reply-To");
-      const warmupId  = getHeader("X-PP-Ref");
+      const warmupId  = getHeader("X-LD-Ref");
       const fromRaw   = getHeader("From") ?? "";
       const fromEmail = fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw;
 
