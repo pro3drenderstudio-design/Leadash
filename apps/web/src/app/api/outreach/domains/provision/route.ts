@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
           first_name:           domainRecord.first_name ?? null,
           last_name:            domainRecord.last_name  ?? null,
         });
-      }
+      } // end for logins
 
       // ── Step 7: Mark domain active ───────────────────────────────────────────
       await db
