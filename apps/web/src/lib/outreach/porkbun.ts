@@ -55,28 +55,48 @@ async function call<T = unknown>(path: string, body: Record<string, unknown> = {
     body:    JSON.stringify({ ...auth(), ...body }),
   });
 
-  const data = await res.json() as { status: string; message?: string } & T;
+  let data: { status: string; message?: string } & T;
+  try {
+    data = await res.json() as { status: string; message?: string } & T;
+  } catch {
+    throw new Error(`Porkbun API returned non-JSON response (HTTP ${res.status})`);
+  }
+
   if (data.status !== "SUCCESS") {
     throw new Error(`Porkbun error: ${data.message ?? data.status}`);
   }
   return data;
 }
 
+// Fallback prices (USD) when API keys are not configured
+const FALLBACK_PRICES: Record<string, number> = {
+  com: 10.98, io: 39.99, co: 27.98, net: 13.98, org: 11.98,
+  ai: 79.98, app: 17.98, dev: 13.98, info: 5.98, biz: 17.98,
+  us: 9.98, pro: 25.98,
+};
+
 /**
  * Fetch Porkbun's TLD pricing table (cached per process lifetime).
+ * Falls back to hardcoded prices if API keys are not configured.
  */
 let _pricingCache: Record<string, { registration: string }> | null = null;
 
 async function getPricing(): Promise<Record<string, { registration: string }>> {
   if (_pricingCache) return _pricingCache;
-  const data = await call<{ pricing: Record<string, { registration: string }> }>("/domain/pricing/get");
-  _pricingCache = data.pricing;
-  return _pricingCache;
+  if (!process.env.PORKBUN_API_KEY) return {}; // no keys — use fallback prices
+  try {
+    const data = await call<{ pricing: Record<string, { registration: string }> }>("/domain/pricing/get");
+    _pricingCache = data.pricing;
+    return _pricingCache;
+  } catch {
+    return {}; // pricing fetch failed — use fallback prices
+  }
 }
 
 /**
  * Check availability and pricing for a list of domains.
  * Availability is determined via Cloudflare DNS-over-HTTPS (NXDOMAIN = available).
+ * Pricing falls back to hardcoded values if Porkbun API keys are not set.
  */
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
   const pricing = await getPricing();
