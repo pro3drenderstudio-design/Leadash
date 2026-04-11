@@ -68,7 +68,30 @@ export async function POST(req: NextRequest) {
 
   try {
     await setStatus("purchasing");
-    await purchaseDomain(domainRecord.domain);
+
+    const { data: wsSettings } = await db
+      .from("workspace_settings")
+      .select("registrant_first_name, registrant_last_name, registrant_email, registrant_phone, registrant_address, registrant_city, registrant_state, registrant_zip, registrant_country")
+      .eq("workspace_id", workspaceId)
+      .single();
+
+    const registrant: RegistrantContact = {
+      firstName: wsSettings?.registrant_first_name ?? "",
+      lastName:  wsSettings?.registrant_last_name  ?? "",
+      email:     wsSettings?.registrant_email      ?? "",
+      phone:     wsSettings?.registrant_phone      ?? "",
+      address:   wsSettings?.registrant_address    ?? "",
+      city:      wsSettings?.registrant_city       ?? "",
+      state:     wsSettings?.registrant_state      ?? "",
+      zip:       wsSettings?.registrant_zip        ?? "",
+      country:   wsSettings?.registrant_country    ?? "US",
+    };
+
+    if (!registrant.firstName || !registrant.email || !registrant.address) {
+      throw new Error("Registrant contact info is incomplete. Please fill in Settings → Outreach.");
+    }
+
+    await purchaseDomain(domainRecord.domain, registrant);
 
     await setStatus("dns_pending");
     const { dkimTokens } = await registerDomain(domainRecord.domain);
