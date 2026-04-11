@@ -307,9 +307,15 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
         const since = new Date(Date.now() - lookbackDays * 86_400_000);
         const raw = await fetchNewReplies(inbox, since).catch(() => []);
         messages = raw.map(r => ({
-          messageId: (r.threadId ?? "").replace(/^<|>$/g,""), inReplyTo: null,
-          fromEmail: r.fromEmail ?? "", fromName: null, subject: null, bodyText: null,
-          receivedAt: r.receivedAt ?? new Date().toISOString(), warmupId: null,
+          messageId:  r.messageId.replace(/^<|>$/g, ""),
+          inReplyTo:  r.inReplyTo ? r.inReplyTo.replace(/^<|>$/g, "") : null,
+          threadId:   r.threadId ?? null,   // conversationId for fallback matching
+          fromEmail:  r.fromEmail ?? "",
+          fromName:   null,
+          subject:    null,
+          bodyText:   r.bodySnippet ?? null,
+          receivedAt: r.receivedAt ?? new Date().toISOString(),
+          warmupId:   r.warmupId ?? null,
         }));
       } catch (e) { fetchError = String(e); }
     } else { fetchError = "no imap_host and no OAuth credentials"; }
