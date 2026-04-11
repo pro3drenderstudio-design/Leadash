@@ -77,7 +77,7 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-16 overflow-hidden">
+    <section className="relative min-h-screen flex flex-col items-center text-center px-6 pt-28 pb-16 overflow-hidden">
       {/* Background glow orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[600px] rounded-full" style={{ background: "radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%)" }} />
