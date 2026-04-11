@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const personalize_enabled  = formData.get("personalize_enabled") === "true";
   const personalize_prompt   = (formData.get("personalize_prompt") as string) || null;
   const personalize_valid_only = formData.get("personalize_valid_only") === "true";
+  const personalize_depth    = (formData.get("personalize_depth") as string) || "standard";
   const file                 = formData.get("file") as File | null;
 
   if (!name || !file) {
