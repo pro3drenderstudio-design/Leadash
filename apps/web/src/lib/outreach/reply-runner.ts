@@ -63,7 +63,7 @@ Respond with JSON only: {"category": "...", "confidence": 0.0-1.0}`;
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genai = new GoogleGenerativeAI(apiKey);
-    const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
     const text   = result.response.text().trim().replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(text);
