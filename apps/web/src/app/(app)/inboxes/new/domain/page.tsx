@@ -636,7 +636,7 @@ export default function BuyDomainPage() {
             </div>
           )}
 
-          {provisionStatus === "failed" && (
+          {overallStatus === "failed" && (
             <div className="mt-6 flex items-center gap-3">
               <Link
                 href="/inboxes/new/domain"
