@@ -586,6 +586,47 @@ function OutreachTab() {
         </div>
       </Section>
 
+      {/* Domain Registrant */}
+      <Section
+        title="Domain Registrant Info"
+        description="Used as the WHOIS contact when purchasing sending domains through Leadash. Saved once, reused for all future domain purchases."
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="First name">
+            <Input value={settings.registrant_first_name} onChange={e => set("registrant_first_name", e.target.value)} placeholder="Alex" />
+          </Field>
+          <Field label="Last name">
+            <Input value={settings.registrant_last_name} onChange={e => set("registrant_last_name", e.target.value)} placeholder="Smith" />
+          </Field>
+          <Field label="Email address">
+            <Input type="email" value={settings.registrant_email} onChange={e => set("registrant_email", e.target.value)} placeholder="you@company.com" />
+          </Field>
+          <Field label="Phone (intl format)">
+            <Input value={settings.registrant_phone} onChange={e => set("registrant_phone", e.target.value)} placeholder="+1.2125551234" />
+          </Field>
+        </div>
+        <Field label="Street address">
+          <Input value={settings.registrant_address} onChange={e => set("registrant_address", e.target.value)} placeholder="123 Main Street" />
+        </Field>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="City">
+            <Input value={settings.registrant_city} onChange={e => set("registrant_city", e.target.value)} placeholder="New York" />
+          </Field>
+          <Field label="State / Province">
+            <Input value={settings.registrant_state} onChange={e => set("registrant_state", e.target.value)} placeholder="NY" />
+          </Field>
+          <Field label="ZIP / Postal code">
+            <Input value={settings.registrant_zip} onChange={e => set("registrant_zip", e.target.value)} placeholder="10001" />
+          </Field>
+        </div>
+        <Field label="Country (2-letter code)">
+          <Input value={settings.registrant_country} onChange={e => set("registrant_country", e.target.value.toUpperCase().slice(0, 2))} placeholder="US" className="max-w-[80px]" />
+        </Field>
+        <p className="text-white/25 text-xs">
+          This information is required by ICANN for domain registration. It appears in public WHOIS records unless domain privacy is enabled.
+        </p>
+      </Section>
+
       <div className="flex justify-end">
         <SaveButton saving={saving} saved={saved} onClick={save} />
       </div>
