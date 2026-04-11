@@ -78,7 +78,7 @@ export default function NewInboxPage() {
           </button>
 
           <button
-            onClick={() => window.location.href = "/api/outreach/inboxes/oauth/microsoft"}
+            onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/microsoft?workspace_id=${wsId}`; }}
             className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left"
           >
             <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center text-xl">M</div>
