@@ -257,8 +257,6 @@ export default function BuyDomainPage() {
   const mailboxCount   = activePrefixes.length || 1;
   const totalInboxes   = selectedDomains.length * mailboxCount;
   const cap            = domainCapacity(selectedDomains.length, mailboxCount);
-  const sendsPerDay    = cap.warmupDay;   // used in review summary (warmup period)
-  const sendsPerMonth  = cap.fullMonth;   // full capacity after warmup
 
   const oneTimeUsd   = selectedDomains.reduce((s, d) => s + d.price + DOMAIN_SERVICE_FEE_USD, 0);
   const recurringUsd = INBOX_PRICE_USD * totalInboxes;
