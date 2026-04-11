@@ -296,9 +296,15 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
           ? await fetchNewMessages(inbox, inbox.gmail_history_id).catch(() => [])
           : await fetchRecentMessages(inbox, lookbackDays).catch(() => []);
         messages = raw.map(r => ({
-          messageId: (r.messageId ?? "").replace(/^<|>$/g,""), inReplyTo: (r.inReplyTo ?? "").replace(/^<|>$/g,"") || null,
-          fromEmail: r.fromEmail ?? "", fromName: null, subject: r.subject ?? null,
-          bodyText: r.bodyText ?? null, receivedAt: new Date().toISOString(), warmupId: r.warmupId ?? null,
+          messageId:  (r.messageId ?? "").replace(/^<|>$/g, ""),
+          inReplyTo:  (r.inReplyTo ?? "").replace(/^<|>$/g, "") || null,
+          threadId:   r.threadId ?? null,   // Gmail threadId for fallback matching
+          fromEmail:  r.fromEmail ?? "",
+          fromName:   null,
+          subject:    r.subject ?? null,
+          bodyText:   r.bodyText ?? null,
+          receivedAt: new Date().toISOString(),
+          warmupId:   r.warmupId ?? null,
         }));
       } catch (e) { fetchError = String(e); }
     } else if (inbox.provider === "outlook" && inbox.oauth_refresh_token) {
