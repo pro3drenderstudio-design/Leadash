@@ -68,9 +68,11 @@ export default function NewInboxPage() {
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/gmail?workspace_id=${wsId}`; }}
-            className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left"
+            className="flex flex-col items-start gap-4 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center text-xl">G</div>
+            <div className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 48 48" className="w-5 h-5"><path fill="#EA4335" d="M24 5C13.5 5 5 13.5 5 24s8.5 19 19 19 19-8.5 19-19S34.5 5 24 5z" opacity="0"/><path fill="#4285F4" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#34A853" d="M6.3 14.7l6.6 4.8C14.5 15.8 18.9 12 24 12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.4 4.3-17.7 10.7z"/><path fill="#FBBC05" d="M24 44c5.2 0 9.9-1.9 13.4-5.1l-6.2-5.2C29.4 35.6 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#EA4335" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.2 5.2C36.9 37.2 44 32 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
+            </div>
             <div>
               <p className="text-white font-medium text-sm">Gmail</p>
               <p className="text-white/40 text-xs mt-0.5">Connect with OAuth</p>
@@ -79,9 +81,11 @@ export default function NewInboxPage() {
 
           <button
             onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/microsoft?workspace_id=${wsId}`; }}
-            className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left"
+            className="flex flex-col items-start gap-4 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center text-xl">M</div>
+            <div className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 23 23" className="w-5 h-5"><path fill="#F35325" d="M0 0h11v11H0z"/><path fill="#81BC06" d="M12 0h11v11H12z"/><path fill="#05A6F0" d="M0 12h11v11H0z"/><path fill="#FFBA08" d="M12 12h11v11H12z"/></svg>
+            </div>
             <div>
               <p className="text-white font-medium text-sm">Outlook</p>
               <p className="text-white/40 text-xs mt-0.5">Connect with OAuth</p>
@@ -90,9 +94,11 @@ export default function NewInboxPage() {
 
           <button
             onClick={() => setProvider("smtp")}
-            className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left"
+            className="flex flex-col items-start gap-4 p-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-gray-500/15 flex items-center justify-center text-xl">@</div>
+            <div className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" className="text-white/60"/></svg>
+            </div>
             <div>
               <p className="text-white font-medium text-sm">Custom SMTP</p>
               <p className="text-white/40 text-xs mt-0.5">Any mail provider</p>
@@ -101,10 +107,12 @@ export default function NewInboxPage() {
 
           <button
             onClick={() => router.push("/inboxes/new/domain")}
-            className="flex flex-col items-center gap-3 p-6 bg-white/4 hover:bg-white/8 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl transition-all text-left relative overflow-hidden"
+            className="flex flex-col items-start gap-4 p-6 bg-white/4 hover:bg-white/8 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl transition-all relative overflow-hidden"
           >
-            <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">NEW</div>
-            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-xl">🌐</div>
+            <div className="absolute top-3 right-3 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 tracking-wide">NEW</div>
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253" className="text-emerald-400"/></svg>
+            </div>
             <div>
               <p className="text-white font-medium text-sm">Buy a domain</p>
               <p className="text-white/40 text-xs mt-0.5">Auto-provision + DNS setup</p>
