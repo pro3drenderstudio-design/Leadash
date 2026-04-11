@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { checkDomains } from "@/lib/outreach/namecheap";
+import { checkDomains } from "@/lib/outreach/porkbun";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
 
 // $2 per inbox per month (recurring)

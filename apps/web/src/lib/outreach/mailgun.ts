@@ -8,7 +8,7 @@
  *   MAILGUN_REGION    — "us" (default) or "eu"
  */
 
-import type { DnsRecord } from "./namecheap";
+import type { DnsRecord } from "./porkbun";
 
 function getBase(): string {
   return process.env.MAILGUN_REGION === "eu"
