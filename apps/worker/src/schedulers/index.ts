@@ -3,9 +3,10 @@ import { Queue } from "bullmq";
 import { connection } from "../lib/redis";
 import { adminClient } from "../lib/supabase";
 
-const sendQueue    = new Queue("leadash:send",       { connection });
-const replyQueue   = new Queue("leadash:reply-poll", { connection });
-const warmupQueue  = new Queue("leadash:warmup",     { connection });
+const sendQueue           = new Queue("leadash:send",           { connection });
+const replyQueue          = new Queue("leadash:reply-poll",     { connection });
+const warmupQueue         = new Queue("leadash:warmup",         { connection });
+const leadCampaignQueue   = new Queue("leadash:lead-campaign",  { connection });
 
 async function getActiveWorkspaceIds(): Promise<string[]> {
   const db = adminClient();
