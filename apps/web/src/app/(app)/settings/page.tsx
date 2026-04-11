@@ -505,11 +505,20 @@ function OutreachTab() {
     setSettings(s => ({ ...s, [key]: value }));
   }
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   async function save() {
     setSaving(true);
-    await wsPost("/api/outreach/settings", settings);
-    setSaving(false); setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveError(null);
+    try {
+      await wsPost("/api/outreach/settings", settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const footerEnabled      = settings.footer_enabled === "true";
