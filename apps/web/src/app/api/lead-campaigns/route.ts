@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     personalize_enabled = false,
     personalize_prompt,
     personalize_valid_only = false,
+    personalize_depth = "standard",
   } = body;
 
   if (!name || !mode) {
