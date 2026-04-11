@@ -704,3 +704,41 @@ function Spinner({ className = "text-white" }: { className?: string }) {
     </svg>
   );
 }
+
+// ─── Capacity preview (shown in search step after domain selection) ────────────
+
+function CapacityCard({ domainCount }: { domainCount: number }) {
+  const rows = [1, 2, 3, 5].map(inboxes => {
+    const c = domainCapacity(domainCount, inboxes);
+    return { inboxes: domainCount * inboxes, warmupDay: c.warmupDay, fullDay: c.fullDay, fullMonth: c.fullMonth };
+  });
+
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/3 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-white/8 flex items-center justify-between">
+        <p className="text-white/60 text-xs font-medium">Sending capacity · {domainCount} domain{domainCount > 1 ? "s" : ""}</p>
+        <p className="text-white/30 text-xs">5 inboxes max per domain</p>
+      </div>
+      <div className="divide-y divide-white/6">
+        {/* Header */}
+        <div className="grid grid-cols-4 px-4 py-2 text-white/30 text-xs">
+          <span>Inboxes</span>
+          <span className="text-right">Warmup/day</span>
+          <span className="text-right">Full/day</span>
+          <span className="text-right">Full/month</span>
+        </div>
+        {rows.map(r => (
+          <div key={r.inboxes} className={`grid grid-cols-4 px-4 py-2.5 text-xs ${r.inboxes === domainCount * MAX_INBOXES_PER_DOMAIN ? "bg-blue-600/8" : ""}`}>
+            <span className="text-white/70 font-medium">{r.inboxes} {r.inboxes === domainCount * MAX_INBOXES_PER_DOMAIN && <span className="text-white/30">(max)</span>}</span>
+            <span className="text-right text-white/40">{r.warmupDay.toLocaleString()}</span>
+            <span className="text-right text-white/70">{r.fullDay.toLocaleString()}</span>
+            <span className="text-right text-white/70">{r.fullMonth.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      <div className="px-4 py-2 border-t border-white/8 bg-white/2">
+        <p className="text-white/25 text-xs">Warmup = first 21 days (15/inbox/day) · Full = after warmup (40/inbox/day)</p>
+      </div>
+    </div>
+  );
+}
