@@ -50,7 +50,27 @@ function buildUrl(command: string, extra: Record<string, string> = {}): string {
 
 async function callApi(command: string, extra: Record<string, string> = {}): Promise<string> {
   const url = buildUrl(command, extra);
-  const res = await fetch(url);
+
+  // If QUOTAGUARD_URL is set, route through the static proxy so Namecheap
+  // sees a whitelisted IP even on Vercel serverless. Format:
+  //   QUOTAGUARD_URL=http://user:pass@proxy.quotaguard.com:9293
+  const proxyUrl = process.env.QUOTAGUARD_URL;
+  const fetchOptions: RequestInit = {};
+  if (proxyUrl) {
+    // Node 18+ supports the undici dispatcher for proxying; use a simple
+    // approach via HTTPS_PROXY env var that Next.js/Node respects natively.
+    // If undici ProxyAgent is available, use it; otherwise fall back to env var.
+    try {
+      const { ProxyAgent, setGlobalDispatcher } = await import("undici");
+      setGlobalDispatcher(new ProxyAgent(proxyUrl));
+    } catch {
+      // undici not available — set env var as fallback (works in most Node runtimes)
+      process.env.HTTPS_PROXY = proxyUrl;
+      process.env.HTTP_PROXY  = proxyUrl;
+    }
+  }
+
+  const res = await fetch(url, fetchOptions);
   if (!res.ok) throw new Error(`Namecheap HTTP error ${res.status}`);
   return res.text();
 }
