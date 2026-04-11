@@ -12,10 +12,11 @@ console.log("[Leadash Worker] Starting...");
 
 // ── Workers ────────────────────────────────────────────────────────────────────
 
-new Worker("leadash:send",       processSend,       { connection, concurrency: 50 });
-new Worker("leadash:reply-poll", processReplyPoll,  { connection, concurrency: 20 });
-new Worker("leadash:warmup",     processWarmup,     { connection, concurrency: 10 });
-new Worker("leadash:webhook",    processWebhook,    { connection, concurrency: 100 });
+new Worker("leadash:send",           processSend,           { connection, concurrency: 50 });
+new Worker("leadash:reply-poll",     processReplyPoll,      { connection, concurrency: 20 });
+new Worker("leadash:warmup",         processWarmup,         { connection, concurrency: 10 });
+new Worker("leadash:webhook",        processWebhook,        { connection, concurrency: 100 });
+new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 5 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
