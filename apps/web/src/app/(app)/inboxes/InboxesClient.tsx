@@ -225,8 +225,13 @@ export default function InboxesClient() {
 
   async function load() {
     setLoading(true);
-    setInboxes(await getInboxes());
-    setLoading(false);
+    try {
+      setInboxes(await getInboxes());
+    } catch {
+      // swallow — inboxes list just stays empty
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showToast(msg: string, isError = false) {
