@@ -22,7 +22,7 @@ type PaymentProvider = "stripe" | "paystack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TLDS = [".com", ".io", ".co", ".net"];
+const TLDS = [".com", ".io", ".co", ".net", ".org", ".ai", ".app", ".dev", ".info", ".biz", ".us", ".pro"];
 const INBOX_PRICE_USD = 2;
 const DOMAIN_SERVICE_FEE_USD = 1;
 const NGN_PER_USD = 1600;
