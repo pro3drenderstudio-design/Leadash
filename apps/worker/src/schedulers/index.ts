@@ -56,6 +56,28 @@ export function startSchedulers() {
     console.log(`[scheduler:warmup] Enqueued ${workspaceIds.length} workspaces`);
   });
 
+  // ── Lead campaigns: every 2 minutes ─────────────────────────────────────
+  cron.schedule("*/2 * * * *", async () => {
+    const db = adminClient();
+    const { data: campaigns } = await db
+      .from("lead_campaigns")
+      .select("id")
+      .in("status", ["pending", "running"])
+      .order("created_at")
+      .limit(20);
+
+    for (const c of campaigns ?? []) {
+      await leadCampaignQueue.add("lead-campaign", { campaign_id: c.id }, {
+        jobId:    `lead-campaign:${c.id}`,   // deduplicates — won't double-process same campaign
+        attempts: 2,
+        backoff:  { type: "fixed", delay: 10_000 },
+      });
+    }
+    if ((campaigns ?? []).length > 0) {
+      console.log(`[scheduler:lead-campaigns] Enqueued ${campaigns!.length} campaigns`);
+    }
+  });
+
   // ── Monthly send counter reset: 1st of each month at 00:05 UTC ───────────
   cron.schedule("5 0 1 * *", async () => {
     const db = adminClient();
