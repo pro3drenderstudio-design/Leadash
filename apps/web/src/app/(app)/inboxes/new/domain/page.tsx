@@ -351,32 +351,50 @@ export default function BuyDomainPage() {
             {searchError && <p className="text-red-400 text-sm">{searchError}</p>}
 
             {results.length > 0 && (
-              <div className="border border-white/8 rounded-xl overflow-hidden mt-2">
-                {results.map(r => (
-                  <div
-                    key={r.domain}
-                    className={`flex items-center justify-between px-4 py-3 border-b border-white/6 last:border-0 transition-colors ${
-                      selected?.domain === r.domain ? "bg-blue-600/10" : "hover:bg-white/3"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${r.available ? "bg-green-400" : "bg-red-400"}`} />
-                      <span className="text-white text-sm font-mono">{r.domain}</span>
-                      {!r.available && <span className="text-white/30 text-xs">Taken</span>}
+              <div>
+                <div className="border border-white/8 rounded-xl overflow-hidden mt-2">
+                  {results.map(r => {
+                    const isSelected = selectedDomains.some(d => d.domain === r.domain);
+                    return (
+                      <div
+                        key={r.domain}
+                        onClick={() => r.available && toggleDomain(r)}
+                        className={`flex items-center justify-between px-4 py-3 border-b border-white/6 last:border-0 transition-colors ${
+                          r.available ? "cursor-pointer" : "opacity-40 cursor-not-allowed"
+                        } ${isSelected ? "bg-blue-600/10" : "hover:bg-white/3"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected ? "bg-blue-600 border-blue-500" : "border-white/20"
+                          }`}>
+                            {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                          </div>
+                          <span className="text-white text-sm font-mono">{r.domain}</span>
+                          {!r.available && <span className="text-white/30 text-xs">Taken</span>}
+                        </div>
+                        <span className="text-white/50 text-sm">${r.price.toFixed(2)}/yr</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {selectedDomains.length > 0 && (
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {selectedDomains.map(d => (
+                        <span key={d.domain} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/15 border border-blue-500/30 rounded-full text-blue-300 text-xs font-mono">
+                          {d.domain}
+                          <button onClick={() => toggleDomain(d)} className="hover:text-white">×</button>
+                        </span>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-white/50 text-sm">${r.price.toFixed(2)}/yr</span>
-                      {r.available && (
-                        <button
-                          onClick={() => { setSelected(r); setStep("configure"); }}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
-                        >
-                          Select
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => setStep("configure")}
+                      className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors whitespace-nowrap ml-4"
+                    >
+                      Configure {selectedDomains.length} domain{selectedDomains.length > 1 ? "s" : ""} →
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
