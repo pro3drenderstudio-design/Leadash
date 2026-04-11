@@ -202,6 +202,7 @@ export interface OutreachWarmupSend {
   from_inbox_id: string;
   to_inbox_id: string;
   message_id?: string | null;
+  thread_id?: string | null;
   subject?: string | null;
   sent_at: string;
   replied_at?: string | null;
