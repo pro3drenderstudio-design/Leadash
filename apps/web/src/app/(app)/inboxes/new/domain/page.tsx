@@ -402,100 +402,117 @@ export default function BuyDomainPage() {
       )}
 
       {/* ── Step 2: Configure ─────────────────────────────────────────────────── */}
-      {step === "configure" && selected && (
+      {step === "configure" && selectedDomains.length > 0 && (
         <div>
-          <h1 className="text-xl font-bold text-white mb-1">Configure your inboxes</h1>
+          <h1 className="text-xl font-bold text-white mb-1">Configure inboxes</h1>
           <p className="text-white/40 text-sm mb-6">
-            Set up sending mailboxes for <span className="text-white/70 font-mono">{selected.domain}</span>
+            Settings apply to all {selectedDomains.length} selected domain{selectedDomains.length > 1 ? "s" : ""}.
           </p>
 
           <div className="space-y-6">
-            {/* Mailbox count */}
+            {/* Sender name */}
             <div>
-              <label className="block text-white/50 text-xs font-medium mb-3">
-                Number of inboxes <span className="text-white/30">(max 5)</span>
-              </label>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setMailboxCount(c => Math.max(1, c - 1))}
-                  className="w-8 h-8 rounded-lg bg-white/6 border border-white/10 text-white flex items-center justify-center text-lg hover:bg-white/10 transition-colors"
-                >
-                  −
-                </button>
-                <span className="text-white font-bold text-2xl w-6 text-center">{mailboxCount}</span>
-                <button
-                  onClick={() => setMailboxCount(c => Math.min(5, c + 1))}
-                  className="w-8 h-8 rounded-lg bg-white/6 border border-white/10 text-white flex items-center justify-center text-lg hover:bg-white/10 transition-colors"
-                >
-                  +
-                </button>
+              <label className="block text-white/50 text-xs font-medium mb-3">Sender name</label>
+              <div className="grid grid-cols-2 gap-4">
+                <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Alex"
+                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors" />
+                <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Smith"
+                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors" />
               </div>
             </div>
 
-            {/* Prefix */}
+            {/* Inbox address selection */}
             <div>
-              <label className="block text-white/50 text-xs font-medium mb-1.5">Mailbox prefix</label>
-              <input
-                value={prefix}
-                onChange={e => setPrefix(e.target.value.replace(/[^a-z0-9]/gi, "").toLowerCase())}
-                placeholder="outreach"
-                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
-              />
-              {/* Preview */}
-              <div className="mt-3 p-3 rounded-lg bg-white/3 border border-white/6">
-                <p className="text-white/30 text-xs mb-2">Preview</p>
-                {Array.from({ length: mailboxCount }).map((_, i) => (
-                  <p key={i} className="text-white/60 text-xs font-mono">
-                    {prefix || "outreach"}{i + 1}@{selected.domain}
-                  </p>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-white/50 text-xs font-medium">Inbox addresses <span className="text-white/30">(pick up to 5)</span></label>
+                <div className="flex gap-1 bg-white/6 rounded-lg p-0.5">
+                  {(["generated", "custom"] as const).map(m => (
+                    <button key={m} onClick={() => setPrefixMode(m)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${prefixMode === m ? "bg-white/12 text-white" : "text-white/30 hover:text-white/60"}`}>
+                      {m === "generated" ? "From name" : "Custom"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {prefixMode === "generated" && (
+                <div>
+                  {combos.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {combos.map(c => {
+                        const isOn = selectedPrefixes.includes(c);
+                        return (
+                          <button key={c} onClick={() => setSelectedPrefixes(prev =>
+                            isOn ? prev.filter(p => p !== c)
+                                 : prev.length < 5 ? [...prev, c] : prev
+                          )}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-mono transition-all ${
+                              isOn ? "bg-blue-600/20 border-blue-500/50 text-blue-200"
+                                   : "bg-white/4 border-white/10 text-white/50 hover:border-white/25"
+                            }`}>
+                            {c}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-white/30 text-sm">Enter a first and/or last name above to generate suggestions.</p>
+                  )}
+                  {selectedPrefixes.length > 0 && (
+                    <div className="mt-3 p-3 rounded-lg bg-white/3 border border-white/6">
+                      <p className="text-white/30 text-xs mb-2">Preview ({selectedDomains[0]?.domain})</p>
+                      {selectedPrefixes.map(p => (
+                        <p key={p} className="text-white/60 text-xs font-mono">{p}@{selectedDomains[0]?.domain}</p>
+                      ))}
+                      {selectedDomains.length > 1 && <p className="text-white/25 text-xs mt-1">+ {selectedDomains.length - 1} more domain{selectedDomains.length > 2 ? "s" : ""}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {prefixMode === "custom" && (
+                <div>
+                  <input value={customPrefix} onChange={e => setCustomPrefix(e.target.value.toLowerCase())}
+                    placeholder="john, j.smith, john.smith"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 font-mono focus:outline-none focus:border-blue-500/60 transition-colors" />
+                  <p className="text-white/30 text-xs mt-1.5">Comma-separated local-parts, max 5. e.g. john, j.smith, john.smith</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sending capacity stats */}
+            {activePrefixes.length > 0 && selectedDomains.length > 0 && (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Total inboxes", value: String(totalInboxes) },
+                  { label: "Sends / day", value: sendsPerDay.toLocaleString() },
+                  { label: "Sends / month", value: sendsPerMonth.toLocaleString() },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                    <p className="text-white font-bold text-xl">{value}</p>
+                    <p className="text-white/40 text-xs mt-0.5">{label}</p>
+                  </div>
                 ))}
               </div>
-            </div>
-
-            {/* Sender name */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-white/50 text-xs font-medium mb-1.5">Sender first name</label>
-                <input
-                  value={firstName}
-                  onChange={e => setFirstName(e.target.value)}
-                  placeholder="Alex"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs font-medium mb-1.5">Sender last name</label>
-                <input
-                  value={lastName}
-                  onChange={e => setLastName(e.target.value)}
-                  placeholder="Smith"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
-                />
-              </div>
-            </div>
+            )}
 
             {/* Warmup notice */}
             <div className="flex gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
-              <span className="text-amber-400 text-lg flex-shrink-0">⚠</span>
-              <div>
-                <p className="text-amber-300 text-sm font-medium">21-day warmup period</p>
-                <p className="text-amber-300/60 text-xs mt-0.5">
-                  New inboxes warm up for 21 days (max 15 sends/day) to build sender reputation before your campaigns can use them.
-                </p>
-              </div>
+              <span className="text-amber-400 flex-shrink-0 mt-0.5">⚠</span>
+              <p className="text-amber-300/70 text-xs">
+                New inboxes warm up for 21 days (max 15 sends/day) to build sender reputation before campaigns can use them.
+              </p>
             </div>
 
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => setStep("review")}
-                disabled={!prefix}
+                disabled={activePrefixes.length === 0}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 Continue
               </button>
-              <button onClick={() => setStep("search")} className="text-white/40 hover:text-white/70 text-sm transition-colors">
-                Back
-              </button>
+              <button onClick={() => setStep("search")} className="text-white/40 hover:text-white/70 text-sm transition-colors">Back</button>
             </div>
           </div>
         </div>
