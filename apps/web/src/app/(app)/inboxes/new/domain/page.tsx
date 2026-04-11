@@ -58,6 +58,21 @@ export default function BuyDomainPage() {
 
   const [step, setStep]   = useState<Step>(returnedDomainId ? "provisioning" : "search");
 
+  // ── Registrant check ────────────────────────────────────────────────────────
+  const [registrantComplete, setRegistrantComplete] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (step === "provisioning") return; // don't block post-payment
+    const wsId = getWorkspaceId() ?? "";
+    fetch("/api/outreach/settings", { headers: { "x-workspace-id": wsId } })
+      .then(r => r.json())
+      .then((data: Record<string, string>) => {
+        const complete = !!(data.registrant_first_name && data.registrant_email && data.registrant_address);
+        setRegistrantComplete(complete);
+      })
+      .catch(() => setRegistrantComplete(true)); // don't block on error
+  }, [step]);
+
   // ── Step 1: Search ──────────────────────────────────────────────────────────
   const [sld, setSld]           = useState("");
   const [selectedTlds, setSelectedTlds] = useState<string[]>([".com"]);
