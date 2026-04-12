@@ -145,13 +145,19 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   const priceUsd  = parseFloat(tldData.registration);
   const costPennies = Math.round(priceUsd * 100);
 
-  await call(`/domain/create/${domain}`, {
-    years:        1,
-    autorenew:    0,
-    privacy:      1,
-    cost:         costPennies,
-    agreeToTerms: "yes",
-  });
+  try {
+    await call(`/domain/create/${domain}`, {
+      years:        1,
+      autorenew:    0,
+      privacy:      1,
+      cost:         costPennies,
+      agreeToTerms: "yes",
+    });
+  } catch (err) {
+    // Idempotent — if already registered (retry scenario), continue
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("taken")) throw err;
+  }
 }
 
 /**
