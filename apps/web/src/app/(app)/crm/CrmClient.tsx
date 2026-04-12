@@ -543,7 +543,17 @@ export default function CrmClient() {
                       <p className="text-white/30 text-xs mt-0.5">{[selected.lead.title, selected.lead.company].filter(Boolean).join(" at ")}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Notes drawer button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowNotesDrawer((v) => !v); }}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${showNotesDrawer ? "bg-amber-500/20 border-amber-500/30 text-amber-300" : "bg-white/6 border-white/10 text-white/50 hover:text-white/70 hover:bg-white/10"}`}
+                      title="Notes"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M10 1a1 1 0 000 2h5a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1v-3a1 1 0 10-2 0v3a3 3 0 003 3h10a3 3 0 003-3V4a3 3 0 00-3-3h-5zM3.293 9.707a1 1 0 011.414 0L8 13V5a1 1 0 012 0v8l3.293-3.293a1 1 0 111.414 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414z"/></svg>
+                      Notes {convNotes.length > 0 && <span className="ml-0.5 px-1.5 py-0.5 bg-amber-500/30 text-amber-200 text-[9px] rounded-full">{convNotes.length}</span>}
+                    </button>
+                    {/* Status picker */}
                     <div className="relative">
                       <div onClick={(e) => { e.stopPropagation(); setStatusDropdown((v) => !v); }} className="cursor-pointer flex items-center gap-1.5">
                         <StatusBadge status={selected.crm_status ?? "neutral"} onClick={() => {}} />
@@ -562,211 +572,179 @@ export default function CrmClient() {
                         </div>
                       )}
                     </div>
-                    <div className="text-right">
-                      <p className="text-white/50 text-xs font-medium">{selected.campaign?.name ?? "Direct inbound"}</p>
-                      <p className="text-white/25 text-[10px] mt-0.5">Replied {timeAgo(selected.replied_at)}</p>
-                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Email thread */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-
-                {/* Sent email bubble — right aligned */}
-                {selected.latest_send && (
-                  <div className="flex flex-col items-end">
-                    <div className="max-w-[85%] w-full">
-                      <div className="flex items-center justify-end gap-2 mb-1.5">
-                        <span className="text-white/30 text-[10px]">
-                          {selected.latest_send.sent_at ? new Date(selected.latest_send.sent_at).toLocaleString() : ""}
-                        </span>
-                        {selected.latest_send.opened_at && <span className="text-emerald-400/60 text-[10px]">Opened</span>}
-                        <span className="text-blue-300/50 text-[10px] font-medium">You</span>
+              {/* Main area: thread + optional notes drawer */}
+              <div className="flex flex-1 overflow-hidden relative">
+                {/* Thread */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                    {convLoading ? (
+                      [1,2,3].map((i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${i % 2 === 0 ? "bg-emerald-500/8 mr-12" : "bg-blue-600/10 ml-12"}`} />)
+                    ) : conversation.length === 0 ? (
+                      <div className="text-center py-12 text-white/20">
+                        <p className="text-sm">No messages yet</p>
                       </div>
+                    ) : conversation.map((msg) => (
+                      msg.type === "send" ? (
+                        <SentBubble key={msg.id} msg={msg} leadEmail={selected.lead.email} />
+                      ) : (
+                        <ReplyBubble key={msg.id} msg={msg} leadEmail={selected.lead.email} />
+                      )
+                    ))}
+                  </div>
+
+                  {/* Rich text compose — pinned to bottom */}
+                  <div className="flex-shrink-0 border-t border-white/8 bg-[#0e0e0e] p-3" onClick={() => { setShowEmojiPicker(false); }}>
+                    {/* Toolbar */}
+                    <div className="flex items-center gap-0.5 mb-2 px-1">
+                      <ToolbarBtn title="Bold" onClick={() => execFormat("bold")}><b>B</b></ToolbarBtn>
+                      <ToolbarBtn title="Italic" onClick={() => execFormat("italic")}><i>I</i></ToolbarBtn>
+                      <ToolbarBtn title="Underline" onClick={() => execFormat("underline")}><u>U</u></ToolbarBtn>
+                      <div className="w-px h-4 bg-white/10 mx-1" />
+                      <div className="relative">
+                        <ToolbarBtn title="Insert link" onClick={(e) => { e.stopPropagation(); setShowLinkDialog((v) => !v); setShowEmojiPicker(false); }}>
+                          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd"/></svg>
+                        </ToolbarBtn>
+                        {showLinkDialog && (
+                          <div className="absolute bottom-full left-0 mb-1 bg-[#1a1a1a] border border-white/12 rounded-xl p-3 shadow-2xl z-20 w-64" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-white/50 text-xs mb-2 font-medium">Insert link</p>
+                            <input
+                              type="url"
+                              placeholder="https://example.com"
+                              value={linkUrl}
+                              onChange={(e) => setLinkUrl(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && handleInsertLink()}
+                              className="w-full px-2.5 py-1.5 bg-white/8 border border-white/10 rounded-lg text-xs text-white placeholder-white/25 focus:outline-none focus:border-blue-500/40 mb-2"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <button onClick={handleInsertLink} className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors">Insert</button>
+                              <button onClick={() => { setShowLinkDialog(false); setLinkUrl(""); }} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/50 text-xs rounded-lg transition-colors">Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <ToolbarBtn title="Emoji" onClick={(e) => { e.stopPropagation(); setShowEmojiPicker((v) => !v); setShowLinkDialog(false); }}>
+                          <span className="text-sm leading-none">☺</span>
+                        </ToolbarBtn>
+                        {showEmojiPicker && (
+                          <div className="absolute bottom-full left-0 mb-1 bg-[#1a1a1a] border border-white/12 rounded-xl p-3 shadow-2xl z-20 w-64" onClick={(e) => e.stopPropagation()}>
+                            <EmojiPicker onSelect={handleInsertEmoji} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-px h-4 bg-white/10 mx-1" />
+                      <ToolbarBtn title="Attach file" onClick={() => fileInputRef.current?.click()}>
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                      </ToolbarBtn>
+                      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                      <div className="flex-1" />
+                      {/* AI Generate button */}
                       <button
-                        className="w-full text-left"
-                        onClick={() => setSentCollapsed((v) => !v)}
+                        onClick={handleSuggestReply}
+                        disabled={suggesting}
+                        className="px-2.5 py-1 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/25 text-violet-300 text-[11px] font-semibold rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5"
+                        title="Generate AI reply — fills compose field"
                       >
-                        <div className="bg-blue-600/15 border border-blue-500/25 rounded-2xl rounded-tr-sm overflow-hidden">
-                          <div className="px-4 py-2.5 border-b border-blue-500/15 flex items-center justify-between gap-2">
-                            <p className="text-blue-200/80 text-xs font-medium truncate">{selected.latest_send.subject}</p>
-                            <span className="text-blue-300/30 text-[10px] flex-shrink-0">{sentCollapsed ? "▸" : "▾"}</span>
-                          </div>
-                          {!sentCollapsed && (
-                            <div className="p-4">
-                              {selected.latest_send.body?.trim().startsWith("<") ? (
-                                <iframe
-                                  srcDoc={`<html><head><style>body{margin:0;font-family:sans-serif;font-size:13px;color:#ccc;background:transparent;line-height:1.6}a{color:#7dd3fc}*{max-width:100%}</style></head><body>${selected.latest_send.body}</body></html>`}
-                                  sandbox="allow-same-origin"
-                                  className="w-full border-0 min-h-[80px]"
-                                  style={{ height: "auto" }}
-                                  onLoad={(e) => {
-                                    const iframe = e.currentTarget;
-                                    if (iframe.contentDocument?.body) {
-                                      iframe.style.height = iframe.contentDocument.body.scrollHeight + "px";
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <pre className="text-blue-100/60 text-xs whitespace-pre-wrap font-sans leading-relaxed">{selected.latest_send.body}</pre>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        {suggesting ? (
+                          <><svg className="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</>
+                        ) : <>✦ Generate Reply</>}
                       </button>
                     </div>
-                  </div>
-                )}
 
-                {/* Their reply bubble — left aligned */}
-                {selected.latest_reply && (
-                  <div className="flex flex-col items-start">
-                    <div className="max-w-[85%] w-full">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-emerald-300/60 text-[10px] font-medium">
-                          {selected.latest_reply.from_name || selected.latest_reply.from_email}
-                        </span>
-                        {selected.latest_reply.from_email !== selected.lead.email && (
-                          <span className="text-amber-400/50 text-[10px]">({selected.latest_reply.from_email})</span>
-                        )}
-                        <span className="text-white/30 text-[10px]">
-                          {new Date(selected.latest_reply.received_at).toLocaleString()}
-                        </span>
-                        {selected.latest_reply.ai_category && selected.latest_reply.ai_category !== "neutral" && (selected.latest_reply.ai_confidence ?? 0) >= 0.7 && (
-                          <span className="text-emerald-400/50 text-[10px]">
-                            AI: {selected.latest_reply.ai_category.replace(/_/g, " ")} {Math.round((selected.latest_reply.ai_confidence ?? 0) * 100)}%
-                          </span>
-                        )}
-                      </div>
-                      <button className="w-full text-left" onClick={() => setReplyCollapsed((v) => !v)}>
-                        <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl rounded-tl-sm overflow-hidden">
-                          <div className="px-4 py-2.5 border-b border-emerald-500/15 flex items-center justify-between gap-2">
-                            <p className="text-emerald-200/70 text-xs font-medium truncate">
-                              {selected.latest_reply.subject ?? `Re: ${selected.latest_send?.subject ?? ""}`}
-                            </p>
-                            <span className="text-emerald-300/30 text-[10px] flex-shrink-0">{replyCollapsed ? "▸" : "▾"}</span>
-                          </div>
-                          {!replyCollapsed && (
-                            <div className="p-4 space-y-3">
-                              <pre className="text-emerald-100/75 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                                {selected.latest_reply.body_text ?? "(No body captured — reply detected via header matching)"}
-                              </pre>
-                              {selected.latest_reply.attachments?.length > 0 && (
-                                <div className="border-t border-emerald-500/15 pt-3 space-y-1.5">
-                                  <p className="text-emerald-300/40 text-[10px] font-semibold uppercase tracking-wider">
-                                    {selected.latest_reply.attachments.length} attachment{selected.latest_reply.attachments.length > 1 ? "s" : ""}
-                                  </p>
-                                  {selected.latest_reply.attachments.map((att, i) => (
-                                    <a
-                                      key={i}
-                                      href={att.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-emerald-500/8 hover:bg-emerald-500/14 border border-emerald-500/15 hover:border-emerald-500/25 transition-colors group"
-                                      onClick={e => e.stopPropagation()}
-                                    >
-                                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-emerald-400/60 flex-shrink-0">
-                                        <path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/>
-                                      </svg>
-                                      <span className="text-emerald-200/70 text-xs truncate flex-1">{att.name}</span>
-                                      <span className="text-emerald-300/30 text-[10px] flex-shrink-0">
-                                        {att.size < 1024 ? `${att.size} B` : att.size < 1_048_576 ? `${(att.size / 1024).toFixed(1)} KB` : `${(att.size / 1_048_576).toFixed(1)} MB`}
-                                      </span>
-                                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-emerald-400/30 group-hover:text-emerald-400/60 flex-shrink-0 transition-colors">
-                                        <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd"/>
-                                      </svg>
-                                    </a>
-                                  ))}
-                                </div>
-                              )}
+                    {/* Compose area */}
+                    <div className="relative bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-blue-500/40 transition-colors">
+                      <div
+                        ref={composeRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={() => {
+                          setComposeHtml(composeRef.current?.innerHTML ?? "");
+                          setComposeBody(composeRef.current?.innerText ?? "");
+                          setSendError(null);
+                          setSendSuccess(false);
+                        }}
+                        className="min-h-[90px] max-h-[200px] overflow-y-auto text-white text-sm focus:outline-none px-4 py-3 leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:text-white/25 empty:before:pointer-events-none"
+                        data-placeholder={`Reply to ${selected.lead.first_name || selected.lead.email}…`}
+                        style={{ wordBreak: "break-word" }}
+                      />
+                      {/* Attachments */}
+                      {attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 border-t border-white/8 pt-2">
+                          {attachments.map((f, i) => (
+                            <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white/8 border border-white/12 rounded-lg text-xs text-white/70">
+                              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/40"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                              <span className="max-w-[120px] truncate">{f.name}</span>
+                              <span className="text-white/30 text-[10px]">{f.size < 1_048_576 ? `${(f.size/1024).toFixed(0)}KB` : `${(f.size/1_048_576).toFixed(1)}MB`}</span>
+                              <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))} className="text-white/30 hover:text-red-400 transition-colors ml-0.5">✕</button>
                             </div>
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* AI Reply Suggestion */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-white/30 uppercase tracking-wider">AI Suggestion</h3>
-                    <button onClick={handleSuggestReply} disabled={suggesting} className="px-3 py-1 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-xs font-semibold rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5">
-                      {suggesting ? <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</> : <>✦ Suggest</>}
-                    </button>
-                  </div>
-                  {suggestion && (
-                    <div className={`border rounded-xl p-4 space-y-3 ${suggestion.startsWith("Error") ? "border-red-500/20 bg-red-500/8" : "border-violet-500/20 bg-violet-500/8"}`}>
-                      <p className={`text-sm whitespace-pre-wrap ${suggestion.startsWith("Error") ? "text-red-400" : "text-white/70"}`}>{suggestion}</p>
-                      {!suggestion.startsWith("Error") && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setComposeBody(suggestion); setSuggestion(null); }}
-                            className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-lg transition-colors"
-                          >
-                            Use as Reply
-                          </button>
-                          <button onClick={() => { setNoteBody(suggestion); setSuggestion(null); noteRef.current?.focus(); }} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/50 text-xs rounded-lg transition-colors">Use as Note</button>
-                          <button onClick={() => setSuggestion(null)} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/50 text-xs rounded-lg transition-colors">Dismiss</button>
+                          ))}
                         </div>
                       )}
+                      <div className="flex items-center justify-between px-3 pb-2 pt-1">
+                        <div className="text-xs">
+                          {sendError && <span className="text-red-400">⚠ {sendError}</span>}
+                          {sendSuccess && <span className="text-emerald-400">✓ Sent</span>}
+                        </div>
+                        <button
+                          onClick={handleSendReply}
+                          disabled={sending || !composeBody.trim()}
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                        >
+                          {sending ? (
+                            <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</>
+                          ) : (
+                            <><svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z"/></svg>Send</>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* Notes */}
-                <div className="pt-1">
-                  <h3 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Notes</h3>
-                  {(selected.notes?.length ?? 0) > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {(selected.notes ?? []).map((n) => (
-                        <div key={n.id} className="bg-amber-500/8 border border-amber-500/15 rounded-xl p-4">
+                {/* Notes drawer */}
+                {showNotesDrawer && (
+                  <div className="w-72 flex-shrink-0 border-l border-white/8 bg-[#0a0a0a] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
+                      <h3 className="text-white/70 text-sm font-semibold">Notes</h3>
+                      <button onClick={() => setShowNotesDrawer(false)} className="text-white/30 hover:text-white/60 transition-colors">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                      {convNotes.length === 0 ? (
+                        <p className="text-white/25 text-xs text-center py-6">No notes yet</p>
+                      ) : convNotes.map((n) => (
+                        <div key={n.id} className="bg-amber-500/8 border border-amber-500/15 rounded-xl p-3">
                           <p className="text-white/80 text-sm whitespace-pre-wrap">{n.body}</p>
                           <p className="text-white/25 text-[10px] mt-2">{new Date(n.created_at).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
-                  )}
-                  <div className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
-                    <textarea ref={noteRef} value={noteBody} onChange={(e) => setNoteBody(e.target.value)} placeholder="Add a note…" rows={2} className="w-full bg-transparent text-white text-sm placeholder:text-white/25 focus:outline-none resize-none" />
-                    <div className="flex justify-end">
-                      <button onClick={handleAddNote} disabled={savingNote || !noteBody.trim()} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors">
+                    <div className="flex-shrink-0 border-t border-white/8 p-3">
+                      <textarea
+                        ref={noteRef}
+                        value={noteBody}
+                        onChange={(e) => setNoteBody(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddNote(); }}
+                        placeholder="Add a note… (⌘↵ to save)"
+                        rows={3}
+                        className="w-full bg-white/4 border border-white/8 rounded-xl text-white text-sm placeholder:text-white/25 focus:outline-none resize-none p-3 focus:border-amber-500/30 transition-colors"
+                      />
+                      <button
+                        onClick={handleAddNote}
+                        disabled={savingNote || !noteBody.trim()}
+                        className="mt-2 w-full px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 text-amber-200 text-xs font-semibold rounded-lg transition-colors"
+                      >
                         {savingNote ? "Saving…" : "Save Note"}
                       </button>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Compose reply — pinned to bottom */}
-              <div className="flex-shrink-0 border-t border-white/8 bg-white/2 p-4">
-                <div className="bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-blue-500/40 transition-colors">
-                  <textarea
-                    value={composeBody}
-                    onChange={(e) => { setComposeBody(e.target.value); setSendError(null); setSendSuccess(false); }}
-                    placeholder={`Reply to ${selected.lead.first_name || selected.lead.email}…`}
-                    rows={4}
-                    className="w-full bg-transparent text-white text-sm placeholder:text-white/25 focus:outline-none resize-none px-4 pt-3 pb-1"
-                  />
-                  <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
-                    <div className="text-xs">
-                      {sendError && <span className="text-red-400">⚠ {sendError}</span>}
-                      {sendSuccess && <span className="text-emerald-400">✓ Sent successfully</span>}
-                    </div>
-                    <button
-                      onClick={handleSendReply}
-                      disabled={sending || !composeBody.trim()}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-                    >
-                      {sending ? (
-                        <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</>
-                      ) : (
-                        <>↗ Send Reply</>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           ) : (
