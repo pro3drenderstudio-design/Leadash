@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         .update({ dns_records: dnsRecords })
         .eq("id", domain_record_id);
 
-      // ── Step 4b: Optional web redirect + email forwarding ──────────────────
+      // ── Step 5b: Optional web redirect + email forwarding ─────────────────
       if (domainRecord.redirect_url) {
         await setWebRedirect(domainRecord.domain, domainRecord.redirect_url);
       }
