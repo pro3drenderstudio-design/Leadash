@@ -110,7 +110,7 @@ export async function POST(
       to_email:      toEmail,
       from_email:    inbox.email_address,
       subject,
-      body,
+      body:          htmlBodyRaw?.trim() ? htmlBodyRaw : body,
       status:        "sent",
       message_id:    messageId || null,
       sent_at:       new Date().toISOString(),
