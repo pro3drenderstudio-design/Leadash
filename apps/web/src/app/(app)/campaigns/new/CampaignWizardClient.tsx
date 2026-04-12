@@ -213,15 +213,21 @@ export default function CampaignWizardClient() {
               Sending Inboxes {selectedInboxes.length > 0 && <span className="text-blue-400 normal-case ml-1">{selectedInboxes.length} selected</span>}
             </label>
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-              {inboxes.map((inbox) => (
-                <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedInboxes.includes(inbox.id) ? "border-blue-500/40 bg-blue-600/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-                  <input type="checkbox" checked={selectedInboxes.includes(inbox.id)} onChange={() => toggleInbox(inbox.id)} className="accent-blue-500" />
-                  <div>
-                    <div className="text-white text-sm font-medium">{inbox.label}</div>
-                    <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div>
-                  </div>
-                </label>
-              ))}
+              {inboxes.map((inbox) => {
+                const warmupEndsAt = (inbox as OutreachInboxSafe & { warmup_ends_at?: string }).warmup_ends_at;
+                const isWarming    = !!warmupEndsAt && new Date(warmupEndsAt) > new Date();
+                const daysLeft     = isWarming ? Math.ceil((new Date(warmupEndsAt!).getTime() - Date.now()) / 86_400_000) : 0;
+                return (
+                  <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${selectedInboxes.includes(inbox.id) ? "border-blue-500/40 bg-blue-600/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
+                    <input type="checkbox" disabled={isWarming} checked={!isWarming && selectedInboxes.includes(inbox.id)} onChange={() => !isWarming && toggleInbox(inbox.id)} className="accent-blue-500 disabled:opacity-40" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium">{inbox.label}</div>
+                      <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div>
+                      {isWarming && <div className="text-amber-400/70 text-xs mt-0.5">Warming up — available in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>}
+                    </div>
+                  </label>
+                );
+              })}
               {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/inboxes/new" className="text-blue-400">Add one first.</a></p>}
             </div>
           </div>
