@@ -285,6 +285,10 @@ export interface ReplyPollResult {
   details: Array<{ email: string; fetched: number; matched: number; unmatched: number; error?: string }>;
 }
 
+function isSesSmtpInbox(inbox: { imap_host?: string | null; smtp_host?: string | null; provider?: string | null }): boolean {
+  return !inbox.imap_host && (inbox.smtp_host ?? "").includes("amazonaws.com") && inbox.provider === "smtp";
+}
+
 export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promise<ReplyPollResult> {
   const db = supabase();
 
@@ -296,6 +300,59 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
   if (!inboxes?.length) return { inboxes: 0, matched: 0, unmatched: 0, filtered: 0, details: [] };
   const filters = (filtersData ?? []) as OutreachCrmFilter[];
 
+  // ── SES S3 inbound: one poll per workspace covers all SES inboxes ────────────
+  const sesInboxes = inboxes.filter(isSesSmtpInbox);
+  const sesInboxMap = new Map(sesInboxes.map(i => [i.email_address.toLowerCase(), i]));
+  const sesMessagesByInbox = new Map<string, RawMessage[]>();
+
+  if (sesInboxes.length && process.env.SES_INBOUND_BUCKET) {
+    try {
+      const { listInboundObjects, downloadObject, parseRawEmail } = await import("@/lib/outreach/ses-inbound");
+      const since   = new Date(Date.now() - lookbackDays * 86_400_000);
+      const objects = await listInboundObjects(since);
+
+      // Already-seen message IDs to avoid re-processing
+      const { data: existing } = await db
+        .from("outreach_replies")
+        .select("message_id")
+        .eq("workspace_id", workspaceId)
+        .gte("received_at", since.toISOString());
+      const seenIds = new Set((existing ?? []).map((r: { message_id: string }) => r.message_id).filter(Boolean));
+
+      for (const obj of objects) {
+        const raw = await downloadObject(obj.key);
+        if (!raw) continue;
+
+        const parsed = parseRawEmail(raw);
+        if (!parsed) continue;
+        if (parsed.messageId && seenIds.has(parsed.messageId)) continue;
+
+        // Route to the correct inbox by To: address
+        const inbox = sesInboxMap.get(parsed.toEmail);
+        if (!inbox) continue; // email not destined for one of our inboxes
+
+        const msg: RawMessage = {
+          messageId:  parsed.messageId,
+          inReplyTo:  parsed.inReplyTo,
+          fromEmail:  parsed.fromEmail,
+          fromName:   parsed.fromName,
+          subject:    parsed.subject,
+          bodyText:   parsed.bodyText,
+          receivedAt: parsed.receivedAt,
+          warmupId:   parsed.warmupId,
+          rawSource:  parsed.rawSource,
+        };
+
+        const bucket = sesMessagesByInbox.get(inbox.id) ?? [];
+        bucket.push(msg);
+        sesMessagesByInbox.set(inbox.id, bucket);
+      }
+    } catch (e) {
+      console.error("[reply-runner] SES S3 poll failed:", String(e).slice(0, 300));
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   const CONCURRENCY = 5;
   const allDetails: ReplyPollResult["details"] = [];
   let totalMatched = 0, totalUnmatched = 0, totalFiltered = 0;
@@ -305,7 +362,13 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
     let messages: RawMessage[] = [];
     let fetchError: string | undefined;
 
-    if (inbox.imap_host || deriveImapHost(inbox.smtp_host)) {
+    if (isSesSmtpInbox(inbox)) {
+      // Messages already fetched from S3 above
+      messages = sesMessagesByInbox.get(inbox.id) ?? [];
+      if (!process.env.SES_INBOUND_BUCKET) {
+        fetchError = "SES_INBOUND_BUCKET not configured — add it to environment variables";
+      }
+    } else if (inbox.imap_host || deriveImapHost(inbox.smtp_host)) {
       const r = await fetchImapMessages(inbox, lookbackDays);
       messages = r.messages; fetchError = r.error;
       if (fetchError) await db.from("outreach_inboxes").update({ last_error: `IMAP poll: ${fetchError}` }).eq("id", inbox.id);
@@ -318,7 +381,7 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
         messages = raw.map(r => ({
           messageId:  (r.messageId ?? "").replace(/^<|>$/g, ""),
           inReplyTo:  (r.inReplyTo ?? "").replace(/^<|>$/g, "") || null,
-          threadId:   r.threadId ?? null,   // Gmail threadId for fallback matching
+          threadId:   r.threadId ?? null,
           fromEmail:  r.fromEmail ?? "",
           fromName:   null,
           subject:    r.subject ?? null,
@@ -335,7 +398,7 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
         messages = raw.map(r => ({
           messageId:  r.messageId.replace(/^<|>$/g, ""),
           inReplyTo:  r.inReplyTo ? r.inReplyTo.replace(/^<|>$/g, "") : null,
-          threadId:   r.threadId ?? null,   // conversationId for fallback matching
+          threadId:   r.threadId ?? null,
           fromEmail:  r.fromEmail ?? "",
           fromName:   null,
           subject:    null,
