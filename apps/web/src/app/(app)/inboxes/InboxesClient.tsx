@@ -3,7 +3,19 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getInboxes, deleteInbox, updateInbox, importInboxes } from "@/lib/outreach/api";
+import { wsFetch } from "@/lib/workspace/client";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
+
+// ─── Domain types ─────────────────────────────────────────────────────────────
+interface OutreachDomain {
+  id: string;
+  domain: string;
+  status: string;
+  mailbox_count: number;
+  warmup_ends_at: string | null;
+  error_message: string | null;
+  created_at: string;
+}
 
 // ─── CSV column mapping ────────────────────────────────────────────────────────
 
