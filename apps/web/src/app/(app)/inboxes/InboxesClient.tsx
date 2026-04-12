@@ -649,6 +649,7 @@ export default function InboxesClient() {
         )}
         </>
       )}
+      </>)}
 
       {/* Import CSV modal */}
       {showImport && (
