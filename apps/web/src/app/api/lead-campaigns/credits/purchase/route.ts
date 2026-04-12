@@ -12,9 +12,6 @@ export async function POST(req: NextRequest) {
   const { pack_id } = await req.json();
   const pack = CREDIT_PACKS.find(p => p.id === pack_id);
   if (!pack) return NextResponse.json({ error: "Invalid pack" }, { status: 400 });
-  if (!pack.stripe_price_id) {
-    return NextResponse.json({ error: "Pack not yet available for purchase" }, { status: 400 });
-  }
 
   const { data: workspace } = await db
     .from("workspaces")
@@ -39,7 +36,14 @@ export async function POST(req: NextRequest) {
   const session = await stripe.checkout.sessions.create({
     customer:    customerId,
     mode:        "payment",
-    line_items:  [{ price: pack.stripe_price_id, quantity: 1 }],
+    line_items:  [{
+      quantity: 1,
+      price_data: {
+        currency:     "usd",
+        unit_amount:  pack.priceUsd * 100,
+        product_data: { name: `${pack.label} – Lead Credits` },
+      },
+    }],
     success_url: `${origin}/lead-campaigns/credits?purchase=success&credits=${pack.credits}`,
     cancel_url:  `${origin}/lead-campaigns/credits`,
     metadata:    {
