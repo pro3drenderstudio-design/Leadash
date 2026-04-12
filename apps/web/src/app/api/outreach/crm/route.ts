@@ -37,16 +37,22 @@ export async function GET(req: NextRequest) {
     const sends = (row.latest_send as { id: string }[]) ?? [];
     const latestSend = sends[0] ?? null;
 
-    const { data: reply } = latestSend
-      ? await db
-          .from("outreach_replies")
-          .select("id, from_email, from_name, subject, body_text, received_at, ai_category, ai_confidence, is_filtered")
-          .eq("enrollment_id", row.id as string)
-          .eq("is_filtered", false)
-          .order("received_at", { ascending: false })
-          .limit(1)
-          .single()
-      : { data: null };
+    const { data: reply } = await db
+      .from("outreach_replies")
+      .select("id, from_email, from_name, subject, body_text, received_at, ai_category, ai_confidence, is_filtered")
+      .eq("enrollment_id", row.id as string)
+      .eq("is_filtered", false)
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .single()
+      .then(r => r)
+      .catch(() => ({ data: null }));
+
+    const { data: notes } = await db
+      .from("crm_notes")
+      .select("id, lead_id, body, created_at")
+      .eq("enrollment_id", row.id as string)
+      .order("created_at", { ascending: true });
 
     return {
       enrollment_id: row.id,
@@ -56,6 +62,7 @@ export async function GET(req: NextRequest) {
       latest_send:   latestSend,
       latest_reply:  reply ?? null,
       replied_at:    (reply as { received_at?: string } | null)?.received_at ?? null,
+      notes:         notes ?? [],
     };
   }));
 
