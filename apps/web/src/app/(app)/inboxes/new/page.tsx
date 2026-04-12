@@ -67,6 +67,23 @@ export default function NewInboxPage() {
       {!provider && (
         <div className="grid grid-cols-2 gap-4">
           <button
+            onClick={() => router.push("/inboxes/new/connect-domain")}
+            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-blue-500/20 hover:border-blue-500/40 rounded-xl transition-all relative overflow-hidden col-span-2"
+          >
+            <div className="absolute top-3 right-3 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 tracking-wide">BRING YOUR OWN</div>
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="#60a5fa" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <p className="text-white font-medium text-sm">Connect existing domain</p>
+                <p className="text-white/40 text-xs mt-0.5">Already own a domain? We&apos;ll generate the DNS records — add them at your registrar and you&apos;re live.</p>
+              </div>
+            </div>
+          </button>
+          <button
             onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/gmail?workspace_id=${wsId}`; }}
             className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
           >
