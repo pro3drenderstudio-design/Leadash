@@ -26,21 +26,11 @@ export async function POST(
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Already registered — re-publish if cloudflare flag set
-  if (domainRecord.dns_records) {
-    let auto_configured = false;
-    if (use_cloudflare) {
-      try {
-        await publishDnsRecords(domainRecord.domain, domainRecord.dns_records);
-        auto_configured = true;
-      } catch { /* non-fatal */ }
-    }
-    return NextResponse.json({ domain: domainRecord.domain, dns_records: domainRecord.dns_records, auto_configured });
-  }
-
+  // Always re-register to ensure MAIL FROM and latest DNS records are applied
   let dkimTokens: string[];
   try {
     ({ dkimTokens } = await registerDomain(domainRecord.domain));
+    await setMailFromDomain(domainRecord.domain).catch(() => {}); // non-fatal
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db.from("outreach_domains").update({ status: "failed", error_message: msg }).eq("id", id);
