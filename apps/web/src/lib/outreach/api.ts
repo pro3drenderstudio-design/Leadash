@@ -2,8 +2,30 @@ import { wsFetch } from "@/lib/workspace/client";
 import type {
   OutreachInboxSafe, OutreachList, OutreachCampaign, OutreachSequenceStep,
   ImportResult, CrmThread, OutreachTemplate, OutreachReply, OutreachCrmFilter,
-  CampaignEnrollmentRow, CampaignAnalytics,
+  CampaignEnrollmentRow, CampaignAnalytics, ReplyAttachment,
 } from "@/types/outreach";
+
+export interface ConversationMessage {
+  id: string;
+  type: "send" | "reply";
+  timestamp: string;
+  subject?: string | null;
+  // send fields
+  body?: string | null;
+  status?: string | null;
+  sent_at?: string | null;
+  opened_at?: string | null;
+  clicked_at?: string | null;
+  to_email?: string | null;
+  // reply fields
+  body_text?: string | null;
+  from_email?: string | null;
+  from_name?: string | null;
+  received_at?: string | null;
+  ai_category?: string | null;
+  ai_confidence?: number | null;
+  attachments?: ReplyAttachment[];
+}
 
 const base = "/api/outreach";
 
