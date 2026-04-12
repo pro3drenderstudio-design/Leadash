@@ -1,12 +1,102 @@
+"use client";
+import { useState } from "react";
 import Link from "next/link";
-import { PLANS } from "@/lib/billing/plans";
+import { PLANS, CREDIT_PACKS, CREDIT_COSTS } from "@/lib/billing/plans";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Currency = "NGN" | "USD";
+
+// ─── Credit slider ────────────────────────────────────────────────────────────
+
+function CreditSlider() {
+  const packs = [...CREDIT_PACKS];
+  const [idx, setIdx] = useState(0);
+  const pack = packs[idx];
+
+  const baseRateNgn = 15_000 / 2_000; // ₦7.50/credit
+  const discountNgn = baseRateNgn * pack.credits - pack.priceNgn;
+
+  return (
+    <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-2xl mx-auto">
+      <h3 className="text-white font-semibold text-lg mb-1">Top up credits</h3>
+      <p className="text-gray-400 text-sm mb-6">Credits never expire. Use them for scraping, verification, and AI personalization.</p>
+
+      {/* Slider */}
+      <div className="mb-6">
+        <div className="flex justify-between text-xs text-gray-500 mb-2">
+          <span>2,000</span>
+          <span>50,000</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={packs.length - 1}
+          value={idx}
+          onChange={e => setIdx(Number(e.target.value))}
+          className="w-full accent-blue-500"
+        />
+      </div>
+
+      {/* Selected pack info */}
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <p className="text-4xl font-bold text-white">
+            ₦{pack.priceNgn.toLocaleString()}
+          </p>
+          <p className="text-gray-400 text-sm mt-1">{pack.credits.toLocaleString()} credits</p>
+        </div>
+        <div className="text-right">
+          {pack.savingsPct > 0 ? (
+            <>
+              <p className="text-green-400 font-semibold text-sm">Save {pack.savingsPct}%</p>
+              <p className="text-gray-500 text-xs">You save ₦{discountNgn.toLocaleString()}</p>
+            </>
+          ) : (
+            <p className="text-gray-500 text-xs">₦7.50 / credit</p>
+          )}
+        </div>
+      </div>
+
+      {/* What you can do with these credits */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "Leads scraped",    credits: CREDIT_COSTS.scrape,         icon: "🔍" },
+          { label: "Leads verified",   credits: CREDIT_COSTS.verify,         icon: "✓" },
+          { label: "AI openers",       credits: CREDIT_COSTS.ai_personalize, icon: "✨" },
+        ].map(op => (
+          <div key={op.label} className="bg-white/5 rounded-xl p-3 text-center">
+            <p className="text-xl mb-1">{op.icon}</p>
+            <p className="text-white font-bold text-lg">{Math.floor(pack.credits / op.credits).toLocaleString()}</p>
+            <p className="text-gray-500 text-xs">{op.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href={`/signup?credits=${pack.id}`}
+        className="block w-full text-center py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors"
+      >
+        Buy {pack.credits.toLocaleString()} credits →
+      </Link>
+      <p className="text-gray-600 text-xs text-center mt-3">Credits added instantly. Never expire.</p>
+    </div>
+  );
+}
+
+// ─── Main Pricing Page ────────────────────────────────────────────────────────
+
+const PLAN_ORDER = ["free", "starter", "growth", "scale", "enterprise"] as const;
 
 export default function PricingPage() {
-  const plans = Object.values(PLANS);
+  const [currency] = useState<Currency>("NGN");
+
+  const plans = PLAN_ORDER.map(id => PLANS[id]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="flex items-center justify-between px-8 py-5 max-w-6xl mx-auto">
+      {/* Nav */}
+      <nav className="flex items-center justify-between px-8 py-5 max-w-6xl mx-auto border-b border-white/5">
         <Link href="/" className="text-lg font-bold tracking-tight">Leadash</Link>
         <div className="flex items-center gap-4">
           <Link href="/login" className="text-sm text-gray-400 hover:text-white">Sign in</Link>
@@ -14,37 +104,163 @@ export default function PricingPage() {
         </div>
       </nav>
 
-      <div className="text-center px-4 py-16 max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold mb-4">Simple, transparent pricing</h1>
-        <p className="text-gray-400 mb-12">Start free, upgrade when you scale.</p>
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <h1 className="text-5xl font-bold mb-4">Simple, transparent pricing</h1>
+          <p className="text-gray-400 text-lg">Start free for 14 days. No card required.</p>
+        </div>
 
-        <div className="grid md:grid-cols-4 gap-6">
-          {plans.map(plan => (
-            <div key={plan.id} className={`rounded-xl p-6 text-left border ${plan.id === "growth" ? "border-blue-500 bg-blue-500/5" : "border-white/10 bg-gray-900"}`}>
-              {plan.id === "growth" && (
-                <div className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full inline-block mb-3">Most popular</div>
-              )}
-              <h3 className="font-semibold text-white mb-1">{plan.name}</h3>
-              <div className="mb-4">
-                <span className="text-3xl font-bold">${plan.price}</span>
-                {plan.price > 0 && <span className="text-gray-400 text-sm">/mo</span>}
-              </div>
-              <ul className="space-y-2 text-sm text-gray-400 mb-6">
-                <li>{plan.maxInboxes} inboxes</li>
-                <li>{plan.maxMonthlySends.toLocaleString()} emails/month</li>
-                <li>{plan.maxSeats === 999999 ? "Unlimited" : plan.maxSeats} seat{plan.maxSeats !== 1 ? "s" : ""}</li>
-                <li>Inbox warmup</li>
-                <li>AI reply classification</li>
-                {plan.id !== "free" && <li>Priority support</li>}
-              </ul>
-              <Link
-                href={plan.price === 0 ? "/signup" : `/signup?plan=${plan.id}`}
-                className={`block text-center text-sm font-medium py-2 rounded-lg transition-colors ${plan.id === "growth" ? "bg-blue-600 hover:bg-blue-700 text-white" : "border border-white/15 hover:border-white/30 text-white"}`}
-              >
-                {plan.price === 0 ? "Start free" : "Get started"}
-              </Link>
+        {/* Credit cost explainer */}
+        <div className="flex flex-wrap items-center justify-center gap-6 mb-12 px-6 py-5 bg-white/3 border border-white/8 rounded-2xl max-w-2xl mx-auto">
+          <p className="text-gray-400 text-sm font-medium w-full text-center mb-2">Credits are charged per action — not per seat or inbox</p>
+          {[
+            { label: "Scrape a lead",      cost: CREDIT_COSTS.scrape,         emoji: "🔍" },
+            { label: "Verify an email",    cost: CREDIT_COSTS.verify,         emoji: "✓" },
+            { label: "AI personalization", cost: CREDIT_COSTS.ai_personalize, emoji: "✨" },
+          ].map(op => (
+            <div key={op.label} className="flex items-center gap-2">
+              <span className="text-sm">{op.emoji}</span>
+              <span className="text-white text-sm font-semibold">{op.cost}</span>
+              <span className="text-gray-500 text-sm">cr · {op.label}</span>
             </div>
           ))}
+        </div>
+
+        {/* Plan cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-20">
+          {plans.map(plan => {
+            const isPopular  = plan.id === "growth";
+            const isFree     = plan.id === "free";
+            const priceStr   = isFree ? "Free" : `₦${plan.priceNgn.toLocaleString()}`;
+
+            return (
+              <div
+                key={plan.id}
+                className={`rounded-2xl p-5 flex flex-col border transition-all ${
+                  isPopular
+                    ? "border-blue-500 bg-blue-500/5 shadow-lg shadow-blue-500/10"
+                    : "border-white/8 bg-gray-900/80"
+                }`}
+              >
+                {isPopular && (
+                  <div className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full inline-block self-start mb-3">
+                    Most popular
+                  </div>
+                )}
+
+                <h3 className="font-bold text-white text-base mb-1">{plan.name}</h3>
+                {isFree && plan.trialDays > 0 && (
+                  <p className="text-gray-500 text-xs mb-3">{plan.trialDays}-day trial</p>
+                )}
+
+                <div className="mb-4">
+                  <span className="text-3xl font-bold text-white">{priceStr}</span>
+                  {!isFree && <span className="text-gray-500 text-sm">/mo</span>}
+                </div>
+
+                <ul className="space-y-2 text-sm text-gray-400 mb-6 flex-1">
+                  <li className="flex items-center gap-2">
+                    <span className="text-blue-400">✦</span>
+                    <span className={plan.includedCredits === 0 ? "text-gray-600" : "text-white"}>
+                      {plan.includedCredits === 0 ? "No credits" : `${plan.includedCredits.toLocaleString()} credits/mo`}
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-blue-400">✦</span>
+                    <span className={plan.maxLeadsPool === 0 ? "text-gray-600" : ""}>
+                      {plan.maxLeadsPool === 0
+                        ? "Preview leads only"
+                        : `${plan.maxLeadsPool.toLocaleString()} leads pool`}
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-blue-400">✦</span>
+                    {plan.maxInboxes === -1 ? "Unlimited inboxes" : `Up to ${plan.maxInboxes} inboxes`}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className={plan.features.warmup ? "text-green-400" : "text-gray-700"}>✓</span>
+                    <span className={!plan.features.warmup ? "text-gray-600" : ""}>Inbox warmup</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className={plan.features.campaigns ? "text-green-400" : "text-gray-700"}>✓</span>
+                    <span className={!plan.features.campaigns ? "text-gray-600" : ""}>Run campaigns</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className={plan.features.aiPersonalization ? "text-green-400" : "text-gray-700"}>✓</span>
+                    <span className={!plan.features.aiPersonalization ? "text-gray-600" : ""}>AI personalization</span>
+                  </li>
+                  {plan.id !== "free" && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">✓</span>
+                      Priority support
+                    </li>
+                  )}
+                </ul>
+
+                <Link
+                  href={isFree ? "/signup" : `/signup?plan=${plan.id}`}
+                  className={`block text-center text-sm font-semibold py-2.5 rounded-xl transition-colors ${
+                    isPopular
+                      ? "bg-blue-600 hover:bg-blue-500 text-white"
+                      : isFree
+                      ? "border border-white/15 hover:border-white/25 text-white"
+                      : "bg-white/6 hover:bg-white/10 text-white border border-white/10"
+                  }`}
+                >
+                  {isFree ? "Start free trial" : "Get started"}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Credit top-up section */}
+        <div className="mb-20">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold mb-3">Need more credits?</h2>
+            <p className="text-gray-400">Top up any time. Bulk discounts up to 40% off.</p>
+          </div>
+          <CreditSlider />
+        </div>
+
+        {/* FAQ */}
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-2xl font-bold text-center mb-8">Common questions</h2>
+          <div className="space-y-4">
+            {[
+              {
+                q: "What happens when I run out of credits?",
+                a: "Scraping, verification, and AI personalization stop for the current job. Leads already collected are kept. Buy more credits and jobs resume automatically.",
+              },
+              {
+                q: "Do credits roll over?",
+                a: "Monthly plan credits reset each billing cycle. Purchased top-up credits never expire.",
+              },
+              {
+                q: "Can I change plans?",
+                a: "Yes — upgrade or downgrade at any time. Credits from your old plan are not carried over on downgrade.",
+              },
+              {
+                q: "What payment methods are accepted?",
+                a: "NGN payments via Paystack (card, bank transfer, USSD). USD payments via Stripe (card).",
+              },
+              {
+                q: "What is the leads pool?",
+                a: "Leads in your pool are kept between campaigns. Your plan limits how many you can store at once. Export to sequences when ready to send.",
+              },
+            ].map(item => (
+              <details key={item.q} className="group border border-white/8 rounded-xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer bg-white/3 hover:bg-white/5 transition-colors list-none">
+                  <span className="text-white text-sm font-medium pr-4">{item.q}</span>
+                  <svg className="w-4 h-4 text-white/30 flex-shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="px-5 py-4 text-gray-400 text-sm leading-relaxed border-t border-white/5">{item.a}</div>
+              </details>
+            ))}
+          </div>
         </div>
       </div>
     </div>
