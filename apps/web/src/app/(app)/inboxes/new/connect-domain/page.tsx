@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceId } from "@/lib/workspace/client";
+import { useCurrency } from "@/lib/currency";
 
-type Step = "configure" | "dns" | "verifying" | "done";
+type Step = "configure" | "payment" | "dns" | "verifying" | "done";
 
 interface DnsRecord {
   type:      string;
