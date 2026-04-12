@@ -86,7 +86,7 @@ const FALLBACK_PRICES: Record<string, number> = {
  */
 interface TldPricing {
   registration: string;
-  minYears?: number;
+  minperiod?: string;  // Porkbun returns min period as string like "1"
 }
 
 let _pricingCache: Record<string, TldPricing> | null = null;
