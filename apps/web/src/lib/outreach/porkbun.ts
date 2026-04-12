@@ -153,11 +153,10 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   }
 
   await call(`/domain/create/${domain}`, {
-    years:          1,
-    autorenew:      0,
-    privacy:        1,   // enable free WHOIS privacy
-    cost:           costUsdInt,
-    agreedToTerms:  true,
+    years:     1,
+    autorenew: 0,
+    privacy:   1,
+    cost:      costUsdInt,
   });
 }
 
