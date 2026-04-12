@@ -10,7 +10,6 @@
  * Required env vars:
  *   CLOUDFLARE_API_TOKEN   — token with Account:Registrar:Edit + Zone:DNS:Edit + Account:Zone:Edit
  *   CLOUDFLARE_ACCOUNT_ID  — found in Cloudflare dashboard sidebar
- *   PORKBUN_API_KEY / PORKBUN_SECRET_KEY — used for live TLD pricing only
  */
 
 const CF_BASE = "https://api.cloudflare.com/client/v4";
@@ -20,6 +19,37 @@ export interface DomainCheckResult {
   available: boolean;
   price:     number; // USD, registration year 1
 }
+
+/**
+ * Cloudflare Registrar at-cost prices (USD/yr).
+ * Source: https://www.cloudflare.com/products/registrar/
+ * CF passes through ICANN wholesale rates with zero markup.
+ * Last updated: April 2026.
+ */
+const CF_PRICES: Record<string, number> = {
+  com:     9.15,
+  net:     10.99,
+  org:     9.93,
+  uk:      9.99,
+  us:      9.99,
+  co:      25.00,
+  io:      35.99,
+  ai:      79.00,
+  app:     14.00,
+  dev:     12.00,
+  biz:     12.99,
+  info:    9.99,
+  pro:     14.99,
+  me:      19.99,
+  homes:   34.99,
+  xyz:     0.88,
+  site:    2.99,
+  online:  3.99,
+  click:   2.49,
+  website: 2.99,
+  fun:     3.99,
+  space:   3.99,
+};
 
 function authHeaders() {
   return {
@@ -56,36 +86,6 @@ async function cfFetch<T>(
 }
 
 /**
- * Fetch live TLD pricing from Porkbun.
- * Used only for price display — domain purchase goes through CF Registrar.
- */
-async function getLivePricing(): Promise<Record<string, number>> {
-  const res = await fetch("https://api.porkbun.com/api/json/v3/pricing/get", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({
-      apikey:       process.env.PORKBUN_API_KEY!,
-      secretapikey: process.env.PORKBUN_SECRET_KEY!,
-    }),
-  });
-
-  const data = await res.json() as {
-    status:  string;
-    pricing: Record<string, { registration: string }>;
-  };
-
-  if (data.status !== "SUCCESS") throw new Error("Failed to fetch live TLD pricing");
-
-  // Build tld → price map
-  const map: Record<string, number> = {};
-  for (const [tld, info] of Object.entries(data.pricing ?? {})) {
-    const price = parseFloat(info.registration);
-    if (!isNaN(price)) map[tld] = price;
-  }
-  return map;
-}
-
-/**
  * Check availability via Cloudflare DNS-over-HTTPS (NXDOMAIN = available).
  * Authoritative, no API key required.
  */
@@ -95,23 +95,20 @@ async function isDomainAvailable(domain: string): Promise<boolean> {
     { headers: { Accept: "application/dns-json" } },
   );
   const json = await res.json() as { Status: number };
-  return json.Status === 3; // NXDOMAIN = not registered
+  return json.Status === 3; // NXDOMAIN = not registered anywhere
 }
 
 /**
- * Check availability and live pricing for a list of domains.
- * Availability: Cloudflare DoH NXDOMAIN (no auth needed, always reliable).
- * Pricing: live from Porkbun /pricing/get (no fallbacks).
+ * Check availability and pricing for a list of domains.
+ * Availability: Cloudflare DoH NXDOMAIN (no auth, always reliable).
+ * Pricing: CF Registrar published at-cost rates.
  */
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
-  // Fetch pricing once for all domains in parallel with availability checks
-  const [pricing] = await Promise.all([getLivePricing()]);
-
   return Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
-      const tld       = domain.split(".").slice(1).join(".");
-      const price     = pricing[tld];
-      if (price === undefined) throw new Error(`TLD ".${tld}" is not supported`);
+      const tld   = domain.split(".").slice(1).join(".");
+      const price = CF_PRICES[tld];
+      if (price === undefined) throw new Error(`TLD ".${tld}" is not supported by Cloudflare Registrar`);
 
       const available = await isDomainAvailable(domain);
       return { domain, available, price };
