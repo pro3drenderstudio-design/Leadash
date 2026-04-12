@@ -294,6 +294,23 @@ export default function InboxesClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
+
+      // If domain is already verified but inboxes were never created, create them now
+      if (data.status === "active") {
+        const connectRes = await wsFetch("/api/outreach/domains/connect", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain_record_id: domainId }),
+        });
+        const connectData = await connectRes.json();
+        if (connectRes.ok && connectData.inbox_count > 0) {
+          showToast(`${connectData.inbox_count} inbox${connectData.inbox_count !== 1 ? "es" : ""} created — DNS + MAIL FROM updated`);
+          loadDomains();
+          load();
+          return;
+        }
+      }
+
       showToast(data.auto_configured
         ? `DNS re-applied via Cloudflare — MAIL FROM + DKIM updated (${data.status})`
         : `SES re-registered (${data.status}) — add the new DNS records manually`
