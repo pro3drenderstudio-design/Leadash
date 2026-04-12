@@ -68,7 +68,8 @@ export default function BuyDomainPage() {
   // Detect post-Stripe/Paystack redirect (multi-domain: domain_ids is comma-separated)
   const returnedDomainIds  = searchParams.get("domain_ids");
   const returnedSessionId  = searchParams.get("session_id");
-  const returnedRef        = searchParams.get("ref");
+  // Paystack appends ?reference=xxx&trxref=xxx to callback URL
+  const returnedRef        = searchParams.get("reference") || searchParams.get("trxref");
   const returnedIdList     = returnedDomainIds ? returnedDomainIds.split(",").filter(Boolean) : [];
 
   const [step, setStep]   = useState<Step>(returnedIdList.length > 0 ? "provisioning" : "search");
