@@ -77,14 +77,17 @@ export async function POST(req: NextRequest) {
         if (!paid) throw new Error("Payment not completed");
       }
 
-      // ── Step 2: Purchase domain via Cloudflare Registrar ─────────────────────
-      // Domain is instantly available in Cloudflare DNS — no addZone/NS update needed.
+      // ── Step 2: Purchase domain via Porkbun ──────────────────────────────────
       await setStatus("purchasing");
       await purchaseDomain(domainRecord.domain);
 
       // ── Step 3: Register domain with SES + get DKIM tokens ──────────────────
       await setStatus("dns_pending");
       const { dkimTokens } = await registerDomain(domainRecord.domain);
+
+      // ── Step 3b: Add zone to Cloudflare + point Porkbun nameservers ──────────
+      const { nameservers } = await addZone(domainRecord.domain);
+      await updateNameservers(domainRecord.domain, nameservers);
 
       // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────
       const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
