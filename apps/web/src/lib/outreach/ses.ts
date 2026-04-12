@@ -173,6 +173,24 @@ export async function isDomainVerified(domain: string): Promise<boolean> {
 }
 
 /**
+ * Set the custom MAIL FROM domain so SPF aligns with the From: domain for DMARC.
+ * Uses mail.{domain} as the bounce subdomain.
+ */
+export async function setMailFromDomain(domain: string): Promise<void> {
+  const { region } = getConfig();
+  const host = sesHost(region);
+
+  const xml = await signedFetch("email", host, "POST", "/", {
+    Action:              "SetIdentityMailFromDomain",
+    Identity:            domain,
+    MailFromDomain:      `mail.${domain}`,
+    BehaviorOnMXFailure: "UseDefaultValue",
+    Version:             "2010-12-01",
+  });
+  checkSesError(xml);
+}
+
+/**
  * Enable DKIM signing for a domain (must be called after DNS records propagate).
  */
 export async function enableDkimSigning(domain: string): Promise<void> {
