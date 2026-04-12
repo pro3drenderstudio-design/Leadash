@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       await setStatus("dns_pending");
       const { dkimTokens } = await registerDomain(domainRecord.domain);
 
-      // ── Step 5: Publish DNS records via Cloudflare ──────────────────────────
+      // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────
       const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
       await publishDnsRecords(domainRecord.domain, dnsRecords);
 
