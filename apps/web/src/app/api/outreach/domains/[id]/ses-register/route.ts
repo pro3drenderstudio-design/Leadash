@@ -28,7 +28,7 @@ export async function POST(
 
   // Already registered
   if (domainRecord.dns_records) {
-    return NextResponse.json({ dns_records: domainRecord.dns_records });
+    return NextResponse.json({ domain: domainRecord.domain, dns_records: domainRecord.dns_records });
   }
 
   let dkimTokens: string[];
