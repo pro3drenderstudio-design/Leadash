@@ -130,8 +130,9 @@ async function fetchImapMessages(
       const fromAddr   = msg.envelope?.from?.[0]?.address ?? "";
       if (fromAddr.toLowerCase() === inbox.email_address.toLowerCase()) continue;
 
+      const rawSource = msg.source ? msg.source.toString() : null;
       let bodyText: string | null = null;
-      if (msg.source) bodyText = extractPlainText(msg.source.toString());
+      if (rawSource) bodyText = extractPlainText(rawSource);
 
       messages.push({
         messageId:  (msg.envelope?.messageId ?? "").replace(/^<|>$/g, ""),
@@ -142,6 +143,7 @@ async function fetchImapMessages(
         bodyText:   bodyText ? stripQuotedReply(bodyText) : null,
         receivedAt: (msg.envelope?.date ?? new Date()).toISOString(),
         warmupId:   warmupM?.[1]?.trim() ?? null,
+        rawSource,
       });
     }
   } finally { lock.release(); await client.logout().catch(() => {}); }
