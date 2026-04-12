@@ -91,24 +91,13 @@ async function isDomainAvailable(domain: string): Promise<boolean> {
 }
 
 /**
- * Fetch the Cloudflare at-cost price for a domain via the Registrar API.
- * Falls back to hardcoded TLD prices if the API call fails (e.g. token lacks Registrar:Read).
+ * Get the Cloudflare at-cost price for a domain.
+ * Uses hardcoded ICANN wholesale prices — the CF Registrar API only returns
+ * pricing for domains already registered in the account, not for availability checks.
  */
-async function getDomainPrice(domain: string): Promise<number> {
-  try {
-    const acctId = accountId();
-    const result = await cfFetch<{
-      available?: boolean;
-      price?:     number;
-      fees?:      { icann_fee?: number; registration?: number };
-    }>("GET", `/accounts/${acctId}/registrar/domains/${encodeURIComponent(domain)}`);
-
-    return result.fees?.registration ?? result.price ?? 0;
-  } catch {
-    // Fall back to hardcoded at-cost prices
-    const tld = domain.split(".").slice(1).join(".");
-    return FALLBACK_PRICES[tld] ?? 0;
-  }
+function getDomainPrice(domain: string): number {
+  const tld = domain.split(".").slice(1).join(".");
+  return FALLBACK_PRICES[tld] ?? 0;
 }
 
 /**
