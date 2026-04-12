@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
       console.error(`[provision] Failed for domain ${domainRecord.domain}:`, msg);
       await setStatus("failed", msg);
     }
-  })();
+  });
 
   return NextResponse.json({ ok: true });
 }
