@@ -148,6 +148,9 @@ export default function ConnectDomainPage() {
     }
   }
 
+  const monthlyUsd = activePrefixes.length * INBOX_PRICE_USD;
+  const monthlyNgn = monthlyUsd * NGN_PER_USD;
+
   async function handleVerify() {
     setStep("verifying");
     setVerifyMsg(null);
