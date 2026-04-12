@@ -84,13 +84,18 @@ const FALLBACK_PRICES: Record<string, number> = {
  * Fetch Porkbun's TLD pricing table (cached per process lifetime).
  * Falls back to hardcoded prices if API keys are not configured.
  */
-let _pricingCache: Record<string, { registration: string }> | null = null;
+interface TldPricing {
+  registration: string;
+  minYears?: number;
+}
 
-async function getPricing(): Promise<Record<string, { registration: string }>> {
+let _pricingCache: Record<string, TldPricing> | null = null;
+
+async function getPricing(): Promise<Record<string, TldPricing>> {
   if (_pricingCache) return _pricingCache;
   if (!process.env.PORKBUN_API_KEY) return {}; // no keys — use fallback prices
   try {
-    const data = await call<{ pricing: Record<string, { registration: string }> }>("/domain/pricing/get");
+    const data = await call<{ pricing: Record<string, TldPricing }>("/domain/pricing/get");
     _pricingCache = data.pricing;
     return _pricingCache;
   } catch {
