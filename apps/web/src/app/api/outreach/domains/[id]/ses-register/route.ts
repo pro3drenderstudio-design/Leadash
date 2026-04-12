@@ -51,5 +51,5 @@ export async function POST(
     .update({ dns_records: dnsRecords, status: "dns_pending" })
     .eq("id", id);
 
-  return NextResponse.json({ dns_records: dnsRecords });
+  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords });
 }
