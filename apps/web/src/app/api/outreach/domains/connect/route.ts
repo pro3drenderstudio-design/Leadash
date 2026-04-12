@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
+import { registerDomain, isDomainVerified, enableDkimSigning, setMailFromDomain, getSmtpCredentials } from "@/lib/outreach/ses";
 import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
