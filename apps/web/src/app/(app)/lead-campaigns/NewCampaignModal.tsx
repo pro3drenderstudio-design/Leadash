@@ -791,13 +791,13 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       </div>
                     </div>
                     <input
-                      type="range" min={Math.min(10, sliderMax)} max={sliderMax} step={sliderStep}
-                      value={Math.min(form.totalResults, sliderMax)}
+                      type="range" min={sliderMin} max={sliderMax} step={sliderStep}
+                      value={Math.min(Math.max(form.totalResults, sliderMin), sliderMax)}
                       onChange={e => set("totalResults", parseInt(e.target.value))}
                       className="w-full accent-blue-500"
                     />
                     <div className="flex justify-between text-white/30 text-xs mt-1">
-                      <span>{Math.min(10, sliderMax)}</span>
+                      <span>{sliderMin.toLocaleString()}</span>
                       <span>{sliderMax.toLocaleString()}</span>
                     </div>
                     {!canAfford && (
