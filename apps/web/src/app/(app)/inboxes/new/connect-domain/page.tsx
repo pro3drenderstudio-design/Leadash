@@ -615,7 +615,7 @@ export default function ConnectDomainPage() {
           <div>
             <p className="text-white font-bold text-lg">Domain connected!</p>
             <p className="text-white/50 text-sm mt-1">
-              {activePrefixes.length} inbox{activePrefixes.length > 1 ? "es" : ""} created on <span className="text-white font-mono">{domain}</span>.
+              {inboxCount} inbox{inboxCount !== 1 ? "es" : ""} created on <span className="text-white font-mono">{domain}</span>.
               They&apos;ll warm up over the next {WARMUP_DAYS} days.
             </p>
           </div>
