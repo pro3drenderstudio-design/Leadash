@@ -74,8 +74,24 @@ interface TldPricing {
  * Throws if the API call fails — no fallbacks, so the UI always shows accurate prices.
  */
 export async function getLivePricing(): Promise<Record<string, TldPricing>> {
-  if (!process.env.PORKBUN_API_KEY) throw new Error("PORKBUN_API_KEY is not configured");
-  const data = await call<{ pricing: Record<string, TldPricing> }>("/pricing/get");
+  // Pricing is public — no auth required
+  const res = await fetch(`${BASE}/pricing/get`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({}),
+  });
+
+  let data: { status: string; message?: string; pricing: Record<string, TldPricing> };
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Porkbun pricing API returned non-JSON response (HTTP ${res.status})`);
+  }
+
+  if (data.status !== "SUCCESS") {
+    throw new Error(`Porkbun pricing error: ${data.message ?? data.status}`);
+  }
+
   return data.pricing;
 }
 
