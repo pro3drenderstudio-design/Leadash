@@ -140,10 +140,9 @@ function InboxAvatar({
     fd.append("file", f);
     fd.append("inbox_id", inbox.id);
     try {
-      const res  = await fetch(`/api/outreach/inboxes/profile-image?ws=${encodeURIComponent(window.location.pathname.split("/")[2] ?? "")}`, { method: "POST", body: fd });
-      // Use wsFetch-compatible URL — workspace header is injected by wsFetch middleware
-      const res2 = await (await import("@/lib/workspace/client")).wsFetch("/api/outreach/inboxes/profile-image", { method: "POST", body: fd });
-      const data = await res2.json();
+      const { wsFetch } = await import("@/lib/workspace/client");
+      const res  = await wsFetch("/api/outreach/inboxes/profile-image", { method: "POST", body: fd });
+      const data = await res.json();
       if (data.url) { setPreview(data.url); onUploaded?.(data.url); }
     } finally { setUploading(false); e.target.value = ""; }
   }
