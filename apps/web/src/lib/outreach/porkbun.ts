@@ -151,18 +151,32 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
   // Porkbun requires cost in cents (integer) and agreeToTerms='yes'.
-  // Always fetch the live price from Porkbun — it must match exactly what they charge.
-  // The priceUsd param (from checkout) is used as a fallback only.
+  // The cost must match Porkbun's pricing exactly (registration + ICANN fee).
   const tld = domain.split(".").slice(1).join(".");
-  let costPennies: number;
 
+  // Always use the price passed from checkout — it came from Porkbun's API at checkout time
+  // This ensures we match exactly what Porkbun expects
+  if (priceUsd != null && priceUsd > 0) {
+    const costPennies = Math.round(priceUsd * 100);
+    console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents (from checkout)`);
+
+    await call(`/domain/create/${domain}`, {
+      years:          1,
+      autorenew:      0,
+      privacy:        1,
+      cost:           costPennies,
+      agreeToTerms:   "yes",
+    });
+    return;
+  }
+
+  // Fallback: fetch current pricing (should rarely happen)
+  let costPennies: number;
   try {
-    // Force a fresh lookup — bypass the process-level cache
     _pricingCache = null;
     const pricing = await getPricing();
     const tldData = pricing[tld];
     if (tldData) {
-      // Cost = registration + ICANN fee (if applicable)
       const regPrice = parseFloat(tldData.registration);
       const icannFee = tldData.icann ? parseFloat(tldData.icann) : 0;
       costPennies = Math.round((regPrice + icannFee) * 100);
@@ -170,13 +184,12 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
       throw new Error("TLD not in pricing response");
     }
   } catch (err) {
-    console.error(`[porkbun] Failed to fetch pricing for ${tld}, using fallback:`, err);
-    // Fall back to the price stored at checkout, then hardcoded fallback
-    const fallback = priceUsd != null ? Number(priceUsd) : (FALLBACK_PRICES[tld] ?? 12.00);
+    console.error(`[porkbun] Failed to fetch pricing for ${tld}:`, err);
+    const fallback = FALLBACK_PRICES[tld] ?? 12.00;
     costPennies = Math.round(fallback * 100);
   }
 
-  console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents`);
+  console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents (fallback)`);
 
   await call(`/domain/create/${domain}`, {
     years:          1,
