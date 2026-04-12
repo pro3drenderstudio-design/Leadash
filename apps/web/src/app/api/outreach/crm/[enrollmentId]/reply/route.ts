@@ -79,22 +79,25 @@ export async function POST(
   try {
     let messageId: string;
 
+    const htmlBody = htmlBodyRaw?.trim() ? htmlBodyRaw : body.replace(/\n/g, "<br>");
+    const textBody = body || (htmlBodyRaw ?? "").replace(/<[^>]+>/g, "");
+
     if (inbox.provider === "gmail" && inbox.oauth_refresh_token) {
       const result = await sendGmailMessage(inbox, {
-        to: toEmail, subject, htmlBody: body.replace(/\n/g, "<br>"),
-        textBody: body, fromName, inReplyToMessageId: inReplyToId,
+        to: toEmail, subject, htmlBody,
+        textBody, fromName, inReplyToMessageId: inReplyToId,
       });
       messageId = result.messageId;
     } else if (inbox.provider === "outlook" && inbox.oauth_refresh_token) {
       const result = await sendMicrosoftMessage(inbox, {
-        to: toEmail, subject, htmlBody: body.replace(/\n/g, "<br>"),
-        textBody: body, fromName, inReplyToMessageId: inReplyToId,
+        to: toEmail, subject, htmlBody,
+        textBody, fromName, inReplyToMessageId: inReplyToId,
       });
       messageId = result.messageId;
     } else {
       const result = await sendSmtpMessage(inbox, {
-        to: toEmail, subject, htmlBody: body.replace(/\n/g, "<br>"),
-        textBody: body, fromName, inReplyToMessageId: inReplyToId,
+        to: toEmail, subject, htmlBody,
+        textBody, fromName, inReplyToMessageId: inReplyToId,
       });
       messageId = result.messageId;
     }
