@@ -109,40 +109,51 @@ export async function POST(req: NextRequest) {
     }
 
     const domainNames = domains.map(d => d.domain).join(", ");
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode:     "payment",
-      line_items: [
-        {
-          price_data: {
-            currency:     "usd",
-            unit_amount:  Math.round(totalOneTimeUsd * 100),
-            product_data: {
-              name:        `Domain registration${domains.length > 1 ? ` (${domains.length})` : ""}: ${domainNames}`,
-              description: "1-year registration + DNS setup per domain",
+
+    // Stripe requires mode:"subscription" when any line item is recurring.
+    // One-time domain fees are added via add_invoice_items (billed on first invoice).
+    const addInvoiceItems: Stripe.Checkout.SessionCreateParams.AddInvoiceItem[] =
+      totalOneTimeUsd > 0
+        ? [{
+            price_data: {
+              currency:     "usd",
+              unit_amount:  Math.round(totalOneTimeUsd * 100),
+              product_data: {
+                name: `Domain registration${domains.length > 1 ? ` (${domains.length})` : ""}: ${domainNames}`,
+              },
             },
-          },
-          quantity: 1,
-        },
-        {
-          price_data: {
-            currency:    "usd",
-            unit_amount: Math.round(recurringPriceUsd * 100),
-            recurring:   { interval: "month" },
-            product_data: {
-              name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
-              description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""} × $${INBOX_MONTHLY_PRICE_USD}/mo`,
+          }]
+        : [];
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode:     "subscription",
+        line_items: [
+          {
+            price_data: {
+              currency:    "usd",
+              unit_amount: Math.round(recurringPriceUsd * 100),
+              recurring:   { interval: "month" },
+              product_data: {
+                name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
+                description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""} × $${INBOX_MONTHLY_PRICE_USD}/mo`,
+              },
             },
+            quantity: 1,
           },
-          quantity: 1,
-        },
-      ],
-      payment_intent_data: { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
-      subscription_data:   { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
-      success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}`,
-      cancel_url:  `${appUrl}/inboxes/new`,
-      metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
-    });
+        ],
+        add_invoice_items:   addInvoiceItems,
+        subscription_data:   { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
+        success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}`,
+        cancel_url:  `${appUrl}/inboxes/new`,
+        metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Stripe error: ${msg}` }, { status: 500 });
+    }
 
     await db
       .from("outreach_domains")
