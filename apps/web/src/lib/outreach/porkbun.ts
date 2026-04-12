@@ -140,16 +140,24 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
   // Porkbun requires cost in pennies (integer) and agreeToTerms='yes'.
-  // Account must have made at least one prior registration for API access to work.
+  // Always fetch the live price from Porkbun — it must match exactly what they charge.
+  // The priceUsd param (from checkout) is used as a fallback only.
+  const tld = domain.split(".").slice(1).join(".");
   let costPennies: number;
-  if (priceUsd != null) {
-    costPennies = Math.round(Number(priceUsd) * 100);
-  } else {
+  try {
+    // Force a fresh lookup — bypass the process-level cache
+    _pricingCache = null;
     const pricing = await getPricing();
-    const tld = domain.split(".").slice(1).join(".");
     const tldPrice = pricing[tld]?.registration;
-    const resolved = tldPrice ? parseFloat(tldPrice) : (FALLBACK_PRICES[tld] ?? 12.00);
-    costPennies = Math.round(resolved * 100);
+    if (tldPrice) {
+      costPennies = Math.round(parseFloat(tldPrice) * 100);
+    } else {
+      throw new Error("TLD not in pricing response");
+    }
+  } catch {
+    // Fall back to the price stored at checkout, then hardcoded fallback
+    const fallback = priceUsd != null ? Number(priceUsd) : (FALLBACK_PRICES[tld] ?? 12.00);
+    costPennies = Math.round(fallback * 100);
   }
 
   await call(`/domain/create/${domain}`, {
