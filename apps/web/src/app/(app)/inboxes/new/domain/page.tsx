@@ -337,9 +337,11 @@ export default function BuyDomainPage() {
                 <button
                   onClick={handleSearch}
                   disabled={checking || !sld.trim() || !selectedTlds.length}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 min-w-[90px] justify-center"
                 >
-                  {checking ? "Checking…" : "Search"}
+                  {checking
+                    ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Checking</>
+                    : "Search"}
                 </button>
               </div>
             </div>
