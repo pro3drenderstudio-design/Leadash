@@ -152,43 +152,89 @@ async function fetchImapMessages(
 }
 
 function decodeQP(str: string): string {
-  return str.replace(/=\r?\n/g,"").replace(/=([0-9A-F]{2})/gi, (_,h) => String.fromCharCode(parseInt(h,16)));
+  return str.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
 
 function decodePart(body: string, headers: string): string {
   const encM = headers.match(/content-transfer-encoding:\s*(\S+)/i);
-  const enc   = (encM?.[1] ?? "7bit").toLowerCase().trim();
+  const enc  = (encM?.[1] ?? "7bit").toLowerCase().trim();
   if (enc === "base64") {
     try { return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8"); }
     catch { return body; }
   }
-  return decodeQP(body);
+  if (enc === "quoted-printable") return decodeQP(body);
+  return body;
 }
 
-function matchPart(raw: string, type: string): { headers: string; body: string } | null {
-  const re = new RegExp(
-    `((?:^|\\n)(?:[^\\n]+\\n)*?content-type:\\s*${type}[^\\n]*\\n(?:[^\\n]*\\n)*?)\\n([\\s\\S]*?)(?=\\n--[^\\n]|$)`,
-    "i"
-  );
-  const m = raw.match(re);
-  return m ? { headers: m[1], body: m[2].trim() } : null;
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function escRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface MimePart { headers: string; body: string; contentType: string; boundary?: string }
+
+/** Split a raw MIME message into header-block + body, then into parts if multipart. */
+function parseMimeParts(raw: string): MimePart[] {
+  // Normalise line endings
+  const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  // Find blank-line separator between headers and body
+  const sep = text.indexOf("\n\n");
+  if (sep === -1) return [];
+
+  const hdrs = text.slice(0, sep);
+  const body = text.slice(sep + 2);
+
+  const ctM = hdrs.match(/^content-type:\s*([^\n;]+)/im);
+  const ct  = (ctM?.[1] ?? "text/plain").trim().toLowerCase();
+
+  if (ct.startsWith("multipart/")) {
+    const bdM = hdrs.match(/boundary="?([^"\n;]+)"?/i);
+    if (!bdM) return [];
+    const boundary = bdM[1].trim();
+    // Split on --boundary lines
+    const parts = body.split(new RegExp(`^--${escRe(boundary)}(?:--|\\s*$)`, "m"));
+    // First element is preamble, last may be epilogue
+    const result: MimePart[] = [];
+    for (const part of parts.slice(1)) {
+      const sub = parseMimeParts(part.trimStart());
+      result.push(...sub);
+    }
+    return result;
+  }
+
+  return [{ headers: hdrs, body: body.trim(), contentType: ct }];
 }
 
 function extractPlainText(rawSource: string): string | null {
-  const plain = matchPart(rawSource, "text\\/plain");
+  const parts = parseMimeParts(rawSource);
+
+  // Prefer text/plain
+  const plain = parts.find(p => p.contentType.startsWith("text/plain"));
   if (plain?.body?.trim()) {
     const decoded = decodePart(plain.body, plain.headers);
     if (decoded.trim()) return decoded.trim();
   }
-  const html = matchPart(rawSource, "text\\/html");
+
+  // Fall back to text/html
+  const html = parts.find(p => p.contentType.startsWith("text/html"));
   if (html?.body) {
     const decoded = decodePart(html.body, html.headers);
-    const text = decoded
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
-      .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/\s+/g," ").trim();
-    if (text) return text;
+    const stripped = stripHtml(decoded);
+    if (stripped) return stripped;
   }
+
   return null;
 }
 
