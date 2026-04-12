@@ -86,7 +86,11 @@ const FALLBACK_PRICES: Record<string, number> = {
  */
 interface TldPricing {
   registration: string;
-  minperiod?: string;  // Porkbun returns min period as string like "1"
+  renew?: string;
+  transfer?: string;
+  restore?: string;
+  icann?: string;      // ICANN fee (e.g., "0.18" for .com)
+  minperiod?: string;
 }
 
 let _pricingCache: Record<string, TldPricing> | null = null;
