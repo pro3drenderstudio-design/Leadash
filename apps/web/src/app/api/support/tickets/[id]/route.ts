@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { data, error } = await db
     .from("support_tickets")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
 
