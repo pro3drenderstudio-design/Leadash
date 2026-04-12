@@ -68,8 +68,16 @@ export async function POST(req: NextRequest) {
       if (provider === "stripe") {
         const session_id = stripe_session_id ?? domainRecord.stripe_session_id;
         if (!session_id) throw new Error("No Stripe session ID available");
-        const session = await getStripe().checkout.sessions.retrieve(session_id);
-        if (session.payment_status !== "paid") throw new Error("Payment not completed");
+        const session = await getStripe().checkout.sessions.retrieve(session_id, { expand: ["subscription"] });
+        // subscription mode: payment_status is "no_payment_required" but subscription should be active/trialing
+        const isPaid =
+          session.payment_status === "paid" ||
+          (session.mode === "subscription" &&
+            (session.status === "complete" ||
+              (typeof session.subscription === "object" &&
+                session.subscription !== null &&
+                ["active", "trialing"].includes((session.subscription as { status: string }).status))));
+        if (!isPaid) throw new Error("Payment not completed");
       } else {
         const ref = paystack_reference ?? domainRecord.paystack_reference;
         if (!ref) throw new Error("No Paystack reference available");
