@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       ],
       payment_intent_data: { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
       subscription_data:   { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
-      success_url: `${appUrl}/inboxes/new/domain?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}`,
       cancel_url:  `${appUrl}/inboxes/new`,
       metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
     });
