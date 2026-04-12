@@ -427,6 +427,65 @@ export default function InboxesClient() {
         ))}
       </div>
 
+      {/* ── DOMAINS TAB ────────────────────────────────────────────────────────── */}
+      {activeTab === "domains" && (
+        <div className="space-y-3">
+          {domainsLoading ? (
+            [1,2,3].map((i) => <div key={i} className="h-16 bg-white/4 rounded-xl animate-pulse" />)
+          ) : domains.length === 0 ? (
+            <div className="text-center py-16 text-white/30">
+              <div className="text-4xl mb-3">🌐</div>
+              <p className="text-sm font-medium">No connected domains yet</p>
+              <p className="text-xs mt-1">Connect a domain to get auto-provisioned inboxes with DKIM, DMARC, and MAIL FROM set up automatically</p>
+              <Link href="/inboxes/new/connect-domain" className="inline-block mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">
+                Connect a Domain
+              </Link>
+            </div>
+          ) : (
+            <div className="border border-white/8 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 bg-white/3 border-b border-white/6 text-white/35 text-xs font-semibold uppercase tracking-wider">
+                <div>Domain</div><div>Inboxes</div><div>Status</div><div>Warmup ends</div><div></div>
+              </div>
+              {domains.map((d) => {
+                const warmupDaysLeft = d.warmup_ends_at
+                  ? Math.max(0, Math.ceil((new Date(d.warmup_ends_at).getTime() - Date.now()) / 86_400_000))
+                  : null;
+                return (
+                  <div key={d.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 items-center px-5 py-3.5 border-b border-white/5 last:border-0 hover:bg-white/2">
+                    <div>
+                      <p className="text-white text-sm font-medium">{d.domain}</p>
+                      <p className="text-white/30 text-xs mt-0.5">{new Date(d.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div className="text-white/60 text-sm">{d.mailbox_count}</div>
+                    <div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        d.status === "active"  ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                        d.status === "failed"  ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                        "text-amber-400 bg-amber-500/15 border-amber-500/30"
+                      }`}>{d.status}</span>
+                      {d.error_message && <p className="text-red-400/70 text-[10px] mt-0.5 truncate max-w-[140px]" title={d.error_message}>{d.error_message}</p>}
+                    </div>
+                    <div className="text-white/50 text-xs">
+                      {warmupDaysLeft !== null ? (warmupDaysLeft > 0 ? `${warmupDaysLeft}d left` : "Done") : "—"}
+                    </div>
+                    <button
+                      onClick={() => handleReconfigure(d.id)}
+                      disabled={reconfiguringId === d.id}
+                      className="px-3 py-1.5 bg-white/6 hover:bg-white/12 disabled:opacity-40 text-white/60 hover:text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+                      title="Re-register with SES and re-publish DNS records (DKIM, MAIL FROM, SPF, DMARC)"
+                    >
+                      {reconfiguringId === d.id ? "Applying…" : "↻ Re-configure"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "inboxes" && (<>
+
       {/* Admin consent banner — shown when Outlook inboxes exist without OAuth */}
       {!loading && inboxes.some((i) => i.provider === "outlook" && !i.has_oauth) && (
         <div className="mb-5 bg-amber-500/8 border border-amber-500/25 rounded-xl p-4 flex items-start gap-3">
