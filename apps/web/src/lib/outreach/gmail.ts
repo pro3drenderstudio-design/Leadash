@@ -214,20 +214,29 @@ export async function fetchRecentMessages(
     const inReplyTo = getH("In-Reply-To");
     const warmupId  = getH("X-LD-Ref");
 
-    // Extract plain-text body
+    // Extract body — prefer text/plain, fall back to text/html stripped
     let bodyText: string | null = null;
-    const extractBody = (part: typeof msg.data.payload): string | null => {
+    const extractBody = (part: typeof msg.data.payload, preferHtml = false): string | null => {
       if (!part) return null;
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        return Buffer.from(part.body.data, "base64").toString("utf-8");
+      const mt = part.mimeType ?? "";
+      if (!preferHtml && mt === "text/plain" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64url").toString("utf-8");
+      }
+      if (preferHtml && mt === "text/html" && part.body?.data) {
+        const html = Buffer.from(part.body.data, "base64url").toString("utf-8");
+        return html
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n")
+          .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
       }
       for (const sub of part.parts ?? []) {
-        const found = extractBody(sub);
+        const found = extractBody(sub, preferHtml);
         if (found) return found;
       }
       return null;
     };
-    bodyText = extractBody(msg.data.payload ?? undefined);
+    bodyText = extractBody(msg.data.payload ?? undefined) ?? extractBody(msg.data.payload ?? undefined, true);
 
     messages.push({
       messageId:  item.id,
