@@ -42,8 +42,14 @@ export async function POST(
 
   const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
 
+  let auto_configured = false;
   if (use_cloudflare) {
-    await publishDnsRecords(domainRecord.domain, dnsRecords).catch(() => {});
+    try {
+      await publishDnsRecords(domainRecord.domain, dnsRecords);
+      auto_configured = true;
+    } catch {
+      // Non-fatal — user can add manually
+    }
   }
 
   await db
@@ -51,5 +57,5 @@ export async function POST(
     .update({ dns_records: dnsRecords, status: "dns_pending" })
     .eq("id", id);
 
-  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords });
+  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords, auto_configured });
 }
