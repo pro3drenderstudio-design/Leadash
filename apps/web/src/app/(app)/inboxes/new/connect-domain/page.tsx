@@ -93,6 +93,7 @@ export default function ConnectDomainPage() {
       .then(data => {
         if (data.dns_records) {
           setDnsRecords(data.dns_records);
+          if (data.domain) setDomain(data.domain);
           setStep("dns");
         } else {
           setError(data.error ?? "Failed to configure domain");
