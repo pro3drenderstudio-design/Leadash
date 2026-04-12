@@ -511,8 +511,6 @@ function OutreachTab() {
   const [uploadingImage, setUploadingImage]     = useState(false);
   const [imageError, setImageError]             = useState<string | null>(null);
   const [imageSaved, setImageSaved]             = useState(false);
-  const imageInputRef = useState<HTMLInputElement | null>(null);
-
   useEffect(() => {
     wsGet<Partial<OutreachSettings> & { default_inbox_profile_image_url?: string | null }>("/api/outreach/settings").then(data => {
       setSettings(prev => ({ ...prev, ...data }));
