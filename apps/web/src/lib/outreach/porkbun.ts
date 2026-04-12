@@ -135,10 +135,11 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
   // Porkbun requires `cost` as an integer (cents) to confirm the expected charge.
-  // If we don't know the price, look it up from the pricing API.
+  // If we don't know the price (null/undefined), look it up from the pricing API.
   let priceCents: number;
-  if (priceUsd !== undefined) {
-    priceCents = Math.round(priceUsd * 100);
+  if (priceUsd != null) {
+    // DB numeric columns may come back as strings — coerce explicitly
+    priceCents = Math.round(Number(priceUsd) * 100);
   } else {
     const pricing = await getPricing();
     const tld = domain.split(".").slice(1).join(".");
