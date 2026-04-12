@@ -94,7 +94,11 @@ Rules:
     }),
   });
 
-  if (!res.ok) throw new Error(`Gemini API error ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try { const e = await res.json(); detail = e?.error?.message ?? JSON.stringify(e); } catch { /* ignore */ }
+    throw new Error(`Gemini API error ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   return text.trim().replace(/^["']|["']$/g, "");
