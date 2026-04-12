@@ -173,12 +173,25 @@ export default function CrmClient() {
     }
   }, [mainTab]);
 
+  // ── Conversation loader ───────────────────────────────────────────────────
+  const loadConversation = useCallback(async (enrollmentId: string) => {
+    setConvLoading(true);
+    try {
+      const data = await getConversation(enrollmentId);
+      setConversation(data.messages);
+      setConvNotes(data.notes);
+    } finally {
+      setConvLoading(false);
+    }
+  }, []);
+
   // ── Inbox actions ─────────────────────────────────────────────────────────
   async function handleAddNote() {
     if (!selected || !noteBody.trim()) return;
     setSavingNote(true);
     await addNote(selected.enrollment_id, noteBody.trim());
-    const newNote = { id: Date.now().toString(), lead_id: selected.lead.id, body: noteBody.trim(), created_at: new Date().toISOString() };
+    const newNote: CrmNote = { id: Date.now().toString(), lead_id: selected.lead.id, body: noteBody.trim(), created_at: new Date().toISOString() };
+    setConvNotes((prev) => [...prev, newNote]);
     const update = (t: CrmThread) => t.enrollment_id === selected.enrollment_id ? { ...t, notes: [...(t.notes ?? []), newNote] } : t;
     setThreads((ts) => ts.map(update));
     setSelected((prev) => prev ? { ...prev, notes: [...(prev.notes ?? []), newNote] } : prev);
