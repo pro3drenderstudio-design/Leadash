@@ -231,19 +231,54 @@ export default function CrmClient() {
   }
 
   async function handleSendReply() {
-    if (!selected || !composeBody.trim()) return;
+    const plainText = composeRef.current?.innerText?.trim() ?? composeBody.trim();
+    const htmlContent = composeRef.current?.innerHTML ?? "";
+    if (!selected || !plainText) return;
     setSending(true);
     setSendError(null);
     setSendSuccess(false);
-    const result = await sendCrmReply(selected.enrollment_id, composeBody.trim());
+    const result = await sendCrmReply(selected.enrollment_id, plainText, htmlContent);
     if (result.error) {
       setSendError(result.error);
     } else {
       setSendSuccess(true);
+      if (composeRef.current) composeRef.current.innerHTML = "";
       setComposeBody("");
+      setComposeHtml("");
+      setAttachments([]);
+      // Reload conversation to show sent message
+      await loadConversation(selected.enrollment_id);
       setTimeout(() => setSendSuccess(false), 3000);
     }
     setSending(false);
+  }
+
+  function execFormat(cmd: string, value?: string) {
+    composeRef.current?.focus();
+    document.execCommand(cmd, false, value);
+    setComposeHtml(composeRef.current?.innerHTML ?? "");
+    setComposeBody(composeRef.current?.innerText ?? "");
+  }
+
+  function handleInsertLink() {
+    if (!linkUrl.trim()) return;
+    execFormat("createLink", linkUrl.trim());
+    setShowLinkDialog(false);
+    setLinkUrl("");
+  }
+
+  function handleInsertEmoji(emoji: string) {
+    composeRef.current?.focus();
+    document.execCommand("insertText", false, emoji);
+    setComposeHtml(composeRef.current?.innerHTML ?? "");
+    setComposeBody(composeRef.current?.innerText ?? "");
+    setShowEmojiPicker(false);
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    setAttachments((prev) => [...prev, ...files]);
+    e.target.value = "";
   }
 
   async function handleTrigger() {
