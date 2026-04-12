@@ -4,9 +4,10 @@ import {
   getCrmThreads, addNote, updateCrmStatus, suggestReply,
   getCrmUnmatched, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
-  triggerSendBatch, sendCrmReply,
+  triggerSendBatch, sendCrmReply, getConversation,
 } from "@/lib/outreach/api";
-import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter } from "@/types/outreach";
+import type { ConversationMessage } from "@/lib/outreach/api";
+import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter, CrmNote } from "@/types/outreach";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
