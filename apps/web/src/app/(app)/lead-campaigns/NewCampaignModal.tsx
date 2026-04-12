@@ -773,8 +773,9 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 const selectedCampaign = scrapeCampaigns.find(c => c.id === form.sourceCampaignId);
                 const sliderMax = form.mode === "verify_personalize" && selectedCampaign
                   ? selectedCampaign.total_scraped
-                  : 1000;
-                const sliderStep = sliderMax <= 100 ? 1 : sliderMax <= 500 ? 5 : 10;
+                  : 50_000;
+                const sliderMin = form.mode === "verify_personalize" ? Math.min(10, sliderMax) : 500;
+                const sliderStep = sliderMax <= 1000 ? 50 : sliderMax <= 10_000 ? 100 : 500;
                 const cost = form.totalResults * costPerLead;
                 return (
                   <div>
