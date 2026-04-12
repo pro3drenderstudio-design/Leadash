@@ -330,7 +330,10 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
 
         // Route to the correct inbox by To: address
         const inbox = sesInboxMap.get(parsed.toEmail);
-        if (!inbox) continue; // email not destined for one of our inboxes
+        if (!inbox) {
+          console.log(`[reply-runner] SES S3: no inbox match for To: ${parsed.toEmail} (known: ${[...sesInboxMap.keys()].join(", ")})`);
+          continue;
+        }
 
         const msg: RawMessage = {
           messageId:  parsed.messageId,
