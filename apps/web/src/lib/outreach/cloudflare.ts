@@ -41,10 +41,10 @@ async function cfFetch<T>(
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = (await res.json()) as { success: boolean; errors: { message: string }[]; result: T };
+  const json = (await res.json()) as { success: boolean; errors: { message: string; code?: number }[]; result: T };
   if (!json.success) {
-    const msg = json.errors?.[0]?.message ?? `Cloudflare API error ${res.status}`;
-    throw new Error(msg);
+    const err = json.errors?.[0];
+    throw new Error(`CF ${method} ${path}: ${err?.message ?? "Unknown error"}${err?.code ? ` (code ${err.code})` : ""}`);
   }
   return json.result;
 }
