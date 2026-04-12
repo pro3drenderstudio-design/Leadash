@@ -118,7 +118,7 @@ export async function publishDnsRecords(domain: string, records: DnsRecord[]): P
     if (!typesToManage.has(rec.type as DnsRecord["type"])) continue;
     const recName = rec.name.endsWith(".") ? rec.name : rec.name + ".";
     if (recName !== apexName && !recName.endsWith("." + apexName)) continue;
-    await cfFetch("DELETE", `/zones/${zoneId}/dns_records/${rec.id}`);
+    await cfFetch("DELETE", `/zones/${zoneId}/dns_records/${rec.id}`).catch(() => {});
   }
 
   // Create new records
