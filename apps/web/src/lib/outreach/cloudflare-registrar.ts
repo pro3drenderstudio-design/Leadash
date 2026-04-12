@@ -55,29 +55,59 @@ async function cfFetch<T>(
 }
 
 /**
- * Check availability and at-cost pricing for a list of domains.
- * Uses the Cloudflare Registrar API — returns the real ICANN wholesale price.
- * Requires Account:Registrar:Edit on the API token.
+ * Check availability via Cloudflare DNS-over-HTTPS (NXDOMAIN = available).
+ * This is authoritative and requires no API key.
  */
-export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
+async function isDomainAvailable(domain: string): Promise<boolean> {
+  const res  = await fetch(
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
+    { headers: { Accept: "application/dns-json" } },
+  );
+  const json = await res.json() as { Status: number };
+  // Status 3 = NXDOMAIN — domain is not registered anywhere
+  return json.Status === 3;
+}
+
+/**
+ * Fetch the real Cloudflare at-cost price for a domain via the Registrar API.
+ * The CF endpoint returns price info regardless of whether the domain is taken.
+ * Throws if the price cannot be determined (unsupported TLD, auth error, etc.).
+ */
+async function getDomainPrice(domain: string): Promise<number> {
   const acctId = accountId();
 
+  const result = await cfFetch<{
+    price?:         number;
+    fees?: {
+      registration?: number;
+      icann_fee?:    number;
+    };
+    supported_tld?: boolean;
+  }>("GET", `/accounts/${acctId}/registrar/domains/${encodeURIComponent(domain)}`);
+
+  const price = result.fees?.registration ?? result.price;
+
+  if (!price) {
+    const tld = domain.split(".").slice(1).join(".");
+    throw new Error(`Cloudflare Registrar does not support .${tld} or returned no price`);
+  }
+
+  return price;
+}
+
+/**
+ * Check availability and at-cost pricing for a list of domains.
+ * Availability: Cloudflare DoH NXDOMAIN (no auth, always reliable).
+ * Pricing: Cloudflare Registrar API (real ICANN wholesale price, no fallbacks).
+ */
+export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
   return Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
-      const result = await cfFetch<{
-        name:           string;
-        available:      boolean;
-        supported_tld?: boolean;
-        price?:         number;
-        fees?: {
-          icann_fee?:    number;
-          registration?: number;
-          renewal?:      number;
-        };
-      }>("GET", `/accounts/${acctId}/registrar/domains/${encodeURIComponent(domain)}`);
-
-      const price = result.fees?.registration ?? result.price ?? 0;
-      return { domain, available: result.available ?? false, price };
+      const [available, price] = await Promise.all([
+        isDomainAvailable(domain),
+        getDomainPrice(domain),
+      ]);
+      return { domain, available, price };
     }),
   );
 }
