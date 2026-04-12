@@ -49,10 +49,14 @@ export async function POST(
     }
   }
 
+  // If domain was already verified in SES, keep it active — we just updated DNS records
+  const alreadyVerified = domainRecord.status === "active" || await isDomainVerified(domainRecord.domain).catch(() => false);
+  const newStatus = alreadyVerified ? "active" : "dns_pending";
+
   await db
     .from("outreach_domains")
-    .update({ dns_records: dnsRecords, status: "dns_pending" })
+    .update({ dns_records: dnsRecords, status: newStatus })
     .eq("id", id);
 
-  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords, auto_configured });
+  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords, auto_configured, status: newStatus });
 }
