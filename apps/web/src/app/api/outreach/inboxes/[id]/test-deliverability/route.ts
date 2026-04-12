@@ -72,7 +72,7 @@ export async function POST(
     }
 
     return NextResponse.json({
-      message: `Test email sent to ${inbox.email_address} — check your inbox.`,
+      message: `Test email sent to ${toEmail} — check your inbox.`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
