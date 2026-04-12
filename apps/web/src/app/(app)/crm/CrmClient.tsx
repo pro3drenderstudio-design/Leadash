@@ -492,7 +492,13 @@ export default function CrmClient() {
                 return (
                   <button
                     key={t.enrollment_id}
-                    onClick={() => { setSelected(t); setSuggestion(null); setReplyCollapsed(false); setSentCollapsed(!!t.latest_reply); setComposeBody(""); setSendError(null); setSendSuccess(false); }}
+                    onClick={() => {
+                      setSelected(t);
+                      setComposeBody(""); setComposeHtml(""); setSendError(null); setSendSuccess(false);
+                      setAttachments([]); setShowNotesDrawer(false); setShowEmojiPicker(false); setShowLinkDialog(false);
+                      if (composeRef.current) composeRef.current.innerHTML = "";
+                      loadConversation(t.enrollment_id);
+                    }}
                     className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-blue-600/10 border-r-2 border-blue-500" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
