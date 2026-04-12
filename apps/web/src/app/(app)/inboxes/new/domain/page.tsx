@@ -541,6 +541,36 @@ export default function BuyDomainPage() {
               </p>
             </div>
 
+            {/* ── Optional: Domain redirect ──────────────────────────────────── */}
+            <div className="border border-white/8 rounded-xl p-4 space-y-3">
+              <div>
+                <p className="text-white text-sm font-medium">Domain redirect <span className="text-white/30 font-normal">(optional)</span></p>
+                <p className="text-white/40 text-xs mt-0.5">Redirect visitors who land on this domain to your main website.</p>
+              </div>
+              <input
+                type="url"
+                placeholder="https://yourcompany.com"
+                value={redirectUrl}
+                onChange={e => setRedirectUrl(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/25"
+              />
+            </div>
+
+            {/* ── Optional: Reply forwarding ─────────────────────────────────── */}
+            <div className="border border-white/8 rounded-xl p-4 space-y-3">
+              <div>
+                <p className="text-white text-sm font-medium">Forward replies to <span className="text-white/30 font-normal">(optional)</span></p>
+                <p className="text-white/40 text-xs mt-0.5">Replies to any inbox on this domain will be forwarded to this address. Cloudflare will send a one-time verification email to confirm the address.</p>
+              </div>
+              <input
+                type="email"
+                placeholder="you@gmail.com"
+                value={replyForwardTo}
+                onChange={e => setReplyForwardTo(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/25"
+              />
+            </div>
+
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => setStep("review")}
