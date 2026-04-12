@@ -121,6 +121,17 @@ export async function POST(req: NextRequest) {
         .update({ dns_records: dnsRecords })
         .eq("id", domain_record_id);
 
+      // ── Step 4b: Optional web redirect + email forwarding ──────────────────
+      if (domainRecord.redirect_url) {
+        await setWebRedirect(domainRecord.domain, domainRecord.redirect_url);
+      }
+      if (domainRecord.reply_forward_to) {
+        // Swaps MX to Cloudflare Email Routing — outbound SES SMTP is unaffected.
+        // Cloudflare will email the destination address to verify it (one-time).
+        await setEmailForwarding(domainRecord.domain, domainRecord.reply_forward_to);
+        await db.from("outreach_domains").update({ forward_verified: false }).eq("id", domain_record_id);
+      }
+
       // ── Step 5: Wait for SES domain verification (DNS propagation) ──────────
       await setStatus("verifying");
 
