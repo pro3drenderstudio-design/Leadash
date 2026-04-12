@@ -153,34 +153,6 @@ export default function ConnectDomainPage() {
     }
   }
 
-  async function handleRegisterAndShowDns() {
-    setLoading(true);
-    setError(null);
-    try {
-      const wsId = getWorkspaceId() ?? "";
-      const res = await fetch("/api/outreach/domains/connect", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
-        body: JSON.stringify({
-          domain:           domain.trim().toLowerCase(),
-          mailbox_prefixes: activePrefixes,
-          first_name:       firstName || undefined,
-          last_name:        lastName  || undefined,
-          use_cloudflare:   useCloudflare,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setDnsRecords(data.dns_records ?? []);
-      setDomainRecordId(data.domain_record_id);
-      setStep("dns");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const monthlyUsd = activePrefixes.length * INBOX_PRICE_USD;
   const monthlyNgn = monthlyUsd * NGN_PER_USD;
 
