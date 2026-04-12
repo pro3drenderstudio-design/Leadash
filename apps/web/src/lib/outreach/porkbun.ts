@@ -139,6 +139,16 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
 }
 
 /**
+ * Update the nameservers for a domain registered on Porkbun.
+ * Use this to point the domain to Cloudflare after registration.
+ */
+export async function updateNameservers(domain: string, nameservers: string[]): Promise<void> {
+  const nsParams: Record<string, string> = {};
+  nameservers.forEach((ns, i) => { nsParams[`ns${i + 1}`] = ns; });
+  await call(`/domain/updateNs/${domain}`, nsParams);
+}
+
+/**
  * Replace all DNS records for a domain (Porkbun-managed DNS fallback).
  */
 export async function setDnsHosts(domain: string, records: DnsRecord[]): Promise<void> {
