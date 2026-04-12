@@ -279,8 +279,8 @@ export default function InboxesClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
       showToast(data.auto_configured
-        ? "DNS re-applied via Cloudflare — MAIL FROM + DKIM updated"
-        : "SES re-registered — add the new DNS records manually"
+        ? `DNS re-applied via Cloudflare — MAIL FROM + DKIM updated (${data.status})`
+        : `SES re-registered (${data.status}) — add the new DNS records manually`
       );
       loadDomains();
     } catch (e) {
