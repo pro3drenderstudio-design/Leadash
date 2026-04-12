@@ -761,8 +761,36 @@ export default function CrmClient() {
                 <p className="text-white/25 text-xs mb-4">{new Date(selectedUnmatched.received_at).toLocaleString()} · via {selectedUnmatched.inbox?.email_address ?? "unknown"}</p>
                 <div className="bg-white/4 border border-white/8 rounded-xl p-5">
                   <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                    {selectedUnmatched.body_text ?? "(No body captured)"}
+                    {selectedUnmatched.body_text ?? "(No body captured — body will appear after next poll if transfer encoding is base64)"}
                   </pre>
+                </div>
+              </div>
+
+              {/* Quick reply compose */}
+              <div className="flex-shrink-0 border-t border-white/8 bg-white/2 p-4">
+                <div className="bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-emerald-500/40 transition-colors">
+                  <textarea
+                    value={unmatchedCompose}
+                    onChange={(e) => { setUnmatchedCompose(e.target.value); setUnmatchedSendErr(null); setUnmatchedSendOk(false); }}
+                    placeholder={`Reply to ${selectedUnmatched.from_name || selectedUnmatched.from_email}… (creates a lead + inbox thread automatically)`}
+                    rows={3}
+                    className="w-full bg-transparent text-white text-sm placeholder:text-white/25 focus:outline-none resize-none px-4 pt-3 pb-1"
+                  />
+                  <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+                    <div className="text-xs">
+                      {unmatchedSendErr && <span className="text-red-400">⚠ {unmatchedSendErr}</span>}
+                      {unmatchedSendOk  && <span className="text-emerald-400">✓ Sent — moved to inbox</span>}
+                    </div>
+                    <button
+                      onClick={handleUnmatchedSend}
+                      disabled={unmatchedSending || !unmatchedCompose.trim()}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      {unmatchedSending ? (
+                        <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</>
+                      ) : <>↗ Reply &amp; Move to Inbox</>}
+                    </button>
+                  </div>
                 </div>
               </div>
 
