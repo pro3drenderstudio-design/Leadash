@@ -159,9 +159,8 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
  * Use this to point the domain to Cloudflare after registration.
  */
 export async function updateNameservers(domain: string, nameservers: string[]): Promise<void> {
-  const nsParams: Record<string, string> = {};
-  nameservers.forEach((ns, i) => { nsParams[`ns${i + 1}`] = ns; });
-  await call(`/domain/updateNs/${domain}`, nsParams);
+  // Porkbun API v3 expects nameservers as an array under "ns"
+  await call(`/domain/updateNs/${domain}`, { ns: nameservers });
 }
 
 /**
