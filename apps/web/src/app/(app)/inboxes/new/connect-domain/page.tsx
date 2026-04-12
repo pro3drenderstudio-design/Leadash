@@ -75,12 +75,31 @@ export default function ConnectDomainPage() {
   // Returning from Stripe/Paystack after paying for a connect-only inbox subscription
   useEffect(() => {
     const isConnect = searchParams.get("connect") === "1";
-    const domainIds = searchParams.get("domain_ids");
-    if (isConnect && domainIds) {
-      // Payment done — move to SES registration step
-      setDomainRecordId(domainIds.split(",")[0]);
-      setStep("dns-register");
-    }
+    const domainIds  = searchParams.get("domain_ids");
+    if (!isConnect || !domainIds) return;
+
+    const recordId = domainIds.split(",")[0];
+    setDomainRecordId(recordId);
+
+    // Register the existing domain record with SES to get DNS records
+    const wsId = getWorkspaceId() ?? "";
+    setLoading(true);
+    fetch(`/api/outreach/domains/${recordId}/ses-register`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+      body:    JSON.stringify({ use_cloudflare: false }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.dns_records) {
+          setDnsRecords(data.dns_records);
+          setStep("dns");
+        } else {
+          setError(data.error ?? "Failed to configure domain");
+        }
+      })
+      .catch(() => setError("Failed to reach server"))
+      .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
