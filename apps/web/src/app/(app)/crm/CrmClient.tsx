@@ -405,7 +405,7 @@ export default function CrmClient() {
     document.execCommand("insertText", false, emoji);
     setComposeHtml(composeRef.current?.innerHTML ?? "");
     setComposeBody(composeRef.current?.innerText ?? "");
-    setShowEmojiPicker(false);
+    // Keep picker open so user can insert multiple emojis
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
