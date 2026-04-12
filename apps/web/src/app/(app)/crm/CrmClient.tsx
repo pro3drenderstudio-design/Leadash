@@ -83,8 +83,6 @@ export default function CrmClient() {
   const [selected, setSelected]         = useState<CrmThread | null>(null);
   const [filterStatus, setFilterStatus] = useState<CrmStatus | "all">("all");
   const [search, setSearch]             = useState("");
-  const [noteBody, setNoteBody]         = useState("");
-  const [savingNote, setSavingNote]     = useState(false);
   const [statusDropdown, setStatusDropdown] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [suggesting, setSuggesting]     = useState(false);
