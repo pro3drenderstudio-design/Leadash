@@ -391,20 +391,40 @@ export default function InboxesClient() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white">Connected Inboxes</h1>
+          <h1 className="text-xl font-bold text-white">Inboxes</h1>
           <p className="text-white/40 text-sm mt-0.5">Manage sending accounts for cold outreach</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setShowImport(true); setImportResult(null); setShowMapping(false); setCsvHeaders([]); setImportFile(null); }}
-            className="px-4 py-2 bg-white/8 hover:bg-white/12 text-white/70 hover:text-white rounded-xl text-sm font-semibold transition-colors border border-white/10"
-          >
-            Import CSV
-          </button>
-          <Link href="/inboxes/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
-            + Add Inbox
-          </Link>
+          {activeTab === "inboxes" && (<>
+            <button
+              onClick={() => { setShowImport(true); setImportResult(null); setShowMapping(false); setCsvHeaders([]); setImportFile(null); }}
+              className="px-4 py-2 bg-white/8 hover:bg-white/12 text-white/70 hover:text-white rounded-xl text-sm font-semibold transition-colors border border-white/10"
+            >
+              Import CSV
+            </button>
+            <Link href="/inboxes/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+              + Add Inbox
+            </Link>
+          </>)}
+          {activeTab === "domains" && (
+            <Link href="/inboxes/new/connect-domain" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+              + Connect Domain
+            </Link>
+          )}
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 border-b border-white/8 pb-0">
+        {(["inboxes", "domains"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={`px-4 py-2 text-sm font-semibold capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${activeTab === t ? "text-white border-blue-500" : "text-white/40 border-transparent hover:text-white/60"}`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
       {/* Admin consent banner — shown when Outlook inboxes exist without OAuth */}
