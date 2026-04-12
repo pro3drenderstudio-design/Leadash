@@ -23,19 +23,31 @@ export interface DomainCheckResult {
 // Cloudflare at-cost prices (USD) for common TLDs.
 // These are ICANN wholesale — no markup. Updated periodically.
 const FALLBACK_PRICES: Record<string, number> = {
-  com:   9.15,
-  net:   10.99,
-  org:   9.93,
-  io:    32.00,
-  co:    24.99,
-  ai:    79.00,
-  app:   14.00,
-  dev:   12.00,
-  homes: 29.99,
-  info:  9.99,
-  biz:   12.99,
-  us:    9.99,
-  me:    19.99,
+  // Popular / high-deliverability
+  com:     9.15,
+  net:     10.99,
+  org:     9.93,
+  uk:      9.99,
+  us:      9.99,
+  biz:     12.99,
+  info:    9.99,
+  pro:     14.99,
+  me:      19.99,
+  co:      24.99,
+  io:      32.00,
+  ai:      79.00,
+  app:     14.00,
+  dev:     12.00,
+  homes:   29.99,
+  // Budget TLDs (lower deliverability — use with caution for outreach)
+  xyz:     0.75,
+  click:   2.49,
+  site:    2.99,
+  pw:      2.99,
+  website: 2.99,
+  online:  3.99,
+  fun:     3.99,
+  space:   3.99,
 };
 
 function authHeaders() {
