@@ -526,10 +526,38 @@ export default function CrmClient() {
                             <span className="text-emerald-300/30 text-[10px] flex-shrink-0">{replyCollapsed ? "▸" : "▾"}</span>
                           </div>
                           {!replyCollapsed && (
-                            <div className="p-4">
+                            <div className="p-4 space-y-3">
                               <pre className="text-emerald-100/75 text-sm whitespace-pre-wrap font-sans leading-relaxed">
                                 {selected.latest_reply.body_text ?? "(No body captured — reply detected via header matching)"}
                               </pre>
+                              {selected.latest_reply.attachments?.length > 0 && (
+                                <div className="border-t border-emerald-500/15 pt-3 space-y-1.5">
+                                  <p className="text-emerald-300/40 text-[10px] font-semibold uppercase tracking-wider">
+                                    {selected.latest_reply.attachments.length} attachment{selected.latest_reply.attachments.length > 1 ? "s" : ""}
+                                  </p>
+                                  {selected.latest_reply.attachments.map((att, i) => (
+                                    <a
+                                      key={i}
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-emerald-500/8 hover:bg-emerald-500/14 border border-emerald-500/15 hover:border-emerald-500/25 transition-colors group"
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-emerald-400/60 flex-shrink-0">
+                                        <path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/>
+                                      </svg>
+                                      <span className="text-emerald-200/70 text-xs truncate flex-1">{att.name}</span>
+                                      <span className="text-emerald-300/30 text-[10px] flex-shrink-0">
+                                        {att.size < 1024 ? `${att.size} B` : att.size < 1_048_576 ? `${(att.size / 1024).toFixed(1)} KB` : `${(att.size / 1_048_576).toFixed(1)} MB`}
+                                      </span>
+                                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-emerald-400/30 group-hover:text-emerald-400/60 flex-shrink-0 transition-colors">
+                                        <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd"/>
+                                      </svg>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
