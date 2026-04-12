@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
       // Stripe requires mode:"subscription" when any line item is recurring.
       // One-time domain fees are added via add_invoice_items (billed on first invoice).
-      const addInvoiceItems: Stripe.Checkout.SessionCreateParams.AddInvoiceItem[] =
+      const addInvoiceItems: { price_data: { currency: string; unit_amount: number; product_data: { name: string } } }[] =
         totalOneTimeUsd > 0
           ? [{
               price_data: {
