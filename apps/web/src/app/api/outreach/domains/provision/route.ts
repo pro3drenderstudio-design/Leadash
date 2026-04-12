@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         throw new Error("Registrant contact info is incomplete. Please fill in your domain registrant details in Settings → Outreach.");
       }
 
-      await purchaseDomain(domainRecord.domain, registrant, domainRecord.domain_price_usd ?? undefined);
+      await purchaseDomain(domainRecord.domain, registrant);
 
       // ── Step 3: Register domain with SES + get DKIM tokens ──────────────────
       await setStatus("dns_pending");
