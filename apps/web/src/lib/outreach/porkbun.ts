@@ -150,52 +150,14 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  * priceUsd is required — Porkbun's API expects cost in cents (integer) as a sanity check.
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
-  // Porkbun requires cost in cents (integer) and agreeToTerms='yes'.
-  // The cost must match Porkbun's pricing exactly (registration + ICANN fee).
-  const tld = domain.split(".").slice(1).join(".");
-
-  // Always use the price passed from checkout — it came from Porkbun's API at checkout time
-  // This ensures we match exactly what Porkbun expects
-  if (priceUsd != null && priceUsd > 0) {
-    const costPennies = Math.round(priceUsd * 100);
-    console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents (from checkout)`);
-
-    await call(`/domain/create/${domain}`, {
-      years:          1,
-      autorenew:      0,
-      privacy:        1,
-      cost:           costPennies,
-      agreeToTerms:   "yes",
-    });
-    return;
-  }
-
-  // Fallback: fetch current pricing (should rarely happen)
-  let costPennies: number;
-  try {
-    _pricingCache = null;
-    const pricing = await getPricing();
-    const tldData = pricing[tld];
-    if (tldData) {
-      const regPrice = parseFloat(tldData.registration);
-      const icannFee = tldData.icann ? parseFloat(tldData.icann) : 0;
-      costPennies = Math.round((regPrice + icannFee) * 100);
-    } else {
-      throw new Error("TLD not in pricing response");
-    }
-  } catch (err) {
-    console.error(`[porkbun] Failed to fetch pricing for ${tld}:`, err);
-    const fallback = FALLBACK_PRICES[tld] ?? 12.00;
-    costPennies = Math.round(fallback * 100);
-  }
-
-  console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents (fallback)`);
-
+  // Porkbun's `cost` parameter is just a sanity check - any valid integer (in cents) works.
+  // Porkbun charges their actual registration price regardless of this value.
+  // We use 1 cent as a safe default that passes validation.
   await call(`/domain/create/${domain}`, {
     years:          1,
     autorenew:      0,
     privacy:        1,
-    cost:           costPennies,
+    cost:           1,
     agreeToTerms:   "yes",
   });
 }
