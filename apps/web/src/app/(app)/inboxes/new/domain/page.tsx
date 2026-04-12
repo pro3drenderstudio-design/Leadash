@@ -191,8 +191,10 @@ export default function BuyDomainPage() {
         body: JSON.stringify({
           domains:          selectedDomains.map(d => ({ domain: d.domain, price: d.price })),
           mailbox_prefixes: prefixes,
-          first_name:       firstName || undefined,
-          last_name:        lastName  || undefined,
+          first_name:       firstName       || undefined,
+          last_name:        lastName        || undefined,
+          redirect_url:     redirectUrl     || undefined,
+          reply_forward_to: replyForwardTo  || undefined,
           payment_provider: currency,
         }),
       });
