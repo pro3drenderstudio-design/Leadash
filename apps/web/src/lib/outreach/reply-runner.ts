@@ -240,12 +240,27 @@ async function ingestMessages(
       aiCategory = r.category; aiConfidence = r.confidence;
     }
 
+    // Extract + upload attachments (IMAP only — rawSource available)
+    let attachments: import("@/lib/outreach/mime-attachments").StoredAttachment[] = [];
+    if (msg.rawSource) {
+      try {
+        const { extractAttachments, uploadAttachments } = await import("@/lib/outreach/mime-attachments");
+        const parsed = extractAttachments(msg.rawSource);
+        if (parsed.length) {
+          attachments = await uploadAttachments(workspaceId, msg.messageId || Date.now().toString(), parsed);
+        }
+      } catch (e) {
+        console.warn("[reply-runner] attachment extraction failed:", String(e).slice(0, 200));
+      }
+    }
+
     await db.from("outreach_replies").insert({
       workspace_id: workspaceId, inbox_id: inboxId,
       send_id: send?.id ?? null, enrollment_id: send?.enrollment_id ?? null,
       from_email: msg.fromEmail, from_name: msg.fromName, subject: msg.subject,
       body_text: msg.bodyText, message_id: msg.messageId || null, in_reply_to: msg.inReplyTo,
-      received_at: msg.receivedAt, ai_category: aiCategory, ai_confidence: aiConfidence, is_filtered: false,
+      received_at: msg.receivedAt, ai_category: aiCategory, ai_confidence: aiConfidence,
+      is_filtered: false, attachments,
     });
 
     if (send) {
