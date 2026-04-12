@@ -166,5 +166,5 @@ export async function PATCH(req: NextRequest) {
     .update({ status: "active", warmup_ends_at: warmupEndsAt, updated_at: new Date().toISOString() })
     .eq("id", domain_record_id);
 
-  return NextResponse.json({ ok: true, status: "active" });
+  return NextResponse.json({ ok: true, status: "active", inbox_count: logins.length });
 }
