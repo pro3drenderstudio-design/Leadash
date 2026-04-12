@@ -86,6 +86,41 @@ export default function ConnectDomainPage() {
 
   async function handleConfigure() {
     if (!domain.trim() || activePrefixes.length === 0) return;
+    // Go to payment step first
+    setStep("payment");
+  }
+
+  async function handlePay() {
+    setLoading(true);
+    setError(null);
+    const provider = globalCurrency === "NGN" ? "paystack" : "stripe";
+    const inboxCount = activePrefixes.length;
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      // Reuse the existing domains/checkout route — pass domain price as 0 (no registration fee)
+      const res = await fetch("/api/outreach/domains/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body: JSON.stringify({
+          domains:          [{ domain: domain.trim().toLowerCase(), price: 0 }],
+          mailbox_prefixes: activePrefixes,
+          first_name:       firstName || undefined,
+          last_name:        lastName  || undefined,
+          payment_provider: provider,
+          connect_only:     true, // flag: skip domain registration, just charge monthly inbox fee
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Checkout failed");
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegisterAndShowDns() {
     setLoading(true);
     setError(null);
     try {
