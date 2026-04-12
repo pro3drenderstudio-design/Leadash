@@ -486,7 +486,7 @@ export default function CrmClient() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-white/50 text-xs font-medium">{selected.campaign.name}</p>
+                      <p className="text-white/50 text-xs font-medium">{selected.campaign?.name ?? "Direct inbound"}</p>
                       <p className="text-white/25 text-[10px] mt-0.5">Replied {timeAgo(selected.replied_at)}</p>
                     </div>
                   </div>
