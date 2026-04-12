@@ -29,15 +29,14 @@ export default function WarmupClient() {
 
   useEffect(() => {
     Promise.all([
-      getInboxes(),
+      getInboxes().catch(() => [] as OutreachInboxSafe[]),
       fetch("/api/outreach/warmup/stats").then((r) => r.json()).catch(() => null),
       fetch("/api/outreach/warmup/activity?limit=100").then((r) => r.json()).catch(() => []),
     ]).then(([inboxList, poolStats, activityList]) => {
-      setInboxes(inboxList);
+      setInboxes(Array.isArray(inboxList) ? inboxList : []);
       setStats(poolStats);
       setActivity(Array.isArray(activityList) ? activityList : []);
-      setLoading(false);
-    });
+    }).finally(() => setLoading(false));
   }, []);
 
   function getField<K extends keyof OutreachInboxSafe>(inbox: OutreachInboxSafe, key: K): OutreachInboxSafe[K] {
