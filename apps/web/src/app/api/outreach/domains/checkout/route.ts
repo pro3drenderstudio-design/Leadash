@@ -89,45 +89,44 @@ export async function POST(req: NextRequest) {
 
   // ── Stripe ───────────────────────────────────────────────────────────────────
   if (payment_provider === "stripe") {
-    const stripe = getStripe();
-
-    const { data: workspace } = await db
-      .from("workspaces")
-      .select("stripe_customer_id, billing_email, name")
-      .eq("id", workspaceId)
-      .single();
-
-    let customerId = workspace?.stripe_customer_id as string | undefined;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email:    workspace?.billing_email ?? undefined,
-        name:     workspace?.name ?? undefined,
-        metadata: { workspace_id: workspaceId },
-      });
-      customerId = customer.id;
-      await db.from("workspaces").update({ stripe_customer_id: customerId }).eq("id", workspaceId);
-    }
-
-    const domainNames = domains.map(d => d.domain).join(", ");
-
-    // Stripe requires mode:"subscription" when any line item is recurring.
-    // One-time domain fees are added via add_invoice_items (billed on first invoice).
-    const addInvoiceItems: Stripe.Checkout.SessionCreateParams.AddInvoiceItem[] =
-      totalOneTimeUsd > 0
-        ? [{
-            price_data: {
-              currency:     "usd",
-              unit_amount:  Math.round(totalOneTimeUsd * 100),
-              product_data: {
-                name: `Domain registration${domains.length > 1 ? ` (${domains.length})` : ""}: ${domainNames}`,
-              },
-            },
-          }]
-        : [];
-
-    let session: Stripe.Checkout.Session;
     try {
-      session = await stripe.checkout.sessions.create({
+      const stripe = getStripe();
+
+      const { data: workspace } = await db
+        .from("workspaces")
+        .select("stripe_customer_id, billing_email, name")
+        .eq("id", workspaceId)
+        .single();
+
+      let customerId = workspace?.stripe_customer_id as string | undefined;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email:    workspace?.billing_email ?? undefined,
+          name:     workspace?.name ?? undefined,
+          metadata: { workspace_id: workspaceId },
+        });
+        customerId = customer.id;
+        await db.from("workspaces").update({ stripe_customer_id: customerId }).eq("id", workspaceId);
+      }
+
+      const domainNames = domains.map(d => d.domain).join(", ");
+
+      // Stripe requires mode:"subscription" when any line item is recurring.
+      // One-time domain fees are added via add_invoice_items (billed on first invoice).
+      const addInvoiceItems: Stripe.Checkout.SessionCreateParams.AddInvoiceItem[] =
+        totalOneTimeUsd > 0
+          ? [{
+              price_data: {
+                currency:     "usd",
+                unit_amount:  Math.round(totalOneTimeUsd * 100),
+                product_data: {
+                  name: `Domain setup: ${domainNames}`,
+                },
+              },
+            }]
+          : [];
+
+      const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode:     "subscription",
         line_items: [
@@ -150,43 +149,50 @@ export async function POST(req: NextRequest) {
         cancel_url:  `${appUrl}/inboxes/new`,
         metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
       });
+
+      await db
+        .from("outreach_domains")
+        .update({ stripe_session_id: session.id })
+        .in("id", insertedIds);
+
+      return NextResponse.json({ domain_record_ids: insertedIds, checkout_url: session.url });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `Stripe error: ${msg}` }, { status: 500 });
+      console.error("[checkout] Stripe error:", msg);
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
-
-    await db
-      .from("outreach_domains")
-      .update({ stripe_session_id: session.id })
-      .in("id", insertedIds);
-
-    return NextResponse.json({ domain_record_ids: insertedIds, checkout_url: session.url });
   }
 
   // ── Paystack ─────────────────────────────────────────────────────────────────
-  const totalNgn = Math.round((totalOneTimeUsd + recurringPriceUsd) * NGN_PER_USD * 100);
+  try {
+    const totalNgn = Math.round((totalOneTimeUsd + recurringPriceUsd) * NGN_PER_USD * 100);
 
-  const { data: workspace } = await db
-    .from("workspaces")
-    .select("billing_email")
-    .eq("id", workspaceId)
-    .single();
+    const { data: workspace } = await db
+      .from("workspaces")
+      .select("billing_email")
+      .eq("id", workspaceId)
+      .single();
 
-  const { authorizationUrl, reference } = await createPaystackCheckout({
-    email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
-    amountKobo:  totalNgn,
-    callbackUrl: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}${connect_only ? "&connect=1" : ""}`,
-    metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
-  });
+    const { authorizationUrl, reference } = await createPaystackCheckout({
+      email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
+      amountKobo:  totalNgn,
+      callbackUrl: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}${connect_only ? "&connect=1" : ""}`,
+      metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
+    });
 
-  await db
-    .from("outreach_domains")
-    .update({ paystack_reference: reference })
-    .in("id", insertedIds);
+    await db
+      .from("outreach_domains")
+      .update({ paystack_reference: reference })
+      .in("id", insertedIds);
 
-  return NextResponse.json({
-    domain_record_ids: insertedIds,
-    checkout_url: authorizationUrl,
-    reference,
-  });
+    return NextResponse.json({
+      domain_record_ids: insertedIds,
+      checkout_url: authorizationUrl,
+      reference,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[checkout] Paystack error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
