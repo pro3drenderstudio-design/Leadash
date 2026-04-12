@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   getCrmThreads, addNote, updateCrmStatus, suggestReply,
   getCrmUnmatched, ignoreCrmUnmatched, matchReply, promoteUnmatched,
