@@ -70,6 +70,19 @@ export default function ConnectDomainPage() {
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
 
   const { currency: globalCurrency } = useCurrency();
+  const searchParams = useSearchParams();
+
+  // Returning from Stripe/Paystack after paying for a connect-only inbox subscription
+  useEffect(() => {
+    const isConnect = searchParams.get("connect") === "1";
+    const domainIds = searchParams.get("domain_ids");
+    if (isConnect && domainIds) {
+      // Payment done — move to SES registration step
+      setDomainRecordId(domainIds.split(",")[0]);
+      setStep("dns-register");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const combos = generateCombos(firstName, lastName);
   const activePrefixes = prefixMode === "custom"
