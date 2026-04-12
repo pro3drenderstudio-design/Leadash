@@ -689,7 +689,7 @@ export default function BuyDomainPage() {
               ? "Your inboxes are created and warming up. They'll be ready for campaigns in 21 days."
               : overallStatus === "failed"
               ? "Something went wrong during setup. Contact support if this persists."
-              : "This usually takes under a minute. Don't close this tab."}
+              : "This usually takes 2–4 minutes. Don't close this tab."}
           </p>
 
           <div className="space-y-3">
