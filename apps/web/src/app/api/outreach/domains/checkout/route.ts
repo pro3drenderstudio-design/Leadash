@@ -26,12 +26,16 @@ export async function POST(req: NextRequest) {
     mailbox_prefixes,  // explicit local-parts e.g. ["john","j.smith"]
     first_name,
     last_name,
+    redirect_url,
+    reply_forward_to,
     payment_provider = "stripe",
   } = body as {
     domains: Array<{ domain: string; price: number }>;
     mailbox_prefixes: string[];
     first_name?: string;
     last_name?: string;
+    redirect_url?: string;
+    reply_forward_to?: string;
     payment_provider?: "stripe" | "paystack";
   };
 
