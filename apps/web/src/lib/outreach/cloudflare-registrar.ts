@@ -108,10 +108,8 @@ function getDomainPrice(domain: string): number {
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
   return Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
-      const [available, price] = await Promise.all([
-        isDomainAvailable(domain),
-        getDomainPrice(domain),
-      ]);
+      const available = await isDomainAvailable(domain);
+      const price     = getDomainPrice(domain);
       return { domain, available, price };
     }),
   );
