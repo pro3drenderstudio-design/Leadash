@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
       .eq("id", domain_record_id);
   }
 
-  // Fire-and-forget pipeline — respond immediately so client can start polling
-  (async () => {
+  // Run pipeline after response is sent — keeps the serverless function alive
+  after(async () => {
     try {
       // ── Step 1: Verify payment ───────────────────────────────────────────────
       const provider = domainRecord.payment_provider ?? "stripe";
