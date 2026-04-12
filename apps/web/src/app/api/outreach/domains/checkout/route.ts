@@ -114,39 +114,37 @@ export async function POST(req: NextRequest) {
 
       const domainNames = domains.map(d => d.domain).join(", ");
 
-      // Stripe requires mode:"subscription" when any line item is recurring.
-      // One-time domain fees are added via add_invoice_items (billed on first invoice).
-      const addInvoiceItems: { price_data: { currency: string; unit_amount: number; product_data: { name: string } } }[] =
-        totalOneTimeUsd > 0
-          ? [{
-              price_data: {
-                currency:     "usd",
-                unit_amount:  Math.round(totalOneTimeUsd * 100),
-                product_data: {
-                  name: `Domain setup: ${domainNames}`,
-                },
-              },
-            }]
-          : [];
+      // Stripe subscription mode: non-recurring line items are billed once on the first invoice.
+      const lineItems: Parameters<typeof stripe.checkout.sessions.create>[0]["line_items"] = [
+        {
+          price_data: {
+            currency:    "usd",
+            unit_amount: Math.round(recurringPriceUsd * 100),
+            recurring:   { interval: "month" },
+            product_data: {
+              name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
+              description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""} × $${INBOX_MONTHLY_PRICE_USD}/mo`,
+            },
+          },
+          quantity: 1,
+        },
+      ];
+
+      if (totalOneTimeUsd > 0) {
+        lineItems.push({
+          price_data: {
+            currency:     "usd",
+            unit_amount:  Math.round(totalOneTimeUsd * 100),
+            product_data: { name: `Domain setup: ${domainNames}` },
+          },
+          quantity: 1,
+        });
+      }
 
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode:     "subscription",
-        line_items: [
-          {
-            price_data: {
-              currency:    "usd",
-              unit_amount: Math.round(recurringPriceUsd * 100),
-              recurring:   { interval: "month" },
-              product_data: {
-                name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
-                description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""} × $${INBOX_MONTHLY_PRICE_USD}/mo`,
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        add_invoice_items:   addInvoiceItems,
+        line_items: lineItems,
         subscription_data:   { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
         success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}${cfSuffix}`,
         cancel_url:  `${appUrl}/inboxes/new`,
