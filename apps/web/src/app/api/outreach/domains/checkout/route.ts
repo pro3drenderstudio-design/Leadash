@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     last_name,
     redirect_url,
     reply_forward_to,
+    connect_only = false,
     payment_provider = "stripe",
   } = body as {
     domains: Array<{ domain: string; price: number }>;
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     last_name?: string;
     redirect_url?: string;
     reply_forward_to?: string;
+    connect_only?: boolean;
     payment_provider?: "stripe" | "paystack";
   };
 
