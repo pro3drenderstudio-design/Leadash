@@ -369,7 +369,27 @@ export default function BuyDomainPage() {
 
             {searchError && <p className="text-red-400 text-sm">{searchError}</p>}
 
-            {results.length > 0 && (
+            {checking && (
+              <div className="border border-white/8 rounded-xl overflow-hidden mt-2">
+                <div className="px-4 py-2.5 bg-white/3 border-b border-white/8">
+                  <div className="flex items-center gap-2 text-white/40 text-xs">
+                    <svg className="w-3 h-3 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                    Checking {selectedTlds.length} extension{selectedTlds.length !== 1 ? "s" : ""} — this takes a few seconds…
+                  </div>
+                </div>
+                {selectedTlds.map(tld => (
+                  <div key={tld} className="flex items-center justify-between px-4 py-3 border-b border-white/6 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded border border-white/10 bg-white/5 animate-pulse" />
+                      <span className="text-white/30 text-sm font-mono">{sld}{tld}</span>
+                    </div>
+                    <div className="w-16 h-4 rounded bg-white/8 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!checking && results.length > 0 && (
               <div>
                 <div className="border border-white/8 rounded-xl overflow-hidden mt-2">
                   {results.map(r => {
