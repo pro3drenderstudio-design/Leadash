@@ -110,10 +110,14 @@ export async function POST(req: NextRequest) {
       await setStatus("dns_pending");
       const { dkimTokens } = await registerDomain(domainRecord.domain);
 
-      // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────
-      // Build SPF, DKIM CNAMEs, DMARC, and MX records
-      const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
+      // ── Step 4: Add domain to Cloudflare + point Porkbun nameservers ─────────
+      // Newly registered Porkbun domains use Porkbun's nameservers by default.
+      // We add the zone to Cloudflare and update the nameservers at Porkbun.
+      const { nameservers } = await addZone(domainRecord.domain);
+      await updateNameservers(domainRecord.domain, nameservers);
 
+      // ── Step 5: Publish DNS records via Cloudflare ──────────────────────────
+      const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
       await publishDnsRecords(domainRecord.domain, dnsRecords);
 
       // Save DNS records for display in UI
