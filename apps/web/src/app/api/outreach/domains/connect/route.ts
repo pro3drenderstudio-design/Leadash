@@ -103,7 +103,19 @@ export async function PATCH(req: NextRequest) {
     .single();
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (domainRecord.status === "active") return NextResponse.json({ ok: true, status: "active" });
+
+  if (domainRecord.status === "active") {
+    // Check if inboxes were actually created — Re-configure sets status=active but skips inbox creation
+    const { count: existingCount } = await db
+      .from("outreach_inboxes")
+      .select("id", { count: "exact", head: true })
+      .eq("domain_id", domain_record_id)
+      .eq("workspace_id", workspaceId);
+    if ((existingCount ?? 0) > 0) {
+      return NextResponse.json({ ok: true, status: "active", inbox_count: existingCount ?? 0 });
+    }
+    // Fall through to create inboxes (domain is verified but inboxes were never made)
+  }
 
   // Check SES verification
   await db.from("outreach_domains").update({ status: "verifying" }).eq("id", domain_record_id);
@@ -129,7 +141,7 @@ export async function PATCH(req: NextRequest) {
   const smtp = getSmtpCredentials();
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes)
+  const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes) && domainRecord.mailbox_prefixes.length > 0
     ? domainRecord.mailbox_prefixes as string[]
     : Array.from({ length: domainRecord.mailbox_count }, (_, i) => `${domainRecord.mailbox_prefix}${i + 1}`);
 
