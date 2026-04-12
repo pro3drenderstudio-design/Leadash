@@ -42,6 +42,7 @@ export interface OutreachInbox {
   gmail_watch_expiry?: string | null;
   ms_subscription_id?: string | null;
   ms_subscription_expiry?: string | null;
+  profile_image_url?: string | null;
   created_at: string;
   updated_at: string;
 }
