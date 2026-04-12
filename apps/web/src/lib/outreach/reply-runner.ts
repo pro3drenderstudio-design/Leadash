@@ -151,20 +151,45 @@ async function fetchImapMessages(
   return { messages };
 }
 
-function extractPlainText(rawSource: string): string | null {
-  const plainMatch = rawSource.match(/content-type:\s*text\/plain[^\n]*\n(?:.*\n)*?\n([\s\S]*?)(?=\n--|\n\r?\nContent-Type:|$)/i);
-  if (plainMatch?.[1]?.trim()) return decodeQP(plainMatch[1]).trim();
-
-  const htmlMatch = rawSource.match(/content-type:\s*text\/html[^\n]*\n(?:.*\n)*?\n([\s\S]*?)(?=\n--|\n\r?\nContent-Type:|$)/i);
-  if (htmlMatch?.[1]) {
-    return htmlMatch[1].replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
-      .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/\s+/g," ").trim() || null;
-  }
-  return null;
-}
-
 function decodeQP(str: string): string {
   return str.replace(/=\r?\n/g,"").replace(/=([0-9A-F]{2})/gi, (_,h) => String.fromCharCode(parseInt(h,16)));
+}
+
+function decodePart(body: string, headers: string): string {
+  const encM = headers.match(/content-transfer-encoding:\s*(\S+)/i);
+  const enc   = (encM?.[1] ?? "7bit").toLowerCase().trim();
+  if (enc === "base64") {
+    try { return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8"); }
+    catch { return body; }
+  }
+  return decodeQP(body);
+}
+
+function matchPart(raw: string, type: string): { headers: string; body: string } | null {
+  const re = new RegExp(
+    `((?:^|\\n)(?:[^\\n]+\\n)*?content-type:\\s*${type}[^\\n]*\\n(?:[^\\n]*\\n)*?)\\n([\\s\\S]*?)(?=\\n--[^\\n]|$)`,
+    "i"
+  );
+  const m = raw.match(re);
+  return m ? { headers: m[1], body: m[2].trim() } : null;
+}
+
+function extractPlainText(rawSource: string): string | null {
+  const plain = matchPart(rawSource, "text\\/plain");
+  if (plain?.body?.trim()) {
+    const decoded = decodePart(plain.body, plain.headers);
+    if (decoded.trim()) return decoded.trim();
+  }
+  const html = matchPart(rawSource, "text\\/html");
+  if (html?.body) {
+    const decoded = decodePart(html.body, html.headers);
+    const text = decoded
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
+      .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/\s+/g," ").trim();
+    if (text) return text;
+  }
+  return null;
 }
 
 // ─── Core ingest ──────────────────────────────────────────────────────────────
