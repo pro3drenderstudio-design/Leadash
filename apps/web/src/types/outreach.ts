@@ -50,6 +50,10 @@ export type OutreachInboxSafe = Omit<OutreachInbox, "oauth_access_token" | "oaut
   has_oauth?: boolean;
 };
 
+export interface OutreachInbox {
+  profile_image_url?: string | null;
+}
+
 export interface OutreachList {
   id: string;
   workspace_id: string;
