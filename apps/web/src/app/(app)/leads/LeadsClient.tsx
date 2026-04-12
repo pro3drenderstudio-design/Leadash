@@ -2,7 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getLists, createList, deleteList, importLeads } from "@/lib/outreach/api";
+import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
+
+interface Campaign {
+  id: string;
+  name: string;
+  status: string;
+  lead_count?: number;
+  verified_count?: number;
+}
+
+type ImportMode = "csv" | "campaign";
 
 const DB_FIELDS = ["email", "first_name", "last_name", "company", "title", "website"] as const;
 const CUSTOM_SENTINEL = "__custom__";
