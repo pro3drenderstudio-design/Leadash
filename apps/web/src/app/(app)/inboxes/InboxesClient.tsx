@@ -268,6 +268,22 @@ export default function InboxesClient() {
     if (activeTab === "domains" && domains.length === 0) loadDomains();
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function handleDeleteDomain(domainId: string, domain: string) {
+    if (!confirm(`Delete ${domain}? This will not remove any inboxes already created.`)) return;
+    try {
+      const res = await wsFetch("/api/outreach/domains", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: domainId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      setDomains((prev) => prev.filter((d) => d.id !== domainId));
+      showToast("Domain record deleted");
+    } catch (e) {
+      showToast(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   async function handleReconfigure(domainId: string) {
     setReconfiguringId(domainId);
     try {
