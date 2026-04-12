@@ -219,6 +219,7 @@ export default function ConnectDomainPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
       if (data.status === "active") {
+        setInboxCount(data.inbox_count ?? 0);
         setStep("done");
       } else {
         setVerifyMsg(data.message ?? "DNS not detected yet — check back in a few minutes.");
