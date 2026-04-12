@@ -108,6 +108,8 @@ export default function BuyDomainPage() {
   // ── Step 2: Configure ───────────────────────────────────────────────────────
   const [firstName, setFirstName]         = useState("");
   const [lastName, setLastName]           = useState("");
+  const [redirectUrl, setRedirectUrl]     = useState("");
+  const [replyForwardTo, setReplyForwardTo] = useState("");
   const [selectedPrefixes, setSelectedPrefixes] = useState<string[]>([]);
   const [customPrefix, setCustomPrefix]   = useState("");
   const [prefixMode, setPrefixMode]       = useState<"generated" | "custom">("generated");
