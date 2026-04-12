@@ -230,7 +230,7 @@ export interface CrmNote {
 export interface CrmThread {
   enrollment_id: string;
   lead: OutreachLead;
-  campaign: Pick<OutreachCampaign, "id" | "name">;
+  campaign: Pick<OutreachCampaign, "id" | "name"> | null;
   latest_send: OutreachSend | null;
   latest_reply: OutreachReply | null;
   replied_at: string | null;
