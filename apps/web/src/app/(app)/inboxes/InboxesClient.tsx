@@ -117,6 +117,65 @@ const PROVIDER_COLORS: Record<string, string> = {
   smtp:    "#a855f7",
 };
 
+// ─── Profile image avatar ─────────────────────────────────────────────────────
+function InboxAvatar({
+  inbox, size = 36, onUploaded,
+}: {
+  inbox: OutreachInboxSafe;
+  size?: number;
+  onUploaded?: (url: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview]     = useState<string | null>(inbox.profile_image_url ?? null);
+  const color = PROVIDER_COLORS[inbox.provider] ?? "#888";
+  const initials = ((inbox.first_name?.[0] ?? "") + (inbox.last_name?.[0] ?? "")) ||
+    inbox.email_address.slice(0, 2).toUpperCase();
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", f);
+    fd.append("inbox_id", inbox.id);
+    try {
+      const res  = await fetch(`/api/outreach/inboxes/profile-image?ws=${encodeURIComponent(window.location.pathname.split("/")[2] ?? "")}`, { method: "POST", body: fd });
+      // Use wsFetch-compatible URL — workspace header is injected by wsFetch middleware
+      const res2 = await (await import("@/lib/workspace/client")).wsFetch("/api/outreach/inboxes/profile-image", { method: "POST", body: fd });
+      const data = await res2.json();
+      if (data.url) { setPreview(data.url); onUploaded?.(data.url); }
+    } finally { setUploading(false); e.target.value = ""; }
+  }
+
+  return (
+    <div className="relative flex-shrink-0 group" style={{ width: size, height: size }}>
+      {preview ? (
+        <img src={preview} alt="" className="w-full h-full rounded-lg object-cover" style={{ width: size, height: size }} />
+      ) : (
+        <div className="w-full h-full rounded-lg flex items-center justify-center text-xs font-bold"
+          style={{ background: `${color}20`, border: `1px solid ${color}40`, color, fontSize: size < 32 ? 9 : 11 }}>
+          {initials}
+        </div>
+      )}
+      {/* Upload overlay on hover */}
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="absolute inset-0 rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        title="Upload photo"
+      >
+        {uploading ? (
+          <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        ) : (
+          <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
+        )}
+      </button>
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
 export default function InboxesClient() {
   const params = useSearchParams();
   const [activeTab, setActiveTab]       = useState<"inboxes" | "domains">("inboxes");
