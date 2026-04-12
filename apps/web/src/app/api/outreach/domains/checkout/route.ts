@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       const domainNames = domains.map(d => d.domain).join(", ");
 
       // Stripe subscription mode: non-recurring line items are billed once on the first invoice.
-      type LineItem = { price_data: { currency: string; unit_amount: number; recurring?: { interval: string }; product_data: { name: string; description?: string } }; quantity: number };
+      type LineItem = { price_data: { currency: string; unit_amount: number; recurring?: { interval: "day" | "week" | "month" | "year" }; product_data: { name: string; description?: string } }; quantity: number };
       const lineItems: LineItem[] = [
         {
           price_data: {
