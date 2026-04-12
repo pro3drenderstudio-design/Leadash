@@ -143,15 +143,39 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  * Register a domain for 1 year.
  * Porkbun uses the account's contact info and enables free WHOIS privacy automatically.
  * The registrant parameter is accepted for interface compatibility but not forwarded.
- *
- * Note: We no longer send the `cost` parameter — it's optional and Porkbun's API
- * rejects it if it doesn't match their internal calculation exactly.
+ * priceUsd is required — Porkbun's API expects cost in cents (integer) as a sanity check.
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
+  // Porkbun requires cost in cents (integer) and agreeToTerms='yes'.
+  // Always fetch the live price from Porkbun — it must match exactly what they charge.
+  // The priceUsd param (from checkout) is used as a fallback only.
+  const tld = domain.split(".").slice(1).join(".");
+  let costPennies: number;
+
+  try {
+    // Force a fresh lookup — bypass the process-level cache
+    _pricingCache = null;
+    const pricing = await getPricing();
+    const tldData = pricing[tld];
+    if (tldData) {
+      costPennies = Math.round(parseFloat(tldData.registration) * 100);
+    } else {
+      throw new Error("TLD not in pricing response");
+    }
+  } catch (err) {
+    console.error(`[porkbun] Failed to fetch pricing for ${tld}, using fallback:`, err);
+    // Fall back to the price stored at checkout, then hardcoded fallback
+    const fallback = priceUsd != null ? Number(priceUsd) : (FALLBACK_PRICES[tld] ?? 12.00);
+    costPennies = Math.round(fallback * 100);
+  }
+
+  console.log(`[porkbun] Creating domain ${domain} with cost=${costPennies} cents`);
+
   await call(`/domain/create/${domain}`, {
     years:          1,
     autorenew:      0,
     privacy:        1,
+    cost:           costPennies,
     agreeToTerms:   "yes",
   });
 }
