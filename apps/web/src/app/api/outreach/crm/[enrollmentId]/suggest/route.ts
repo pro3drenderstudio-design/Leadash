@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL = "gemini-1.5-flash";
-
 // POST /api/outreach/crm/[enrollmentId]/suggest
 // Uses the conversation context to generate an AI reply suggestion.
 export async function POST(
