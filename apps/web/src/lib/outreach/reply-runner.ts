@@ -83,6 +83,8 @@ interface RawMessage {
   subject: string | null; bodyText: string | null; receivedAt: string; warmupId: string | null;
   /** Provider-level thread/conversation ID (Gmail threadId, Outlook conversationId) for fallback matching */
   threadId?: string | null;
+  /** Raw MIME source — used to extract attachments on IMAP inboxes */
+  rawSource?: string | null;
 }
 
 function deriveImapHost(smtpHost?: string | null): string | null {
