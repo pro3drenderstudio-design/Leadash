@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { checkDomains } from "@/lib/outreach/cloudflare-registrar";
+import { checkDomains } from "@/lib/outreach/porkbun";
 
 /**
  * GET /api/outreach/domains/check?domains=example.com,example.io
