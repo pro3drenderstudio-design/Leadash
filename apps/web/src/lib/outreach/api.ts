@@ -142,6 +142,8 @@ export const suggestReply      = (enrollmentId: string) =>
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
 export const sendCrmReply      = (enrollmentId: string, body: string) =>
   post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body });
+export const promoteUnmatched  = (replyId: string) =>
+  post<{ ok: boolean; enrollment_id: string; error?: string }>(`${base}/crm/unmatched/${replyId}/promote`, {});
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 export const getSettings    = () => get<Record<string, unknown>>(`${base}/settings`);
