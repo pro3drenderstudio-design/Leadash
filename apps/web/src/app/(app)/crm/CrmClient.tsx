@@ -213,9 +213,20 @@ export default function CrmClient() {
   async function handleSuggestReply() {
     if (!selected) return;
     setSuggesting(true);
-    setSuggestion(null);
     const { suggestion: text, error } = await suggestReply(selected.enrollment_id);
-    setSuggestion(error ? `Error: ${error}` : (text ?? "No suggestion generated"));
+    if (!error && text && composeRef.current) {
+      composeRef.current.innerText = text;
+      setComposeBody(text);
+      setComposeHtml(composeRef.current.innerHTML);
+      // Move cursor to end
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(composeRef.current);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      composeRef.current.focus();
+    }
     setSuggesting(false);
   }
 
