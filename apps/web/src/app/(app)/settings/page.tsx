@@ -506,12 +506,41 @@ function OutreachTab() {
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
 
+  // Default inbox profile image (separate from text settings)
+  const [defaultImage, setDefaultImage]         = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage]     = useState(false);
+  const [imageError, setImageError]             = useState<string | null>(null);
+  const [imageSaved, setImageSaved]             = useState(false);
+  const imageInputRef = useState<HTMLInputElement | null>(null);
+
   useEffect(() => {
-    wsGet<Partial<OutreachSettings>>("/api/outreach/settings").then(data => {
+    wsGet<Partial<OutreachSettings> & { default_inbox_profile_image_url?: string | null }>("/api/outreach/settings").then(data => {
       setSettings(prev => ({ ...prev, ...data }));
+      if (data.default_inbox_profile_image_url) setDefaultImage(data.default_inbox_profile_image_url);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  async function handleDefaultImageUpload(file: File) {
+    setUploadingImage(true);
+    setImageError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      // No inbox_id → saves as workspace default
+      const { wsFetch } = await import("@/lib/workspace/client");
+      const res = await wsFetch("/api/outreach/inboxes/profile-image", { method: "POST", body: fd });
+      if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error ?? res.statusText); }
+      const { url } = await res.json() as { url: string };
+      setDefaultImage(url);
+      setImageSaved(true);
+      setTimeout(() => setImageSaved(false), 2500);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   function set(key: keyof OutreachSettings, value: string) {
     setSettings(s => ({ ...s, [key]: value }));
