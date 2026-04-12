@@ -40,6 +40,138 @@ type MainTab = "inbox" | "unmatched" | "filters";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+const COMMON_EMOJIS = [
+  "😀","😊","😂","🙏","👍","👎","🔥","✅","❌","⚡","🎉","🚀",
+  "💡","💼","📧","📅","💰","🤝","⭐","🌟","✨","💪","🎯","📊",
+  "👋","😅","🤔","😍","🥳","🤩","😎","🙌","💯","❤️","👏","🏆",
+];
+
+function EmojiPicker({ onSelect }: { onSelect: (e: string) => void }) {
+  return (
+    <div>
+      <p className="text-white/40 text-[10px] font-semibold uppercase tracking-wider mb-2">Emoji</p>
+      <div className="grid grid-cols-8 gap-0.5">
+        {COMMON_EMOJIS.map((e) => (
+          <button key={e} onClick={() => onSelect(e)} className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/10 text-base transition-colors">{e}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolbarBtn({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={(e) => { e.preventDefault(); onClick(e); }}
+      className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white/80 text-xs transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+
+function AttachmentList({ attachments }: { attachments: import("@/types/outreach").ReplyAttachment[] }) {
+  if (!attachments?.length) return null;
+  return (
+    <div className="border-t border-white/10 pt-2.5 mt-2.5 space-y-1">
+      {attachments.map((att, i) => (
+        <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 transition-colors group text-xs"
+          onClick={e => e.stopPropagation()}
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-white/40 flex-shrink-0">
+            <path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/>
+          </svg>
+          <span className="flex-1 truncate text-white/60">{att.name}</span>
+          <span className="text-white/30 text-[10px] flex-shrink-0">
+            {att.size < 1024 ? `${att.size}B` : att.size < 1_048_576 ? `${(att.size/1024).toFixed(0)}KB` : `${(att.size/1_048_576).toFixed(1)}MB`}
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: string }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const isHtml = (msg.body ?? "").trim().startsWith("<");
+  return (
+    <div className="flex flex-col items-end">
+      <div className="max-w-[82%] w-full">
+        <div className="flex items-center justify-end gap-2 mb-1">
+          <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
+          {msg.opened_at && <span className="text-emerald-400/50 text-[10px]">Opened</span>}
+          {msg.clicked_at && <span className="text-blue-400/50 text-[10px]">Clicked</span>}
+          <span className="text-blue-300/60 text-[10px] font-medium">You</span>
+        </div>
+        <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
+          <div className="bg-blue-600/12 border border-blue-500/20 rounded-2xl rounded-tr-sm overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+              <p className="text-blue-200/75 text-xs font-medium truncate">{msg.subject}</p>
+              <span className="text-blue-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
+            </div>
+            {!collapsed && (
+              <div className="px-4 pb-4 border-t border-blue-500/10 pt-3">
+                {isHtml ? (
+                  <iframe
+                    srcDoc={`<html><head><style>body{margin:0;font-family:sans-serif;font-size:13px;color:#ccc;background:transparent;line-height:1.6}a{color:#7dd3fc}*{max-width:100%}</style></head><body>${msg.body}</body></html>`}
+                    sandbox="allow-same-origin"
+                    className="w-full border-0 min-h-[60px]"
+                    style={{ height: "auto" }}
+                    onLoad={(e) => {
+                      const iframe = e.currentTarget;
+                      if (iframe.contentDocument?.body) iframe.style.height = iframe.contentDocument.body.scrollHeight + "px";
+                    }}
+                  />
+                ) : (
+                  <pre className="text-blue-100/55 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
+                )}
+              </div>
+            )}
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReplyBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: string }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const isDifferentEmail = msg.from_email && msg.from_email.toLowerCase() !== leadEmail.toLowerCase();
+  return (
+    <div className="flex flex-col items-start">
+      <div className="max-w-[82%] w-full">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-emerald-300/60 text-[10px] font-medium">{msg.from_name || msg.from_email}</span>
+          {isDifferentEmail && <span className="text-amber-400/45 text-[10px]">({msg.from_email})</span>}
+          <span className="text-white/25 text-[10px]">{msg.received_at ? new Date(msg.received_at).toLocaleString() : ""}</span>
+          {msg.ai_category && msg.ai_category !== "neutral" && (msg.ai_confidence ?? 0) >= 0.7 && (
+            <span className="text-violet-400/50 text-[10px]">AI: {msg.ai_category.replace(/_/g, " ")} {Math.round((msg.ai_confidence ?? 0) * 100)}%</span>
+          )}
+        </div>
+        <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
+          <div className="bg-emerald-500/9 border border-emerald-500/20 rounded-2xl rounded-tl-sm overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+              <p className="text-emerald-200/65 text-xs font-medium truncate">{msg.subject ?? "(reply)"}</p>
+              <span className="text-emerald-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
+            </div>
+            {!collapsed && (
+              <div className="px-4 pb-4 border-t border-emerald-500/10 pt-3">
+                <pre className="text-emerald-100/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                  {msg.body_text ?? "(No body captured — reply detected via header matching)"}
+                </pre>
+                <AttachmentList attachments={msg.attachments ?? []} />
+              </div>
+            )}
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status, onClick }: { status: CrmStatus; onClick?: () => void }) {
   const s = CRM_STATUSES.find((x) => x.value === status) ?? CRM_STATUSES[0];
   return (
