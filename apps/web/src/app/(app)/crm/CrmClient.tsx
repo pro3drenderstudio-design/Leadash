@@ -821,7 +821,7 @@ export default function CrmClient() {
                           className="w-full text-left px-3 py-2.5 bg-white/4 hover:bg-white/8 rounded-lg transition-colors disabled:opacity-40"
                         >
                           <p className="text-white text-sm font-medium">{[t.lead.first_name, t.lead.last_name].filter(Boolean).join(" ") || t.lead.email}</p>
-                          <p className="text-white/40 text-xs">{t.lead.email} · {t.campaign.name}</p>
+                          <p className="text-white/40 text-xs">{t.lead.email} · {t.campaign?.name ?? "Direct inbound"}</p>
                         </button>
                       ))}
                       {matchSearch.length >= 2 && matchResults.length === 0 && (
