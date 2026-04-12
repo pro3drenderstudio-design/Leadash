@@ -97,7 +97,7 @@ function AttachmentList({ attachments }: { attachments: import("@/types/outreach
 
 function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: string }) {
   const [collapsed, setCollapsed] = useState(false);
-  const isHtml = (msg.body ?? "").trim().startsWith("<");
+  const isHtml = /<[a-z][\s\S]*>/i.test(msg.body ?? "");
   return (
     <div className="flex flex-col items-end">
       <div className="max-w-[82%] w-full">
