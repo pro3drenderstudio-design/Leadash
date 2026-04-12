@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import {
   getCrmThreads, addNote, updateCrmStatus, suggestReply,
-  getCrmUnmatched, ignoreCrmUnmatched, matchReply,
+  getCrmUnmatched, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
   triggerSendBatch, sendCrmReply,
 } from "@/lib/outreach/api";
