@@ -63,27 +63,12 @@ ${context}
 Write the reply now:`;
 
   try {
-    const res = await fetch(
-      `${GEMINI_BASE}/${MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: `AI error: ${err}` }, { status: 500 });
-    }
-
-    const json = await res.json();
-    const suggestion = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genai  = new GoogleGenerativeAI(apiKey);
+    const model  = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent(prompt);
+    const suggestion = result.response.text().trim();
     if (!suggestion) return NextResponse.json({ error: "No suggestion generated" }, { status: 500 });
-
     return NextResponse.json({ suggestion });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
