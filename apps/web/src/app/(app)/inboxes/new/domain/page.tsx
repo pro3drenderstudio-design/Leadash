@@ -389,7 +389,7 @@ export default function BuyDomainPage() {
               </div>
             )}
 
-            {!checking && results.length > 0 && (
+            {results.length > 0 && !checking && (
               <div>
                 <div className="border border-white/8 rounded-xl overflow-hidden mt-2">
                   {results.map(r => {
