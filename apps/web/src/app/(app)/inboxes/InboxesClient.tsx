@@ -320,7 +320,8 @@ export default function InboxesClient() {
     setDelivTesting(true);
     setDelivResult(null);
     try {
-      const r = await fetch(`/api/outreach/inboxes/${drawerInbox.id}/test-deliverability`, { method: "POST" });
+      const { wsFetch } = await import("@/lib/workspace/client");
+      const r = await wsFetch(`/api/outreach/inboxes/${drawerInbox.id}/test-deliverability`, { method: "POST" });
       const d = await r.json();
       setDelivResult(d.message ?? (d.error ? `Error: ${d.error}` : "Test sent"));
     } catch {
