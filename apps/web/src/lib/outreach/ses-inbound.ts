@@ -201,51 +201,79 @@ function parseAddress(val: string): { email: string; name: string | null } {
   return { email: decoded.trim().toLowerCase(), name: null };
 }
 
-function decodeMimePart(body: string, encoding: string): string {
-  const enc = encoding.toLowerCase().trim();
+function decodeTransfer(body: string, headers: string): string {
+  const encM = headers.match(/content-transfer-encoding:\s*(\S+)/i);
+  const enc  = (encM?.[1] ?? "7bit").toLowerCase().trim();
   if (enc === "base64") {
     try { return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8"); }
     catch { return body; }
   }
-  // quoted-printable (default)
-  return body.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  if (enc === "quoted-printable") {
+    return body.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body;
 }
 
-/** Extract the Content-Transfer-Encoding value from a MIME part header block */
-function getTransferEncoding(partHeaders: string): string {
-  const m = partHeaders.match(/content-transfer-encoding:\s*(\S+)/i);
-  return m ? m[1] : "7bit";
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/** Match a MIME part for the given content-type, returning { headers, body } */
-function matchMimePart(raw: string, contentType: string): { headers: string; body: string } | null {
-  const re = new RegExp(
-    `((?:^|\\n)(?:[^\\n]+\\n)*?content-type:\\s*${contentType}[^\\n]*\\n(?:[^\\n]*\\n)*?)\\n([\\s\\S]*?)(?=\\n--[^\\n]|$)`,
-    "i"
-  );
-  const m = raw.match(re);
-  if (!m) return null;
-  return { headers: m[1], body: m[2].trim() };
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface MimePart { headers: string; body: string; contentType: string }
+
+function parseMimeParts(raw: string): MimePart[] {
+  const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const sep  = text.indexOf("\n\n");
+  if (sep === -1) return [];
+
+  const hdrs = text.slice(0, sep);
+  const body = text.slice(sep + 2);
+
+  const ctM = hdrs.match(/^content-type:\s*([^\n;]+)/im);
+  const ct  = (ctM?.[1] ?? "text/plain").trim().toLowerCase();
+
+  if (ct.startsWith("multipart/")) {
+    const bdM = hdrs.match(/boundary="?([^"\n;]+)"?/i);
+    if (!bdM) return [];
+    const boundary = bdM[1].trim();
+    const parts = body.split(new RegExp(`^--${escapeRe(boundary)}(?:--|\\s*$)`, "m"));
+    const result: MimePart[] = [];
+    for (const part of parts.slice(1)) {
+      result.push(...parseMimeParts(part.trimStart()));
+    }
+    return result;
+  }
+
+  return [{ headers: hdrs, body: body.trim(), contentType: ct }];
 }
 
 function extractPlainText(raw: string): string | null {
-  // Try text/plain first
-  const plain = matchMimePart(raw, "text\\/plain");
+  const parts = parseMimeParts(raw);
+
+  const plain = parts.find(p => p.contentType.startsWith("text/plain"));
   if (plain?.body?.trim()) {
-    const decoded = decodeMimePart(plain.body, getTransferEncoding(plain.headers));
+    const decoded = decodeTransfer(plain.body, plain.headers);
     if (decoded.trim()) return decoded.trim();
   }
-  // Fall back to html → strip tags
-  const html = matchMimePart(raw, "text\\/html");
+
+  const html = parts.find(p => p.contentType.startsWith("text/html"));
   if (html?.body) {
-    const decoded = decodeMimePart(html.body, getTransferEncoding(html.headers));
-    const text = decoded
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-      .replace(/\s+/g, " ").trim();
-    if (text) return text;
+    const decoded = decodeTransfer(html.body, html.headers);
+    const stripped = stripHtmlTags(decoded);
+    if (stripped) return stripped;
   }
+
   return null;
 }
 
