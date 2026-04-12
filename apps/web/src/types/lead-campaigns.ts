@@ -89,12 +89,15 @@ export interface CreditPack {
   label?:          string;
 }
 
-// Cost per lead per mode
-export const CREDIT_COSTS: Record<LeadCampaignMode, number> = {
-  scrape:             1,
-  verify_personalize: 3,
-  full_suite:         4,
-};
+// Per-operation costs (fractional credits)
+export const CREDIT_COSTS = {
+  scrape:             1.0,  // per lead scraped
+  verify:             0.5,  // per lead verified
+  ai_personalize:     0.5,  // per AI opener generated
+  // Composite mode costs (without AI) — used as fallback
+  verify_personalize: 0.5,  // verify only
+  full_suite:         1.5,  // scrape + verify
+} as const;
 
 // ─── Apify Lead Scraper (pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe) ──
 
