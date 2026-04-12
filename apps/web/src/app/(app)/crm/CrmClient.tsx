@@ -109,6 +109,11 @@ export default function CrmClient() {
   const [matchResults, setMatchResults]   = useState<CrmThread[]>([]);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matching, setMatching]           = useState(false);
+  const [promoting, setPromoting]         = useState(false);
+  const [unmatchedCompose, setUnmatchedCompose] = useState("");
+  const [unmatchedSending, setUnmatchedSending] = useState(false);
+  const [unmatchedSendErr, setUnmatchedSendErr] = useState<string | null>(null);
+  const [unmatchedSendOk, setUnmatchedSendOk]   = useState(false);
 
   // ── Filters state ──────────────────────────────────────────────────────────
   const [filters, setFilters]       = useState<OutreachCrmFilter[]>([]);
