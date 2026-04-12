@@ -156,7 +156,7 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   } catch (err) {
     // Idempotent — if already registered (retry scenario), continue
     const msg = err instanceof Error ? err.message.toLowerCase() : "";
-    if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("taken") && !msg.includes("unable to register")) throw err;
+    if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("taken") && !msg.includes("unable to register") && !msg.includes("not available")) throw err;
   }
 }
 
