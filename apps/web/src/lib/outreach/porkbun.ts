@@ -162,7 +162,10 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
     const pricing = await getPricing();
     const tldData = pricing[tld];
     if (tldData) {
-      costPennies = Math.round(parseFloat(tldData.registration) * 100);
+      // Cost = registration + ICANN fee (if applicable)
+      const regPrice = parseFloat(tldData.registration);
+      const icannFee = tldData.icann ? parseFloat(tldData.icann) : 0;
+      costPennies = Math.round((regPrice + icannFee) * 100);
     } else {
       throw new Error("TLD not in pricing response");
     }
