@@ -44,9 +44,7 @@ export async function GET(req: NextRequest) {
       .eq("is_filtered", false)
       .order("received_at", { ascending: false })
       .limit(1)
-      .single()
-      .then(r => r)
-      .catch(() => ({ data: null }));
+      .maybeSingle();
 
     const { data: notes } = await db
       .from("crm_notes")
