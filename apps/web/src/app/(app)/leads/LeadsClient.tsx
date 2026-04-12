@@ -24,6 +24,7 @@ export default function LeadsClient() {
   const [newName, setNewName]     = useState("");
   const [creating, setCreating]   = useState(false);
   const [importing, setImporting] = useState<string | null>(null); // listId
+  const [importMode, setImportMode] = useState<ImportMode>("csv");
   const [csvFile, setCsvFile]     = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping]     = useState<Partial<Record<string, string>>>({});
@@ -31,6 +32,13 @@ export default function LeadsClient() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Campaign import state
+  const [campaigns, setCampaigns]           = useState<Campaign[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [validOnly, setValidOnly]           = useState(true);
+  const [campaignImporting, setCampaignImporting] = useState(false);
 
   useEffect(() => { load(); }, []);
 
