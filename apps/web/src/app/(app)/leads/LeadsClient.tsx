@@ -220,53 +220,103 @@ export default function LeadsClient() {
                 </div>
               </div>
 
-              {/* CSV import panel */}
+              {/* Import panel */}
               {importing === list.id && (
                 <div className="mt-2 bg-white/3 border border-white/8 rounded-xl p-5 space-y-4">
-                  <p className="text-white/60 text-sm font-medium">Import CSV into "{list.name}"</p>
-                  <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="text-sm text-white/50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/70 file:cursor-pointer" />
-                  {csvHeaders.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-white/60 text-sm font-medium">Import into &quot;{list.name}&quot;</p>
+                    {/* Mode tabs */}
+                    <div className="flex gap-1 bg-white/6 rounded-lg p-0.5">
+                      {([["csv", "CSV Upload"], ["campaign", "From Campaign"]] as const).map(([m, label]) => (
+                        <button key={m} onClick={() => setImportMode(m)}
+                          className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${importMode === m ? "bg-white/12 text-white" : "text-white/30 hover:text-white/60"}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── CSV mode ── */}
+                  {importMode === "csv" && (
                     <>
-                      <div className="flex items-center justify-between">
-                        <p className="text-white/40 text-xs">Map CSV columns to contact fields:</p>
-                        <p className="text-white/25 text-[10px]">Custom variables become <code className="bg-white/8 px-1 rounded">{`{{var_name}}`}</code> in emails</p>
-                      </div>
-                      <div className="space-y-2">
-                        {csvHeaders.map((h) => {
-                          const val = mapping[h] ?? "";
-                          const isCustom = val === CUSTOM_SENTINEL || val.startsWith("custom:");
-                          return (
-                            <div key={h} className="flex items-center gap-2">
-                              <span className="text-white/60 text-xs w-32 truncate flex-shrink-0" title={h}>{h}</span>
-                              <span className="text-white/20 text-xs">→</span>
-                              <select
-                                value={isCustom ? CUSTOM_SENTINEL : val}
-                                onChange={(e) => handleMappingChange(h, e.target.value)}
-                                className="bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none min-w-0 flex-1"
-                              >
-                                <option value="">— skip —</option>
-                                {DB_FIELDS.map((f) => <option key={f} value={f}>{f}</option>)}
-                                <option value={CUSTOM_SENTINEL}>Custom variable…</option>
-                              </select>
-                              {isCustom && (
-                                <input
-                                  value={customNames[h] ?? ""}
-                                  onChange={(e) => handleCustomName(h, e.target.value)}
-                                  placeholder="var_name"
-                                  className="bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none w-28 flex-shrink-0"
-                                />
-                              )}
-                              {val && val !== CUSTOM_SENTINEL && (
-                                <span className="text-white/25 text-[10px] flex-shrink-0">
-                                  {val.startsWith("custom:") ? `{{${val.slice(7)}}}` : `{{${val}}}`}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <button onClick={() => handleImport(list.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">Upload & Import</button>
+                      <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="text-sm text-white/50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/70 file:cursor-pointer" />
+                      {csvHeaders.length > 0 && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white/40 text-xs">Map CSV columns to contact fields:</p>
+                            <p className="text-white/25 text-[10px]">Custom variables become <code className="bg-white/8 px-1 rounded">{`{{var_name}}`}</code> in emails</p>
+                          </div>
+                          <div className="space-y-2">
+                            {csvHeaders.map((h) => {
+                              const val = mapping[h] ?? "";
+                              const isCustom = val === CUSTOM_SENTINEL || val.startsWith("custom:");
+                              return (
+                                <div key={h} className="flex items-center gap-2">
+                                  <span className="text-white/60 text-xs w-32 truncate flex-shrink-0" title={h}>{h}</span>
+                                  <span className="text-white/20 text-xs">→</span>
+                                  <select value={isCustom ? CUSTOM_SENTINEL : val} onChange={(e) => handleMappingChange(h, e.target.value)} className="bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none min-w-0 flex-1">
+                                    <option value="">— skip —</option>
+                                    {DB_FIELDS.map((f) => <option key={f} value={f}>{f}</option>)}
+                                    <option value={CUSTOM_SENTINEL}>Custom variable…</option>
+                                  </select>
+                                  {isCustom && (
+                                    <input value={customNames[h] ?? ""} onChange={(e) => handleCustomName(h, e.target.value)} placeholder="var_name"
+                                      className="bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none w-28 flex-shrink-0" />
+                                  )}
+                                  {val && val !== CUSTOM_SENTINEL && (
+                                    <span className="text-white/25 text-[10px] flex-shrink-0">
+                                      {val.startsWith("custom:") ? `{{${val.slice(7)}}}` : `{{${val}}}`}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button onClick={() => handleImport(list.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">Upload & Import</button>
+                        </>
+                      )}
                     </>
+                  )}
+
+                  {/* ── Campaign mode ── */}
+                  {importMode === "campaign" && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-white/40 text-xs mb-1.5">Select campaign</label>
+                        {campaignsLoading ? (
+                          <p className="text-white/30 text-xs">Loading campaigns…</p>
+                        ) : campaigns.length === 0 ? (
+                          <p className="text-white/30 text-xs">No campaigns found. <Link href="/lead-campaigns" className="text-blue-400 underline">Create one first.</Link></p>
+                        ) : (
+                          <select value={selectedCampaignId} onChange={e => setSelectedCampaignId(e.target.value)}
+                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50">
+                            <option value="">— Choose a campaign —</option>
+                            {campaigns.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}{c.lead_count ? ` (${c.lead_count} leads)` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Filter option */}
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <div onClick={() => setValidOnly(v => !v)}
+                          className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${validOnly ? "bg-blue-600" : "bg-white/15"}`}>
+                          <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${validOnly ? "translate-x-4" : "translate-x-0"}`} />
+                        </div>
+                        <span className="text-white/60 text-xs">Valid emails only (recommended)</span>
+                      </label>
+
+                      <button
+                        onClick={() => handleCampaignImport(list.id)}
+                        disabled={!selectedCampaignId || campaignImporting}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                      >
+                        {campaignImporting ? "Adding leads…" : "Add to this list"}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
