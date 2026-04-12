@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const mailboxCount = mailbox_prefixes.length;
+  const cfSuffix    = connect_only && cf_auto ? "&cf=1" : "";
   const successBase = connect_only ? `${appUrl}/inboxes/new/connect-domain` : `${appUrl}/inboxes/new/domain`;
 
   // ── Insert one pending record per domain ─────────────────────────────────────
