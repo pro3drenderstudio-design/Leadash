@@ -157,6 +157,14 @@ export interface OutreachSend {
   created_at: string;
 }
 
+export interface ReplyAttachment {
+  name:     string;
+  mimeType: string;
+  size:     number;
+  path:     string;
+  url:      string;
+}
+
 export interface OutreachReply {
   id: string;
   workspace_id: string;
@@ -174,6 +182,7 @@ export interface OutreachReply {
   ai_confidence: number | null;
   is_filtered: boolean;
   filter_reason: string | null;
+  attachments: ReplyAttachment[];
   created_at: string;
   inbox?: { id: string; label: string | null; email_address: string };
 }
