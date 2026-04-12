@@ -197,17 +197,17 @@ export default function ConnectDomainPage() {
       {/* Step indicators */}
       {step !== "done" && (
         <div className="flex items-center gap-2 mb-8">
-          {(["configure", "dns", "verifying"] as Step[]).map((s, i) => (
+          {(["configure", "payment", "dns", "verifying"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                 step === s ? "bg-blue-600 text-white" :
-                (["configure","dns","verifying"].indexOf(step) > i) ? "bg-green-600 text-white" :
+                (["configure","payment","dns","verifying"].indexOf(step) > i) ? "bg-green-600 text-white" :
                 "bg-white/10 text-white/30"
               }`}>{i + 1}</div>
               <span className={`text-xs ${step === s ? "text-white" : "text-white/30"}`}>
-                {s === "configure" ? "Configure" : s === "dns" ? "Add DNS records" : "Verify"}
+                {s === "configure" ? "Configure" : s === "payment" ? "Subscribe" : s === "dns" ? "DNS records" : "Verify"}
               </span>
-              {i < 2 && <span className="text-white/15 mx-1">→</span>}
+              {i < 3 && <span className="text-white/15 mx-1">→</span>}
             </div>
           ))}
         </div>
