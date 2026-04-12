@@ -17,8 +17,10 @@ export async function POST(
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const { body } = await req.json() as { body: string };
-  if (!body?.trim()) return NextResponse.json({ error: "body is required" }, { status: 400 });
+  const payload = await req.json() as { body: string; html_body?: string };
+  const body = payload.body ?? "";
+  const htmlBodyRaw = payload.html_body;
+  if (!body?.trim() && !htmlBodyRaw?.trim()) return NextResponse.json({ error: "body is required" }, { status: 400 });
 
   // Fetch enrollment + lead
   const { data: enrollment } = await db
