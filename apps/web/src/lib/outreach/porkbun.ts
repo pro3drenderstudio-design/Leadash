@@ -117,11 +117,21 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
   _pricingCache = null;
   const pricing = await getPricing();
 
+  console.log(`[porkbun] checkDomains: fetched pricing for ${Object.keys(pricing).length} TLDs`);
+
   const results = await Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
       const tld = domain.split(".").slice(1).join(".");
-      const tldPrice = pricing[tld]?.registration;
-      const price = tldPrice ? parseFloat(tldPrice) : (FALLBACK_PRICES[tld] ?? 12.00);
+      const tldData = pricing[tld];
+      const tldPrice = tldData?.registration;
+      const icannFee = tldData?.icann ? parseFloat(tldData.icann) : 0;
+      const price = tldPrice ? (parseFloat(tldPrice) + icannFee) : (FALLBACK_PRICES[tld] ?? 12.00);
+
+      if (tldData) {
+        console.log(`[porkbun] ${domain}: registration=${tldPrice}, icann=${icannFee}, total=${price}`);
+      } else {
+        console.log(`[porkbun] ${domain}: using fallback price=${price} (TLD not in pricing response)`);
+      }
 
       // Cloudflare DoH: Status 3 = NXDOMAIN = domain not registered = available
       let available = false;
