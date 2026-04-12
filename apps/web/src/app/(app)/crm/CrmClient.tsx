@@ -87,18 +87,31 @@ export default function CrmClient() {
   const [savingNote, setSavingNote]     = useState(false);
   const [statusDropdown, setStatusDropdown] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [suggestion, setSuggestion]     = useState<string | null>(null);
   const [suggesting, setSuggesting]     = useState(false);
-  const [replyCollapsed, setReplyCollapsed] = useState(false);
-  const [sentCollapsed, setSentCollapsed]   = useState(false);
-  const [composeBody, setComposeBody]       = useState("");
-  const [sending, setSending]               = useState(false);
-  const [sendError, setSendError]           = useState<string | null>(null);
-  const [sendSuccess, setSendSuccess]       = useState(false);
+  const [composeBody, setComposeBody]   = useState("");
+  const [composeHtml, setComposeHtml]   = useState("");
+  const [sending, setSending]           = useState(false);
+  const [sendError, setSendError]       = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess]   = useState(false);
   const [triggering, setTriggering]     = useState(false);
   const [triggerMsg, setTriggerMsg]     = useState<string | null>(null);
   const [pollDetails, setPollDetails]   = useState<Array<{ email: string; fetched: number; matched: number; unmatched: number; error?: string }>>([]);
   const [showPollDetails, setShowPollDetails] = useState(false);
+  // Conversation
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [convNotes, setConvNotes]       = useState<CrmNote[]>([]);
+  const [convLoading, setConvLoading]   = useState(false);
+  // Notes drawer
+  const [showNotesDrawer, setShowNotesDrawer] = useState(false);
+  const [noteBody, setNoteBody]         = useState("");
+  const [savingNote, setSavingNote]     = useState(false);
+  // Compose rich text
+  const composeRef  = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments]   = useState<File[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showLinkDialog, setShowLinkDialog]   = useState(false);
+  const [linkUrl, setLinkUrl]           = useState("");
   const noteRef   = useRef<HTMLTextAreaElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
