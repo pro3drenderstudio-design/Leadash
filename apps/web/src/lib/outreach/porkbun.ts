@@ -146,13 +146,15 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   // The priceUsd param (from checkout) is used as a fallback only.
   const tld = domain.split(".").slice(1).join(".");
   let costPennies: number;
+  let minYears: number;
   try {
     // Force a fresh lookup — bypass the process-level cache
     _pricingCache = null;
     const pricing = await getPricing();
-    const tldPrice = pricing[tld]?.registration;
-    if (tldPrice) {
-      costPennies = Math.round(parseFloat(tldPrice) * 100);
+    const tldData = pricing[tld];
+    if (tldData) {
+      costPennies = Math.round(parseFloat(tldData.registration) * 100);
+      minYears = tldData.minYears ?? 1;
     } else {
       throw new Error("TLD not in pricing response");
     }
@@ -160,13 +162,14 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
     // Fall back to the price stored at checkout, then hardcoded fallback
     const fallback = priceUsd != null ? Number(priceUsd) : (FALLBACK_PRICES[tld] ?? 12.00);
     costPennies = Math.round(fallback * 100);
+    minYears = 1;
   }
 
   await call(`/domain/create/${domain}`, {
-    years:          1,
+    years:          minYears,
     autorenew:      0,
     privacy:        1,
-    cost:           costPennies,
+    cost:           costPennies * minYears,
     agreeToTerms:   "yes",
   });
 }
