@@ -493,6 +493,15 @@ export default function ConnectDomainPage() {
         </div>
       )}
 
+      {/* ── Post-payment loading ─────────────────────────────────────────────── */}
+      {loading && step === "configure" && searchParams.get("connect") === "1" && (
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          <p className="text-white font-medium">Configuring domain…</p>
+          <p className="text-white/40 text-sm">Registering with SES and generating DNS records</p>
+        </div>
+      )}
+
       {/* ── Step 3: Verifying ─────────────────────────────────────────────────── */}
       {step === "verifying" && (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
