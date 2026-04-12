@@ -42,6 +42,49 @@ export default function LeadsClient() {
 
   useEffect(() => { load(); }, []);
 
+  async function loadCampaigns() {
+    setCampaignsLoading(true);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res = await fetch("/api/lead-campaigns", { headers: { "x-workspace-id": wsId } });
+      const data = await res.json();
+      setCampaigns(Array.isArray(data) ? data : []);
+    } catch { /* silent */ } finally {
+      setCampaignsLoading(false);
+    }
+  }
+
+  function openImport(listId: string) {
+    setImporting(importing === listId ? null : listId);
+    setImportMode("csv");
+    setCsvFile(null); setCsvHeaders([]); setImportResult(null); setSelectedCampaignId("");
+    if (campaigns.length === 0) loadCampaigns();
+  }
+
+  async function handleCampaignImport(listId: string) {
+    if (!selectedCampaignId || !listId) return;
+    setCampaignImporting(true);
+    setImportResult(null);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res = await fetch(`/api/lead-campaigns/${selectedCampaignId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body: JSON.stringify({ list_id: listId, valid_only: validOnly }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Export failed");
+      setImportResult(`Added ${data.exported} leads (${data.skipped_duplicate ?? 0} duplicates skipped)`);
+      setSelectedCampaignId("");
+      setImporting(null);
+      load();
+    } catch (err) {
+      setImportResult(`Error: ${err instanceof Error ? err.message : "Failed"}`);
+    } finally {
+      setCampaignImporting(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setLists(await getLists());
