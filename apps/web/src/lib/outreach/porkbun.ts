@@ -159,7 +159,7 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
     const tldData = pricing[tld];
     if (tldData) {
       costPennies = Math.round(parseFloat(tldData.registration) * 100);
-      minYears = tldData.minYears ?? 1;
+      minYears = tldData.minperiod ? parseInt(tldData.minperiod, 10) : 1;
     } else {
       throw new Error("TLD not in pricing response");
     }
