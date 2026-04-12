@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
         ],
         add_invoice_items:   addInvoiceItems,
         subscription_data:   { metadata: { domain_record_ids: domainIdsParam, workspace_id: workspaceId } },
-        success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}`,
+        success_url: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}&session_id={CHECKOUT_SESSION_ID}${connect_only ? "&connect=1" : ""}${cfSuffix}`,
         cancel_url:  `${appUrl}/inboxes/new`,
         metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
       });
