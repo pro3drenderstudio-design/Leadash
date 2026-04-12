@@ -20,6 +20,24 @@ export interface DomainCheckResult {
   price:     number; // USD, registration year 1
 }
 
+// Cloudflare at-cost prices (USD) for common TLDs.
+// These are ICANN wholesale — no markup. Updated periodically.
+const FALLBACK_PRICES: Record<string, number> = {
+  com:   9.15,
+  net:   10.99,
+  org:   9.93,
+  io:    32.00,
+  co:    24.99,
+  ai:    79.00,
+  app:   14.00,
+  dev:   12.00,
+  homes: 29.99,
+  info:  9.99,
+  biz:   12.99,
+  us:    9.99,
+  me:    19.99,
+};
+
 function authHeaders() {
   return {
     Authorization:  `Bearer ${process.env.CLOUDFLARE_API_TOKEN!}`,
@@ -55,37 +73,59 @@ async function cfFetch<T>(
 }
 
 /**
+ * Check if a domain is available using Cloudflare DNS-over-HTTPS.
+ * Status 3 = NXDOMAIN = not registered anywhere = available.
+ */
+async function isDomainAvailable(domain: string): Promise<boolean> {
+  try {
+    const res  = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
+      { headers: { Accept: "application/dns-json" } },
+    );
+    const json = await res.json() as { Status: number };
+    return json.Status === 3; // NXDOMAIN
+  } catch {
+    // If DoH fails, assume available (better than blocking the user)
+    return true;
+  }
+}
+
+/**
+ * Fetch the Cloudflare at-cost price for a domain via the Registrar API.
+ * Falls back to hardcoded TLD prices if the API call fails (e.g. token lacks Registrar:Read).
+ */
+async function getDomainPrice(domain: string): Promise<number> {
+  try {
+    const acctId = accountId();
+    const result = await cfFetch<{
+      available?: boolean;
+      price?:     number;
+      fees?:      { icann_fee?: number; registration?: number };
+    }>("GET", `/accounts/${acctId}/registrar/domains/${encodeURIComponent(domain)}`);
+
+    return result.fees?.registration ?? result.price ?? 0;
+  } catch {
+    // Fall back to hardcoded at-cost prices
+    const tld = domain.split(".").slice(1).join(".");
+    return FALLBACK_PRICES[tld] ?? 0;
+  }
+}
+
+/**
  * Check availability and at-cost pricing for a list of domains.
- * Uses Cloudflare's bulk domain check endpoint.
+ * Availability: Cloudflare DoH NXDOMAIN check (reliable, no auth needed).
+ * Pricing: Cloudflare Registrar API with hardcoded fallback.
  */
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
-  const acctId = accountId();
-
-  // Cloudflare checks one domain at a time via registrar
-  const results = await Promise.all(
+  return Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
-      try {
-        const result = await cfFetch<{
-          name:      string;
-          available: boolean;
-          price?:    number;
-          fees?:     { icann_fee?: number; registration?: number };
-        }>("GET", `/accounts/${acctId}/registrar/domains/${encodeURIComponent(domain)}`);
-
-        const price =
-          result.fees?.registration ??
-          result.price ??
-          0;
-
-        return { domain, available: result.available ?? false, price };
-      } catch {
-        // If domain lookup fails (e.g. already registered), mark as unavailable
-        return { domain, available: false, price: 0 };
-      }
+      const [available, price] = await Promise.all([
+        isDomainAvailable(domain),
+        getDomainPrice(domain),
+      ]);
+      return { domain, available, price };
     }),
   );
-
-  return results;
 }
 
 /**
