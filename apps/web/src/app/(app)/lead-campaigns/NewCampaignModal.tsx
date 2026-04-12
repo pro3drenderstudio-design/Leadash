@@ -918,14 +918,14 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       </div>
                     </div>
                     <input
-                      type="range" min={10} max={1000} step={10}
-                      value={form.totalResults}
+                      type="range" min={500} max={50_000} step={500}
+                      value={Math.max(form.totalResults, 500)}
                       onChange={e => set("totalResults", parseInt(e.target.value))}
                       className="w-full accent-blue-500"
                     />
                     <div className="flex justify-between text-white/30 text-xs mt-1">
-                      <span>10</span>
-                      <span>1,000</span>
+                      <span>500</span>
+                      <span>50,000</span>
                     </div>
                     {!canAfford && (
                       <p className="text-xs text-red-400 mt-1.5">
