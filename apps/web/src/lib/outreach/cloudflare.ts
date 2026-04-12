@@ -50,6 +50,25 @@ async function cfFetch<T>(
 }
 
 /**
+ * Add a domain as a new zone in Cloudflare.
+ * Requires CLOUDFLARE_ACCOUNT_ID env var.
+ * Returns the zone ID and the Cloudflare nameservers to set at the registrar.
+ */
+export async function addZone(domain: string): Promise<{ zoneId: string; nameservers: string[] }> {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) throw new Error("CLOUDFLARE_ACCOUNT_ID is not configured");
+
+  const result = await cfFetch<{ id: string; name_servers: string[] }>("POST", "/zones", {
+    name:        domain,
+    account:     { id: accountId },
+    jump_start:  false,
+    type:        "full",
+  });
+
+  return { zoneId: result.id, nameservers: result.name_servers };
+}
+
+/**
  * Get the Cloudflare Zone ID for a domain.
  * If CLOUDFLARE_ZONE_ID is set, uses that directly.
  * Otherwise looks up by domain name.
