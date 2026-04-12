@@ -50,8 +50,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name and mode are required" }, { status: 400 });
   }
 
-  // Check credit balance
-  const costPerLead = CREDIT_COSTS[mode as keyof typeof CREDIT_COSTS] ?? 1;
+  // Check credit balance — compute dynamically based on which operations are enabled
+  const costPerLead =
+    (mode === "scrape" || mode === "full_suite" ? CREDIT_COSTS.scrape : 0) +
+    (mode === "verify_personalize" || mode === "full_suite" ? CREDIT_COSTS.verify : 0) +
+    ((mode === "verify_personalize" || mode === "full_suite") && personalize_enabled
+      ? CREDIT_COSTS.ai_personalize
+      : 0);
   const creditsNeeded = max_leads * costPerLead;
 
   const { data: workspace } = await db
