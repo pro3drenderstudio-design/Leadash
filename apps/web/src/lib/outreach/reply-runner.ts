@@ -250,12 +250,19 @@ async function ingestMessages(
 
   const msgIds = messages.map(m => m.messageId).filter(Boolean);
   const { data: existing } = msgIds.length
-    ? await db.from("outreach_replies").select("message_id").in("message_id", msgIds)
+    ? await db.from("outreach_replies").select("id, message_id, body_text").in("message_id", msgIds)
     : { data: [] };
-  const seenIds = new Set((existing ?? []).map(r => r.message_id));
+  const seenMap = new Map((existing ?? []).map(r => [r.message_id, r]));
 
   for (const msg of messages) {
-    if (msg.messageId && seenIds.has(msg.messageId)) continue;
+    const existingRow = msg.messageId ? seenMap.get(msg.messageId) : undefined;
+    // If already seen but body was null and we now have body, backfill it
+    if (existingRow) {
+      if (!existingRow.body_text && msg.bodyText) {
+        await db.from("outreach_replies").update({ body_text: msg.bodyText }).eq("id", existingRow.id);
+      }
+      continue;
+    }
 
     if (msg.warmupId) {
       await db.from("outreach_warmup_sends").update({ replied_at: new Date().toISOString() })
