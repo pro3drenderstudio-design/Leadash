@@ -294,10 +294,10 @@ export async function fetchNewMessages(
       if (!msgId) continue;
 
       const msg = await gmail.users.messages.get({
-        userId: "me",
-        id:     msgId,
-        format: "metadata",
-        metadataHeaders: ["From", "In-Reply-To", "References", "X-LD-Ref"],
+        userId:          "me",
+        id:              msgId,
+        format:          "full",
+        metadataHeaders: ["From", "In-Reply-To", "References", "X-LD-Ref", "Subject"],
       });
 
       const headers = msg.data.payload?.headers ?? [];
@@ -308,8 +308,34 @@ export async function fetchNewMessages(
       const warmupId  = getHeader("X-LD-Ref");
       const fromRaw   = getHeader("From") ?? "";
       const fromEmail = fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw;
+      const subject   = getHeader("Subject");
 
       if (!inReplyTo && !warmupId) continue; // Neither reply nor warmup
+
+      // Extract body (same logic as fetchRecentMessages)
+      const extractBodyPart = (part: typeof msg.data.payload, preferHtml = false): string | null => {
+        if (!part) return null;
+        const mt = part.mimeType ?? "";
+        if (!preferHtml && mt === "text/plain" && part.body?.data) {
+          return Buffer.from(part.body.data, "base64url").toString("utf-8");
+        }
+        if (preferHtml && mt === "text/html" && part.body?.data) {
+          const html = Buffer.from(part.body.data, "base64url").toString("utf-8");
+          return html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+            .replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n")
+            .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+        }
+        for (const sub of part.parts ?? []) {
+          const found = extractBodyPart(sub, preferHtml);
+          if (found) return found;
+        }
+        return null;
+      };
+      const bodyText = extractBodyPart(msg.data.payload ?? undefined)
+        ?? extractBodyPart(msg.data.payload ?? undefined, true)
+        ?? null;
 
       messages.push({
         messageId:  msgId,
@@ -317,6 +343,8 @@ export async function fetchNewMessages(
         inReplyTo,
         fromEmail,
         warmupId,
+        subject,
+        bodyText,
       });
     }
   }
