@@ -671,9 +671,12 @@ export default function CrmClient() {
                   <div className="min-w-0 flex-1">
                     <h2 className="text-white font-semibold text-base">{[selected.lead.first_name, selected.lead.last_name].filter(Boolean).join(" ") || selected.lead.email}</h2>
                     <p className="text-white/40 text-xs">{selected.lead.email}</p>
-                    {(selected.lead.company || selected.lead.title) && (
-                      <p className="text-white/30 text-xs mt-0.5">{[selected.lead.title, selected.lead.company].filter(Boolean).join(" at ")}</p>
-                    )}
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {(selected.lead.company || selected.lead.title) && (
+                        <p className="text-white/30 text-xs">{[selected.lead.title, selected.lead.company].filter(Boolean).join(" at ")}</p>
+                      )}
+                      <p className="text-white/20 text-xs">{selected.campaign?.name ?? "Direct inbound"} · {timeAgo(selected.replied_at)}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Notes drawer button */}
