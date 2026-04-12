@@ -131,12 +131,27 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  * Register a domain for 1 year.
  * Porkbun uses the account's contact info and enables free WHOIS privacy automatically.
  * The registrant parameter is accepted for interface compatibility but not forwarded.
+ * priceUsd is required — Porkbun's API expects cost in cents (integer) as a sanity check.
  */
-export async function purchaseDomain(domain: string, _registrant?: RegistrantContact): Promise<void> {
+export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
+  // Porkbun requires `cost` as an integer (cents) to confirm the expected charge.
+  // If we don't know the price, look it up from the pricing API.
+  let priceCents: number;
+  if (priceUsd !== undefined) {
+    priceCents = Math.round(priceUsd * 100);
+  } else {
+    const pricing = await getPricing();
+    const tld = domain.split(".").slice(1).join(".");
+    const tldPrice = pricing[tld]?.registration;
+    const resolved = tldPrice ? parseFloat(tldPrice) : (FALLBACK_PRICES[tld] ?? 12.00);
+    priceCents = Math.round(resolved * 100);
+  }
+
   await call(`/domain/create/${domain}`, {
     years:     1,
     autorenew: 0,
     privacy:   1, // enable free WHOIS privacy
+    cost:      priceCents,
   });
 }
 
