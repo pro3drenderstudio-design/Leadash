@@ -683,7 +683,7 @@ export default function BuyDomainPage() {
                 Try again
               </Link>
               <a
-                href="mailto:support@leadash.io"
+                href="mailto:support@leadash.com"
                 className="text-white/40 hover:text-white/70 text-sm transition-colors"
               >
                 Contact support
