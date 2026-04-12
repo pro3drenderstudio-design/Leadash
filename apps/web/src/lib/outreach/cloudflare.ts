@@ -105,6 +105,133 @@ export async function publishDnsRecords(domain: string, records: DnsRecord[]): P
 }
 
 /**
+ * Set up a permanent 301 redirect for all traffic on the domain's root.
+ * Adds a proxied A record (required for Cloudflare to intercept HTTP requests)
+ * and creates/replaces a Redirect Rule in the zone's ruleset.
+ *
+ * redirectUrl example: "https://mycompany.com"
+ */
+export async function setWebRedirect(domain: string, redirectUrl: string): Promise<void> {
+  const zoneId = await getZoneId(domain);
+
+  // 1. Ensure there's a proxied A record for @ so Cloudflare can intercept web traffic.
+  //    192.0.2.1 is a documentation/dummy IP — Cloudflare proxies it before it reaches any real server.
+  const existing = await cfFetch<{ id: string; type: string; name: string; proxied?: boolean }[]>(
+    "GET",
+    `/zones/${zoneId}/dns_records?type=A&per_page=100`,
+  );
+  const apexA = (existing ?? []).find(r => r.name === domain || r.name === `${domain}.`);
+  if (!apexA) {
+    await cfFetch("POST", `/zones/${zoneId}/dns_records`, {
+      type:    "A",
+      name:    domain,
+      content: "192.0.2.1",
+      ttl:     1,
+      proxied: true,
+    });
+  } else if (!apexA.proxied) {
+    await cfFetch("PUT", `/zones/${zoneId}/dns_records/${apexA.id}`, {
+      type:    "A",
+      name:    domain,
+      content: "192.0.2.1",
+      ttl:     1,
+      proxied: true,
+    });
+  }
+
+  // 2. Create/replace redirect ruleset for the zone.
+  //    Uses the http_request_dynamic_redirect phase (replaces deprecated Page Rules).
+  await cfFetch("PUT", `/zones/${zoneId}/rulesets/phases/http_request_dynamic_redirect/entrypoint`, {
+    rules: [
+      {
+        description: `Redirect ${domain} to ${redirectUrl}`,
+        expression:  "true",
+        action:      "redirect",
+        action_parameters: {
+          from_value: {
+            status_code:           301,
+            target_url:            { value: redirectUrl },
+            preserve_query_string: true,
+          },
+        },
+        enabled: true,
+      },
+    ],
+  });
+}
+
+/**
+ * Configure Cloudflare Email Routing to forward all email on the domain
+ * to the specified address. Cloudflare will send a one-time verification
+ * email to the destination address if it hasn't been verified before.
+ *
+ * This replaces the SES inbound MX record with Cloudflare's email routing MX records.
+ * Outbound email continues to use SES SMTP — only inbound routing changes.
+ */
+export async function setEmailForwarding(domain: string, forwardTo: string): Promise<void> {
+  const zoneId = await getZoneId(domain);
+
+  // Enable email routing on the zone (idempotent)
+  await cfFetch("POST", `/zones/${zoneId}/email/routing/enable`, {}).catch(() => {
+    // Already enabled — ignore "already enabled" errors
+  });
+
+  // Add the destination address (Cloudflare will email them a verification link)
+  await cfFetch("POST", `/zones/${zoneId}/email/routing/addresses`, {
+    email: forwardTo,
+  }).catch(() => {
+    // Ignore "already exists" errors — destination may already be verified
+  });
+
+  // Replace the existing catch-all rule (or create one)
+  const existingRules = await cfFetch<{ id?: string; matchers: { type: string }[] }[]>(
+    "GET",
+    `/zones/${zoneId}/email/routing/rules`,
+  ).catch(() => [] as { id?: string; matchers: { type: string }[] }[]);
+
+  const catchAll = (existingRules ?? []).find(r => r.matchers?.some(m => m.type === "all"));
+
+  const ruleBody = {
+    name:     "Forward all replies",
+    enabled:  true,
+    matchers: [{ type: "all" }],
+    actions:  [{ type: "forward", value: [forwardTo] }],
+  };
+
+  if (catchAll?.id) {
+    await cfFetch("PUT", `/zones/${zoneId}/email/routing/rules/${catchAll.id}`, ruleBody);
+  } else {
+    await cfFetch("POST", `/zones/${zoneId}/email/routing/rules`, ruleBody);
+  }
+
+  // Update MX records to point to Cloudflare Email Routing instead of SES inbound.
+  // SES outbound (SMTP) is unaffected — only inbound routing changes.
+  const allRecords = await cfFetch<{ id: string; type: string }[]>(
+    "GET",
+    `/zones/${zoneId}/dns_records?type=MX&per_page=100`,
+  );
+  for (const r of allRecords ?? []) {
+    await cfFetch("DELETE", `/zones/${zoneId}/dns_records/${r.id}`);
+  }
+
+  const cfEmailMx = [
+    { name: "route1.mx.cloudflare.net", priority: 16 },
+    { name: "route2.mx.cloudflare.net", priority: 20 },
+    { name: "route3.mx.cloudflare.net", priority: 23 },
+  ];
+  for (const mx of cfEmailMx) {
+    await cfFetch("POST", `/zones/${zoneId}/dns_records`, {
+      type:     "MX",
+      name:     domain,
+      content:  mx.name,
+      priority: mx.priority,
+      ttl:      1,
+      proxied:  false,
+    });
+  }
+}
+
+/**
  * Build the standard set of mail DNS records for a domain + SES DKIM tokens.
  * sesDkimTokens: array of 3 tokens returned by AWS SES verifyDomainDkim()
  */
