@@ -14,7 +14,9 @@ interface DnsRecord {
   priority?: number;
 }
 
-const WARMUP_DAYS = 21;
+const WARMUP_DAYS     = 21;
+const INBOX_PRICE_USD = 2;
+const NGN_PER_USD     = 1600;
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).catch(() => {});
