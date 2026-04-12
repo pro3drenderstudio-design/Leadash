@@ -267,8 +267,9 @@ export async function setEmailForwarding(domain: string, forwardTo: string): Pro
  * sesDkimTokens: array of 3 tokens returned by AWS SES verifyDomainDkim()
  */
 export function buildMailDnsRecords(domain: string, sesDkimTokens: string[]): DnsRecord[] {
+  const region = process.env.AWS_REGION ?? "us-east-1";
   const records: DnsRecord[] = [
-    // SPF
+    // SPF on root
     {
       type:  "TXT",
       name:  "@",
@@ -280,12 +281,25 @@ export function buildMailDnsRecords(domain: string, sesDkimTokens: string[]): Dn
       name:  "_dmarc",
       value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}; pct=100`,
     },
-    // MX — point to SES inbound (for reply detection via IMAP)
+    // MX — SES inbound for reply detection
     {
       type:     "MX",
       name:     "@",
-      value:    `inbound-smtp.${process.env.AWS_REGION ?? "us-east-1"}.amazonaws.com`,
+      value:    `inbound-smtp.${region}.amazonaws.com`,
       priority: 10,
+    },
+    // Custom MAIL FROM subdomain — required for SPF DMARC alignment
+    // SES uses mail.{domain} as the envelope sender (Return-Path)
+    {
+      type:     "MX",
+      name:     "mail",
+      value:    `feedback-smtp.${region}.amazonses.com`,
+      priority: 10,
+    },
+    {
+      type:  "TXT",
+      name:  "mail",
+      value: "v=spf1 include:amazonses.com ~all",
     },
   ];
 
