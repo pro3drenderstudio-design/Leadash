@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
           warmup_enabled:       true,
           warmup_target_daily:  30,
           warmup_ramp_per_week: 3,
+          warmup_ends_at:       warmupEndsAt,
           first_name:           domainRecord.first_name ?? null,
           last_name:            domainRecord.last_name  ?? null,
         });
