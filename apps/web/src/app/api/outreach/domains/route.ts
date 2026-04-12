@@ -15,3 +15,26 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
 }
+
+export async function DELETE(req: NextRequest) {
+  const auth = await requireWorkspace(req);
+  if (!auth.ok) return auth.res;
+  const { workspaceId, db } = auth;
+
+  const { id } = await req.json() as { id: string };
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Verify ownership
+  const { data: domain } = await db
+    .from("outreach_domains")
+    .select("id")
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .single();
+
+  if (!domain) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await db.from("outreach_domains").delete().eq("id", id);
+
+  return NextResponse.json({ ok: true });
+}
