@@ -636,6 +636,53 @@ function OutreachTab() {
         </div>
       </Section>
 
+      {/* Default Inbox Profile Image */}
+      <Section title="Default Inbox Profile Image" description="Applied to new inboxes that don't have their own image. Helps build sender trust.">
+        <div className="flex items-center gap-5">
+          {/* Avatar preview */}
+          <div className="relative flex-shrink-0 group">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-white/8 border border-white/10 flex items-center justify-center">
+              {defaultImage
+                ? <img src={defaultImage} alt="Default inbox" className="w-full h-full object-cover" />
+                : <svg className="w-7 h-7 text-white/25" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+              }
+            </div>
+            {/* Hover overlay */}
+            <button
+              onClick={() => { const el = document.getElementById("default-profile-upload"); el?.click(); }}
+              className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+            </button>
+          </div>
+          {/* Info + button */}
+          <div className="flex-1 min-w-0">
+            <p className="text-white/60 text-sm">
+              {defaultImage ? "Default image set" : "No default image yet"}
+            </p>
+            <p className="text-white/30 text-xs mt-0.5">JPG, PNG, WebP or GIF · max 2 MB</p>
+            <label
+              htmlFor="default-profile-upload"
+              className="mt-2.5 inline-flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded-lg bg-white/8 hover:bg-white/12 border border-white/10 text-xs text-white/70 font-medium transition-colors"
+            >
+              {uploadingImage
+                ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg> Uploading…</>
+                : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg> {defaultImage ? "Change image" : "Upload image"}</>
+              }
+            </label>
+            <input
+              id="default-profile-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleDefaultImageUpload(f); e.target.value = ""; }}
+            />
+            {imageError  && <p className="mt-1.5 text-red-400 text-xs">{imageError}</p>}
+            {imageSaved  && <p className="mt-1.5 text-emerald-400 text-xs">Default image saved</p>}
+          </div>
+        </div>
+      </Section>
+
       {/* Domain Registrant */}
       <Section
         title="Domain Registrant Info"
