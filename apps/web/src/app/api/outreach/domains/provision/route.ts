@@ -77,43 +77,14 @@ export async function POST(req: NextRequest) {
         if (!paid) throw new Error("Payment not completed");
       }
 
-      // ── Step 2: Purchase domain via Namecheap ────────────────────────────────
+      // ── Step 2: Purchase domain via Cloudflare Registrar ─────────────────────
+      // Domain is instantly available in Cloudflare DNS — no addZone/NS update needed.
       await setStatus("purchasing");
-
-      // Fetch registrant contact from workspace settings
-      const { data: wsSettings } = await db
-        .from("workspace_settings")
-        .select("registrant_first_name, registrant_last_name, registrant_email, registrant_phone, registrant_address, registrant_city, registrant_state, registrant_zip, registrant_country")
-        .eq("workspace_id", workspaceId)
-        .single();
-
-      const registrant: RegistrantContact = {
-        firstName: wsSettings?.registrant_first_name ?? "",
-        lastName:  wsSettings?.registrant_last_name  ?? "",
-        email:     wsSettings?.registrant_email      ?? "",
-        phone:     wsSettings?.registrant_phone      ?? "",
-        address:   wsSettings?.registrant_address    ?? "",
-        city:      wsSettings?.registrant_city       ?? "",
-        state:     wsSettings?.registrant_state      ?? "",
-        zip:       wsSettings?.registrant_zip        ?? "",
-        country:   wsSettings?.registrant_country    ?? "US",
-      };
-
-      if (!registrant.firstName || !registrant.email || !registrant.address) {
-        throw new Error("Registrant contact info is incomplete. Please fill in your domain registrant details in Settings → Outreach.");
-      }
-
-      await purchaseDomain(domainRecord.domain, registrant);
+      await purchaseDomain(domainRecord.domain);
 
       // ── Step 3: Register domain with SES + get DKIM tokens ──────────────────
       await setStatus("dns_pending");
       const { dkimTokens } = await registerDomain(domainRecord.domain);
-
-      // ── Step 4: Add domain to Cloudflare + point Porkbun nameservers ─────────
-      // Newly registered Porkbun domains use Porkbun's nameservers by default.
-      // We add the zone to Cloudflare and update the nameservers at Porkbun.
-      const { nameservers } = await addZone(domainRecord.domain);
-      await updateNameservers(domainRecord.domain, nameservers);
 
       // ── Step 5: Publish DNS records via Cloudflare ──────────────────────────
       const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
