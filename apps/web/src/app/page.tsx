@@ -155,7 +155,7 @@ function Hero() {
             <span className="w-3 h-3 rounded-full bg-yellow-500/60" />
             <span className="w-3 h-3 rounded-full bg-green-500/60" />
             <div className="ml-4 flex-1 max-w-xs mx-auto h-5 rounded-lg bg-white/5 flex items-center justify-center">
-              <span className="text-white/20 text-xs">app.leadash.io/dashboard</span>
+              <span className="text-white/20 text-xs">app.leadash.com/dashboard</span>
             </div>
           </div>
 
