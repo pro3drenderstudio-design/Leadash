@@ -10,11 +10,10 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId } = auth;
 
-  const body = await req.json().catch(() => ({}));
-  const campaignId = body?.campaign_id as string | undefined;
+  await req.json().catch(() => ({})); // consume body
 
   const [sends, replies] = await Promise.all([
-    runSendBatch(workspaceId, campaignId).catch(e => ({ sent: 0, failed: 0, error: String(e) })),
+    runSendBatch(workspaceId).catch(e => ({ sent: 0, failed: 0, error: String(e) })),
     runReplyPoll(workspaceId, 7).catch(e => ({ matched: 0, unmatched: 0, filtered: 0, inboxes: 0, details: [], error: String(e) })),
   ]);
 
