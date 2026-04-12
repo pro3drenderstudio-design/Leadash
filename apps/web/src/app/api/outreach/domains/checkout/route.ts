@@ -152,9 +152,9 @@ export async function POST(req: NextRequest) {
     .single();
 
   const { authorizationUrl, reference } = await createPaystackCheckout({
-    email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.io`,
+    email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
     amountKobo:  totalNgn,
-    callbackUrl: `${appUrl}/inboxes/new/domain?domain_ids=${encodeURIComponent(domainIdsParam)}&ref=PAYSTACK_REF`,
+    callbackUrl: `${appUrl}/inboxes/new/domain?domain_ids=${encodeURIComponent(domainIdsParam)}`,
     metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
   });
 
