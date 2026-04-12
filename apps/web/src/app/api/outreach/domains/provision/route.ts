@@ -83,17 +83,21 @@ export async function POST(req: NextRequest) {
 
       // ── Step 3: Register domain with SES + get DKIM tokens ──────────────────
       await setStatus("dns_pending");
-      const { dkimTokens } = await registerDomain(domainRecord.domain);
+      const { dkimTokens } = await registerDomain(domainRecord.domain)
+        .catch(e => { throw new Error(`SES registerDomain: ${e.message}`); });
 
       // ── Step 3b: Add zone to Cloudflare + point Porkbun nameservers ──────────
       // Brief pause — Porkbun needs a few seconds after purchase before accepting NS updates
       await sleep(5_000);
-      const { nameservers } = await addZone(domainRecord.domain);
-      await updateNameservers(domainRecord.domain, nameservers);
+      const { nameservers } = await addZone(domainRecord.domain)
+        .catch(e => { throw new Error(`CF addZone: ${e.message}`); });
+      await updateNameservers(domainRecord.domain, nameservers)
+        .catch(e => { throw new Error(`Porkbun updateNameservers: ${e.message}`); });
 
       // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────
       const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
-      await publishDnsRecords(domainRecord.domain, dnsRecords);
+      await publishDnsRecords(domainRecord.domain, dnsRecords)
+        .catch(e => { throw new Error(`CF publishDnsRecords: ${e.message}`); });
 
       // Save DNS records for display in UI
       await db
