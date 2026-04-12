@@ -26,9 +26,16 @@ export async function POST(
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Already registered
+  // Already registered — re-publish if cloudflare flag set
   if (domainRecord.dns_records) {
-    return NextResponse.json({ domain: domainRecord.domain, dns_records: domainRecord.dns_records });
+    let auto_configured = false;
+    if (use_cloudflare) {
+      try {
+        await publishDnsRecords(domainRecord.domain, domainRecord.dns_records);
+        auto_configured = true;
+      } catch { /* non-fatal */ }
+    }
+    return NextResponse.json({ domain: domainRecord.domain, dns_records: domainRecord.dns_records, auto_configured });
   }
 
   let dkimTokens: string[];
