@@ -718,7 +718,7 @@ export default function CrmClient() {
                   <p className="text-sm">No unmatched replies</p>
                 </div>
               ) : unmatched.map((u) => (
-                <button key={u.id} onClick={() => setSelectedUnmatched(u)} className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selectedUnmatched?.id === u.id ? "bg-amber-500/8 border-r-2 border-amber-500" : ""}`}>
+                <button key={u.id} onClick={() => { setSelectedUnmatched(u); setUnmatchedCompose(""); setUnmatchedSendErr(null); setUnmatchedSendOk(false); }} className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selectedUnmatched?.id === u.id ? "bg-amber-500/8 border-r-2 border-amber-500" : ""}`}>
                   <p className="text-white text-sm font-medium truncate">{u.from_name || u.from_email}</p>
                   <p className="text-white/40 text-xs truncate">{u.from_email}</p>
                   <p className="text-white/30 text-xs truncate mt-0.5">{u.subject ?? "(no subject)"}</p>
