@@ -1,7 +1,9 @@
 // ─── Gemini AI personalization ────────────────────────────────────────────────
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL       = "gemini-2.5-flash";
+// Use the stable flash model — gemini-2.5-flash requires specific API key tiers.
+// Upgrade to gemini-2.5-flash-preview-04-17 once key supports it.
+const MODEL       = "gemini-1.5-flash";
 
 interface LeadData {
   first_name?: string | null;
