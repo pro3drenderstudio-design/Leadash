@@ -140,8 +140,10 @@ export const addNote           = (enrollmentId: string, note: string) =>
 export const suggestReply      = (enrollmentId: string) =>
   post<{ suggestion: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
-export const sendCrmReply      = (enrollmentId: string, body: string) =>
-  post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body });
+export const sendCrmReply      = (enrollmentId: string, body: string, html_body?: string) =>
+  post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body, html_body });
+export const getConversation   = (enrollmentId: string) =>
+  get<{ messages: ConversationMessage[]; notes: import("@/types/outreach").CrmNote[] }>(`${base}/crm/${enrollmentId}`);
 export const promoteUnmatched  = (replyId: string) =>
   post<{ ok: boolean; enrollment_id: string; error?: string }>(`${base}/crm/unmatched/${replyId}/promote`, {});
 
