@@ -86,6 +86,8 @@ export async function POST(req: NextRequest) {
       const { dkimTokens } = await registerDomain(domainRecord.domain);
 
       // ── Step 3b: Add zone to Cloudflare + point Porkbun nameservers ──────────
+      // Brief pause — Porkbun needs a few seconds after purchase before accepting NS updates
+      await sleep(5_000);
       const { nameservers } = await addZone(domainRecord.domain);
       await updateNameservers(domainRecord.domain, nameservers);
 
