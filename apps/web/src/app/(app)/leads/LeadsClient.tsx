@@ -214,7 +214,7 @@ export default function LeadsClient() {
                   <p className="text-white/30 text-xs mt-0.5">{(list.lead_count ?? 0).toLocaleString()} leads</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setImporting(importing === list.id ? null : list.id); setCsvFile(null); setCsvHeaders([]); }} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/60 hover:text-white text-xs font-medium rounded-lg transition-colors">Import CSV</button>
+                  <button onClick={() => openImport(list.id)} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/60 hover:text-white text-xs font-medium rounded-lg transition-colors">Import</button>
                   <Link href={`/leads/${list.id}`} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/60 hover:text-white text-xs font-medium rounded-lg transition-colors">View</Link>
                   <button onClick={() => handleDelete(list.id, list.name)} className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium rounded-lg transition-colors">Delete</button>
                 </div>
