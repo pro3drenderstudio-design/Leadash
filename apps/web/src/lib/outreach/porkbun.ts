@@ -104,6 +104,8 @@ async function getPricing(): Promise<Record<string, { registration: string }>> {
  * Pricing falls back to hardcoded values if Porkbun API keys are not set.
  */
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
+  // Bust cache so the user always sees current Porkbun pricing
+  _pricingCache = null;
   const pricing = await getPricing();
 
   const results = await Promise.all(
