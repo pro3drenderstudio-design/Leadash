@@ -204,6 +204,7 @@ async function ingestMessages(
         from_email: msg.fromEmail, from_name: msg.fromName, subject: msg.subject,
         body_text: msg.bodyText, message_id: msg.messageId || null, in_reply_to: msg.inReplyTo,
         received_at: msg.receivedAt, is_filtered: true, filter_reason: filterHit.reason,
+        attachments: [],
       });
       filtered++; continue;
     }
