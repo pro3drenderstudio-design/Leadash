@@ -31,7 +31,7 @@ const NGN_PER_USD = 1600;
 // Sending limits
 const MAX_INBOXES_PER_DOMAIN = 5;
 const WARMUP_SENDS_PER_INBOX = 15;  // during 21-day warmup
-const FULL_SENDS_PER_INBOX   = 40;  // post-warmup
+const FULL_SENDS_PER_INBOX   = 30;  // post-warmup (conservative for deliverability)
 
 function domainCapacity(domains: number, inboxes: number) {
   return {
