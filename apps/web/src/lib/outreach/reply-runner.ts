@@ -310,6 +310,7 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
       const { listInboundObjects, downloadObject, parseRawEmail } = await import("@/lib/outreach/ses-inbound");
       const since   = new Date(Date.now() - lookbackDays * 86_400_000);
       const objects = await listInboundObjects(since);
+      console.log(`[reply-runner] SES S3: found ${objects.length} object(s) since ${since.toISOString()}, ${sesInboxes.length} SES inbox(es)`);
 
       // Already-seen message IDs to avoid re-processing
       const { data: existing } = await db
