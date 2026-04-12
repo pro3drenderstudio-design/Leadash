@@ -44,10 +44,25 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   const sentToday = new Map<string, number>();
   for (const r of todayCounts ?? []) sentToday.set(r.from_inbox_id, (sentToday.get(r.from_inbox_id) ?? 0) + 1);
 
+  // Count campaign sends today per inbox so warmup stays within the daily_send_limit
+  const { data: campaignCounts } = await db
+    .from("outreach_sends")
+    .select("inbox_id")
+    .in("inbox_id", pool.map((i: OutreachInbox) => i.id))
+    .in("status", ["sent", "queued"])
+    .gte("created_at", todayStart.toISOString());
+
+  const campaignSentToday = new Map<string, number>();
+  for (const r of campaignCounts ?? []) {
+    campaignSentToday.set(r.inbox_id, (campaignSentToday.get(r.inbox_id) ?? 0) + 1);
+  }
+
   for (const sender of pool) {
-    const perRun     = Math.max(1, Math.floor(sender.warmup_current_daily / 6));
-    const alreadySent = sentToday.get(sender.id) ?? 0;
-    const toSend     = Math.min(perRun, Math.max(0, sender.warmup_current_daily - alreadySent));
+    const campaignUsed  = campaignSentToday.get(sender.id) ?? 0;
+    const remaining     = Math.max(0, (sender.daily_send_limit ?? 30) - campaignUsed);
+    const perRun        = Math.max(1, Math.floor(sender.warmup_current_daily / 6));
+    const alreadySent   = sentToday.get(sender.id) ?? 0;
+    const toSend        = Math.min(perRun, Math.max(0, sender.warmup_current_daily - alreadySent), remaining);
     if (toSend === 0) continue;
 
     const recipients = pool.filter(r => r.id !== sender.id);
