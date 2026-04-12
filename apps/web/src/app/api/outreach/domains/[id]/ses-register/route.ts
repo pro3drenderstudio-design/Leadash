@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, setMailFromDomain } from "@/lib/outreach/ses";
+import { registerDomain, setMailFromDomain, isDomainVerified } from "@/lib/outreach/ses";
 import { buildMailDnsRecords, publishDnsRecords } from "@/lib/outreach/cloudflare";
 
 // POST /api/outreach/domains/[id]/ses-register
