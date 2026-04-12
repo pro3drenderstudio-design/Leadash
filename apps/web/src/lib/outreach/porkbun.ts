@@ -49,10 +49,13 @@ function auth() {
 }
 
 async function call<T = unknown>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+  const payload = { ...auth(), ...body };
+  console.log(`[porkbun] POST ${path}`, JSON.stringify({ ...payload, apikey: "***", secretapikey: "***" }));
+
   const res = await fetch(`${BASE}${path}`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ ...auth(), ...body }),
+    body:    JSON.stringify(payload),
   });
 
   let data: { status: string; message?: string } & T;
@@ -61,6 +64,8 @@ async function call<T = unknown>(path: string, body: Record<string, unknown> = {
   } catch {
     throw new Error(`Porkbun API returned non-JSON response (HTTP ${res.status})`);
   }
+
+  console.log(`[porkbun] response ${path}:`, JSON.stringify(data));
 
   if (data.status !== "SUCCESS") {
     throw new Error(`Porkbun error: ${data.message ?? data.status}`);
