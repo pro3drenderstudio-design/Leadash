@@ -119,9 +119,13 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 export default function InboxesClient() {
   const params = useSearchParams();
+  const [activeTab, setActiveTab]       = useState<"inboxes" | "domains">("inboxes");
   const [inboxes, setInboxes]           = useState<OutreachInboxSafe[]>([]);
   const [loading, setLoading]           = useState(true);
   const [toast, setToast]               = useState<string | null>(null);
+  const [domains, setDomains]           = useState<OutreachDomain[]>([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
+  const [reconfiguringId, setReconfiguringId] = useState<string | null>(null);
   const [showImport, setShowImport]     = useState(false);
   const [importFile, setImportFile]     = useState<File | null>(null);
   const [importing, setImporting]       = useState(false);
