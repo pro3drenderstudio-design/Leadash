@@ -128,7 +128,7 @@ export default function HelpPage() {
         <h3 className="text-white font-semibold mb-1">Still need help?</h3>
         <p className="text-white/40 text-sm mb-4">Can&apos;t find what you&apos;re looking for? Reach out and we&apos;ll get back to you within 24 hours.</p>
         <a
-          href="mailto:support@leadash.io"
+          href="mailto:support@leadash.com"
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
