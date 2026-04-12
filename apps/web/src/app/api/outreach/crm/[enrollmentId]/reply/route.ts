@@ -103,18 +103,18 @@ export async function POST(
     }
 
     // Record the send
-    await db.from("outreach_sends").insert({
+    const { error: insertErr } = await db.from("outreach_sends").insert({
       workspace_id:  workspaceId,
       enrollment_id: enrollmentId,
       inbox_id:      inbox.id,
       to_email:      toEmail,
-      from_email:    inbox.email_address,
       subject,
       body:          htmlBodyRaw?.trim() ? htmlBodyRaw : body,
       status:        "sent",
       message_id:    messageId || null,
       sent_at:       new Date().toISOString(),
     });
+    if (insertErr) console.error("[crm/reply] send record insert failed:", insertErr.message);
 
     // Ensure enrollment stays replied
     await db
