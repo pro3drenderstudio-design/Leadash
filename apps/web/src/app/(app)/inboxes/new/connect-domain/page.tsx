@@ -69,6 +69,8 @@ export default function ConnectDomainPage() {
   const [error, setError]   = useState<string | null>(null);
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
 
+  const { currency: globalCurrency } = useCurrency();
+
   const combos = generateCombos(firstName, lastName);
   const activePrefixes = prefixMode === "custom"
     ? customPrefix.split(",").map(p => p.trim().toLowerCase()).filter(Boolean).slice(0, 5)
