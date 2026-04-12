@@ -54,10 +54,11 @@ export async function POST(req: NextRequest) {
 
   const domainRecordId = rec.id;
 
-  // Register with SES + get DKIM tokens
+  // Register with SES + get DKIM tokens + set custom MAIL FROM for DMARC alignment
   let dkimTokens: string[];
   try {
     ({ dkimTokens } = await registerDomain(domain));
+    await setMailFromDomain(domain).catch(() => {}); // non-fatal if it fails
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db.from("outreach_domains").update({ status: "failed", error_message: msg }).eq("id", domainRecordId);
