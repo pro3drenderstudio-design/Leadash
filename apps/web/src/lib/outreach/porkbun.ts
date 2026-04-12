@@ -148,10 +148,11 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   }
 
   await call(`/domain/create/${domain}`, {
-    years:     1,
-    autorenew: 0,
-    privacy:   1, // enable free WHOIS privacy
-    cost:      priceCents,
+    years:          1,
+    autorenew:      0,
+    privacy:        1,   // enable free WHOIS privacy
+    cost:           priceCents,
+    agreedToTerms:  true, // required by Porkbun to confirm acceptance of registration terms
   });
 }
 
