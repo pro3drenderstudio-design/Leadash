@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         await db.from("outreach_domains").update({ forward_verified: false }).eq("id", domain_record_id);
       }
 
-      // ── Step 5: Wait for SES domain verification (DNS propagation) ──────────
+      // ── Step 5: Wait for SES domain verification ────────────────────────────
       await setStatus("verifying");
 
       let verified = false;
