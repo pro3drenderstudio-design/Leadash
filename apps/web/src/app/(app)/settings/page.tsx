@@ -526,7 +526,6 @@ function OutreachTab() {
       const fd = new FormData();
       fd.append("file", file);
       // No inbox_id → saves as workspace default
-      const { wsFetch } = await import("@/lib/workspace/client");
       const res = await wsFetch("/api/outreach/inboxes/profile-image", { method: "POST", body: fd });
       if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error ?? res.statusText); }
       const { url } = await res.json() as { url: string };
