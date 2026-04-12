@@ -134,26 +134,25 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  * priceUsd is required — Porkbun's API expects cost in cents (integer) as a sanity check.
  */
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
-  // Porkbun requires `cost` as an integer (cents) to confirm the expected charge.
-  // If we don't know the price (null/undefined), look it up from the pricing API.
-  let priceCents: number;
+  // Porkbun requires `cost` as an integer in whole USD (no decimals) to confirm the charge.
+  // Round up to the nearest dollar so it's always >= the actual price.
+  let costUsdInt: number;
   if (priceUsd != null) {
-    // DB numeric columns may come back as strings — coerce explicitly
-    priceCents = Math.round(Number(priceUsd) * 100);
+    costUsdInt = Math.ceil(Number(priceUsd));
   } else {
     const pricing = await getPricing();
     const tld = domain.split(".").slice(1).join(".");
     const tldPrice = pricing[tld]?.registration;
     const resolved = tldPrice ? parseFloat(tldPrice) : (FALLBACK_PRICES[tld] ?? 12.00);
-    priceCents = Math.round(resolved * 100);
+    costUsdInt = Math.ceil(resolved);
   }
 
   await call(`/domain/create/${domain}`, {
     years:          1,
     autorenew:      0,
     privacy:        1,   // enable free WHOIS privacy
-    cost:           priceCents,
-    agreedToTerms:  true, // required by Porkbun to confirm acceptance of registration terms
+    cost:           costUsdInt,
+    agreedToTerms:  true,
   });
 }
 
