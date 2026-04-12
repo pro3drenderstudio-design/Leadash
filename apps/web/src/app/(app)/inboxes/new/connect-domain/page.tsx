@@ -79,6 +79,7 @@ export default function ConnectDomainPage() {
   const [dnsRecords, setDnsRecords]         = useState<DnsRecord[]>([]);
   const [domainRecordId, setDomainRecordId] = useState("");
   const [autoConfigured, setAutoConfigured] = useState(false);
+  const [inboxCount, setInboxCount]         = useState(0);
 
   // State
   const [step, setStep]         = useState<Step>("configure");
