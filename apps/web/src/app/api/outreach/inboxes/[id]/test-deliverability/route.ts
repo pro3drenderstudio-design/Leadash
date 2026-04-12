@@ -76,6 +76,15 @@ export async function POST(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
+    // SES sandbox blocks sending to unverified addresses
+    if (msg.includes("not verified") || msg.includes("554") || msg.includes("Email address is not verified")) {
+      return NextResponse.json({
+        error: `SES sandbox restriction: ${toEmail} is not a verified address in your AWS SES account. ` +
+          "Either verify this email in the SES console, or request SES production access to send to any address.",
+      }, { status: 400 });
+    }
+
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
