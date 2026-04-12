@@ -12,6 +12,7 @@ interface Ticket {
   category: string;
   priority: string;
   status: string;
+  message: string;
   admin_reply: string | null;
   admin_replied_at: string | null;
   created_at: string;
