@@ -91,8 +91,9 @@ export async function getZoneId(domain: string): Promise<string> {
   const parts = domain.split(".");
   const apex  = parts.slice(-2).join(".");
 
-  const zones = await cfFetch<{ id: string; name: string }[]>("GET", `/zones?name=${apex}&status=active`);
-  if (!zones?.length) throw new Error(`No active Cloudflare zone found for ${apex}`);
+  // Don't filter by status=active — newly created zones start as "pending"
+  const zones = await cfFetch<{ id: string; name: string }[]>("GET", `/zones?name=${apex}`);
+  if (!zones?.length) throw new Error(`No Cloudflare zone found for ${apex}`);
   return zones[0].id;
 }
 
