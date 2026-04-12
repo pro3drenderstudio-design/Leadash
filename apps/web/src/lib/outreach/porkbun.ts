@@ -1,20 +1,17 @@
 /**
- * Porkbun REST API wrapper.
- *
+ * Porkbun REST API v3 wrapper.
  * Docs: https://porkbun.com/api/json/v3/documentation
  *
  * Required env vars:
  *   PORKBUN_API_KEY     — API key  (starts with pk1_...)
  *   PORKBUN_SECRET_KEY  — Secret key (starts with sk1_...)
- *
- * No IP whitelisting, no deposit, free WHOIS privacy on all domains.
  */
 
 const BASE = "https://api.porkbun.com/api/json/v3";
 
 export interface DnsRecord {
   type: "A" | "AAAA" | "CNAME" | "MX" | "TXT";
-  name: string;   // subdomain / "" for root
+  name: string;
   value: string;
   priority?: number;
   ttl?: number;
@@ -26,9 +23,7 @@ export interface DomainCheckResult {
   price:     number;
 }
 
-// Kept for interface compatibility with provision routes and settings.
-// Porkbun uses the account's contact info + auto-enables free WHOIS privacy,
-// so these fields are accepted but not forwarded to the API.
+// Kept for interface compatibility — Porkbun uses account contact info automatically.
 export interface RegistrantContact {
   firstName: string;
   lastName:  string;
@@ -49,13 +44,10 @@ function auth() {
 }
 
 async function call<T = unknown>(path: string, body: Record<string, unknown> = {}): Promise<T> {
-  const payload = { ...auth(), ...body };
-  console.log(`[porkbun] POST ${path}`, JSON.stringify({ ...payload, apikey: "***", secretapikey: "***" }));
-
   const res = await fetch(`${BASE}${path}`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(payload),
+    body:    JSON.stringify({ ...auth(), ...body }),
   });
 
   let data: { status: string; message?: string } & T;
@@ -65,121 +57,91 @@ async function call<T = unknown>(path: string, body: Record<string, unknown> = {
     throw new Error(`Porkbun API returned non-JSON response (HTTP ${res.status})`);
   }
 
-  console.log(`[porkbun] response ${path}:`, JSON.stringify(data));
-
   if (data.status !== "SUCCESS") {
     throw new Error(`Porkbun error: ${data.message ?? data.status}`);
   }
   return data;
 }
 
-// Fallback prices (USD) when API keys are not configured
-const FALLBACK_PRICES: Record<string, number> = {
-  com: 10.98, io: 39.99, co: 27.98, net: 13.98, org: 11.98,
-  ai: 79.98, app: 17.98, dev: 13.98, info: 5.98, biz: 17.98,
-  us: 9.98, pro: 25.98,
-};
-
-/**
- * Fetch Porkbun's TLD pricing table (cached per process lifetime).
- * Falls back to hardcoded prices if API keys are not configured.
- */
 interface TldPricing {
   registration: string;
-  renew?: string;
-  transfer?: string;
-  restore?: string;
-  icann?: string;      // ICANN fee (e.g., "0.18" for .com)
-  minperiod?: string;
-}
-
-let _pricingCache: Record<string, TldPricing> | null = null;
-
-async function getPricing(): Promise<Record<string, TldPricing>> {
-  if (_pricingCache) return _pricingCache;
-  if (!process.env.PORKBUN_API_KEY) return {}; // no keys — use fallback prices
-  try {
-    const data = await call<{ pricing: Record<string, TldPricing }>("/domain/pricing/get");
-    _pricingCache = data.pricing;
-    return _pricingCache;
-  } catch {
-    return {}; // pricing fetch failed — use fallback prices
-  }
+  renew?:       string;
+  transfer?:    string;
 }
 
 /**
- * Check availability and pricing for a list of domains.
+ * Fetch live TLD pricing from Porkbun.
+ * Throws if the API call fails — no fallbacks, so the UI always shows accurate prices.
+ */
+export async function getLivePricing(): Promise<Record<string, TldPricing>> {
+  if (!process.env.PORKBUN_API_KEY) throw new Error("PORKBUN_API_KEY is not configured");
+  const data = await call<{ pricing: Record<string, TldPricing> }>("/domain/pricing/get");
+  return data.pricing;
+}
+
+/**
+ * Check availability and current Porkbun registration price for a list of domains.
  * Availability is determined via Cloudflare DNS-over-HTTPS (NXDOMAIN = available).
- * Pricing falls back to hardcoded values if Porkbun API keys are not set.
+ * Throws if pricing cannot be fetched — callers must handle this error.
  */
 export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
-  // Bust cache so the user always sees current Porkbun pricing
-  _pricingCache = null;
-  const pricing = await getPricing();
+  const pricing = await getLivePricing();
 
-  console.log(`[porkbun] checkDomains: fetched pricing for ${Object.keys(pricing).length} TLDs`);
-
-  const results = await Promise.all(
+  return Promise.all(
     names.map(async (domain): Promise<DomainCheckResult> => {
-      const tld = domain.split(".").slice(1).join(".");
-      const tldData = pricing[tld];
-      const tldPrice = tldData?.registration;
-      const icannFee = tldData?.icann ? parseFloat(tldData.icann) : 0;
-      const price = tldPrice ? (parseFloat(tldPrice) + icannFee) : (FALLBACK_PRICES[tld] ?? 12.00);
+      const tld      = domain.split(".").slice(1).join(".");
+      const tldData  = pricing[tld];
+      if (!tldData) throw new Error(`TLD ".${tld}" is not supported by Porkbun`);
 
-      if (tldData) {
-        console.log(`[porkbun] ${domain}: registration=${tldPrice}, icann=${icannFee}, total=${price}`);
-      } else {
-        console.log(`[porkbun] ${domain}: using fallback price=${price} (TLD not in pricing response)`);
-      }
+      // registration price already includes all fees (ICANN, etc.)
+      const price = parseFloat(tldData.registration);
+      if (isNaN(price)) throw new Error(`Invalid price for .${tld}`);
 
-      // Cloudflare DoH: Status 3 = NXDOMAIN = domain not registered = available
+      // Cloudflare DoH: Status 3 = NXDOMAIN = not registered = available
       let available = false;
       try {
-        const doh = await fetch(
+        const doh  = await fetch(
           `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
           { headers: { Accept: "application/dns-json" } },
         );
         const json = await doh.json() as { Status: number };
-        available = json.Status === 3;
+        available  = json.Status === 3;
       } catch {
-        available = true; // assume available on DNS error
+        available = true;
       }
 
       return { domain, available, price };
     }),
   );
-
-  return results;
 }
 
 /**
  * Register a domain for 1 year.
- * Porkbun uses the account's contact info and enables free WHOIS privacy automatically.
- * The registrant parameter is accepted for interface compatibility but not forwarded.
- * priceUsd is required — Porkbun's API expects cost in cents (integer) as a sanity check.
+ * Fetches the live price from Porkbun and passes it as `cost` (in pennies) — required by the API.
+ * Requirements: account email/phone verified, sufficient credit, at least one prior registration.
  */
-export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsd?: number): Promise<void> {
-  // Porkbun's `cost` parameter is just a sanity check - any valid integer (in cents) works.
-  // Porkbun charges their actual registration price regardless of this value.
-  // We use 1 cent as a safe default that passes validation.
+export async function purchaseDomain(domain: string, _registrant?: RegistrantContact): Promise<void> {
+  const pricing = await getLivePricing();
+  const tld     = domain.split(".").slice(1).join(".");
+  const tldData = pricing[tld];
+  if (!tldData) throw new Error(`TLD ".${tld}" is not supported by Porkbun`);
+
+  const priceUsd  = parseFloat(tldData.registration);
+  const costPennies = Math.round(priceUsd * 100);
+
   await call(`/domain/create/${domain}`, {
-    years:          1,
-    autorenew:      0,
-    privacy:        1,
-    cost:           1,
-    agreeToTerms:   "yes",
+    years:        1,
+    autorenew:    0,
+    privacy:      1,
+    cost:         costPennies,
+    agreeToTerms: "yes",
   });
 }
 
 /**
- * Replace all DNS records for a domain.
- * Deletes existing records of the same types, then creates the new ones.
- * Note: Our primary DNS management uses Cloudflare (cloudflare.ts).
- * This method is provided as a fallback for domains using Porkbun's nameservers.
+ * Replace all DNS records for a domain (Porkbun-managed DNS fallback).
  */
 export async function setDnsHosts(domain: string, records: DnsRecord[]): Promise<void> {
-  // Delete all existing records first
   const existing = await call<{ records?: Array<{ id: string }> }>(`/dns/retrieve/${domain}`);
   if (existing.records?.length) {
     await Promise.all(
@@ -187,7 +149,6 @@ export async function setDnsHosts(domain: string, records: DnsRecord[]): Promise
     );
   }
 
-  // Create new records
   for (const rec of records) {
     await call(`/dns/create/${domain}`, {
       type:    rec.type,
