@@ -993,7 +993,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">AI Verification & Personalization</p>
-                    <p className="text-white/40 text-xs">Costs {form.aiEnabled ? "1 additional credit" : "0 additional credits"} per lead</p>
+                    <p className="text-white/40 text-xs">Costs {form.aiEnabled ? `${CREDIT_COSTS.ai_personalize} additional credits` : "0 additional credits"} per lead</p>
                   </div>
                 </div>
                 <div
