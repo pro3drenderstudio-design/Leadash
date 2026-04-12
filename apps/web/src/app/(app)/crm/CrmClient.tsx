@@ -740,6 +740,14 @@ export default function CrmClient() {
                   <p className="text-white/40 text-xs">{selectedUnmatched.from_email}</p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePromote(selectedUnmatched.id)}
+                    disabled={promoting}
+                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 disabled:opacity-40 text-emerald-300 text-xs font-semibold rounded-lg transition-colors"
+                    title="Create a lead + thread from this reply so you can track and reply to it"
+                  >
+                    {promoting ? "Moving…" : "↗ Move to Inbox"}
+                  </button>
                   <button onClick={() => { setShowMatchModal(true); setMatchSearch(""); setMatchResults([]); }} className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold rounded-lg transition-colors">
                     🔗 Match to Lead
                   </button>
