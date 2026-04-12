@@ -315,24 +315,12 @@ function TeamTab() {
 
 // ── Billing & Plans Tab ────────────────────────────────────────────────────────
 
-const PLANS_DISPLAY = [
-  { id: "free",    name: "Free",    price: 0,   credits: 0,      sends: "1,000/mo"  },
-  { id: "starter", name: "Starter", price: 49,  credits: 500,    sends: "25,000/mo" },
-  { id: "growth",  name: "Growth",  price: 149, credits: 2000,   sends: "150,000/mo"},
-  { id: "scale",   name: "Scale",   price: 399, credits: 10000,  sends: "1M/mo"     },
-];
-
-const CREDIT_PACKS = [
-  { id: "pack_500",   credits: 500,   price_usd: 19,  label: "Starter pack" },
-  { id: "pack_2000",  credits: 2000,  price_usd: 59,  label: "Growth pack"  },
-  { id: "pack_5000",  credits: 5000,  price_usd: 129, label: "Best value"   },
-  { id: "pack_10000", credits: 10000, price_usd: 249, label: "Scale pack"   },
-] as const;
-
 const TX_LABELS: Record<string, string> = { grant: "Monthly Grant", purchase: "Purchase", reserve: "Reserved", consume: "Used", refund: "Refunded" };
 const TX_COLORS: Record<string, string> = { grant: "text-emerald-400", purchase: "text-emerald-400", refund: "text-emerald-400", reserve: "text-amber-400", consume: "text-red-400" };
 
 type Transaction = { id: string; type: string; amount: number; description: string | null; created_at: string };
+
+const PLAN_ORDER = ["free", "starter", "growth", "scale", "enterprise"] as const;
 
 function BillingTab() {
   const [planId, setPlanId]         = useState("free");
@@ -340,6 +328,8 @@ function BillingTab() {
   const [transactions, setTx]       = useState<Transaction[]>([]);
   const [loading, setLoading]       = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const { currency } = useCurrency();
+  const isNgn = currency === "NGN";
 
   useEffect(() => {
     Promise.all([
@@ -365,7 +355,13 @@ function BillingTab() {
     }
   }
 
-  const currentPlan = PLANS_DISPLAY.find(p => p.id === planId) ?? PLANS_DISPLAY[0];
+  const plans = PLAN_ORDER.map(id => PLANS[id]);
+  const currentPlan = PLANS[planId as keyof typeof PLANS] ?? PLANS.free;
+
+  function fmtPrice(plan: typeof PLANS[keyof typeof PLANS]) {
+    if (plan.priceNgn === 0) return "Free";
+    return isNgn ? `₦${plan.priceNgn.toLocaleString()}` : `$${plan.price}`;
+  }
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-2xl animate-pulse" />)}</div>;
 
@@ -376,23 +372,29 @@ function BillingTab() {
         <div className="flex items-center justify-between p-4 bg-white/3 border border-white/8 rounded-xl">
           <div>
             <p className="text-white font-semibold text-lg">{currentPlan.name}</p>
-            <p className="text-white/40 text-xs mt-0.5">{currentPlan.sends} · {currentPlan.credits.toLocaleString()} lead credits/mo</p>
+            <p className="text-white/40 text-xs mt-0.5">
+              {currentPlan.includedCredits > 0 ? `${currentPlan.includedCredits.toLocaleString()} credits/mo` : "No credits"}
+              {currentPlan.maxLeadsPool > 0 ? ` · ${currentPlan.maxLeadsPool.toLocaleString()} leads pool` : ""}
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-white font-bold text-xl">${currentPlan.price}<span className="text-white/30 text-sm font-normal">/mo</span></p>
+            <p className="text-white font-bold text-xl">
+              {fmtPrice(currentPlan)}
+              {currentPlan.priceNgn > 0 && <span className="text-white/30 text-sm font-normal">/mo</span>}
+            </p>
             <a href="/api/billing/portal" className="text-blue-400 text-xs hover:underline mt-0.5 block">Manage subscription →</a>
           </div>
         </div>
 
         {/* Plan comparison */}
-        <div className="grid grid-cols-4 gap-2 mt-2">
-          {PLANS_DISPLAY.map(plan => (
+        <div className="grid grid-cols-5 gap-2 mt-2">
+          {plans.map(plan => (
             <div
               key={plan.id}
               className={`rounded-xl p-3 border text-center transition-colors ${plan.id === planId ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/3"}`}
             >
-              <p className="text-white text-sm font-semibold">{plan.name}</p>
-              <p className="text-white/40 text-xs mt-0.5">${plan.price}/mo</p>
+              <p className="text-white text-xs font-semibold">{plan.name}</p>
+              <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.priceNgn > 0 ? "/mo" : ""}</p>
             </div>
           ))}
         </div>
@@ -404,39 +406,47 @@ function BillingTab() {
           <span className="text-4xl font-bold text-white">{balance.toLocaleString()}</span>
           <span className="text-amber-400 font-medium mb-0.5">credits remaining</span>
         </div>
-        <p className="text-white/30 text-xs -mt-2">Scrape 1cr · Verify 1cr · Personalize 2cr · Full suite 4cr</p>
+        <p className="text-white/30 text-xs -mt-2">
+          Scrape {CREDIT_COSTS.scrape}cr · Verify {CREDIT_COSTS.verify}cr · AI Opener {CREDIT_COSTS.ai_personalize}cr
+        </p>
       </Section>
 
       {/* Purchase packs */}
       <div>
         <p className="text-white font-semibold mb-3">Purchase Credits</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {CREDIT_PACKS.map(pack => (
-            <div
-              key={pack.id}
-              className={`relative border rounded-2xl p-4 flex flex-col gap-2 transition-colors ${
-                pack.id === "pack_5000" ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/4 hover:bg-white/6"
-              }`}
-            >
-              {pack.id === "pack_5000" && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-blue-600 text-white text-[10px] font-semibold rounded-full whitespace-nowrap">
-                  Best value
-                </span>
-              )}
-              <p className="text-xl font-bold text-white">{pack.credits.toLocaleString()}</p>
-              <p className="text-white/40 text-xs -mt-1">credits</p>
-              <p className="text-white/60 text-sm">${pack.price_usd} <span className="text-white/30 text-xs">one-time</span></p>
-              <button
-                onClick={() => handlePurchase(pack.id)}
-                disabled={!!purchasing}
-                className={`mt-auto py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-                  pack.id === "pack_5000" ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-white/8 hover:bg-white/12 text-white"
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {CREDIT_PACKS_CONFIG.map(pack => {
+            const isBest = pack.savingsPct >= 20;
+            const price  = isNgn ? `₦${pack.priceNgn.toLocaleString()}` : `$${pack.priceUsd}`;
+            return (
+              <div
+                key={pack.id}
+                className={`relative border rounded-2xl p-4 flex flex-col gap-2 transition-colors ${
+                  isBest ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/4 hover:bg-white/6"
                 }`}
               >
-                {purchasing === pack.id ? "Loading…" : "Buy"}
-              </button>
-            </div>
-          ))}
+                {pack.savingsPct > 0 && (
+                  <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[10px] font-semibold rounded-full whitespace-nowrap ${
+                    isBest ? "bg-blue-600 text-white" : "bg-white/10 text-white/60"
+                  }`}>
+                    Save {pack.savingsPct}%
+                  </span>
+                )}
+                <p className="text-xl font-bold text-white">{pack.credits.toLocaleString()}</p>
+                <p className="text-white/40 text-xs -mt-1">credits</p>
+                <p className="text-white/60 text-sm">{price} <span className="text-white/30 text-xs">one-time</span></p>
+                <button
+                  onClick={() => handlePurchase(pack.id)}
+                  disabled={!!purchasing}
+                  className={`mt-auto py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    isBest ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-white/8 hover:bg-white/12 text-white"
+                  }`}
+                >
+                  {purchasing === pack.id ? "Loading…" : "Buy"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
