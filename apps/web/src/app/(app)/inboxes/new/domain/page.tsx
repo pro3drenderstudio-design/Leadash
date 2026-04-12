@@ -738,12 +738,17 @@ export default function BuyDomainPage() {
 
           {overallStatus === "failed" && (
             <div className="mt-6 flex items-center gap-3">
-              <Link
-                href="/inboxes/new/domain"
-                className="px-6 py-2.5 bg-white/8 hover:bg-white/12 border border-white/10 text-white text-sm font-medium rounded-xl transition-colors"
+              <button
+                onClick={() => {
+                  setProvisioning(false);
+                  setProvisionStatuses({});
+                  setProvisionErrors({});
+                  startProvision(domainIds, returnedSessionId, returnedRef);
+                }}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
               >
-                Try again
-              </Link>
+                Retry provisioning
+              </button>
               <Link
                 href="/support"
                 className="text-white/40 hover:text-white/70 text-sm transition-colors"
