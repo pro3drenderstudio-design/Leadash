@@ -236,6 +236,46 @@ export default function CrmClient() {
     if (selectedUnmatched?.id === id) setSelectedUnmatched(null);
   }
 
+  async function handlePromote(replyId: string) {
+    setPromoting(true);
+    const result = await promoteUnmatched(replyId);
+    setPromoting(false);
+    if (result.error) { alert(`Failed to promote: ${result.error}`); return; }
+    setUnmatched((prev) => prev.filter((u) => u.id !== replyId));
+    setSelectedUnmatched(null);
+    setUnmatchedCompose("");
+    setUnmatchedSendErr(null);
+    setUnmatchedSendOk(false);
+    await loadThreads();
+    setMainTab("inbox");
+  }
+
+  async function handleUnmatchedSend() {
+    if (!selectedUnmatched || !unmatchedCompose.trim()) return;
+    // Promote first (creates enrollment), then send reply
+    setUnmatchedSending(true);
+    setUnmatchedSendErr(null);
+    setUnmatchedSendOk(false);
+    const promoted = await promoteUnmatched(selectedUnmatched.id);
+    if (promoted.error || !promoted.enrollment_id) {
+      setUnmatchedSendErr(promoted.error ?? "Failed to create thread");
+      setUnmatchedSending(false);
+      return;
+    }
+    const sent = await sendCrmReply(promoted.enrollment_id, unmatchedCompose.trim());
+    if (sent.error) {
+      setUnmatchedSendErr(sent.error);
+      setUnmatchedSending(false);
+      return;
+    }
+    setUnmatchedSendOk(true);
+    setUnmatchedCompose("");
+    setUnmatched((prev) => prev.filter((u) => u.id !== selectedUnmatched.id));
+    setSelectedUnmatched(null);
+    await loadThreads();
+    setMainTab("inbox");
+  }
+
   async function handleMatch(replyId: string, enrollmentId: string) {
     setMatching(true);
     await matchReply(replyId, enrollmentId);
