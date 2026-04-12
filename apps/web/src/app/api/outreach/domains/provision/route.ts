@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { purchaseDomain, type RegistrantContact } from "@/lib/outreach/porkbun";
 import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
-import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
+import { publishDnsRecords, buildMailDnsRecords, setWebRedirect, setEmailForwarding } from "@/lib/outreach/cloudflare";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
 import { encrypt } from "@/lib/outreach/crypto";
 
