@@ -69,6 +69,8 @@ export async function POST(req: NextRequest) {
         daily_send_limit:  15,
         payment_provider,
         domain_price_usd:  domainPrice,
+        redirect_url:      redirect_url ?? null,
+        reply_forward_to:  reply_forward_to ?? null,
       })
       .select("id")
       .single();
