@@ -134,7 +134,7 @@ export async function PATCH(req: NextRequest) {
 
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
-    await db.from("outreach_inboxes").insert({
+    const { error: inboxError } = await db.from("outreach_inboxes").insert({
       workspace_id:         workspaceId,
       domain_id:            domain_record_id,
       label:                email,
@@ -155,6 +155,10 @@ export async function PATCH(req: NextRequest) {
       first_name:           domainRecord.first_name ?? null,
       last_name:            domainRecord.last_name  ?? null,
     });
+    if (inboxError) {
+      await db.from("outreach_domains").update({ status: "failed", error_message: inboxError.message }).eq("id", domain_record_id);
+      return NextResponse.json({ error: `Failed to create inbox ${email}: ${inboxError.message}` }, { status: 500 });
+    }
   }
 
   await db
