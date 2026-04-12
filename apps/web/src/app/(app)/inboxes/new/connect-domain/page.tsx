@@ -339,7 +339,59 @@ export default function ConnectDomainPage() {
         </div>
       )}
 
-      {/* ── Step 2: DNS Records ───────────────────────────────────────────────── */}
+      {/* ── Step 2: Payment ──────────────────────────────────────────────────── */}
+      {step === "payment" && (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-xl font-bold text-white mb-1">Inbox subscription</h1>
+            <p className="text-white/40 text-sm">
+              Your inboxes run on our managed sending infrastructure (SES). A monthly subscription covers hosting, warmup, and deliverability monitoring.
+            </p>
+          </div>
+
+          <div className="border border-white/8 rounded-xl p-5 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-white/60 text-sm">Domain</span>
+              <span className="text-white font-mono text-sm">{domain}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/60 text-sm">Inboxes</span>
+              <span className="text-white text-sm">{activePrefixes.length} × ({activePrefixes.join(", ")})</span>
+            </div>
+            <div className="border-t border-white/8 pt-3 flex justify-between items-center">
+              <span className="text-white/60 text-sm">Monthly total</span>
+              <div className="text-right">
+                <span className="text-white font-bold">
+                  {globalCurrency === "NGN"
+                    ? `₦${monthlyNgn.toLocaleString()}/mo`
+                    : `$${monthlyUsd}/mo`}
+                </span>
+                <p className="text-white/30 text-xs">${INBOX_PRICE_USD}/inbox × {activePrefixes.length} inbox{activePrefixes.length > 1 ? "es" : ""}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 p-4 rounded-xl bg-blue-500/8 border border-blue-500/20">
+            <span className="text-blue-400 flex-shrink-0">ℹ</span>
+            <p className="text-blue-300/70 text-xs">No domain registration fee — you already own the domain. This is only for the managed inbox subscription.</p>
+          </div>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handlePay}
+              disabled={loading}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              {loading ? "Redirecting…" : `Pay ${globalCurrency === "NGN" ? `₦${monthlyNgn.toLocaleString()}` : `$${monthlyUsd}`}/mo →`}
+            </button>
+            <button onClick={() => setStep("configure")} className="text-white/40 hover:text-white/70 text-sm transition-colors">Back</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 3: DNS Records ───────────────────────────────────────────────── */}
       {step === "dns" && (
         <div className="space-y-6">
           <div>
