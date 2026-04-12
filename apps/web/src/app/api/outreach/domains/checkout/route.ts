@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
         last_name:         last_name  ?? null,
         daily_send_limit:  15,
         payment_provider,
+        domain_price_usd:  domainPrice,
       })
       .select("id")
       .single();
