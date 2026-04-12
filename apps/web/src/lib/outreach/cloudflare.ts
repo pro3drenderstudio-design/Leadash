@@ -58,14 +58,25 @@ export async function addZone(domain: string): Promise<{ zoneId: string; nameser
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   if (!accountId) throw new Error("CLOUDFLARE_ACCOUNT_ID is not configured");
 
-  const result = await cfFetch<{ id: string; name_servers: string[] }>("POST", "/zones", {
-    name:        domain,
-    account:     { id: accountId },
-    jump_start:  false,
-    type:        "full",
-  });
+  try {
+    const result = await cfFetch<{ id: string; name_servers: string[] }>("POST", "/zones", {
+      name:       domain,
+      account:    { id: accountId },
+      jump_start: false,
+      type:       "full",
+    });
+    return { zoneId: result.id, nameservers: result.name_servers };
+  } catch (err) {
+    // Zone already exists — fetch the existing one instead of failing
+    const msg = err instanceof Error ? err.message : "";
+    if (!msg.includes("already exists") && !msg.includes("1061")) throw err;
 
-  return { zoneId: result.id, nameservers: result.name_servers };
+    const zones = await cfFetch<{ id: string; name_servers: string[] }[]>(
+      "GET", `/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`,
+    );
+    if (!zones?.length) throw new Error(`Zone already exists for ${domain} but could not be retrieved`);
+    return { zoneId: zones[0].id, nameservers: zones[0].name_servers };
+  }
 }
 
 /**
