@@ -614,6 +614,12 @@ export default function BuyDomainPage() {
               <Row label="Monthly subscription" value={`$${recurringUsd}/mo`} highlight />
               <p className="text-white/30 text-xs mt-1">${INBOX_PRICE_USD}/inbox × {totalInboxes} inboxes</p>
             </div>
+            {(redirectUrl || replyForwardTo) && (
+              <div className="border-t border-white/8 pt-3 space-y-1">
+                {redirectUrl     && <Row label="Redirect visitors to" value={redirectUrl} mono />}
+                {replyForwardTo  && <Row label="Forward replies to"   value={replyForwardTo} mono />}
+              </div>
+            )}
           </div>
 
           {/* Currency — driven by sidebar toggle */}
