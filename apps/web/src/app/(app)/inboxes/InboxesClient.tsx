@@ -876,10 +876,14 @@ export default function InboxesClient() {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: `${PROVIDER_COLORS[drawerInbox.provider] ?? "#888"}20`, border: `1px solid ${PROVIDER_COLORS[drawerInbox.provider] ?? "#888"}40` }}>
-                  <span className="text-xs font-bold" style={{ color: PROVIDER_COLORS[drawerInbox.provider] ?? "#888" }}>{drawerInbox.provider.toUpperCase().slice(0, 2)}</span>
-                </div>
+                <InboxAvatar
+                  inbox={{ ...drawerInbox, ...drawerEdits }}
+                  size={40}
+                  onUploaded={(url) => {
+                    setDrawerEdits(e => ({ ...e, profile_image_url: url }));
+                    setInboxes(prev => prev.map(i => i.id === drawerInbox.id ? { ...i, profile_image_url: url } : i));
+                  }}
+                />
                 <div>
                   <p className="text-white font-semibold text-sm truncate max-w-xs">{drawerInbox.email_address}</p>
                   <div className="flex items-center gap-2 mt-0.5">
