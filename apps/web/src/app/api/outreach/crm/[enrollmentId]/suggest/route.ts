@@ -12,8 +12,8 @@ export async function POST(
   const { workspaceId, db } = auth;
   const { enrollmentId } = await params;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 });
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "AI not configured (set GEMINI_API_KEY)" }, { status: 503 });
 
   // Fetch enrollment + lead
   const { data: enrollment } = await db
