@@ -451,9 +451,13 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
     setForm(f => ({ ...f, [key]: value }));
   }
 
-  const costPerLead = form.mode === "scrape" ? CREDIT_COSTS.scrape
-    : form.mode === "verify_personalize" ? CREDIT_COSTS.verify_personalize
-    : CREDIT_COSTS.full_suite;
+  // Build cost dynamically so toggling aiEnabled updates the estimate in real-time
+  const costPerLead =
+    (form.mode === "scrape" || form.mode === "full_suite" ? CREDIT_COSTS.scrape : 0) +
+    (form.mode === "verify_personalize" || form.mode === "full_suite" ? CREDIT_COSTS.verify : 0) +
+    ((form.mode === "verify_personalize" || form.mode === "full_suite") && form.aiEnabled
+      ? CREDIT_COSTS.ai_personalize
+      : 0);
 
   const estimatedCost = form.totalResults * costPerLead;
   const canAfford     = balance >= estimatedCost;
