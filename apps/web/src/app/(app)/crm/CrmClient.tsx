@@ -65,6 +65,7 @@ function ToolbarBtn({ children, title, onClick }: { children: React.ReactNode; t
       type="button"
       title={title}
       onMouseDown={(e) => { e.preventDefault(); onClick(e); }}
+      onClick={(e) => e.stopPropagation()}
       className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white/80 text-xs transition-colors"
     >
       {children}
