@@ -45,21 +45,21 @@ export async function POST(
   try {
     if (inbox.provider === "gmail" && inbox.oauth_refresh_token) {
       await sendGmailMessage(inbox as OutreachInbox, {
-        to: inbox.email_address,
+        to: toEmail,
         subject,
         htmlBody,
         textBody,
       });
     } else if (inbox.provider === "outlook" && inbox.oauth_refresh_token) {
       await sendMicrosoftMessage(inbox as OutreachInbox, {
-        to: inbox.email_address,
+        to: toEmail,
         subject,
         htmlBody,
         textBody,
       });
     } else if (inbox.smtp_host && inbox.smtp_user) {
       await sendSmtpMessage(inbox as OutreachInbox, {
-        to: inbox.email_address,
+        to: toEmail,
         subject,
         htmlBody,
         textBody,
