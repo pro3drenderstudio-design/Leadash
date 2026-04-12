@@ -178,6 +178,7 @@ export async function POST(req: NextRequest) {
           first_name:           domainRecord.first_name ?? null,
           last_name:            domainRecord.last_name  ?? null,
         });
+        if (inboxError) throw new Error(`Failed to create inbox ${email}: ${inboxError.message}`);
       } // end for logins
 
       // ── Step 7: Mark domain active ───────────────────────────────────────────
