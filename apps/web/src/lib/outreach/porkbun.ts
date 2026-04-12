@@ -75,7 +75,7 @@ interface TldPricing {
  */
 export async function getLivePricing(): Promise<Record<string, TldPricing>> {
   if (!process.env.PORKBUN_API_KEY) throw new Error("PORKBUN_API_KEY is not configured");
-  const data = await call<{ pricing: Record<string, TldPricing> }>("/domain/pricing/get");
+  const data = await call<{ pricing: Record<string, TldPricing> }>("/pricing/get");
   return data.pricing;
 }
 
