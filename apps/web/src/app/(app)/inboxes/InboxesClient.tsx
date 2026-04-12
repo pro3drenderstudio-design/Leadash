@@ -250,9 +250,44 @@ export default function InboxesClient() {
     }
   }
 
-  function showToast(msg: string, isError = false) {
+  function showToast(msg: string, _isError = false) {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  }
+
+  async function loadDomains() {
+    setDomainsLoading(true);
+    try {
+      const res = await wsFetch("/api/outreach/domains");
+      if (res.ok) setDomains(await res.json());
+    } catch { /* swallow */ }
+    finally { setDomainsLoading(false); }
+  }
+
+  useEffect(() => {
+    if (activeTab === "domains" && domains.length === 0) loadDomains();
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleReconfigure(domainId: string) {
+    setReconfiguringId(domainId);
+    try {
+      const res = await wsFetch(`/api/outreach/domains/${domainId}/ses-register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ use_cloudflare: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      showToast(data.auto_configured
+        ? "DNS re-applied via Cloudflare — MAIL FROM + DKIM updated"
+        : "SES re-registered — add the new DNS records manually"
+      );
+      loadDomains();
+    } catch (e) {
+      showToast(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setReconfiguringId(null);
+    }
   }
 
   async function handleDelete(id: string, label: string) {
