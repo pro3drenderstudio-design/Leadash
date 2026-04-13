@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { verifyEmails } from "@/lib/lead-campaigns/verifier";
+import { verifyEmails } from "@/lib/lead-campaigns/reoon";
 
 // POST /api/lead-campaigns/verify-single
 export async function POST(req: NextRequest) {
