@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, isDomainVerified, enableDkimSigning, setMailFromDomain, getSmtpCredentials } from "@/lib/outreach/ses";
-import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings } from "@/lib/outreach/postal";
+import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
 const WARMUP_DAYS = 21;
@@ -11,7 +11,7 @@ async function sleep(ms: number) {
 }
 
 // ── POST /api/outreach/domains/connect ─────────────────────────────────────────
-// Registers an existing domain with SES, publishes DNS records if the domain
+// Registers an existing domain with Postal, publishes DNS records if the domain
 // uses Cloudflare, and returns DNS records to display to the user.
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -54,18 +54,24 @@ export async function POST(req: NextRequest) {
 
   const domainRecordId = rec.id;
 
-  // Register with SES + get DKIM tokens + set custom MAIL FROM for DMARC alignment
-  let dkimTokens: string[];
+  // Register with Postal + get DKIM public key
+  const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+  if (!postalIp) {
+    await db.from("outreach_domains").update({ status: "failed", error_message: "POSTAL_SERVER_IP is not configured" }).eq("id", domainRecordId);
+    return NextResponse.json({ error: "POSTAL_SERVER_IP is not configured" }, { status: 500 });
+  }
+
+  let dkimPublicKey: string;
   try {
-    ({ dkimTokens } = await registerDomain(domain));
-    await setMailFromDomain(domain).catch(() => {}); // non-fatal if it fails
+    const postalDomain = await registerDomain(domain);
+    dkimPublicKey = postalDomain.dkim_public_key;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db.from("outreach_domains").update({ status: "failed", error_message: msg }).eq("id", domainRecordId);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const dnsRecords = buildMailDnsRecords(domain, dkimTokens);
+  const dnsRecords = buildPostalMailDnsRecords(domain, postalIp, dkimPublicKey);
 
   // If the domain's DNS is managed by Cloudflare in this account, auto-publish
   if (use_cloudflare) {
@@ -85,7 +91,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ── PATCH /api/outreach/domains/connect ────────────────────────────────────────
-// Called after user adds DNS records. Polls SES verification, then creates inboxes.
+// Called after user adds DNS records. Polls Postal DKIM propagation, then creates inboxes.
 export async function PATCH(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
@@ -105,7 +111,7 @@ export async function PATCH(req: NextRequest) {
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (domainRecord.status === "active") {
-    // Check if inboxes were actually created — Re-configure sets status=active but skips inbox creation
+    // Check if inboxes were actually created — re-configure sets status=active but skips inbox creation
     const { count: existingCount } = await db
       .from("outreach_inboxes")
       .select("id", { count: "exact", head: true })
@@ -117,7 +123,7 @@ export async function PATCH(req: NextRequest) {
     // Fall through to create inboxes (domain is verified but inboxes were never made)
   }
 
-  // Check SES verification
+  // Check Postal DKIM DNS propagation
   await db.from("outreach_domains").update({ status: "verifying" }).eq("id", domain_record_id);
 
   let verified = false;
@@ -135,10 +141,8 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
-  await enableDkimSigning(domainRecord.domain);
-
-  // Create inboxes
-  const smtp = getSmtpCredentials();
+  // Create per-mailbox Postal SMTP credentials + inboxes
+  const smtpSettings = getSmtpSettings();
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes) && domainRecord.mailbox_prefixes.length > 0
@@ -147,6 +151,11 @@ export async function PATCH(req: NextRequest) {
 
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
+
+    const cred = await createSmtpCredential(domainRecord.domain, email).catch(err => {
+      throw new Error(`Postal createSmtpCredential(${email}): ${err.message}`);
+    });
+
     const { error: inboxError } = await db.from("outreach_inboxes").insert({
       workspace_id:         workspaceId,
       domain_id:            domain_record_id,
@@ -154,11 +163,11 @@ export async function PATCH(req: NextRequest) {
       email_address:        email,
       provider:             "smtp",
       status:               "active",
-      smtp_host:            smtp.host,
-      smtp_port:            smtp.port,
-      smtp_user:            smtp.username,
-      smtp_pass_encrypted:  encrypt(smtp.password),
-      imap_host:            null,
+      smtp_host:            smtpSettings.host,
+      smtp_port:            smtpSettings.port,
+      smtp_user:            cred.username,
+      smtp_pass_encrypted:  encrypt(cred.password),
+      imap_host:            null, // SES handles inbound replies
       imap_port:            null,
       daily_send_limit:     30,
       warmup_enabled:       true,
