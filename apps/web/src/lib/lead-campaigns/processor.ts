@@ -187,7 +187,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           }
         }
 
-        await deductCredits(db, fresh.workspace_id, campaignId, results.length, "verify");
+        await deductCredits(db, fresh.workspace_id, campaignId, results.length * 0.5, "verify");
         await db.from("lead_campaigns")
           .update({ total_verified: (fresh.total_verified ?? 0) + results.length })
           .eq("id", campaignId);
