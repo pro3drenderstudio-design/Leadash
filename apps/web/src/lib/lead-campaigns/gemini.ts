@@ -1,9 +1,7 @@
-// ─── Gemini AI personalization ────────────────────────────────────────────────
+// ─── OpenAI GPT personalization ───────────────────────────────────────────────
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-// Use the stable flash model — gemini-2.5-flash requires specific API key tiers.
-// Upgrade to gemini-2.5-flash-preview-04-17 once key supports it.
-const MODEL       = "gemini-2.0-flash";
+const OPENAI_BASE = "https://api.openai.com/v1/chat/completions";
+const MODEL       = "gpt-4o-mini";
 
 interface LeadData {
   first_name?: string | null;
@@ -23,8 +21,8 @@ export async function personalizeLeads(
   productPrompt: string,
   depth:         "standard" | "deep" = "standard",
 ): Promise<string[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
   const BATCH = 20;
   const results: string[] = [];
@@ -50,29 +48,28 @@ async function personalizeSingle(
     lead.industry && `(${lead.industry} industry)`,
   ].filter(Boolean).join(" ");
 
-  let prompt: string;
-  let maxTokens: number;
+  let systemPrompt: string;
+  let userPrompt:   string;
+  let maxTokens:    number;
 
   if (depth === "deep") {
-    prompt = `You are an expert cold email copywriter. Write a complete, highly personalized cold email body for the following prospect.
+    systemPrompt = "You are an expert cold email copywriter. Write complete, highly personalized cold email bodies. Never use placeholders. Output only the email body — no subject line, no greeting, no sign-off.";
+    userPrompt   = `Write a personalized cold email body for this prospect.
 
 Prospect: ${name}${context ? `, ${context}` : ""}
-Offer/Product: ${productPrompt}
+Offer: ${productPrompt}
 
 Rules:
 - 3-4 short paragraphs, conversational tone, no fluff
 - Reference their specific role, company, or industry naturally
 - Clear value proposition and one soft CTA at the end
-- Do NOT include a subject line
-- Do NOT include a greeting like "Hi [name]" at the start
-- Do NOT include a sign-off or signature at the end
-- Do NOT use generic openers like "I hope this finds you well"
-- No placeholders — write the full body ready to drop into a sequence
-- Keep it under 120 words
-- Respond with ONLY the email body, nothing else`;
+- No subject line, no greeting like "Hi [name]", no sign-off
+- No generic openers like "I hope this finds you well"
+- Under 120 words`;
     maxTokens = 400;
   } else {
-    prompt = `You are a cold email expert. Write a single personalized icebreaker opening line (1-2 sentences, max 30 words) for a cold email to ${name}${context ? `, ${context}` : ""}.
+    systemPrompt = "You are a cold email expert. Write single personalized icebreaker opening lines. Output only the line — no quotes, no greeting, nothing else.";
+    userPrompt   = `Write a personalized icebreaker opening line (1-2 sentences, max 30 words) for a cold email to ${name}${context ? `, ${context}` : ""}.
 
 The email is about: ${productPrompt}
 
@@ -80,26 +77,34 @@ Rules:
 - Reference something specific about their role, company, or industry
 - Sound natural and human, not salesy
 - No generic openers like "I came across your profile"
-- Do NOT include a greeting like "Hi [name]" — just the icebreaker line
-- Respond with ONLY the icebreaker line, no quotes, no ellipsis`;
+- Do NOT start with "Hi [name]" — just the icebreaker line`;
     maxTokens = 120;
   }
 
-  const res = await fetch(`${GEMINI_BASE}/${MODEL}:generateContent?key=${apiKey}`, {
+  const res = await fetch(OPENAI_BASE, {
     method:  "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.9 },
+      model:       MODEL,
+      messages:    [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt },
+      ],
+      max_tokens:  maxTokens,
+      temperature: 0.9,
     }),
   });
 
   if (!res.ok) {
     let detail = "";
     try { const e = await res.json(); detail = e?.error?.message ?? JSON.stringify(e); } catch { /* ignore */ }
-    throw new Error(`Gemini API error ${res.status}${detail ? `: ${detail}` : ""}`);
+    throw new Error(`OpenAI API error ${res.status}${detail ? `: ${detail}` : ""}`);
   }
+
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = data?.choices?.[0]?.message?.content ?? "";
   return text.trim().replace(/^["']|["']$/g, "");
 }
