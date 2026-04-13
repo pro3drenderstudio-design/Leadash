@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { PLANS, CREDIT_PACKS, CREDIT_COSTS } from "@/lib/billing/plans";
+import { PLANS, CREDIT_COSTS } from "@/lib/billing/plans";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
