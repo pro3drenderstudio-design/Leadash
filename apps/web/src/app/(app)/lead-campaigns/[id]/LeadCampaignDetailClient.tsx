@@ -32,9 +32,12 @@ const VERIFY_STYLES: Record<string, { bg: string; text: string; dot: string }> =
 };
 
 const DL_STATUS_OPTIONS = [
-  { key: "valid",      label: "Valid",       dotCls: "bg-emerald-400" },
+  { key: "safe",       label: "Safe",        dotCls: "bg-emerald-400" },
   { key: "catch_all",  label: "Catch-all",   dotCls: "bg-amber-400" },
+  { key: "risky",      label: "Risky",       dotCls: "bg-amber-400" },
   { key: "invalid",    label: "Invalid",     dotCls: "bg-red-400" },
+  { key: "dangerous",  label: "Dangerous",   dotCls: "bg-red-400" },
+  { key: "disposable", label: "Disposable",  dotCls: "bg-orange-400" },
   { key: "unknown",    label: "Unknown",     dotCls: "bg-white/30" },
   { key: "pending",    label: "Not verified",dotCls: "bg-white/15" },
 ];
