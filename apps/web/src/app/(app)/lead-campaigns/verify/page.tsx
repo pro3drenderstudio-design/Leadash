@@ -101,9 +101,6 @@ export default function VerifyEmailPage() {
                 <span className="text-white/40 text-sm">Score: {result.score}</span>
               </div>
               <p className="text-white/60 text-sm break-all">{result.email}</p>
-              {result.reason && (
-                <p className="text-white/30 text-xs mt-1 font-mono">{result.reason}</p>
-              )}
             </div>
           </div>
         </div>
