@@ -570,11 +570,12 @@ function Comparison() {
 function Pricing() {
   const plans = [
     {
-      name: "Starter",
-      price: "$49",
+      id: "starter",
+      name: PLANS.starter.name,
+      price: `₦${PLANS.starter.priceNgn.toLocaleString()}`,
       period: "/month",
       desc: "For solo founders and small teams getting started with outreach.",
-      features: ["5,000 lead credits/month", "3 sending inboxes", "3 active sequences", "Email verification", "Basic AI personalization", "Email support"],
+      features: [`${PLANS.starter.includedCredits.toLocaleString()} credits/month`, `${PLANS.starter.maxLeadsPool.toLocaleString()} leads pool`, "Unlimited inboxes", "Email verification", "AI personalization", "Email support"],
       cta: "Start free trial",
       highlight: false,
     },
