@@ -203,6 +203,21 @@ async function verifySingle(email: string): Promise<VerifyResult> {
     return { ...base, status: "disposable", score: 10, reason: "disposable_domain" };
   }
 
+  // Known major providers that block SMTP probing from unknown IPs.
+  // These are verified by MX + syntax only — SMTP probing will always 4xx.
+  const MAJOR_PROVIDERS = new Set([
+    "gmail.com", "googlemail.com",
+    "outlook.com", "hotmail.com", "live.com", "msn.com",
+    "hotmail.co.uk", "live.co.uk", "hotmail.fr", "live.fr",
+    "yahoo.com", "yahoo.co.uk", "yahoo.fr", "yahoo.de", "yahoo.es", "yahoo.it", "yahoo.ca",
+    "icloud.com", "me.com", "mac.com",
+    "protonmail.com", "proton.me",
+    "aol.com", "aol.co.uk",
+    "zoho.com", "zohomail.com",
+    "mail.com", "gmx.com", "gmx.net", "gmx.de",
+    "hey.com", "fastmail.com", "fastmail.fm",
+  ]);
+
   // 3. MX lookup
   let mxHost = getCachedMx(domain);
   if (!mxHost) {
