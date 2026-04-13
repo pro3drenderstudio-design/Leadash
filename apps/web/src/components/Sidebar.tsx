@@ -87,7 +87,12 @@ export default function Sidebar({ workspaceName, plan }: Props) {
             <p className="px-2 mb-1.5 text-[9px] font-bold text-white/20 uppercase tracking-[0.15em]">{group.label}</p>
             <div className="space-y-0.5">
               {group.items.map(item => {
-                const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                const allHrefs = NAV.flatMap(g => g.items.map(i => i.href));
+                const active = pathname === item.href || (
+                  item.href !== "/dashboard" &&
+                  pathname.startsWith(item.href + "/") &&
+                  !allHrefs.some(h => h !== item.href && pathname.startsWith(h))
+                );
                 return (
                   <Link
                     key={item.href}
