@@ -2,7 +2,7 @@
 
 export type LeadCampaignMode   = "scrape" | "verify_personalize" | "full_suite";
 export type LeadCampaignStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
-export type VerificationStatus = "pending" | "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
+export type VerificationStatus = "pending" | "safe" | "valid" | "invalid" | "catch_all" | "risky" | "dangerous" | "disposable" | "unknown";
 export type CreditTxType       = "grant" | "purchase" | "reserve" | "consume" | "refund";
 
 export interface LeadCampaign {
