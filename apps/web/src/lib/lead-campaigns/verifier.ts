@@ -10,9 +10,10 @@
  */
 
 export interface VerifyResult {
-  email:  string;
-  status: "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
-  score:  number;
+  email:   string;
+  status:  "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
+  score:   number;
+  reason?: string;
 }
 
 function verifierUrl(): string {
