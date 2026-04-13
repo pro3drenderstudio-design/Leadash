@@ -48,11 +48,14 @@ async function verifySingle(apiKey: string, email: string): Promise<ReoonResult>
 
 function mapReoonStatus(raw: string): ReoonResult["status"] {
   switch (raw?.toLowerCase()) {
+    case "safe":
     case "valid":       return "valid";
-    case "invalid":     return "invalid";
+    case "invalid":
+    case "dangerous":   return "invalid";
     case "catch_all":
     case "catchall":    return "catch_all";
     case "disposable":  return "disposable";
+    case "risky":       return "unknown";
     default:            return "unknown";
   }
 }
