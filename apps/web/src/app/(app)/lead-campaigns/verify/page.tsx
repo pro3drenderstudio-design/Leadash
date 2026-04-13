@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { wsPost } from "@/lib/workspace/client";
-import type { VerifyResult } from "@/lib/lead-campaigns/verifier";
+import type { ReoonResult as VerifyResult } from "@/lib/lead-campaigns/reoon";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   safe:        { label: "Safe",        color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/25", icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
