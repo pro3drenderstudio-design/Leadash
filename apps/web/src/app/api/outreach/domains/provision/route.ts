@@ -89,10 +89,10 @@ export async function POST(req: NextRequest) {
       await setStatus("purchasing");
       await purchaseDomain(domainRecord.domain);
 
-      // ── Step 3: Register domain with SES + get DKIM tokens ──────────────────
+      // ── Step 3: Register domain with Postal + get DKIM public key ───────────
       await setStatus("dns_pending");
-      const { dkimTokens } = await registerDomain(domainRecord.domain)
-        .catch(e => { throw new Error(`SES registerDomain: ${e.message}`); });
+      const postalDomain = await registerDomain(domainRecord.domain)
+        .catch(e => { throw new Error(`Postal registerDomain: ${e.message}`); });
 
       // ── Step 3b: Add zone to Cloudflare + point Porkbun nameservers ──────────
       // Brief pause — Porkbun needs a few seconds after purchase before accepting NS updates
@@ -103,7 +103,13 @@ export async function POST(req: NextRequest) {
         .catch(e => { throw new Error(`Porkbun updateNameservers: ${e.message}`); });
 
       // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────
-      const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
+      const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+      if (!postalIp) throw new Error("POSTAL_SERVER_IP env var is not set");
+      const dnsRecords = buildPostalMailDnsRecords(
+        domainRecord.domain,
+        postalIp,
+        postalDomain.dkim_public_key,
+      );
       await publishDnsRecords(domainRecord.domain, dnsRecords)
         .catch(e => { throw new Error(`CF publishDnsRecords: ${e.message}`); });
 
