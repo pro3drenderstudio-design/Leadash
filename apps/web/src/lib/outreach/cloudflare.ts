@@ -263,6 +263,51 @@ export async function setEmailForwarding(domain: string, forwardTo: string): Pro
 }
 
 /**
+ * Build mail DNS records for a domain provisioned via Postal (self-hosted SMTP).
+ * - SPF: authorises the Postal VPS IP (or hostname)
+ * - DKIM: single TXT record with Postal-generated public key (selector "postal")
+ * - DMARC: quarantine policy
+ * - MX: kept pointing to SES inbound for reply detection (unchanged)
+ *
+ * postalIp: the public IPv4 of the Hetzner VPS (used in SPF)
+ * dkimPublicKey: base64 RSA public key returned by postal-agent
+ */
+export function buildPostalMailDnsRecords(
+  domain: string,
+  postalIp: string,
+  dkimPublicKey: string,
+): DnsRecord[] {
+  const region = process.env.AWS_REGION ?? "us-east-1";
+  return [
+    // SPF — authorise Postal VPS IP
+    {
+      type:  "TXT",
+      name:  "@",
+      value: `v=spf1 ip4:${postalIp} ~all`,
+    },
+    // DKIM — Postal-generated 2048-bit key, selector "postal"
+    {
+      type:  "TXT",
+      name:  "postal._domainkey",
+      value: `v=DKIM1; k=rsa; p=${dkimPublicKey}`,
+    },
+    // DMARC
+    {
+      type:  "TXT",
+      name:  "_dmarc",
+      value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}; pct=100`,
+    },
+    // MX — keep SES inbound for reply detection (no change)
+    {
+      type:     "MX",
+      name:     "@",
+      value:    `inbound-smtp.${region}.amazonaws.com`,
+      priority: 10,
+    },
+  ];
+}
+
+/**
  * Build the standard set of mail DNS records for a domain + SES DKIM tokens.
  * sesDkimTokens: array of 3 tokens returned by AWS SES verifyDomainDkim()
  */
