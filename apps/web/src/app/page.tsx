@@ -859,8 +859,8 @@ function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-white/6 gap-4">
           <p className="text-white/20 text-sm">© {new Date().getFullYear()} Leadash. All rights reserved.</p>
           <div className="flex items-center gap-6">
-            {["Privacy Policy", "Terms of Service", "GDPR"].map(l => (
-              <a key={l} href="#" className="text-white/20 text-sm hover:text-white/50 transition-colors">{l}</a>
+            {[["Privacy Policy", "/privacy"], ["Terms of Service", "/terms"], ["GDPR", "/privacy#gdpr"]].map(([l, href]) => (
+              <a key={l} href={href} className="text-white/20 text-sm hover:text-white/50 transition-colors">{l}</a>
             ))}
           </div>
         </div>
