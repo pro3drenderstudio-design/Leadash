@@ -11,6 +11,9 @@ export async function POST(req: NextRequest) {
   if (!email || !email.includes("@"))
     return NextResponse.json({ error: "A valid email address is required" }, { status: 400 });
 
-  const [result] = await verifyEmails([email.trim().toLowerCase()]);
+  const apiKey = process.env.REOON_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "REOON_API_KEY is not configured" }, { status: 500 });
+
+  const [result] = await verifyEmails(apiKey, [email.trim().toLowerCase()]);
   return NextResponse.json(result);
 }
