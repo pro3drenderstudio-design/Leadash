@@ -232,6 +232,11 @@ async function verifySingle(email: string): Promise<VerifyResult> {
     }
   }
 
+  // 3b. Major provider — skip SMTP (it will always be inconclusive from unknown IPs)
+  if (MAJOR_PROVIDERS.has(domain)) {
+    return { ...base, status: "valid", score: 90, reason: "major_provider_mx_verified" };
+  }
+
   // 4. Catch-all detection (probe with random address)
   let isCatchAll = getCachedCatchAll(domain);
   if (isCatchAll === null) {
