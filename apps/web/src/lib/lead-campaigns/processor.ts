@@ -229,7 +229,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           }
         }
 
-        await deductCredits(db, fresh2.workspace_id, campaignId, personalized * 2, "personalize");
+        await deductCredits(db, fresh2.workspace_id, campaignId, personalized * 0.5, "personalize");
         await db.from("lead_campaigns")
           .update({ total_personalized: (fresh2.total_personalized ?? 0) + personalized })
           .eq("id", campaignId);
