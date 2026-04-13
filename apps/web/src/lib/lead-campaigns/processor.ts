@@ -174,7 +174,8 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       if (pending?.length) {
         type PendingLead = { id: string; email: string };
         const typedPending = pending as PendingLead[];
-        const results = await verifyEmails(typedPending.map(l => l.email));
+        const reoonKey = process.env.REOON_API_KEY ?? "";
+        const results = await verifyEmails(reoonKey, typedPending.map(l => l.email));
 
         for (const result of results) {
           const lead = typedPending.find(l => l.email === result.email);
