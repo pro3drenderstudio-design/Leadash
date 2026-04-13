@@ -707,9 +707,9 @@ function CTA() {
                 </svg>
                 Start for free
               </Link>
-              <Link href="/pricing" className="w-full sm:w-auto px-10 py-4 rounded-2xl text-base font-semibold text-white/60 hover:text-white border border-white/10 hover:border-white/25 transition-all text-center">
+              <a href="#pricing" className="w-full sm:w-auto px-10 py-4 rounded-2xl text-base font-semibold text-white/60 hover:text-white border border-white/10 hover:border-white/25 transition-all text-center">
                 See pricing
-              </Link>
+              </a>
             </div>
 
             <p className="text-white/25 text-sm mt-6">No credit card required. Upgrade or cancel anytime.</p>
