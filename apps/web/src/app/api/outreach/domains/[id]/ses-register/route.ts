@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, setMailFromDomain, isDomainVerified } from "@/lib/outreach/ses";
-import { buildMailDnsRecords, publishDnsRecords } from "@/lib/outreach/cloudflare";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings } from "@/lib/outreach/postal";
+import { buildPostalMailDnsRecords, publishDnsRecords } from "@/lib/outreach/cloudflare";
+import { encrypt } from "@/lib/outreach/crypto";
 
 // POST /api/outreach/domains/[id]/ses-register
-// Registers an existing domain record with SES and returns the DNS records.
-// Used by the "connect existing domain" flow after payment.
+// Reconfigures an existing domain to use Postal for outbound sending.
+// Re-registers with Postal, refreshes DNS records, and re-provisions
+// SMTP credentials for all inboxes on the domain.
+// SES inbound (reply detection via S3) is unchanged.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -26,18 +29,21 @@ export async function POST(
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Always re-register to ensure MAIL FROM and latest DNS records are applied
-  let dkimTokens: string[];
+  const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+  if (!postalIp) return NextResponse.json({ error: "POSTAL_SERVER_IP is not configured" }, { status: 500 });
+
+  // Register (or re-register) domain with Postal — idempotent
+  let dkimPublicKey: string;
   try {
-    ({ dkimTokens } = await registerDomain(domainRecord.domain));
-    await setMailFromDomain(domainRecord.domain).catch(() => {}); // non-fatal
+    const postalDomain = await registerDomain(domainRecord.domain);
+    dkimPublicKey = postalDomain.dkim_public_key;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db.from("outreach_domains").update({ status: "failed", error_message: msg }).eq("id", id);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
+  const dnsRecords = buildPostalMailDnsRecords(domainRecord.domain, postalIp, dkimPublicKey);
 
   let auto_configured = false;
   if (use_cloudflare) {
@@ -49,14 +55,50 @@ export async function POST(
     }
   }
 
-  // If domain was already verified in SES, keep it active — we just updated DNS records
-  const alreadyVerified = domainRecord.status === "active" || await isDomainVerified(domainRecord.domain).catch(() => false);
+  // Check if DKIM is already propagated
+  const alreadyVerified = await isDomainVerified(domainRecord.domain).catch(() => false);
   const newStatus = alreadyVerified ? "active" : "dns_pending";
 
   await db
     .from("outreach_domains")
-    .update({ dns_records: dnsRecords, status: newStatus })
+    .update({ dns_records: dnsRecords, status: newStatus, updated_at: new Date().toISOString() })
     .eq("id", id);
 
-  return NextResponse.json({ domain: domainRecord.domain, dns_records: dnsRecords, auto_configured, status: newStatus });
+  // Re-provision Postal SMTP credentials for all existing inboxes on this domain
+  const { data: inboxes } = await db
+    .from("outreach_inboxes")
+    .select("id, email_address")
+    .eq("domain_id", id)
+    .eq("workspace_id", workspaceId);
+
+  const smtpSettings = getSmtpSettings();
+  const credErrors: string[] = [];
+
+  for (const inbox of inboxes ?? []) {
+    try {
+      const cred = await createSmtpCredential(domainRecord.domain, inbox.email_address);
+      await db.from("outreach_inboxes").update({
+        smtp_host:           smtpSettings.host,
+        smtp_port:           smtpSettings.port,
+        smtp_user:           cred.username,
+        smtp_pass_encrypted: encrypt(cred.password),
+        imap_host:           null,
+        imap_port:           null,
+        status:              "active",
+        last_error:          null,
+        updated_at:          new Date().toISOString(),
+      }).eq("id", inbox.id);
+    } catch (err) {
+      credErrors.push(`${inbox.email_address}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return NextResponse.json({
+    domain:          domainRecord.domain,
+    dns_records:     dnsRecords,
+    auto_configured,
+    status:          newStatus,
+    inboxes_updated: (inboxes?.length ?? 0) - credErrors.length,
+    ...(credErrors.length ? { credential_errors: credErrors } : {}),
+  });
 }
