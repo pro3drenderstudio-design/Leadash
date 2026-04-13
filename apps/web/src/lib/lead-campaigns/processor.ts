@@ -209,7 +209,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
         .is("personalized_line", null);
 
       if (fresh2.personalize_valid_only) {
-        personQuery = personQuery.in("verification_status", ["valid", "catch_all"]);
+        personQuery = personQuery.in("verification_status", ["safe", "valid", "catch_all"]);
       }
 
       const { data: unpersonalized } = await personQuery.limit(50);
