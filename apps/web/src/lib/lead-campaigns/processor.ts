@@ -19,7 +19,6 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
   if (campaign.status === "completed" || campaign.status === "cancelled") return;
 
   const apifyKey = process.env.APIFY_API_KEY;
-  const reoonKey = process.env.REOON_API_KEY;
 
   try {
     // ── Step 1: Scrape via Apify ──────────────────────────────────────────────
