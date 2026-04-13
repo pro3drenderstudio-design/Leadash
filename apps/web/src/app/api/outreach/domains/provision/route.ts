@@ -136,32 +136,25 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Step 5: Wait for SES domain verification ────────────────────────────
+      // ── Step 5: Wait for DKIM DNS propagation ───────────────────────────────
       await setStatus("verifying");
 
       let verified = false;
       for (let attempt = 1; attempt <= 6; attempt++) {
-        await sleep(10_000); // 10s between attempts — DNS can take time
+        await sleep(10_000); // 10s between attempts
         verified = await isDomainVerified(domainRecord.domain);
         if (verified) break;
       }
 
-      if (verified) {
-        await enableDkimSigning(domainRecord.domain);
-      } else {
-        // Continue anyway — SES sometimes takes longer than 60s.
-        // The domain will become verified in the background.
-        console.warn(`[provision] SES verification still pending for ${domainRecord.domain} — continuing`);
+      if (!verified) {
+        // DNS can take longer — continue anyway, sending will work once DKIM propagates
+        console.warn(`[provision] DKIM not yet visible for ${domainRecord.domain} — continuing`);
       }
 
-      // ── Step 6: Create inboxes ───────────────────────────────────────────────
-      // SES uses shared SMTP credentials (IAM key-derived).
-      // Each inbox sends FROM a different address — deliverability comes
-      // from the domain's DNS records, not per-mailbox SMTP auth.
-      const smtp = getSmtpCredentials();
+      // ── Step 6: Create per-mailbox Postal SMTP credentials + inboxes ─────────
+      const smtpSettings = getSmtpSettings();
       const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-      // Use explicit prefixes if set (name-based), otherwise fall back to prefix+number pattern
       const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
         ? domainRecord.mailbox_prefixes as string[]
         : null;
@@ -171,6 +164,10 @@ export async function POST(req: NextRequest) {
       for (const login of logins) {
         const email = `${login}@${domainRecord.domain}`;
 
+        // Each mailbox gets its own Postal SMTP credential
+        const cred = await createSmtpCredential(domainRecord.domain, email)
+          .catch(e => { throw new Error(`Postal createSmtpCredential(${email}): ${e.message}`); });
+
         const { error: inboxError } = await db.from("outreach_inboxes").insert({
           workspace_id:         workspaceId,
           domain_id:            domain_record_id,
@@ -178,12 +175,11 @@ export async function POST(req: NextRequest) {
           email_address:        email,
           provider:             "smtp",
           status:               "active",
-          smtp_host:            smtp.host,
-          smtp_port:            smtp.port,
-          smtp_user:            smtp.username,
-          smtp_pass_encrypted:  encrypt(smtp.password),
-          // No IMAP via SES — reply detection handled separately via SES inbound
-          imap_host:            null,
+          smtp_host:            smtpSettings.host,
+          smtp_port:            smtpSettings.port,
+          smtp_user:            cred.username,
+          smtp_pass_encrypted:  encrypt(cred.password),
+          imap_host:            null, // SES handles inbound replies
           imap_port:            null,
           daily_send_limit:     30,
           warmup_enabled:       true,
