@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { personalizeLeads } from "@/lib/lead-campaigns/gemini";
 
-const COST_PER_LEAD = 2;
+const COST_PER_LEAD = 0.5;
 
 export async function POST(
   req: NextRequest,
