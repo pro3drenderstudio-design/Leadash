@@ -4,7 +4,7 @@ const REOON_BASE = "https://emailverifier.reoon.com/api/v1";
 
 export interface ReoonResult {
   email:  string;
-  status: "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
+  status: string; // raw Reoon status: "safe", "invalid", "catch_all", "disposable", "risky", "dangerous", etc.
   score:  number; // 0–100
 }
 
@@ -40,22 +40,8 @@ async function verifySingle(apiKey: string, email: string): Promise<ReoonResult>
   if (!res.ok) throw new Error(`Reoon API error ${res.status}`);
   const data = await res.json();
   return {
-    email:  data.email ?? email,
-    status: mapReoonStatus(data.status),
+    email:  data.email  ?? email,
+    status: data.status ?? "unknown",
     score:  typeof data.overall_score === "number" ? data.overall_score : 0,
   };
-}
-
-function mapReoonStatus(raw: string): ReoonResult["status"] {
-  switch (raw?.toLowerCase()) {
-    case "safe":
-    case "valid":       return "valid";
-    case "invalid":
-    case "dangerous":   return "invalid";
-    case "catch_all":
-    case "catchall":    return "catch_all";
-    case "disposable":  return "disposable";
-    case "risky":       return "unknown";
-    default:            return "unknown";
-  }
 }
