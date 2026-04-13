@@ -89,7 +89,7 @@ export default function LeadCampaignDetailClient() {
   const [newListName, setNewListName]     = useState("");
   const [exportResult, setExportResult]   = useState<string | null>(null);
   const [validOnly, setValidOnly]         = useState(true);
-  const [dlStatuses, setDlStatuses]       = useState<string[]>(["valid", "catch_all"]);
+  const [dlStatuses, setDlStatuses]       = useState<string[]>(["safe", "catch_all"]);
   const [cancelling, setCancelling]       = useState(false);
   const [drawerLead, setDrawerLead]       = useState<LeadCampaignLead | null>(null);
   const [showFilters, setShowFilters]     = useState(false);
