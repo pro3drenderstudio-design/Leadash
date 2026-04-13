@@ -670,6 +670,85 @@ function Pricing() {
   );
 }
 
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+
+const FAQ_ITEMS = [
+  {
+    q: "How does inbox warmup work?",
+    a: "Leadash automatically exchanges low-volume emails between your inboxes and a global warmup pool. Open rates, replies, and sending frequency are ramped up gradually over 3–5 weeks — building domain and IP reputation with Gmail, Outlook, and Yahoo before your first campaign goes out.",
+  },
+  {
+    q: "Can I use my existing Gmail or Outlook inbox?",
+    a: "Yes. Connect Gmail via OAuth in one click, or Outlook via OAuth for Microsoft 365. You can also connect any SMTP/IMAP inbox — Zoho, Fastmail, custom domains, anything. All inboxes get the same warmup, tracking, and CRM features.",
+  },
+  {
+    q: "What are credits used for?",
+    a: "Credits are consumed for three actions: scraping a new lead (1 cr), verifying an email address (0.5 cr), and generating an AI personalization line (0.5 cr). Sending emails and running campaigns never costs credits — only the data and AI layer does.",
+  },
+  {
+    q: "Do credits roll over?",
+    a: "Monthly plan credits reset each billing cycle and do not roll over. Top-up credits you purchase separately never expire and are used first before your monthly allocation.",
+  },
+  {
+    q: "What happens when I run out of credits?",
+    a: "Scraping, verification, and AI personalization pause. Emails already in active sequences continue sending normally — your campaigns are never interrupted. Buy more credits and data jobs resume instantly.",
+  },
+  {
+    q: "Is Leadash compliant with CAN-SPAM and GDPR?",
+    a: "Yes. Every sequence includes a one-click unsubscribe link. Unsubscribes are honoured globally across all campaigns instantly. Leads are stored in your private workspace — never sold or shared. You control data retention and can export or delete any time.",
+  },
+  {
+    q: "What payment methods are accepted?",
+    a: "NGN payments via Paystack — card, bank transfer, and USSD all supported. USD payments via Stripe for international users. You can switch between currencies at checkout.",
+  },
+  {
+    q: "Can I change or cancel my plan?",
+    a: "Upgrade or downgrade at any time. Changes take effect at the next billing cycle. Cancel any time — your data stays accessible until the end of the period, then is deleted after 30 days.",
+  },
+];
+
+function FAQ() {
+  return (
+    <section className="py-24 px-6" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <div className="max-w-3xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-14">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-indigo-400 border border-indigo-500/25 bg-indigo-500/8 mb-5">
+            Got questions?
+          </div>
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4" style={{ letterSpacing: "-0.025em" }}>
+            Everything you need<br />to <GradientText>know</GradientText>
+          </h2>
+          <p className="text-white/40 text-lg">Can't find the answer? <a href="/contact" className="text-indigo-400 hover:text-indigo-300 transition-colors">Reach out to us.</a></p>
+        </div>
+
+        {/* Accordion */}
+        <div className="space-y-2">
+          {FAQ_ITEMS.map((item, i) => (
+            <details
+              key={i}
+              className="group rounded-2xl overflow-hidden"
+              style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              <summary className="flex items-center justify-between px-6 py-5 cursor-pointer hover:bg-white/3 transition-colors list-none select-none">
+                <span className="text-white/85 text-sm font-medium pr-6 leading-snug">{item.q}</span>
+                <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.3)" }}>
+                  <svg className="w-3 h-3 text-indigo-400 transition-transform duration-200 group-open:rotate-45" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </span>
+              </summary>
+              <div className="px-6 pb-5 pt-1 text-white/45 text-sm leading-relaxed" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                {item.a}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── CTA banner ───────────────────────────────────────────────────────────────
 
 function CTA() {
