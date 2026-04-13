@@ -134,15 +134,6 @@ export default function PricingPage() {
           })}
         </div>
 
-        {/* Credit top-up section */}
-        <div className="mb-20">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold mb-3">Need more credits?</h2>
-            <p className="text-gray-400">Top up any time. Bulk discounts up to 40% off.</p>
-          </div>
-          <CreditSlider />
-        </div>
-
         {/* FAQ */}
         <div className="max-w-2xl mx-auto">
           <h2 className="text-2xl font-bold text-center mb-8">Common questions</h2>
