@@ -243,7 +243,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       .from("lead_campaign_leads")
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", campaignId)
-      .in("verification_status", ["valid", "catch_all"]);
+      .in("verification_status", ["safe", "valid", "catch_all"]);
 
     await db.from("lead_campaigns").update({
       status:       "completed",
