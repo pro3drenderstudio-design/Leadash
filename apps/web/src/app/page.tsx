@@ -871,6 +871,7 @@ export default function LandingPage() {
       <Testimonials />
       <Comparison />
       <Pricing />
+      <FAQ />
       <CTA />
       <Footer />
     </div>
