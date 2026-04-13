@@ -21,9 +21,12 @@ function fmt(date: string) {
 }
 
 const VERIFY_CONFIG: Record<string, { label: string; color: string; dot: string; bg: string }> = {
+  safe:       { label: "Safe",       color: "text-emerald-400", dot: "bg-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/25" },
   valid:      { label: "Valid",      color: "text-emerald-400", dot: "bg-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/25" },
   catch_all:  { label: "Catch-all",  color: "text-amber-400",   dot: "bg-amber-400",   bg: "bg-amber-500/10 border-amber-500/25" },
+  risky:      { label: "Risky",      color: "text-amber-400",   dot: "bg-amber-400",   bg: "bg-amber-500/10 border-amber-500/25" },
   invalid:    { label: "Invalid",    color: "text-red-400",     dot: "bg-red-400",     bg: "bg-red-500/10 border-red-500/25" },
+  dangerous:  { label: "Dangerous",  color: "text-red-400",     dot: "bg-red-400",     bg: "bg-red-500/10 border-red-500/25" },
   disposable: { label: "Disposable", color: "text-orange-400",  dot: "bg-orange-400",  bg: "bg-orange-500/10 border-orange-500/25" },
   unknown:    { label: "Unknown",    color: "text-white/40",    dot: "bg-white/20",    bg: "bg-white/5 border-white/10" },
   pending:    { label: "Pending",    color: "text-white/30",    dot: "bg-white/15",    bg: "bg-white/4 border-white/8" },
