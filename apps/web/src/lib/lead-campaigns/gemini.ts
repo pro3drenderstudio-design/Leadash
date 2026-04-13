@@ -3,7 +3,7 @@
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 // Use the stable flash model — gemini-2.5-flash requires specific API key tiers.
 // Upgrade to gemini-2.5-flash-preview-04-17 once key supports it.
-const MODEL       = "gemini-1.5-flash";
+const MODEL       = "gemini-2.0-flash";
 
 interface LeadData {
   first_name?: string | null;
