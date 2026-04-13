@@ -164,7 +164,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
     }
 
     // ── Step 2: Email verification ────────────────────────────────────────────
-    if (fresh.verify_enabled && reoonKey) {
+    if (fresh.verify_enabled) {
       const { data: pending } = await db
         .from("lead_campaign_leads")
         .select("id, email")
