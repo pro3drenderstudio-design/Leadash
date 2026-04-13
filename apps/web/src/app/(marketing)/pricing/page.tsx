@@ -1,5 +1,3 @@
-"use client";
-import { useState } from "react";
 import Link from "next/link";
 import { PLANS, CREDIT_COSTS } from "@/lib/billing/plans";
 
@@ -8,8 +6,6 @@ import { PLANS, CREDIT_COSTS } from "@/lib/billing/plans";
 const PLAN_ORDER = ["free", "starter", "growth", "scale", "enterprise"] as const;
 
 export default function PricingPage() {
-  const [currency] = useState<Currency>("NGN");
-
   const plans = PLAN_ORDER.map(id => PLANS[id]);
 
   return (
