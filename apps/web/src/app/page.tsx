@@ -653,7 +653,7 @@ function Pricing() {
               </div>
 
               <Link
-                href="/signup"
+                href={`/signup?plan=${plan.id}`}
                 className="block w-full text-center py-3 rounded-xl text-sm font-bold transition-all"
                 style={plan.highlight
                   ? { background: "linear-gradient(135deg, #1d4ed8, #5b21b6)", color: "white", boxShadow: "0 0 30px rgba(99,102,241,0.4)" }
