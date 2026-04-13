@@ -830,15 +830,26 @@ function Footer() {
 
           {/* Links */}
           {[
-            { heading: "Product", links: ["Features", "Pricing", "Changelog", "Roadmap"] },
-            { heading: "Use cases", links: ["Sales teams", "Agencies", "Founders", "Recruiters"] },
-            { heading: "Company", links: ["About", "Blog", "Careers", "Contact"] },
+            { heading: "Product", links: [
+              { label: "Features",     href: "#features"    },
+              { label: "How it works", href: "#how-it-works"},
+              { label: "Pricing",      href: "#pricing"     },
+            ]},
+            { heading: "Company", links: [
+              { label: "About",   href: "/about"   },
+              { label: "Contact", href: "/contact" },
+            ]},
+            { heading: "Legal", links: [
+              { label: "Privacy Policy",   href: "/privacy" },
+              { label: "Terms of Service", href: "/terms"   },
+              { label: "GDPR",             href: "/privacy#gdpr" },
+            ]},
           ].map(col => (
             <div key={col.heading}>
               <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">{col.heading}</p>
               <div className="space-y-2.5">
                 {col.links.map(l => (
-                  <a key={l} href="#" className="block text-white/30 text-sm hover:text-white/70 transition-colors">{l}</a>
+                  <a key={l.label} href={l.href} className="block text-white/30 text-sm hover:text-white/70 transition-colors">{l.label}</a>
                 ))}
               </div>
             </div>
