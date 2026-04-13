@@ -87,11 +87,13 @@ export default function LeadDrawer({ lead, campaignId, hasPersonalizePrompt, onC
       label:  lead.verification_status ? `Email ${vc?.label}` : "Email Verification",
       sub:    lead.verification_score != null ? `${lead.verification_score}% confidence` : lead.verification_status ? vc?.label : "Not yet verified",
       active: !!lead.verification_status && lead.verification_status !== "pending",
-      color:  lead.verification_status === "valid" || lead.verification_status === "catch_all" ? "bg-emerald-400"
-            : lead.verification_status === "invalid" ? "bg-red-400"
+      color:  ["safe", "valid", "catch_all"].includes(lead.verification_status ?? "") ? "bg-emerald-400"
+            : ["invalid", "dangerous"].includes(lead.verification_status ?? "") ? "bg-red-400"
+            : lead.verification_status === "risky" ? "bg-amber-400"
             : "bg-white/20",
-      ring:   lead.verification_status === "valid" || lead.verification_status === "catch_all" ? "ring-emerald-500/20"
-            : lead.verification_status === "invalid" ? "ring-red-500/20"
+      ring:   ["safe", "valid", "catch_all"].includes(lead.verification_status ?? "") ? "ring-emerald-500/20"
+            : ["invalid", "dangerous"].includes(lead.verification_status ?? "") ? "ring-red-500/20"
+            : lead.verification_status === "risky" ? "ring-amber-500/20"
             : "ring-white/5",
     },
     {
