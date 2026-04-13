@@ -20,8 +20,11 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const VERIFY_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
+  safe:       { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400" },
   valid:      { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400" },
   invalid:    { bg: "bg-red-500/10",     text: "text-red-400",     dot: "bg-red-400" },
+  dangerous:  { bg: "bg-red-500/10",     text: "text-red-400",     dot: "bg-red-400" },
+  risky:      { bg: "bg-amber-500/10",   text: "text-amber-400",   dot: "bg-amber-400" },
   catch_all:  { bg: "bg-amber-500/10",   text: "text-amber-400",   dot: "bg-amber-400" },
   disposable: { bg: "bg-orange-500/10",  text: "text-orange-400",  dot: "bg-orange-400" },
   unknown:    { bg: "bg-white/5",        text: "text-white/30",    dot: "bg-white/20" },
