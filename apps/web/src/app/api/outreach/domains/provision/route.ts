@@ -2,8 +2,8 @@ import { NextRequest, NextResponse, after } from "next/server";
 import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { purchaseDomain, updateNameservers } from "@/lib/outreach/porkbun";
-import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
-import { addZone, publishDnsRecords, buildMailDnsRecords, setWebRedirect, setEmailForwarding } from "@/lib/outreach/cloudflare";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings } from "@/lib/outreach/postal";
+import { addZone, publishDnsRecords, buildPostalMailDnsRecords, setWebRedirect, setEmailForwarding } from "@/lib/outreach/cloudflare";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
 import { encrypt } from "@/lib/outreach/crypto";
 
