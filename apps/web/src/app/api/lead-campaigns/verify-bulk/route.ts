@@ -3,7 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 
 export const maxDuration = 60;
 
-const MAX_EMAILS    = 500;
+const MAX_EMAILS    = 5_000;
 const COST_PER      = 0.5;
 const CONCURRENCY   = 20;
 const REOON_BASE    = "https://emailverifier.reoon.com/api/v1";
