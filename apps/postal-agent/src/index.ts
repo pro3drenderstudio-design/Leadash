@@ -190,7 +190,7 @@ app.get("/domains/:domain", async (req: Request, res: Response) => {
 
       res.json({
         domain,
-        dkim_selector:   row.dkim_identifier ?? "postal",
+        dkim_selector:   "postal",
         dkim_public_key: publicKey,
         dkim_status:     row.dkim_status,
         spf_status:      row.spf_status,
