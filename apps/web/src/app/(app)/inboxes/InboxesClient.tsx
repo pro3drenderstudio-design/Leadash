@@ -587,20 +587,41 @@ export default function InboxesClient() {
                 const warmupDaysLeft = d.warmup_ends_at
                   ? Math.max(0, Math.ceil((new Date(d.warmup_ends_at).getTime() - Date.now()) / 86_400_000))
                   : null;
+                const isReconfiguring = reconfiguringId === d.id;
+                const isPolling       = pollingIds.has(d.id);
                 return (
-                  <div key={d.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 items-center px-5 py-3.5 border-b border-white/5 last:border-0 hover:bg-white/2">
+                  <div key={d.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-4 items-center px-5 py-3.5 border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
                     <div>
                       <p className="text-white text-sm font-medium">{d.domain}</p>
                       <p className="text-white/30 text-xs mt-0.5">{new Date(d.created_at).toLocaleDateString()}</p>
                     </div>
                     <div className="text-white/60 text-sm">{d.mailbox_count}</div>
                     <div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                        d.status === "active"  ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
-                        d.status === "failed"  ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                        "text-amber-400 bg-amber-500/15 border-amber-500/30"
-                      }`}>{d.status}</span>
-                      {d.error_message && <p className="text-red-400/70 text-[10px] mt-0.5 truncate max-w-[140px]" title={d.error_message}>{d.error_message}</p>}
+                      {/* Status badge */}
+                      {isReconfiguring ? (
+                        <div className="flex items-center gap-1.5">
+                          <svg className="w-3 h-3 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                          </svg>
+                          <span className="text-blue-400 text-[10px] font-medium">{reconfiguringStep || "Applying…"}</span>
+                        </div>
+                      ) : isPolling ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"/>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"/>
+                          </span>
+                          <span className="text-amber-400 text-[10px] font-medium">Awaiting DNS…</span>
+                        </div>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          d.status === "active"      ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                          d.status === "failed"      ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                          d.status === "dns_pending" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                          "text-white/40 bg-white/5 border-white/10"
+                        }`}>{d.status === "dns_pending" ? "DNS pending" : d.status}</span>
+                      )}
                     </div>
                     <div className="text-white/50 text-xs">
                       {warmupDaysLeft !== null ? (warmupDaysLeft > 0 ? `${warmupDaysLeft}d left` : "Done") : "—"}
@@ -608,15 +629,24 @@ export default function InboxesClient() {
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleReconfigure(d.id)}
-                        disabled={reconfiguringId === d.id}
-                        className="px-3 py-1.5 bg-white/6 hover:bg-white/12 disabled:opacity-40 text-white/60 hover:text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
-                        title="Re-register with SES and re-publish DNS records (DKIM, MAIL FROM, SPF, DMARC)"
+                        disabled={isReconfiguring || isPolling}
+                        className="px-3 py-1.5 bg-white/6 hover:bg-white/12 disabled:opacity-40 disabled:cursor-not-allowed text-white/60 hover:text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+                        title="Re-register with Postal and re-publish DNS records"
                       >
-                        {reconfiguringId === d.id ? "Applying…" : "↻ Re-configure"}
+                        {isReconfiguring ? (
+                          <span className="flex items-center gap-1.5">
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                            Applying…
+                          </span>
+                        ) : "↻ Re-configure"}
                       </button>
                       <button
                         onClick={() => handleDeleteDomain(d.id, d.domain)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        disabled={isReconfiguring}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30"
                         title="Delete domain record"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
