@@ -36,10 +36,73 @@ function parseCsvEmails(text: string): string[] {
   return [...new Set(emails)];
 }
 
-function downloadCsv(results: VerifyResult[], filename = "verification-results.csv") {
-  const rows = ["email,status,score", ...results.map(r => `${r.email},${r.status},${r.score}`)];
+function downloadCsv(results: VerifyResult[], statuses: string[], filename = "verification-results.csv") {
+  const filtered = statuses.length ? results.filter(r => statuses.includes(r.status)) : results;
+  const rows = ["email,status,score", ...filtered.map(r => `${r.email},${r.status},${r.score}`)];
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
   Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename }).click();
+}
+
+// ─── Download modal ───────────────────────────────────────────────────────────
+
+const DOWNLOAD_STATUSES = ["safe", "catch_all", "risky", "invalid", "dangerous", "disposable", "unknown"] as const;
+
+function DownloadModal({ results, filename, onClose }: {
+  results: VerifyResult[];
+  filename: string;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(["safe", "catch_all"]);
+
+  const toggle = (s: string) =>
+    setSelected(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+
+  const allSelected = selected.length === DOWNLOAD_STATUSES.length;
+  const toggleAll   = () => setSelected(allSelected ? [] : [...DOWNLOAD_STATUSES]);
+
+  const countFor = (s: string) => results.filter(r => r.status === s).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#0f1117] border border-white/10 rounded-2xl w-full max-w-sm mx-4 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div>
+          <p className="text-white font-semibold text-base">Download CSV</p>
+          <p className="text-white/40 text-xs mt-0.5">Choose which statuses to include</p>
+        </div>
+
+        <div className="space-y-2">
+          {/* All */}
+          <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${allSelected ? "border-blue-500/40 bg-blue-500/10" : "border-white/8 hover:border-white/15"}`}>
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-blue-500 w-4 h-4" />
+            <span className="text-white text-sm font-medium">All leads</span>
+            <span className="ml-auto text-white/30 text-xs">{results.length}</span>
+          </label>
+
+          {DOWNLOAD_STATUSES.map(s => {
+            const cfg   = STATUS_CFG[s] ?? DEFAULT_CFG;
+            const count = countFor(s);
+            const on    = selected.includes(s);
+            return (
+              <label key={s} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${on ? "border-blue-500/40 bg-blue-500/10" : "border-white/8 hover:border-white/15"}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(s)} className="accent-blue-500 w-4 h-4" />
+                <span className={`w-2 h-2 rounded-full ${cfg.bar}`} />
+                <span className="text-white text-sm">{cfg.label}</span>
+                <span className="ml-auto text-white/30 text-xs">{count}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => { downloadCsv(results, selected, filename); onClose(); }}
+          disabled={!selected.length}
+          className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+        >
+          Download CSV
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function fmt(n: number)     { return n.toLocaleString(); }
