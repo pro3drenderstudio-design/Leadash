@@ -276,7 +276,7 @@ app.delete("/credentials", async (req: Request, res: Response) => {
 app.get("/smtp-settings", (_req: Request, res: Response) => {
   res.json({
     host:      process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com",
-    port:      587,
+    port:      25,
     imap_host: null, // SES handles inbound — no IMAP needed
     imap_port: null,
   });
