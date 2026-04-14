@@ -132,8 +132,8 @@ app.post("/domains", async (req: Request, res: Response) => {
 
       await conn.execute(
         `INSERT INTO domains
-          (server_id, uuid, name, dkim_private_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+          (server_id, uuid, name, dkim_private_key, dkim_identifier_string, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'postal', ?, ?)`,
         [serverId(), genUuid(), domain, privateKey, now, now],
       );
 
