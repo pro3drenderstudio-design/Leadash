@@ -304,7 +304,8 @@ export default function VerifyEmailPage() {
     setDownloading(job.id);
     try {
       const d = await wsGet<{ results: VerifyResult[]; completed_at: string }>(`/api/lead-campaigns/verify-jobs/${job.id}`);
-      downloadCsv(d.results ?? [], `verify-${new Date(d.completed_at).toISOString().split("T")[0]}-${job.total}.csv`);
+      const filename = `verify-${new Date(d.completed_at).toISOString().split("T")[0]}-${job.total}.csv`;
+      setDlModal({ results: d.results ?? [], filename });
     } catch { /* ignore */ } finally { setDownloading(null); }
   }
 
