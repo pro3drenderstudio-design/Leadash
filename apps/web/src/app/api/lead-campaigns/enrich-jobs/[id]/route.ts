@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 
 // GET /api/lead-campaigns/enrich-jobs/[id]
-// Returns full results for a past enrichment job (for CSV download).
+// Returns job status + progress for polling, and full results once done.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -14,7 +14,7 @@ export async function GET(
 
   const { data, error } = await db
     .from("lead_enrichment_jobs")
-    .select("id, total, results, prompt, completed_at")
+    .select("id, status, total, processed, prompt, credits_used, error, results, completed_at, expires_at, created_at")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
