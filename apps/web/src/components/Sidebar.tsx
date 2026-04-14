@@ -21,7 +21,8 @@ const NAV = [
     label: "Lead Gen",
     items: [
       { href: "/lead-campaigns", label: "Lead Campaigns", icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" },
-      { href: "/lead-campaigns/verify", label: "Verify Email", icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+      { href: "/lead-campaigns/verify", label: "Verify Email",  icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+      { href: "/lead-campaigns/enrich", label: "AI Enrichment", icon: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" },
     ],
   },
   {
