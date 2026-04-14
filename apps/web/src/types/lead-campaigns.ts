@@ -1,36 +1,40 @@
 // ─── Lead Generation Campaign Types ──────────────────────────────────────────
 
-export type LeadCampaignMode   = "scrape" | "verify_personalize" | "full_suite";
+export type LeadCampaignMode   = "scrape" | "verify" | "verify_personalize" | "full_suite";
 export type LeadCampaignStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 export type VerificationStatus = "pending" | "safe" | "valid" | "invalid" | "catch_all" | "risky" | "dangerous" | "disposable" | "unknown";
 export type CreditTxType       = "grant" | "purchase" | "reserve" | "consume" | "refund";
+export type JobStatus          = "pending" | "running" | "done" | "failed";
+
+// ─── Lead Campaigns ───────────────────────────────────────────────────────────
 
 export interface LeadCampaign {
-  id:                  string;
-  workspace_id:        string;
-  name:                string;
-  mode:                LeadCampaignMode;
-  status:              LeadCampaignStatus;
-  apify_actor_id?:     string | null;
-  apify_run_id?:       string | null;
-  apify_input?:        ApifyLeadScraperInput | null;
-  source_list_id?:     string | null;
-  verify_enabled:      boolean;
-  personalize_enabled: boolean;
-  personalize_prompt?: string | null;
-  max_leads:           number;
-  total_scraped:       number;
-  total_verified:      number;
-  total_personalized:  number;
-  total_valid:         number;
-  credits_reserved:    number;
-  credits_used:        number;
+  id:                     string;
+  workspace_id:           string;
+  name:                   string;
+  mode:                   LeadCampaignMode;
+  status:                 LeadCampaignStatus;
+  apify_actor_id?:        string | null;
+  apify_run_id?:          string | null;
+  apify_input?:           ApifyLeadScraperInput | null;
+  source_list_id?:        string | null;
+  source_campaign_id?:    string | null;
+  verify_enabled:         boolean;
+  personalize_enabled:    boolean;
+  personalize_prompt?:    string | null;
+  personalize_depth?:     PersonalizationDepth;
   personalize_valid_only: boolean;
-  source_campaign_id?: string | null;
-  error_message?:      string | null;
-  started_at?:         string | null;
-  completed_at?:       string | null;
-  created_at:          string;
+  max_leads:              number;
+  total_scraped:          number;
+  total_verified:         number;
+  total_personalized:     number;
+  total_valid:            number;
+  credits_reserved:       number;
+  credits_used:           number;
+  error_message?:         string | null;
+  started_at?:            string | null;
+  completed_at?:          string | null;
+  created_at:             string;
 }
 
 export interface LeadCampaignLead {
@@ -47,7 +51,6 @@ export interface LeadCampaignLead {
   phone?:               string | null;
   location?:            string | null;
   industry?:            string | null;
-  // Extended fields
   department?:          string | null;
   seniority?:           string | null;
   org_city?:            string | null;
@@ -57,7 +60,6 @@ export interface LeadCampaignLead {
   org_linkedin_url?:    string | null;
   org_description?:     string | null;
   org_founded_year?:    string | null;
-  // Enrichment
   verification_status?: VerificationStatus | null;
   verification_score?:  number | null;
   personalized_line?:   string | null;
@@ -65,6 +67,67 @@ export interface LeadCampaignLead {
   added_at?:            string | null;
   created_at:           string;
 }
+
+// ─── Standalone verify / enrich jobs ─────────────────────────────────────────
+// Used by the Verify Email and AI Enrichment pages (not tied to a campaign).
+
+export interface VerifyResult {
+  email:  string;
+  status: VerificationStatus;
+  score:  number;
+}
+
+export interface VerifyBulkJob {
+  id:           string;
+  workspace_id: string;
+  status:       JobStatus;
+  total:        number;
+  processed:    number;
+  safe:         number;
+  invalid:      number;
+  catch_all:    number;
+  risky:        number;
+  dangerous:    number;
+  disposable:   number;
+  unknown:      number;
+  credits_used: number;
+  error?:       string | null;
+  results?:     VerifyResult[] | null;
+  completed_at: string | null;
+  expires_at:   string | null;
+  created_at:   string;
+}
+
+export interface LeadInput {
+  email?:      string | null;
+  first_name?: string | null;
+  last_name?:  string | null;
+  title?:      string | null;
+  company?:    string | null;
+  industry?:   string | null;
+  website?:    string | null;
+}
+
+export interface EnrichedLead extends LeadInput {
+  personalized_line: string;
+}
+
+export interface EnrichBulkJob {
+  id:           string;
+  workspace_id: string;
+  status:       JobStatus;
+  total:        number;
+  processed:    number;
+  prompt:       string | null;
+  credits_used: number;
+  error?:       string | null;
+  results?:     EnrichedLead[] | null;
+  completed_at: string | null;
+  expires_at:   string | null;
+  created_at:   string;
+}
+
+// ─── Credits ──────────────────────────────────────────────────────────────────
 
 export interface LeadCreditTransaction {
   id:               string;
@@ -91,17 +154,51 @@ export interface CreditPack {
 
 // Per-operation costs (fractional credits)
 export const CREDIT_COSTS = {
-  scrape:             1.0,  // per lead scraped
-  verify:             0.5,  // per lead verified
-  ai_personalize:     0.5,  // per AI opener generated
-  // Composite mode costs (without AI) — used as fallback
-  verify_personalize: 0.5,  // verify only
-  full_suite:         1.5,  // scrape + verify
+  scrape:             1.0,
+  verify:             0.5,
+  ai_personalize:     0.5,
+  verify_personalize: 0.5,
+  full_suite:         1.5,
 } as const;
 
-// ─── Apify Lead Scraper (pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe) ──
+// ─── Apify ────────────────────────────────────────────────────────────────────
 
 export const APIFY_ACTOR_ID = "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe";
+
+export interface ApifyLeadScraperInput {
+  totalResults?:                  number;
+  emailStatus?:                   "verified" | "unverified";
+  hasEmail?:                      boolean;
+  hasPhone?:                      boolean;
+  personTitleIncludes?:           string[];
+  personTitleExcludes?:           string[];
+  personTitleExtraIncludes?:      string[];
+  seniorityIncludes?:             string[];
+  seniorityExcludes?:             string[];
+  personFunctionIncludes?:        string[];
+  personFunctionExcludes?:        string[];
+  personLocationCountryIncludes?: string[];
+  personLocationCountryExcludes?: string[];
+  personLocationStateIncludes?:   string[];
+  personLocationStateExcludes?:   string[];
+  personLocationCityIncludes?:    string[];
+  personLocationCityExcludes?:    string[];
+  companyNamesIncludes?:          string[];
+  companyNamesExcludes?:          string[];
+  industryIncludes?:              string[];
+  industryExcludes?:              string[];
+  companyKeywordIncludes?:        string[];
+  companyKeywordExcludes?:        string[];
+  companyDomainIncludes?:         string[];
+  companyDomainExcludes?:         string[];
+  companyHeadcountIncludes?:      string[];
+  startOffset?:                   number;
+}
+
+export type PersonalizationDepth = "standard" | "deep";
+export type ToneOfVoice          = "professional" | "casual" | "friendly" | "direct";
+
+// ─── Filter options (for campaign creation UI) ────────────────────────────────
 
 export const JOB_TITLES = [
   "Director", "Manager", "Founder", "General Manager", "Consultant",
@@ -125,115 +222,102 @@ export const JOB_TITLES = [
   "Executive Vice President", "Financial Analyst", "HR Generalist", "Financial Advisor",
   "Instructor", "Engineering Manager", "Art Director", "Director Of Sales And Marketing",
   "Area Manager", "CEO & Founder", "Director Of Finance", "Data Analyst",
-  "Associate Director", "Accounting Manager", "Docente", "Customer Service Manager",
+  "Associate Director", "Accounting Manager", "Customer Service Manager",
   "IT Specialist", "Account Director", "Data Scientist", "District Manager",
   "Human Resources Business Partner", "Co-Founder And CEO", "Assistant Principal",
   "Information Technology Director", "Facilities Manager", "Director Human Resources",
   "Exec/Management (Other)", "Area Sales Manager", "Executive", "Human Resources Generalist",
-  "Cashier", "Design Engineer", "CEO & Co-Founder", "IT Project Manager",
+  "Design Engineer", "CEO & Co-Founder", "IT Project Manager",
   "Electrical Engineer", "Finance Director", "Head Of Marketing", "Independent Consultant",
   "Agent", "Brand Manager", "Buyer", "Financial Controller", "Broker",
   "Human Resource Manager", "Adjunct Professor", "Founder, CEO", "Customer Success Manager",
-  "Artist", "Chairman", "Graduate Student", "CEO And Founder", "Director Of IT",
+  "Chairman", "CEO And Founder", "Director Of IT",
   "Educator", "Founder/CEO", "IT Consultant", "HR Coordinator", "Co Owner", "Lawyer",
   "Chief Human Resources Officer", "Dentist", "Editor", "Legal Assistant",
   "Director Of Technology", "Interior Designer", "Chief Operations Officer",
-  "Business Development Executive", "HR Specialist", "Devops", "Community Manager",
+  "Business Development Executive", "HR Specialist", "Community Manager",
   "Civil Engineer", "Attorney At Law", "Associate Consultant", "CEO And Co-Founder",
-  "Electrician", "General Counsel", "District Sales Manager", "Director Of Product Management",
-  "Assistant", "Driver", "Auditor", "Director, Marketing", "Business Consultant",
+  "General Counsel", "District Sales Manager", "Director Of Product Management",
+  "Assistant", "Auditor", "Director, Marketing", "Business Consultant",
   "Assistant Vice President", "Digital Marketing Specialist", "Deputy Manager",
-  "Human Resources Coordinator", "English Teacher", "Board Member", "IT Analyst",
+  "Human Resources Coordinator", "Board Member", "IT Analyst",
   "Insurance Agent", "Founding Partner", "Event Manager", "Director Of Development",
-  "Co-Founder & CTO", "Auxiliar Administrativo", "Database Administrator", "Admin",
-  "Graduate Research Assistant", "Associate Attorney", "Chief Information Security Officer",
-  "Director Of HR", "Chief Engineer", "Communications Manager", "Construction Manager",
-  "Coordinator", "Director Of Communications", "Estimator", "Corporate Recruiter",
+  "Co-Founder & CTO", "Database Administrator",
   "Business Development Director", "Enterprise Architect", "Case Manager", "Bookkeeper",
-  "Chief Revenue Officer", "Analista", "Assistente Administrativo", "Bartender", "Advisor",
-  "Development Manager", "Co-Founder, CEO", "Human Resources Specialist", "Broker Associate",
-  "Doctor", "Assistant Director", "Consultor", "CTO/Cio", "Event Coordinator", "Chef",
+  "Chief Revenue Officer", "Development Manager", "Co-Founder, CEO", "Human Resources Specialist",
+  "Doctor", "Assistant Director", "CTO/Cio", "Event Coordinator",
   "Chief Product Officer", "Director Of Digital Marketing", "Application Developer",
-  "HR Assistant", "HR Executive", "Directeur", "Executive Administrative Assistant",
-  "Captain", "Licensed Realtor", "Business Development Representative", "Associate Broker",
+  "HR Assistant", "HR Executive",
+  "Business Development Representative", "Associate Broker",
   "Director Of Sales & Marketing", "Commercial Manager", "HR Consultant",
-  "Management Trainee", "Finance", "Flight Attendant", "Lead Engineer",
+  "Finance", "Lead Engineer",
   "Director Of Marketing And Communications", "Manager, Human Resources",
   "Assistant Project Manager", "Application Engineer", "Logistics Manager",
-  "Assistant General Manager", "Lead Software Engineer", "Employee",
+  "Assistant General Manager", "Lead Software Engineer",
   "Founder And President", "Independent Distributor", "Director Of Recruiting",
-  "CEO/Founder", "Associate Creative Director", "Assistant Store Manager", "Barista",
+  "CEO/Founder", "Associate Creative Director", "Assistant Store Manager",
   "Director Of Product Marketing", "Corporate Controller", "Director Of Talent Acquisition",
-  "Administrativo", "Assistant Controller", "Legal Secretary", "Author",
+  "Assistant Controller", "Legal Secretary",
   "Commercial Director", "Chief People Officer", "Inside Sales Representative",
-  "Devops Engineer", "Co-Founder And CTO", "Broker/Owner", "Advogado",
-  "Field Engineer", "Maintenance Manager", "Clerk", "Field Service Engineer", "Cofounder",
-  "Human Resources Assistant", "Executive Chef", "IT Administrator", "General Sales Manager",
+  "Devops Engineer", "Co-Founder And CTO",
+  "Field Engineer", "Maintenance Manager", "Field Service Engineer", "Cofounder",
+  "Human Resources Assistant", "IT Administrator", "General Sales Manager",
   "Director, Business Development", "Franchise Owner", "Customer Service Supervisor",
-  "Adjunct Faculty", "Benefits Manager", "Inside Sales", "Abogado", "Java Developer",
-  "Head Of Product", "Management Consultant", "Contracts Manager", "Freelance Writer",
-  "CEO/President/Owner", "Journalist", "Associate Software Engineer", "Head Of HR",
-  "Internal Auditor", "Head Of Information Technology", "Founder & President", "Accounting",
-  "Freelancer", "Front Office Manager", "Entrepreneur", "HR Administrator",
-  "Graduate Teaching Assistant", "Director Of Sales Operations", "Diretor", "Data Engineer",
-  "Librarian", "Facility Manager", "Administration", "IT Architect", "Legal Counsel",
+  "Benefits Manager", "Inside Sales",
+  "Head Of Product", "Management Consultant", "Contracts Manager",
+  "CEO/President/Owner", "Associate Software Engineer", "Head Of HR",
+  "Internal Auditor", "Head Of Information Technology", "Founder & President",
+  "Front Office Manager", "Entrepreneur", "HR Administrator",
+  "Director Of Sales Operations", "Data Engineer",
+  "Librarian", "Facility Manager", "IT Architect", "Legal Counsel",
   "Maintenance Supervisor", "Head Of Operations", "Founder / CEO", "Chief Strategy Officer",
   "Communications Director", "Development Director", "Content Marketing Manager",
-  "Internship", "Counselor", "Assistant Superintendent", "Business Systems Analyst",
-  "Design Director", "CEO/President", "Manager, Marketing", "Coach",
-  "Freelance Graphic Designer", "Lead Developer", "Associate Manager", "Android Developer",
-  "IT Department Manager", "IT Engineer", "Chiropractor", "Credit Analyst",
-  "Independent Business Owner", "Adjunct Instructor", "Head Of Human Resources",
+  "Business Systems Analyst",
+  "Design Director", "CEO/President", "Manager, Marketing",
+  "Lead Developer", "Associate Manager", "Android Developer",
+  "IT Department Manager", "IT Engineer", "Credit Analyst",
+  "Independent Business Owner", "Head Of Human Resources",
   "Brand Ambassador", "Copywriter", "Chairman & CEO", "Email Marketing Manager",
   "Frontend Developer", "Human Resource Director", "Client Services Manager",
-  "IT Support Specialist", "Contract Manager", "Impiegato", "CEO, Founder",
-  "Chief Medical Officer", "Banker", "Director Information Technology", "Director Of Product",
-  "Director, Product Management", "Country Manager", "Financial Consultant", "Administrador",
-  "Executive Assistant To CEO", "Advogada", "Field Marketing Manager",
+  "IT Support Specialist", "Contract Manager",
+  "Chief Medical Officer", "Director Information Technology", "Director Of Product",
+  "Director, Product Management", "Country Manager", "Financial Consultant",
   "Business Intelligence Analyst", "Director Marketing", "Loan Officer",
-  "Freelance Photographer", "Actor", "Chef De Projet", "Foreman",
-  "Information Technology Project Manager", "Graduate Assistant", "Inside Sales Manager",
-  "Department Manager", "HR Officer", "Account Coordinator", "Deputy Director",
-  "Director Of Facilities", "Executive Recruiter", "IT Technician", "CEO, Co-Founder",
-  "Full Stack Developer", "CEO / Founder", "Counsel", "Logistics Coordinator",
-  "Founder And Chief Executive Officer", "Chairman And CEO", "Administrative Coordinator",
-  "Director Business Development", "Category Manager", "Data Architect",
-  "Information Technology", "Head Of Sales", "Chief Information Officer (Cio)", "IT Recruiter",
-  "Information Security Analyst", "Associate General Counsel", "Inspector", "Admin Assistant",
+  "Head Of Sales", "Chief Information Officer (Cio)", "IT Recruiter",
+  "Information Security Analyst", "Associate General Counsel",
   "Dispatcher", "Contractor", "Design Manager", "Ecommerce Manager", "Chief Technical Officer",
-  "Field Service Technician", "Executive Secretary", "Co-Founder, CTO",
+  "Field Service Technician",
   "Director, Talent Acquisition", "Accounting Assistant", "Director, IT", "Account Supervisor",
-  "Human Resources Administrator", "Faculty", "Administrative Officer", "Front End Developer",
-  "Content Manager", "Freelance", "Maintenance Technician", "Business Development Specialist",
+  "Human Resources Administrator", "Administrative Officer", "Front End Developer",
+  "Content Manager", "Maintenance Technician", "Business Development Specialist",
   "Business Development Consultant", "Communications Specialist", "Director, Product Marketing",
   "Client Manager", "Compliance Officer", "Executive Producer", "Customer Service Specialist",
-  "Certified Personal Trainer", "Human Resources Executive", "Chief Executive", "HR Advisor",
-  "Compliance Manager", "Head Of IT", "IT Business Analyst", "Homemaker", "Events Manager",
-  "Fleet Manager", "CEO & President", "Carpenter", "HR Recruiter",
+  "Human Resources Executive", "Chief Executive", "HR Advisor",
+  "Compliance Manager", "Head Of IT", "IT Business Analyst",
+  "Fleet Manager", "CEO & President", "HR Recruiter",
   "Director, Digital Marketing", "Laboratory Technician", "Associate Product Manager",
   "Director Product Management", "Independent Contractor", "Accounts Payable",
   "Digital Marketing Director", "Instructional Designer", "Digital Project Manager",
-  "Audit Manager", "Estudante", "Credit Manager", "Eigenaar", "Business Developer",
-  "Head Of Business Development", "Avvocato", "Chief Administrative Officer", "Asset Manager",
-  "Accounts Payable Specialist", "Chief Compliance Officer", "Empleado",
+  "Audit Manager", "Credit Manager", "Business Developer",
+  "Head Of Business Development", "Chief Administrative Officer", "Asset Manager",
+  "Accounts Payable Specialist", "Chief Compliance Officer",
   "Digital Marketing Executive", "Account Representative", "Campaign Manager",
-  "Director, Engineering", "Engagement Manager", "Management", "Delivery Manager",
-  "Manager Human Resources", "Cook", "Director Of Product Development",
+  "Director, Engineering", "Engagement Manager", "Delivery Manager",
+  "Manager Human Resources", "Director Of Product Development",
   "Information Technology Specialist", "Chief Of Staff", "Associate Vice President",
   "Company Director", "Chief Technology Officer (CTO)", "Digital Marketing Consultant",
-  "Firefighter", "Business Operations Manager", "Crew Member", "Director - Human Resources",
-  "Caregiver", "Customer Experience Manager", "Financial Accountant", "Customer Service Rep",
-  "Bank Teller", "IT Operations Manager", "Management Accountant", "Digital Marketing",
-  "Investigator", "Enterprise Account Executive", "Logistics", "Deputy General Manager",
+  "Business Operations Manager", "Director - Human Resources",
+  "Customer Experience Manager", "Financial Accountant", "Customer Service Rep",
+  "IT Operations Manager", "Management Accountant", "Digital Marketing",
+  "Investigator", "Enterprise Account Executive", "Deputy General Manager",
   "Freelance Designer", "Economist", "Digital Marketing Coordinator", "Co-Founder & COO",
-  "Chief Architect", "Learning And Development Manager", "Director General", "Distributor",
-  "Associate Marketing Manager", "Abogada", "Assistant General Counsel", "Machine Operator",
-  "Delivery Driver", "Comercial", "Chemist", "Hostess", "Lead Consultant",
-  "Director Of Training", "Financial Representative", "Maintenance", "Audit Associate",
-  "Housewife", "Assistant Accountant", "Financial Manager", "Maintenance Engineer",
-  "Contract Administrator", "First Officer", "Director Of Marketing Communications",
-  "Comptable", "Finance Officer", "Financial Planner", "Automation Engineer",
-  "Administrativa", "Estudiante", "Accounts Manager", "Customer Service Associate",
+  "Chief Architect", "Learning And Development Manager", "Director General",
+  "Associate Marketing Manager", "Assistant General Counsel", "Machine Operator",
+  "Lead Consultant",
+  "Director Of Training", "Financial Representative", "Maintenance",
+  "Assistant Accountant", "Financial Manager", "Maintenance Engineer",
+  "Contract Administrator", "Finance Officer", "Financial Planner", "Automation Engineer",
+  "Accounts Manager", "Customer Service Associate",
   "Investment Banking Analyst", "Director HR",
 ] as const;
 
@@ -276,21 +360,19 @@ export const INDUSTRIES = [
   "Mechanical or Industrial Engineering", "Media Production", "Medical Devices",
   "Medical Practice", "Mental Health Care", "Military", "Mining & Metals",
   "Motion Pictures & Film", "Museums & Institutions", "Music", "Nanotechnology",
-  "Newspapers", "Non-Profit Organization Management", "Non-Profits & Non-Profit Services",
-  "Oil & Energy", "Online Media", "Outsourcing/Offshoring", "Package/Freight Delivery",
-  "Packaging & Containers", "Paper & Forest Products", "Performing Arts",
-  "Pharmaceuticals", "Philanthropy", "Photography", "Plastics", "Political Organization",
-  "Primary/Secondary Education", "Printing", "Professional Training & Coaching",
-  "Program Development", "Public Policy", "Public Relations & Communications",
-  "Public Safety", "Publishing", "Railroad Manufacture", "Ranching", "Real Estate",
-  "Recreation & Sports", "Recreational Facilities & Services", "Religious Institutions",
-  "Renewables & Environment", "Research", "Restaurants", "Retail",
-  "Security & Investigations", "Semiconductors", "Shipbuilding", "Sporting Goods",
-  "Sports", "Staffing & Recruiting", "Supermarkets", "Telecommunications", "Textiles",
-  "Think Tanks", "Tobacco", "Translation & Localization",
+  "Newspapers", "Non-Profit Organization Management", "Oil & Energy", "Online Media",
+  "Outsourcing/Offshoring", "Package/Freight Delivery", "Packaging & Containers",
+  "Paper & Forest Products", "Performing Arts", "Pharmaceuticals", "Philanthropy",
+  "Photography", "Plastics", "Political Organization", "Primary/Secondary Education",
+  "Printing", "Professional Training & Coaching", "Program Development", "Public Policy",
+  "Public Relations & Communications", "Public Safety", "Publishing",
+  "Railroad Manufacture", "Ranching", "Real Estate", "Recreation & Sports",
+  "Recreational Facilities & Services", "Religious Institutions", "Renewables & Environment",
+  "Research", "Restaurants", "Retail", "Security & Investigations", "Semiconductors",
+  "Shipbuilding", "Sporting Goods", "Sports", "Staffing & Recruiting", "Supermarkets",
+  "Telecommunications", "Textiles", "Think Tanks", "Tobacco", "Translation & Localization",
   "Transportation/Trucking/Railroad", "Utilities", "Venture Capital & Private Equity",
-  "Veterinary", "Warehousing", "Wholesale", "Wine & Spirits", "Wireless",
-  "Writing & Editing",
+  "Veterinary", "Warehousing", "Wholesale", "Wine & Spirits", "Wireless", "Writing & Editing",
 ] as const;
 
 export const EMPLOYEE_SIZES = [
@@ -320,38 +402,5 @@ export const COUNTRIES = [
   "Paraguay", "Uruguay", "Venezuela", "Panama", "Costa Rica",
   "Guatemala", "Honduras", "El Salvador", "Nicaragua", "Dominican Republic",
   "Puerto Rico", "Jamaica", "Trinidad And Tobago", "Barbados",
-  "New Zealand", "Fiji", "Papua New Guinea",
+  "Fiji", "Papua New Guinea",
 ] as const;
-
-export interface ApifyLeadScraperInput {
-  totalResults?:                  number;
-  emailStatus?:                   "verified" | "unverified";
-  hasEmail?:                      boolean;
-  hasPhone?:                      boolean;
-  personTitleIncludes?:           string[];
-  personTitleExcludes?:           string[];
-  personTitleExtraIncludes?:      string[];
-  seniorityIncludes?:             string[];
-  seniorityExcludes?:             string[];
-  personFunctionIncludes?:        string[];
-  personFunctionExcludes?:        string[];
-  personLocationCountryIncludes?: string[];
-  personLocationCountryExcludes?: string[];
-  personLocationStateIncludes?:   string[];
-  personLocationStateExcludes?:   string[];
-  personLocationCityIncludes?:    string[];
-  personLocationCityExcludes?:    string[];
-  companyNamesIncludes?:          string[];
-  companyNamesExcludes?:          string[];
-  industryIncludes?:              string[];
-  industryExcludes?:              string[];
-  companyKeywordIncludes?:        string[];
-  companyKeywordExcludes?:        string[];
-  companyDomainIncludes?:         string[];
-  companyDomainExcludes?:         string[];
-  companyHeadcountIncludes?:      string[];
-  startOffset?:                   number;
-}
-
-export type PersonalizationDepth = "standard" | "deep";
-export type ToneOfVoice = "professional" | "casual" | "friendly" | "direct";
