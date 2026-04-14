@@ -155,7 +155,7 @@ export default function EnrichPage() {
         <p className="text-white/50 text-sm font-medium">
           {leads.length > 0 ? `${leads.length} leads loaded — click to replace` : "Upload CSV file"}
         </p>
-        <p className="text-white/25 text-xs mt-1">Columns: email, first_name, last_name, title, company, industry, website · max 200 leads</p>
+        <p className="text-white/25 text-xs mt-1">Columns: email, first_name, last_name, title, company, industry, website · up to 5,000 leads</p>
         <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
       </div>
 
