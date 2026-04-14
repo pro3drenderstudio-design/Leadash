@@ -166,14 +166,13 @@ app.get("/domains/:domain", async (req: Request, res: Response) => {
     const conn = await pool.getConnection();
     try {
       const [rows] = await conn.execute<mysql.RowDataPacket[]>(
-        `SELECT dkim_identifier, dkim_private_key, dkim_status, spf_status
+        `SELECT dkim_private_key, dkim_status, spf_status
          FROM domains WHERE server_id = ? AND name = ? LIMIT 1`,
         [serverId(), domain],
       );
       if (!rows.length) { res.status(404).json({ error: "Domain not found" }); return; }
 
       const row = rows[0] as {
-        dkim_identifier:  string;
         dkim_private_key: string;
         dkim_status:      string | null;
         spf_status:       string | null;
