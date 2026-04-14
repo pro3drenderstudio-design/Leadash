@@ -1,28 +1,52 @@
 "use client";
-import { useState, useRef } from "react";
-import { wsGet, wsPost } from "@/lib/workspace/client";
-import type { ReoonResult as VerifyResult } from "@/lib/lead-campaigns/reoon";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface VerifyResult {
+  email:  string;
+  status: string;
+  score:  number;
+}
+
+interface VerifyJob {
+  id:           string;
+  status:       string;
+  total:        number;
+  safe:         number;
+  invalid:      number;
+  catch_all:    number;
+  risky:        number;
+  dangerous:    number;
+  disposable:   number;
+  unknown:      number;
+  credits_used: number;
+  completed_at: string;
+  expires_at:   string;
+  created_at:   string;
+}
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  safe:       { label: "Safe",       color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/25", icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  valid:      { label: "Valid",      color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/25", icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  invalid:    { label: "Invalid",    color: "text-red-400",     bg: "bg-red-500/15 border-red-500/25",         icon: "M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  dangerous:  { label: "Dangerous",  color: "text-red-400",     bg: "bg-red-500/15 border-red-500/25",         icon: "M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  risky:      { label: "Risky",      color: "text-amber-400",   bg: "bg-amber-500/15 border-amber-500/25",    icon: "M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" },
-  catch_all:  { label: "Catch-all",  color: "text-amber-400",   bg: "bg-amber-500/15 border-amber-500/25",    icon: "M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" },
-  disposable: { label: "Disposable", color: "text-orange-400",  bg: "bg-orange-500/15 border-orange-500/25",  icon: "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" },
-  unknown:    { label: "Unknown",    color: "text-white/40",    bg: "bg-white/6 border-white/10",              icon: "M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; bar: string; icon: string }> = {
+  safe:       { label: "Safe",       color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/25", bar: "bg-emerald-500",  icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+  valid:      { label: "Valid",      color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/25", bar: "bg-emerald-500",  icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+  invalid:    { label: "Invalid",    color: "text-red-400",     bg: "bg-red-500/15 border-red-500/25",         bar: "bg-red-500",     icon: "M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+  dangerous:  { label: "Dangerous",  color: "text-red-400",     bg: "bg-red-500/15 border-red-500/25",         bar: "bg-red-600",     icon: "M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+  risky:      { label: "Risky",      color: "text-amber-400",   bg: "bg-amber-500/15 border-amber-500/25",     bar: "bg-amber-500",   icon: "M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" },
+  catch_all:  { label: "Catch-all",  color: "text-amber-400",   bg: "bg-amber-500/15 border-amber-500/25",     bar: "bg-amber-400",   icon: "M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" },
+  disposable: { label: "Disposable", color: "text-orange-400",  bg: "bg-orange-500/15 border-orange-500/25",   bar: "bg-orange-500",  icon: "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" },
+  unknown:    { label: "Unknown",    color: "text-white/40",    bg: "bg-white/6 border-white/10",               bar: "bg-white/20",    icon: "M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" },
 };
 const DEFAULT_CFG = STATUS_CONFIG.unknown;
+const STATUS_ORDER = ["safe", "catch_all", "risky", "disposable", "invalid", "dangerous", "unknown"];
 
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseCsvEmails(text: string): string[] {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (!lines.length) return [];
-  // Detect header row — if first cell looks like "email" skip it
   const header = lines[0].split(",")[0].trim().toLowerCase().replace(/"/g, "");
   const start  = ["email", "e-mail", "emailaddress"].includes(header) ? 1 : 0;
   const emails: string[] = [];
@@ -36,58 +60,213 @@ function parseCsvEmails(text: string): string[] {
   return [...new Set(emails)];
 }
 
-function downloadResultsCsv(results: VerifyResult[]) {
-  const rows = [
-    "email,status,score",
-    ...results.map(r => `${r.email},${r.status},${r.score}`),
-  ];
+function downloadCsv(results: VerifyResult[], filename = "verification-results.csv") {
+  const rows = ["email,status,score", ...results.map(r => `${r.email},${r.status},${r.score}`)];
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-  const a    = document.createElement("a");
-  a.href     = URL.createObjectURL(blob);
-  a.download = "verification-results.csv";
+  const a    = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename });
   a.click();
+}
+
+function countStatuses(results: VerifyResult[]) {
+  const counts: Record<string, number> = {};
+  for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  return counts;
+}
+
+function fmt(n: number) { return n.toLocaleString(); }
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatusBar({ counts, total }: { counts: Record<string, number>; total: number }) {
+  if (!total) return null;
+  return (
+    <div className="space-y-3">
+      {/* Bar */}
+      <div className="h-2.5 rounded-full overflow-hidden flex bg-white/6">
+        {STATUS_ORDER.map(s => {
+          const n = counts[s] ?? 0;
+          if (!n) return null;
+          const cfg = STATUS_CONFIG[s] ?? DEFAULT_CFG;
+          return (
+            <div
+              key={s}
+              className={`${cfg.bar} h-full transition-all duration-300`}
+              style={{ width: `${(n / total) * 100}%` }}
+              title={`${cfg.label}: ${n}`}
+            />
+          );
+        })}
+      </div>
+      {/* Counts */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {STATUS_ORDER.map(s => {
+          const n = counts[s] ?? 0;
+          if (!n) return null;
+          const cfg = STATUS_CONFIG[s] ?? DEFAULT_CFG;
+          return (
+            <span key={s} className="flex items-center gap-1.5 text-xs">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.bar}`} />
+              <span className={`font-medium ${cfg.color}`}>{fmt(n)}</span>
+              <span className="text-white/30">{cfg.label}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResultsTable({ results, page, onPageChange }: {
+  results: VerifyResult[];
+  page: number;
+  onPageChange: (p: number) => void;
+}) {
+  const PER_PAGE = 25;
+  const totalPages = Math.ceil(results.length / PER_PAGE);
+  const slice      = results.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  return (
+    <div>
+      <div className="border border-white/8 rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto_auto] text-xs font-semibold text-white/30 uppercase tracking-widest px-4 py-2.5 border-b border-white/6">
+          <span>Email</span>
+          <span className="mr-6">Score</span>
+          <span>Status</span>
+        </div>
+        {slice.map((r, i) => {
+          const cfg = STATUS_CONFIG[r.status] ?? DEFAULT_CFG;
+          return (
+            <div
+              key={r.email}
+              className={`grid grid-cols-[1fr_auto_auto] items-center px-4 py-2.5 ${
+                i !== slice.length - 1 ? "border-b border-white/5" : ""
+              }`}
+            >
+              <span className="text-white/60 text-xs font-mono truncate pr-3">{r.email}</span>
+              <span className="text-white/30 text-xs mr-6">{r.score}</span>
+              <span className={`text-xs font-semibold ${cfg.color} min-w-[70px] text-right`}>{cfg.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-white/30 text-xs">
+            {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, results.length)} of {fmt(results.length)}
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onPageChange(page - 1)}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-xs text-white/50 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed bg-white/5 border border-white/8 rounded-lg transition-colors"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => onPageChange(page + 1)}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 text-xs text-white/50 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed bg-white/5 border border-white/8 rounded-lg transition-colors"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SSE reader ───────────────────────────────────────────────────────────────
+
+async function* readSse(res: Response): AsyncGenerator<Record<string, unknown>> {
+  const reader  = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let   buffer  = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.replace(/^data:\s*/, "").trim();
+      if (!line) continue;
+      try { yield JSON.parse(line) as Record<string, unknown>; } catch { /* skip malformed */ }
+    }
+  }
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type MainTab  = "run" | "past";
+type BulkView = "upload" | "running" | "done";
+
 export default function VerifyEmailPage() {
-  const [tab, setTab] = useState<"single" | "bulk">("single");
+  const [mainTab, setMainTab]   = useState<MainTab>("run");
+  const [subTab, setSubTab]     = useState<"single" | "bulk">("single");
+  const [balance, setBalance]   = useState<number | null>(null);
 
   // ── Single ──
-  const [email, setEmail]     = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult]   = useState<VerifyResult | null>(null);
-  const [error, setError]     = useState<string | null>(null);
-  const [history, setHistory] = useState<VerifyResult[]>([]);
+  const [email, setEmail]       = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [result, setResult]     = useState<VerifyResult | null>(null);
+  const [singleErr, setSingleErr] = useState<string | null>(null);
+  const [history, setHistory]   = useState<VerifyResult[]>([]);
 
   // ── Bulk ──
-  const fileRef                           = useRef<HTMLInputElement>(null);
-  const [bulkEmails, setBulkEmails]       = useState<string[]>([]);
-  const [bulkLoading, setBulkLoading]     = useState(false);
-  const [bulkResults, setBulkResults]     = useState<VerifyResult[]>([]);
-  const [bulkError, setBulkError]         = useState<string | null>(null);
-  const [balance, setBalance]             = useState<number | null>(null);
+  const fileRef                 = useRef<HTMLInputElement>(null);
+  const [bulkView, setBulkView] = useState<BulkView>("upload");
+  const [bulkEmails, setBulkEmails]   = useState<string[]>([]);
+  const [processed, setProcessed]     = useState(0);
+  const [total, setTotal]             = useState(0);
+  const [liveResults, setLiveResults] = useState<VerifyResult[]>([]);
+  const [liveCounts, setLiveCounts]   = useState<Record<string, number>>({});
+  const [bulkErr, setBulkErr]         = useState<string | null>(null);
+  const [creditsUsed, setCreditsUsed] = useState(0);
+  const [resultPage, setResultPage]   = useState(1);
 
-  // Load balance once
-  useState(() => {
+  // ── Past jobs ──
+  const [jobs, setJobs]           = useState<VerifyJob[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(() => {
     wsGet<{ balance: number }>("/api/lead-campaigns/credits")
       .then(d => setBalance(d.balance))
       .catch(() => {});
-  });
+  }, []);
 
+  const loadJobs = useCallback(async () => {
+    setJobsLoading(true);
+    try {
+      const d = await wsGet<{ jobs: VerifyJob[] }>("/api/lead-campaigns/verify-jobs");
+      setJobs(d.jobs);
+    } catch { /* ignore */ } finally { setJobsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (mainTab === "past") loadJobs();
+  }, [mainTab, loadJobs]);
+
+  // ── Single verify ──
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setSingleErr(null); setResult(null);
     try {
       const res = await wsPost<VerifyResult>("/api/lead-campaigns/verify-single", { email: email.trim() });
       setResult(res);
       setHistory(prev => [res, ...prev].slice(0, 20));
+      setBalance(b => b !== null ? b - 0.5 : null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
+      setSingleErr(err instanceof Error ? err.message : "Verification failed");
     } finally { setLoading(false); }
   }
 
+  // ── File upload ──
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -95,29 +274,78 @@ export default function VerifyEmailPage() {
     reader.onload = ev => {
       const emails = parseCsvEmails(ev.target?.result as string);
       setBulkEmails(emails);
-      setBulkResults([]);
-      setBulkError(null);
+      setBulkView("upload");
+      setBulkErr(null);
+      setLiveResults([]);
+      setLiveCounts({});
+      setResultPage(1);
     };
     reader.readAsText(file);
+    e.target.value = "";
   }
 
+  // ── Bulk verify (SSE) ──
   async function handleBulkVerify() {
     if (!bulkEmails.length) return;
-    setBulkLoading(true); setBulkError(null); setBulkResults([]);
+    setBulkErr(null);
+    setLiveResults([]);
+    setLiveCounts({});
+    setProcessed(0);
+    setTotal(bulkEmails.length);
+    setCreditsUsed(0);
+    setResultPage(1);
+    setBulkView("running");
+
     try {
-      const res = await wsPost<{ results: VerifyResult[]; credits_used: number }>(
-        "/api/lead-campaigns/verify-bulk",
-        { emails: bulkEmails },
-      );
-      setBulkResults(res.results);
-      setBalance(b => b !== null ? b - res.credits_used : null);
+      const res = await wsFetch("/api/lead-campaigns/verify-bulk", {
+        method: "POST",
+        body:   JSON.stringify({ emails: bulkEmails }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        setBulkErr((err as { error?: string }).error ?? res.statusText);
+        setBulkView("upload");
+        return;
+      }
+
+      const allResults: VerifyResult[] = [];
+
+      for await (const msg of readSse(res)) {
+        if (msg.type === "progress") {
+          const batch = (msg.batch as VerifyResult[]) ?? [];
+          allResults.push(...batch);
+          setProcessed(msg.processed as number);
+          setLiveResults([...allResults]);
+          setLiveCounts(countStatuses(allResults));
+        } else if (msg.type === "done") {
+          setCreditsUsed(msg.credits_used as number);
+          setBalance(b => b !== null ? b - (msg.credits_used as number) : null);
+          setBulkView("done");
+        } else if (msg.type === "error") {
+          setBulkErr(msg.message as string);
+          setBulkView("upload");
+        }
+      }
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Verification failed");
-    } finally { setBulkLoading(false); }
+      setBulkErr(err instanceof Error ? err.message : "Verification failed");
+      setBulkView("upload");
+    }
   }
 
-  const cfg = result ? (STATUS_CONFIG[result.status] ?? DEFAULT_CFG) : null;
+  // ── Download past job ──
+  async function downloadJob(job: VerifyJob) {
+    setDownloading(job.id);
+    try {
+      const d = await wsGet<{ results: VerifyResult[]; completed_at: string }>(`/api/lead-campaigns/verify-jobs/${job.id}`);
+      const date = new Date(d.completed_at).toISOString().split("T")[0];
+      downloadCsv(d.results, `verify-${date}-${job.total}.csv`);
+    } catch { /* ignore */ } finally { setDownloading(null); }
+  }
+
+  const cfg  = result ? (STATUS_CONFIG[result.status] ?? DEFAULT_CFG) : null;
   const cost = bulkEmails.length * 0.5;
+  const pct  = total ? Math.round((processed / total) * 100) : 0;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
@@ -132,14 +360,14 @@ export default function VerifyEmailPage() {
         )}
       </div>
 
-      {/* Tabs */}
+      {/* Main tabs */}
       <div className="flex gap-0.5 bg-white/4 border border-white/8 rounded-xl p-1 mb-6">
-        {([["single", "Single Email"], ["bulk", "Bulk CSV"]] as const).map(([key, label]) => (
+        {([["run", "Verify"], ["past", "Past Jobs"]] as const).map(([key, label]) => (
           <button
             key={key}
-            onClick={() => setTab(key)}
+            onClick={() => setMainTab(key)}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
+              mainTab === key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
             {label}
@@ -147,172 +375,282 @@ export default function VerifyEmailPage() {
         ))}
       </div>
 
-      {/* ── Single tab ── */}
-      {tab === "single" && (
+      {/* ══ Run tab ══ */}
+      {mainTab === "run" && (
         <>
-          <form onSubmit={handleVerify} className="flex gap-3 mb-6">
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
-              disabled={loading}
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={loading || !email.trim()}
-              className="px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
-            >
-              {loading ? (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              {loading ? "Verifying…" : "Verify · 0.5cr"}
-            </button>
-          </form>
-
-          {error && (
-            <div className="mb-6 px-4 py-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-sm">{error}</div>
-          )}
-
-          {result && cfg && (
-            <div className={`mb-8 p-5 rounded-2xl border ${cfg.bg}`}>
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
-                  <svg className={`w-5 h-5 ${cfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d={cfg.icon} />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-base font-bold ${cfg.color}`}>{cfg.label}</span>
-                    <span className="text-white/20 text-sm">·</span>
-                    <span className="text-white/40 text-sm">Score: {result.score}</span>
-                  </div>
-                  <p className="text-white/60 text-sm break-all">{result.email}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <div>
-              <p className="text-white/30 text-xs font-semibold uppercase tracking-widest mb-3">Recent</p>
-              <div className="border border-white/8 rounded-2xl overflow-hidden">
-                {history.map((h, i) => {
-                  const hcfg = STATUS_CONFIG[h.status] ?? DEFAULT_CFG;
-                  return (
-                    <div key={`${h.email}-${i}`} className={`flex items-center justify-between px-4 py-3 ${i !== history.length - 1 ? "border-b border-white/5" : ""}`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <svg className={`w-4 h-4 flex-shrink-0 ${hcfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d={hcfg.icon} />
-                        </svg>
-                        <span className="text-white/70 text-sm truncate cursor-pointer hover:text-white transition-colors" onClick={() => setEmail(h.email)}>
-                          {h.email}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                        <span className="text-white/30 text-xs">{h.score}</span>
-                        <span className={`text-xs font-medium ${hcfg.color}`}>{hcfg.label}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-white/20 text-xs mt-2 text-center">Click an email to re-verify it</p>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── Bulk tab ── */}
-      {tab === "bulk" && (
-        <>
-          {/* Upload area */}
-          <div
-            onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-white/10 rounded-2xl p-10 text-center cursor-pointer hover:border-white/20 hover:bg-white/3 transition-all mb-4"
-          >
-            <svg className="w-8 h-8 text-white/25 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            <p className="text-white/50 text-sm font-medium">Upload CSV file</p>
-            <p className="text-white/25 text-xs mt-1">Must contain an email column · max 500 emails</p>
-            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+          {/* Sub-tabs */}
+          <div className="flex gap-0.5 bg-white/3 border border-white/6 rounded-xl p-0.5 mb-6">
+            {([["single", "Single Email"], ["bulk", "Bulk CSV (up to 500)"]] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSubTab(key)}
+                className={`flex-1 px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                  subTab === key ? "bg-white/8 text-white font-medium" : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {bulkEmails.length > 0 && (
-            <div className="mb-4 flex items-center justify-between px-4 py-3 bg-white/4 border border-white/8 rounded-xl">
-              <div>
-                <p className="text-white text-sm font-medium">{bulkEmails.length} emails detected</p>
-                <p className="text-white/40 text-xs mt-0.5">Cost: {cost} credits ({bulkEmails.length} × 0.5)</p>
-              </div>
-              <button
-                onClick={handleBulkVerify}
-                disabled={bulkLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
-              >
-                {bulkLoading ? (
-                  <>
+          {/* ── Single email ── */}
+          {subTab === "single" && (
+            <>
+              <form onSubmit={handleVerify} className="flex gap-3 mb-6">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                  disabled={loading}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !email.trim()}
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+                >
+                  {loading ? (
                     <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Verifying…
-                  </>
-                ) : "Verify All"}
-              </button>
-            </div>
-          )}
-
-          {bulkError && (
-            <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-sm">{bulkError}</div>
-          )}
-
-          {bulkResults.length > 0 && (
-            <>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-white/50 text-sm">{bulkResults.length} results</p>
-                <button
-                  onClick={() => downloadResultsCsv(bulkResults)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/6 border border-white/10 text-white/70 text-xs font-medium rounded-lg hover:bg-white/10 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download CSV
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  {loading ? "Verifying…" : "Verify · 0.5cr"}
                 </button>
-              </div>
-              <div className="border border-white/8 rounded-2xl overflow-hidden">
-                {bulkResults.slice(0, 100).map((r, i) => {
-                  const rcfg = STATUS_CONFIG[r.status] ?? DEFAULT_CFG;
-                  return (
-                    <div key={r.email} className={`flex items-center justify-between px-4 py-2.5 ${i !== bulkResults.length - 1 ? "border-b border-white/5" : ""}`}>
-                      <span className="text-white/60 text-sm truncate flex-1 mr-4 font-mono text-xs">{r.email}</span>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-white/30 text-xs">{r.score}</span>
-                        <span className={`text-xs font-medium ${rcfg.color}`}>{rcfg.label}</span>
-                      </div>
+              </form>
+
+              {singleErr && (
+                <div className="mb-6 px-4 py-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-sm">{singleErr}</div>
+              )}
+
+              {result && cfg && (
+                <div className={`mb-8 p-5 rounded-2xl border ${cfg.bg}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+                      <svg className={`w-5 h-5 ${cfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d={cfg.icon} />
+                      </svg>
                     </div>
-                  );
-                })}
-                {bulkResults.length > 100 && (
-                  <div className="px-4 py-3 text-center text-white/30 text-xs border-t border-white/5">
-                    +{bulkResults.length - 100} more — download CSV for full results
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-base font-bold ${cfg.color}`}>{cfg.label}</span>
+                        <span className="text-white/20 text-sm">·</span>
+                        <span className="text-white/40 text-sm">Score: {result.score}</span>
+                      </div>
+                      <p className="text-white/60 text-sm break-all">{result.email}</p>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {history.length > 0 && (
+                <div>
+                  <p className="text-white/30 text-xs font-semibold uppercase tracking-widest mb-3">Recent</p>
+                  <div className="border border-white/8 rounded-2xl overflow-hidden">
+                    {history.map((h, i) => {
+                      const hcfg = STATUS_CONFIG[h.status] ?? DEFAULT_CFG;
+                      return (
+                        <div
+                          key={`${h.email}-${i}`}
+                          className={`flex items-center justify-between px-4 py-3 ${i !== history.length - 1 ? "border-b border-white/5" : ""}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <svg className={`w-4 h-4 flex-shrink-0 ${hcfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d={hcfg.icon} />
+                            </svg>
+                            <span
+                              className="text-white/70 text-sm truncate cursor-pointer hover:text-white transition-colors"
+                              onClick={() => setEmail(h.email)}
+                            >
+                              {h.email}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                            <span className="text-white/30 text-xs">{h.score}</span>
+                            <span className={`text-xs font-medium ${hcfg.color}`}>{hcfg.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-white/20 text-xs mt-2 text-center">Click an email to re-verify it</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Bulk tab ── */}
+          {subTab === "bulk" && (
+            <>
+              {/* Upload state */}
+              {bulkView === "upload" && (
+                <>
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    className="border-2 border-dashed border-white/10 rounded-2xl p-10 text-center cursor-pointer hover:border-white/20 hover:bg-white/3 transition-all mb-4"
+                  >
+                    <svg className="w-8 h-8 text-white/25 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    <p className="text-white/50 text-sm font-medium">
+                      {bulkEmails.length > 0 ? `${bulkEmails.length} emails loaded — click to replace` : "Upload CSV file"}
+                    </p>
+                    <p className="text-white/25 text-xs mt-1">Must contain an email column · max 500 emails</p>
+                    <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                  </div>
+
+                  {bulkErr && (
+                    <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-sm">{bulkErr}</div>
+                  )}
+
+                  {bulkEmails.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-white/4 border border-white/8 rounded-xl">
+                      <div>
+                        <p className="text-white text-sm font-medium">{bulkEmails.length.toLocaleString()} emails detected</p>
+                        <p className="text-white/40 text-xs mt-0.5">Cost: {cost} credits ({bulkEmails.length} × 0.5)</p>
+                      </div>
+                      <button
+                        onClick={handleBulkVerify}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                      >
+                        Start Verification
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Running state */}
+              {bulkView === "running" && (
+                <div className="space-y-5">
+                  <div className="px-5 py-5 bg-white/3 border border-white/8 rounded-2xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-white font-semibold text-sm">Verifying emails…</p>
+                      <span className="text-white/40 text-sm">{fmt(processed)} / {fmt(total)}</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-1">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-white/30 text-xs text-right">{pct}%</p>
+                  </div>
+
+                  {/* Live status breakdown */}
+                  {Object.keys(liveCounts).length > 0 && (
+                    <div className="px-5 py-4 bg-white/3 border border-white/8 rounded-2xl">
+                      <p className="text-white/40 text-xs font-semibold uppercase tracking-widest mb-3">Live Breakdown</p>
+                      <StatusBar counts={liveCounts} total={processed} />
+                    </div>
+                  )}
+
+                  <p className="text-white/25 text-xs text-center">Results save automatically when done</p>
+                </div>
+              )}
+
+              {/* Done state */}
+              {bulkView === "done" && (
+                <div className="space-y-5">
+                  {/* Summary card */}
+                  <div className="px-5 py-5 bg-white/3 border border-white/8 rounded-2xl">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-white font-semibold">{fmt(liveResults.length)} emails verified</p>
+                        <p className="text-white/40 text-xs mt-0.5">{creditsUsed} credits used</p>
+                      </div>
+                      <button
+                        onClick={() => downloadCsv(liveResults)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white/6 border border-white/10 text-white/70 text-sm font-medium rounded-xl hover:bg-white/10 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download CSV
+                      </button>
+                    </div>
+                    <StatusBar counts={liveCounts} total={liveResults.length} />
+                  </div>
+
+                  {/* Paginated results */}
+                  <ResultsTable results={liveResults} page={resultPage} onPageChange={setResultPage} />
+
+                  {/* Run another */}
+                  <button
+                    onClick={() => { setBulkView("upload"); setBulkEmails([]); }}
+                    className="w-full py-2.5 text-sm text-white/40 hover:text-white/70 transition-colors border border-white/8 rounded-xl hover:border-white/15"
+                  >
+                    Verify another file
+                  </button>
+                </div>
+              )}
             </>
           )}
         </>
+      )}
+
+      {/* ══ Past jobs tab ══ */}
+      {mainTab === "past" && (
+        <div className="space-y-3">
+          {jobsLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <svg className="w-5 h-5 animate-spin text-white/30" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-white/30 text-sm">No verification jobs yet</p>
+              <p className="text-white/20 text-xs mt-1">Completed bulk jobs are saved here for 90 days</p>
+            </div>
+          ) : (
+            jobs.map(job => {
+              const counts: Record<string, number> = {
+                safe: job.safe, invalid: job.invalid, catch_all: job.catch_all,
+                risky: job.risky, dangerous: job.dangerous, disposable: job.disposable, unknown: job.unknown,
+              };
+              return (
+                <div key={job.id} className="px-5 py-4 bg-white/3 border border-white/8 rounded-2xl">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <p className="text-white text-sm font-semibold">{fmt(job.total)} emails</p>
+                      <p className="text-white/30 text-xs mt-0.5">{fmtDate(job.completed_at)} · {job.credits_used} credits</p>
+                    </div>
+                    <button
+                      onClick={() => downloadJob(job)}
+                      disabled={downloading === job.id}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/6 border border-white/10 text-white/60 text-xs font-medium rounded-lg hover:bg-white/10 transition-colors disabled:opacity-40"
+                    >
+                      {downloading === job.id ? (
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      )}
+                      {downloading === job.id ? "…" : "CSV"}
+                    </button>
+                  </div>
+                  <StatusBar counts={counts} total={job.total} />
+                  <p className="text-white/20 text-xs mt-2">
+                    Expires {fmtDate(job.expires_at)}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
     </div>
   );
