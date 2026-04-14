@@ -538,6 +538,14 @@ export default function VerifyEmailPage() {
           )}
         </div>
       )}
+
+      {dlModal && (
+        <DownloadModal
+          results={dlModal.results}
+          filename={dlModal.filename}
+          onClose={() => setDlModal(null)}
+        />
+      )}
     </div>
   );
 }
