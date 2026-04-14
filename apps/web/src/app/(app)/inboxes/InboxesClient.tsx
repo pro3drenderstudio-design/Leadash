@@ -1127,11 +1127,20 @@ export default function InboxesClient() {
                       <p className="text-red-300/60 text-xs">{drawerInbox.last_error}</p>
                     </div>
                   )}
-                  <div className="flex items-center gap-3">
-                    <button onClick={handleDelivTest} disabled={delivTesting}
-                      className="px-4 py-2 bg-white/6 hover:bg-white/10 disabled:opacity-40 text-white/60 text-xs font-semibold rounded-lg border border-white/10 transition-colors">
-                      {delivTesting ? "Sending…" : "Test Deliverability"}
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        placeholder="Recipient (leave blank for your email)"
+                        value={delivRecipient}
+                        onChange={e => setDelivRecipient(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white/6 border border-white/10 rounded-lg text-white/80 text-xs placeholder:text-white/30 focus:outline-none focus:border-white/25"
+                      />
+                      <button onClick={handleDelivTest} disabled={delivTesting}
+                        className="px-4 py-2 bg-white/6 hover:bg-white/10 disabled:opacity-40 text-white/60 text-xs font-semibold rounded-lg border border-white/10 transition-colors whitespace-nowrap">
+                        {delivTesting ? "Sending…" : "Test Deliverability"}
+                      </button>
+                    </div>
                     {delivResult && <span className={`text-xs ${delivResult.startsWith("Error") ? "text-red-400" : "text-green-400"}`}>{delivResult}</span>}
                   </div>
                 </div>
