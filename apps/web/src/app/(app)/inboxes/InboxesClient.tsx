@@ -373,14 +373,14 @@ export default function InboxesClient() {
 
     pollingRefs.current.set(domainId, interval);
 
-    // Give up after 10 minutes
+    // Give up after 48 hours (DNS propagation can take time)
     setTimeout(() => {
       if (pollingRefs.current.has(domainId)) {
         clearInterval(interval);
         pollingRefs.current.delete(domainId);
         setPollingIds(prev => { const s = new Set(prev); s.delete(domainId); return s; });
       }
-    }, 600_000);
+    }, 172_800_000);
   }
 
   async function handleReconfigure(domainId: string) {
