@@ -211,6 +211,9 @@ export default function VerifyEmailPage() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  // ── Download modal ──
+  const [dlModal, setDlModal] = useState<{ results: VerifyResult[]; filename: string } | null>(null);
+
   useEffect(() => {
     wsGet<{ balance: number }>("/api/lead-campaigns/credits")
       .then(d => setBalance(d.balance)).catch(() => {});
