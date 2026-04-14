@@ -345,9 +345,42 @@ export default function InboxesClient() {
     }
   }
 
+  function startDnsPolling(domainId: string, domainName: string) {
+    if (pollingRefs.current.has(domainId)) return;
+    setPollingIds(prev => new Set(prev).add(domainId));
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await wsFetch(`/api/outreach/domains/${domainId}/status`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.status === "active") {
+          clearInterval(interval);
+          pollingRefs.current.delete(domainId);
+          setPollingIds(prev => { const s = new Set(prev); s.delete(domainId); return s; });
+          setDomains(prev => prev.map(dom => dom.id === domainId ? { ...dom, status: "active", error_message: null } : dom));
+          showToast(`${domainName} is now active`);
+        }
+      } catch { /* ignore */ }
+    }, 20_000);
+
+    pollingRefs.current.set(domainId, interval);
+
+    // Give up after 10 minutes
+    setTimeout(() => {
+      if (pollingRefs.current.has(domainId)) {
+        clearInterval(interval);
+        pollingRefs.current.delete(domainId);
+        setPollingIds(prev => { const s = new Set(prev); s.delete(domainId); return s; });
+      }
+    }, 600_000);
+  }
+
   async function handleReconfigure(domainId: string) {
     setReconfiguringId(domainId);
+    setReconfiguringStep("Registering with Postal…");
     try {
+      setReconfiguringStep("Publishing DNS records…");
       const res = await wsFetch(`/api/outreach/domains/${domainId}/ses-register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -356,8 +389,10 @@ export default function InboxesClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
 
-      // If domain is already verified but inboxes were never created, create them now
+      setReconfiguringStep("Verifying DNS…");
+
       if (data.status === "active") {
+        // Domain verified — ensure inboxes exist
         const connectRes = await wsFetch("/api/outreach/domains/connect", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -365,22 +400,30 @@ export default function InboxesClient() {
         });
         const connectData = await connectRes.json();
         if (connectRes.ok && connectData.inbox_count > 0) {
-          showToast(`${connectData.inbox_count} inbox${connectData.inbox_count !== 1 ? "es" : ""} created — DNS + MAIL FROM updated`);
+          showToast(`Domain active — ${connectData.inbox_count} inbox${connectData.inbox_count !== 1 ? "es" : ""} ready`);
           loadDomains();
           load();
           return;
         }
+        showToast("Domain active — DNS records updated");
+        loadDomains();
+        return;
       }
 
+      // dns_pending — update row immediately and start background polling
+      setDomains(prev => prev.map(d => d.id === domainId ? { ...d, status: "dns_pending", error_message: null } : d));
+      const domainName = data.domain ?? domainId;
       showToast(data.auto_configured
-        ? `DNS re-applied via Cloudflare — MAIL FROM + DKIM updated (${data.status})`
-        : `SES re-registered (${data.status}) — add the new DNS records manually`
+        ? "DNS records published — waiting for propagation (usually 1–5 min)"
+        : "DNS records updated — add them to your DNS provider then click Re-configure again"
       );
-      loadDomains();
+      startDnsPolling(domainId, domainName);
     } catch (e) {
       showToast(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      loadDomains();
     } finally {
       setReconfiguringId(null);
+      setReconfiguringStep("");
     }
   }
 
