@@ -129,7 +129,7 @@ interface SmtpSettings {
 export function getSmtpSettings(): SmtpSettings {
   return {
     host:      process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com",
-    port:      587,
+    port:      25,
     imap_host: null,
     imap_port: null,
   };
