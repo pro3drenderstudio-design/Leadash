@@ -68,15 +68,24 @@ export async function registerDomain(domain: string): Promise<RegisterDomainResu
 
 /**
  * Check if the DKIM record for a domain has been published and propagated.
- * We verify by resolving the DKIM TXT record from DNS.
+ * Uses Google DNS-over-HTTPS so the check works reliably from any Vercel region
+ * without depending on the Lambda's local DNS resolver.
  */
 export async function isDomainVerified(domain: string): Promise<boolean> {
   try {
-    const { resolveTxt } = await import("dns/promises");
-    const selector = "postal";
-    const records = await resolveTxt(`${selector}._domainkey.${domain}`);
-    // Check if any TXT record contains a DKIM key fragment
-    return records.some(r => r.join("").includes("v=DKIM1"));
+    const name = `postal._domainkey.${domain}`;
+    const res  = await fetch(
+      `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=TXT`,
+      { signal: AbortSignal.timeout(8_000) },
+    );
+    if (!res.ok) return false;
+    const json = await res.json() as {
+      Status: number;
+      Answer?: Array<{ type: number; data: string }>;
+    };
+    // Status 0 = NOERROR. Type 16 = TXT.
+    if (json.Status !== 0 || !json.Answer) return false;
+    return json.Answer.some(r => r.type === 16 && r.data.includes("v=DKIM1"));
   } catch {
     return false;
   }
