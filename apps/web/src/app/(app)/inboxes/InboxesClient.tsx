@@ -184,6 +184,9 @@ export default function InboxesClient() {
   const [domains, setDomains]           = useState<OutreachDomain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
   const [reconfiguringId, setReconfiguringId] = useState<string | null>(null);
+  const [reconfiguringStep, setReconfiguringStep] = useState<string>("");
+  const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
+  const pollingRefs = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
   const [showImport, setShowImport]     = useState(false);
   const [importFile, setImportFile]     = useState<File | null>(null);
   const [importing, setImporting]       = useState(false);
