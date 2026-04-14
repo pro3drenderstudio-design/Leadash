@@ -49,7 +49,7 @@ function downloadCsv(rows: EnrichedRow[]) {
   const lines = [
     headers.join(","),
     ...rows.map(r => headers.map(h => {
-      const v = String((r as Record<string, string | undefined>)[h] ?? "");
+      const v = String((r as Record<string, unknown>)[h] ?? "");
       return v.includes(",") || v.includes('"') || v.includes("\n") ? `"${v.replace(/"/g, '""')}"` : v;
     }).join(",")),
   ];
