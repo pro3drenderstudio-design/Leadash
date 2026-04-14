@@ -61,7 +61,7 @@ export async function POST(
 
   await db
     .from("outreach_domains")
-    .update({ dns_records: dnsRecords, status: newStatus, updated_at: new Date().toISOString() })
+    .update({ dns_records: dnsRecords, status: newStatus, error_message: null, updated_at: new Date().toISOString() })
     .eq("id", id);
 
   // Re-provision Postal SMTP credentials for all existing inboxes on this domain
