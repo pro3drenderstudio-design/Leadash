@@ -16,7 +16,7 @@ new Worker("leadash:send",           processSend,           { connection, concur
 new Worker("leadash:reply-poll",     processReplyPoll,      { connection, concurrency: 20 });
 new Worker("leadash:warmup",         processWarmup,         { connection, concurrency: 10 });
 new Worker("leadash:webhook",        processWebhook,        { connection, concurrency: 100 });
-new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 5 });
+new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 2 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
