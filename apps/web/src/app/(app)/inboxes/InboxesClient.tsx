@@ -215,8 +215,9 @@ export default function InboxesClient() {
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
   const [drawerEdits, setDrawerEdits]   = useState<Partial<OutreachInboxSafe>>({});
   const [drawerSaving, setDrawerSaving] = useState(false);
-  const [delivResult, setDelivResult]   = useState<string | null>(null);
-  const [delivTesting, setDelivTesting] = useState(false);
+  const [delivResult, setDelivResult]     = useState<string | null>(null);
+  const [delivTesting, setDelivTesting]   = useState(false);
+  const [delivRecipient, setDelivRecipient] = useState("");
 
   const pageInboxes = inboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const allPageSelected = pageInboxes.length > 0 && pageInboxes.every((i) => selected.has(i.id));
