@@ -132,9 +132,10 @@ app.post("/domains", async (req: Request, res: Response) => {
 
       await conn.execute(
         `INSERT INTO domains
-          (server_id, uuid, name, dkim_private_key, dkim_identifier_string, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'postal', ?, ?)`,
-        [serverId(), genUuid(), domain, privateKey, now, now],
+          (server_id, uuid, name, dkim_private_key, dkim_identifier_string,
+           owner_type, owner_id, verified_at, outgoing, incoming, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'postal', 'Server', ?, ?, 1, 1, ?, ?)`,
+        [serverId(), genUuid(), domain, privateKey, serverId(), now, now, now],
       );
 
       const smtpHost = process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com";
