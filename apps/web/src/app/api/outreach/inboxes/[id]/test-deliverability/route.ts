@@ -23,12 +23,16 @@ export async function POST(
 
   if (!inbox) return NextResponse.json({ error: "Inbox not found" }, { status: 404 });
 
-  // Send to the logged-in user's email
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const toEmail = user?.email;
-  if (!toEmail) return NextResponse.json({ error: "Could not determine user email" }, { status: 400 });
+  // Use provided recipient or fall back to the logged-in user's email
+  const body = await req.json().catch(() => ({})) as { to?: string };
+  let toEmail: string | undefined = body.to?.trim() || undefined;
+  if (!toEmail) {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    toEmail = user?.email;
+  }
+  if (!toEmail) return NextResponse.json({ error: "Could not determine recipient email" }, { status: 400 });
 
   const subject  = "Leadash deliverability test";
   const textBody = "This is a test email sent by Leadash to verify your inbox can send successfully. You can delete it.";
