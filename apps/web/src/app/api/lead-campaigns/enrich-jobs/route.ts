@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 
 // GET /api/lead-campaigns/enrich-jobs
 // Returns past AI enrichment jobs for the workspace (90-day retention).
+// Excludes `leads` and `results` columns — fetched per-job for downloads.
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db
     .from("lead_enrichment_jobs")
-    .select("id, total, prompt, credits_used, completed_at, expires_at, created_at")
+    .select("id, status, total, processed, prompt, credits_used, error, completed_at, expires_at, created_at")
     .eq("workspace_id", workspaceId)
     .gte("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
