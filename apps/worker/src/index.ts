@@ -6,6 +6,8 @@ import { processReplyPoll } from "./workers/reply-worker";
 import { processWarmup } from "./workers/warmup-worker";
 import { processWebhook } from "./workers/webhook-worker";
 import { processLeadCampaign } from "./workers/lead-campaign-worker";
+import { processVerifyBulk } from "./workers/verify-bulk-worker";
+import { processEnrichBulk } from "./workers/enrich-bulk-worker";
 import { startSchedulers } from "./schedulers";
 
 console.log("[Leadash Worker] Starting...");
@@ -17,6 +19,8 @@ new Worker("leadash:reply-poll",     processReplyPoll,      { connection, concur
 new Worker("leadash:warmup",         processWarmup,         { connection, concurrency: 10 });
 new Worker("leadash:webhook",        processWebhook,        { connection, concurrency: 100 });
 new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 2 });
+new Worker("leadash:verify-bulk",    processVerifyBulk,     { connection, concurrency: 3 });
+new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concurrency: 3 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
