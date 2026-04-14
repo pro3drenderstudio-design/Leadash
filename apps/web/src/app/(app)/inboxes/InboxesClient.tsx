@@ -517,7 +517,12 @@ export default function InboxesClient() {
     setDelivResult(null);
     try {
       const { wsFetch } = await import("@/lib/workspace/client");
-      const r = await wsFetch(`/api/outreach/inboxes/${drawerInbox.id}/test-deliverability`, { method: "POST" });
+      const body = delivRecipient.trim() ? { to: delivRecipient.trim() } : undefined;
+      const r = await wsFetch(`/api/outreach/inboxes/${drawerInbox.id}/test-deliverability`, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
       const d = await r.json();
       setDelivResult(d.message ?? (d.error ? `Error: ${d.error}` : "Test sent"));
     } catch {
