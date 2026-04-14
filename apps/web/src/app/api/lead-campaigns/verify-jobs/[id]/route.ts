@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 
 // GET /api/lead-campaigns/verify-jobs/[id]
-// Returns full results for a past verification job (for CSV download).
+// Returns job status + progress for polling, and full results once done.
+// The `results` and `emails` columns are excluded from the list endpoint
+// but included here so the client can render the table and download CSV.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -14,7 +16,7 @@ export async function GET(
 
   const { data, error } = await db
     .from("lead_verification_jobs")
-    .select("id, total, results, completed_at")
+    .select("id, status, total, processed, safe, invalid, catch_all, risky, dangerous, disposable, unknown, credits_used, error, results, completed_at, expires_at, created_at")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
