@@ -320,7 +320,14 @@ export default function InboxesClient() {
     setDomainsLoading(true);
     try {
       const res = await wsFetch("/api/outreach/domains");
-      if (res.ok) setDomains(await res.json());
+      if (res.ok) {
+        const loaded: OutreachDomain[] = await res.json();
+        setDomains(loaded);
+        // Auto-start polling for any domains already sitting at dns_pending
+        for (const d of loaded) {
+          if (d.status === "dns_pending") startDnsPolling(d.id, d.domain);
+        }
+      }
     } catch { /* swallow */ }
     finally { setDomainsLoading(false); }
   }
