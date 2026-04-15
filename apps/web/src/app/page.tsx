@@ -612,7 +612,7 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 items-start">
-          {plans.map(plan => (
+          {plans_to_show.map(plan => (
             <div
               key={plan.name}
               className={`relative rounded-2xl p-7 transition-all ${plan.highlight ? "scale-[1.03]" : ""}`}
