@@ -372,10 +372,10 @@ function BillingTab() {
       <Section title="Current Plan">
         <div className="flex items-center justify-between p-4 bg-white/3 border border-white/8 rounded-xl">
           <div>
-            <p className="text-white font-semibold text-lg">{currentPlan.name}</p>
+            <p className="text-white font-semibold text-lg">{currentPlan?.name ?? "Free"}</p>
             <p className="text-white/40 text-xs mt-0.5">
-              {currentPlan.includedCredits > 0 ? `${currentPlan.includedCredits.toLocaleString()} credits/mo` : "No credits"}
-              {currentPlan.maxLeadsPool > 0 ? ` · ${currentPlan.maxLeadsPool.toLocaleString()} leads pool` : ""}
+              {(currentPlan?.included_credits ?? 0) > 0 ? `${currentPlan!.included_credits.toLocaleString()} credits/mo` : "No credits"}
+              {(currentPlan?.max_leads_pool ?? 0) > 0 ? ` · ${currentPlan!.max_leads_pool.toLocaleString()} leads pool` : ""}
             </p>
           </div>
           <div className="text-right">
