@@ -30,6 +30,16 @@
   --chart-3:             #f59e0b;
   --chart-4:             #8b5cf6;
   --chart-5:             #ef4444;
+  /* ── component tokens (light) ── */
+  --sidebar-bg:          #f1f5f9;
+  --sidebar-border:      rgba(0,0,0,0.07);
+  --header-bg:           rgba(241,245,249,0.85);
+  --header-border:       rgba(0,0,0,0.07);
+  --search-bg:           rgba(0,0,0,0.04);
+  --search-border:       rgba(0,0,0,0.08);
+  --dropdown-bg:         #ffffff;
+  --dropdown-border:     rgba(0,0,0,0.09);
+  --divider-color:       rgba(0,0,0,0.07);
 }
 
 .dark, [data-theme="dark"] {
@@ -55,11 +65,21 @@
   --chart-3:             #f59e0b;
   --chart-4:             #8b5cf6;
   --chart-5:             #ef4444;
+  /* ── component tokens (dark) ── */
+  --sidebar-bg:          #060d1a;
+  --sidebar-border:      rgba(255,255,255,0.07);
+  --header-bg:           rgba(8,15,30,0.72);
+  --header-border:       rgba(255,255,255,0.07);
+  --search-bg:           rgba(255,255,255,0.05);
+  --search-border:       rgba(255,255,255,0.08);
+  --dropdown-bg:         #0d1829;
+  --dropdown-border:     rgba(255,255,255,0.09);
+  --divider-color:       rgba(255,255,255,0.07);
 }
 
 body {
-  background: #020617;
-  color: #f8fafc;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /* Scrollbar */
