@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
 import { CurrencyProvider } from "@/lib/currency";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
+import TrialBanner from "@/components/TrialBanner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Check auth first
