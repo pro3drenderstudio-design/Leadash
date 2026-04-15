@@ -82,18 +82,24 @@ function genKey(length = 24): string {
   return Array.from(bytes).map(b => chars[b % chars.length]).join("");
 }
 
-function generateDkimPair(): { privateKey: string; publicKey: string } {
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
-    modulusLength:        2048,
-    publicKeyEncoding:  { type: "spki",  format: "pem" },
-    privateKeyEncoding: { type: "pkcs8", format: "pem" },
-  });
-  // Strip PEM headers and newlines for DNS TXT value
-  const publicKeyStripped = publicKey
+// DKIM selector used for all domains — must match dkim_identifier_string in Postal DB
+const DKIM_SELECTOR = "postal-1";
+
+/**
+ * Read the global Postal signing key and derive the public key from it.
+ * All domains share this key so the same DNS TXT record works everywhere.
+ * Path is configurable via SIGNING_KEY_PATH env var.
+ */
+function getSigningKeyPair(): { privateKey: string; publicKey: string } {
+  const keyPath = process.env.SIGNING_KEY_PATH ?? "/opt/postal/config/signing.key";
+  const privateKeyPem = readFileSync(keyPath, "utf8");
+  const privObj = createPrivateKey({ key: privateKeyPem, format: "pem" });
+  const pubPem  = createPublicKey(privObj).export({ type: "spki", format: "pem" }).toString();
+  const publicKey = pubPem
     .replace(/-----BEGIN PUBLIC KEY-----/, "")
     .replace(/-----END PUBLIC KEY-----/, "")
     .replace(/\n/g, "");
-  return { privateKey, publicKey: publicKeyStripped };
+  return { privateKey: privateKeyPem, publicKey };
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
