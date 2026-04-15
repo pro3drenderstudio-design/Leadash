@@ -240,9 +240,7 @@ export default function TicketDetailPage() {
 
         {/* Reply form */}
         <form onSubmit={submitReply} className="md:col-span-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">
-            {ticket.admin_reply ? "Edit Reply" : "Write Reply"}
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Reply to User</h2>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
