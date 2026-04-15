@@ -567,40 +567,36 @@ function Comparison() {
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
 
-function Pricing() {
-  const plans = [
-    {
-      id: "starter",
-      name: PLANS.starter.name,
-      price: `₦${PLANS.starter.priceNgn.toLocaleString()}`,
-      period: "/month",
-      desc: "For solo founders and small teams getting started with outreach.",
-      features: [`${PLANS.starter.includedCredits.toLocaleString()} credits/month`, `${PLANS.starter.maxLeadsPool.toLocaleString()} leads pool`, "Unlimited inboxes", "Email verification", "AI personalization", "Email support"],
-      cta: "Start free trial",
-      highlight: false,
-    },
-    {
-      id: "growth",
-      name: PLANS.growth.name,
-      price: `₦${PLANS.growth.priceNgn.toLocaleString()}`,
-      period: "/month",
-      desc: "For sales teams ready to scale their outbound pipeline.",
-      features: [`${PLANS.growth.includedCredits.toLocaleString()} credits/month`, `${PLANS.growth.maxLeadsPool.toLocaleString()} leads pool`, "Unlimited inboxes", "Inbox warmup", "Advanced AI personalization", "A/B testing", "CRM pipeline", "Priority support"],
-      cta: "Start free trial",
-      highlight: true,
-      badge: "Most popular",
-    },
-    {
-      id: "scale",
-      name: PLANS.scale.name,
-      price: `₦${PLANS.scale.priceNgn.toLocaleString()}`,
-      period: "/month",
-      desc: "For agencies and enterprise teams running multiple client campaigns.",
-      features: [`${PLANS.scale.includedCredits.toLocaleString()} credits/month`, `${PLANS.scale.maxLeadsPool.toLocaleString()} leads pool`, "Unlimited inboxes", "Everything in Growth", "Multiple workspaces", "API access", "Dedicated Slack support", "Custom onboarding"],
-      cta: "Talk to sales",
-      highlight: false,
-    },
-  ];
+const PLAN_DISPLAY: Record<string, { desc: string; cta: string; highlight?: boolean; badge?: string; extraFeatures: string[] }> = {
+  starter:    { desc: "For solo founders and small teams getting started with outreach.",          cta: "Start free trial", extraFeatures: ["Unlimited inboxes", "Email verification", "AI personalization", "Email support"] },
+  growth:     { desc: "For sales teams ready to scale their outbound pipeline.",                   cta: "Start free trial", highlight: true, badge: "Most popular", extraFeatures: ["Unlimited inboxes", "Inbox warmup", "Advanced AI personalization", "A/B testing", "CRM pipeline", "Priority support"] },
+  scale:      { desc: "For agencies and enterprise teams running multiple client campaigns.",       cta: "Talk to sales",   extraFeatures: ["Unlimited inboxes", "Everything in Growth", "Multiple workspaces", "API access", "Dedicated Slack support", "Custom onboarding"] },
+  enterprise: { desc: "For large teams requiring custom limits, SLAs, and dedicated support.",     cta: "Talk to sales",   extraFeatures: ["Everything in Scale", "Custom limits", "Dedicated Slack support", "SLA guarantee", "Custom onboarding"] },
+};
+
+function Pricing({ plans }: { plans: PlanConfig[] }) {
+  const displayPlans = plans
+    .filter(p => p.plan_id !== "free" && PLAN_DISPLAY[p.plan_id])
+    .map(p => {
+      const d = PLAN_DISPLAY[p.plan_id];
+      return {
+        id:        p.plan_id,
+        name:      p.name,
+        price:     `₦${p.price_ngn.toLocaleString()}`,
+        period:    "/month",
+        desc:      d.desc,
+        features:  [
+          `${p.included_credits.toLocaleString()} credits/month`,
+          `${p.max_leads_pool.toLocaleString()} leads pool`,
+          ...d.extraFeatures,
+        ],
+        cta:       d.cta,
+        highlight: d.highlight ?? false,
+        badge:     d.badge,
+      };
+    });
+
+  const plans_to_show = displayPlans.slice(0, 3); // Show up to 3 on landing page
 
   return (
     <section id="pricing" className="py-28 px-6" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
