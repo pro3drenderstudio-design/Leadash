@@ -35,15 +35,19 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type Campaign  = { id: string; workspace_id: string; name: string; [k: string]: unknown };
+  type Workspace = { id: string; name: string; owner_id: string };
+
   // Enrich with workspace names and owner emails
-  const workspaceIds = [...new Set((campaigns ?? []).map((c: { workspace_id: string }) => c.workspace_id))];
-  const wsMap = new Map<string, { name: string; owner_id: string }>();
+  const rows = (campaigns ?? []) as Campaign[];
+  const workspaceIds = [...new Set(rows.map(c => c.workspace_id))];
+  const wsMap = new Map<string, Workspace>();
   if (workspaceIds.length) {
     const { data: workspaces } = await ctx.adminClient
       .from("workspaces")
       .select("id, name, owner_id")
       .in("id", workspaceIds);
-    (workspaces ?? []).forEach(w => wsMap.set(w.id, { name: w.name, owner_id: w.owner_id }));
+    (workspaces as Workspace[] ?? []).forEach(w => wsMap.set(w.id, w));
   }
 
   const ownerIds = [...new Set([...wsMap.values()].map(w => w.owner_id))];
@@ -54,7 +58,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Apply workspace name search after enrichment
-  let enriched = (campaigns ?? []).map((c: Record<string, unknown> & { workspace_id: string; name: string }) => {
+  let enriched = rows.map(c => {
     const ws = wsMap.get(c.workspace_id);
     return {
       ...c,
@@ -66,7 +70,7 @@ export async function GET(req: NextRequest) {
   if (search) {
     const s = search.toLowerCase();
     enriched = enriched.filter(c =>
-      c.name.toLowerCase().includes(s) ||
+      (c.name as string).toLowerCase().includes(s) ||
       c.workspace_name.toLowerCase().includes(s)
     );
   }
