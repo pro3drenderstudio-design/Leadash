@@ -1,17 +1,21 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createSmtpInbox } from "@/lib/outreach/api";
 import { getWorkspaceId } from "@/lib/workspace/client";
+import { Suspense } from "react";
 
 type Provider = "gmail" | "outlook" | "smtp";
 
-export default function NewInboxPage() {
+function NewInboxPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("message") ?? (searchParams.get("error") === "oauth_denied" ? "OAuth connection was cancelled." : null);
+
   const [provider, setProvider] = useState<Provider | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(urlError);
 
   const [form, setForm] = useState({
     label: "",
