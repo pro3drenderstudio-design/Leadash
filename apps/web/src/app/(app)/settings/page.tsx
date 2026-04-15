@@ -391,11 +391,11 @@ function BillingTab() {
         <div className="grid grid-cols-5 gap-2 mt-2">
           {plans.map(plan => (
             <div
-              key={plan.id}
-              className={`rounded-xl p-3 border text-center transition-colors ${plan.id === planId ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/3"}`}
+              key={plan.plan_id}
+              className={`rounded-xl p-3 border text-center transition-colors ${plan.plan_id === planId ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/3"}`}
             >
               <p className="text-white text-xs font-semibold">{plan.name}</p>
-              <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.priceNgn > 0 ? "/mo" : ""}</p>
+              <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.price_ngn > 0 ? "/mo" : ""}</p>
             </div>
           ))}
         </div>
