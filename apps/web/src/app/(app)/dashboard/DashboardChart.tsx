@@ -4,6 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
+import { useTheme } from "@/components/ThemeProvider";
 
 export interface DailyPoint {
   date:    string; // "Apr 3"
@@ -25,13 +26,16 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 shadow-xl text-sm">
-      <p className="text-white/50 text-xs mb-2">{label}</p>
+    <div
+      className="rounded-xl px-4 py-3 shadow-xl text-sm"
+      style={{ background: "var(--dropdown-bg)", border: "1px solid var(--card-border)" }}
+    >
+      <p className="text-xs mb-2" style={{ color: "var(--chart-tick)" }}>{label}</p>
       {payload.map(p => (
         <div key={p.name} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
-          <span className="text-white/70 capitalize">{p.name}</span>
-          <span className="ml-auto font-semibold text-white pl-4">{p.value}</span>
+          <span className="capitalize" style={{ color: "var(--chart-legend)" }}>{p.name}</span>
+          <span className="ml-auto font-semibold pl-4" style={{ color: "var(--foreground)" }}>{p.value}</span>
         </div>
       ))}
     </div>
@@ -39,9 +43,17 @@ function CustomTooltip({ active, payload, label }: {
 }
 
 export default function DashboardChart({ data }: { data: DailyPoint[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  const tickColor   = isDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.45)";
+  const gridColor   = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)";
+  const legendColor = isDark ? "rgba(255,255,255,0.5)"  : "rgba(15,23,42,0.5)";
+  const cursorColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+
   if (!data.length) {
     return (
-      <div className="h-48 flex items-center justify-center text-white/25 text-sm">
+      <div className="h-48 flex items-center justify-center text-sm" style={{ color: "var(--chart-tick)" }}>
         No send activity yet this month
       </div>
     );
@@ -58,22 +70,22 @@ export default function DashboardChart({ data }: { data: DailyPoint[] }) {
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
         <XAxis
           dataKey="date"
-          tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+          tick={{ fill: tickColor, fontSize: 11 }}
           axisLine={false} tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+          tick={{ fill: tickColor, fontSize: 11 }}
           axisLine={false} tickLine={false}
           allowDecimals={false}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ stroke: "rgba(255,255,255,0.08)" }} />
+        <Tooltip content={<CustomTooltip />} cursor={{ stroke: cursorColor }} />
         <Legend
           wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-          formatter={(v) => <span style={{ color: "rgba(255,255,255,0.5)", textTransform: "capitalize" }}>{v}</span>}
+          formatter={(v) => <span style={{ color: legendColor, textTransform: "capitalize" }}>{v}</span>}
         />
         <Area type="monotone" dataKey="sent"    stroke={COLORS.sent}    fill={`url(#grad-sent)`}    strokeWidth={2} dot={false} />
         <Area type="monotone" dataKey="opened"  stroke={COLORS.opened}  fill={`url(#grad-opened)`}  strokeWidth={2} dot={false} />
