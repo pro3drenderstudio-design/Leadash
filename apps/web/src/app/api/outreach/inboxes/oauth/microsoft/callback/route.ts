@@ -26,6 +26,12 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCode(code);
     const db = createAdminClient();
 
+    const access = await checkInboxAccess(db, workspaceId, tokens.email);
+    if (!access.ok) {
+      const params = new URLSearchParams({ error: access.code, message: access.message });
+      return NextResponse.redirect(new URL(`/inboxes/new?${params}`, req.url));
+    }
+
     await db.from("outreach_inboxes").upsert({
       workspace_id:        workspaceId,
       label:               tokens.email,
