@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCode } from "@/lib/outreach/microsoft";
 import { createAdminClient } from "@/lib/supabase/server";
 import { encrypt } from "@/lib/outreach/crypto";
+import { checkInboxAccess } from "@/lib/outreach/inbox-access";
 
 export async function GET(req: NextRequest) {
   const url   = new URL(req.url);
