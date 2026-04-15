@@ -867,7 +867,8 @@ function Footer() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const plans = await getActivePlans();
   return (
     <div className="min-h-screen" style={{ background: "#020617" }}>
       <Nav />
@@ -877,7 +878,7 @@ export default function LandingPage() {
       <HowItWorks />
       <Testimonials />
       <Comparison />
-      <Pricing />
+      <Pricing plans={plans} />
       <FAQ />
       <CTA />
       <Footer />
