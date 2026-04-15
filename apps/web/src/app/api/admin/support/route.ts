@@ -36,15 +36,18 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type Ticket = { id: string; user_id: string; [k: string]: unknown };
+
   // Enrich with user emails
-  const userIds = [...new Set((tickets ?? []).map(t => t.user_id))];
+  const rows = (tickets ?? []) as Ticket[];
+  const userIds = [...new Set(rows.map(t => t.user_id))];
   const emailMap = new Map<string, string>();
   if (userIds.length) {
     const { data: { users } } = await ctx.adminClient.auth.admin.listUsers({ perPage: 1000 });
-    users.forEach(u => emailMap.set(u.id, u.email ?? ""));
+    users.forEach((u: { id: string; email?: string }) => emailMap.set(u.id, u.email ?? ""));
   }
 
-  const enriched = (tickets ?? []).map(t => ({
+  const enriched = rows.map(t => ({
     ...t,
     user_email: emailMap.get(t.user_id) ?? "",
   }));
