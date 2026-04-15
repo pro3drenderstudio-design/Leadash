@@ -24,7 +24,8 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import mysql from "mysql2/promise";
-import { generateKeyPairSync, randomBytes } from "crypto";
+import { generateKeyPairSync, randomBytes, createPublicKey, createPrivateKey } from "crypto";
+import { readFileSync } from "fs";
 
 const app  = express();
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
