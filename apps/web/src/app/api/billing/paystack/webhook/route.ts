@@ -262,6 +262,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
+  // ── Recurring billing cycle — grant monthly credits ─────────────────────────────
+  if (event.event === "invoice.update") {
+    const inv = event.data as {
+      status?: string;
+      subscription?: { subscription_code?: string; plan?: { plan_code?: string } };
+    };
+    // Only act on paid invoices for active subscriptions
+    if (inv.status === "success" && inv.subscription?.subscription_code) {
+      const subCode = inv.subscription.subscription_code;
+
+      // Find the workspace tied to this subscription
+      const { data: ws } = await db
+        .from("workspaces")
+        .select("id, plan_id, lead_credits_balance")
+        .eq("paystack_sub_code", subCode)
+        .maybeSingle();
+
+      if (ws) {
+        const plan = await getPlanById(ws.plan_id ?? "free");
+        if (plan.included_credits > 0) {
+          await db.from("workspaces")
+            .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + plan.included_credits })
+            .eq("id", ws.id);
+          await db.from("lead_credit_transactions").insert({
+            workspace_id: ws.id,
+            type:         "grant",
+            amount:       plan.included_credits,
+            description:  `Monthly credits — ${plan.name} plan renewal`,
+          });
+        }
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
+
   // ── Subscription disabled — downgrade to free ─────────────────────────────────
   if (event.event === "subscription.disable" || event.event === "invoice.payment_failed") {
     const data = event.data as {
