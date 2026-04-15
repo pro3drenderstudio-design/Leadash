@@ -66,7 +66,7 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
       <div className="px-4 py-4 flex items-center gap-2.5" style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}>
         <Link href="/admin" className="flex items-center gap-2.5 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/Logo_Icon_Colored.svg" className="w-8 h-8 flex-shrink-0" alt="" />
+          <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
           <div>
             <span className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-white/90 select-none" style={{ letterSpacing: "-0.02em" }}>
               Leadash
