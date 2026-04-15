@@ -44,9 +44,16 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
     wsGet<{ balance: number }>("/api/lead-campaigns/credits")
       .then(d => setCredits(d.balance ?? 0))
       .catch(() => {});
-    wsGet<{ total: number }>("/api/outreach/crm?page=0&limit=1")
-      .then(d => setNotifCount(Math.min(d.total ?? 0, 9)))
-      .catch(() => {});
+
+    const fetchInterested = () =>
+      wsGet<{ count: number }>("/api/outreach/crm/interested-count")
+        .then(d => setNotifCount(Math.min(d.count ?? 0, 9)))
+        .catch(() => {});
+
+    fetchInterested();
+    // Re-check every 5 minutes
+    const interval = setInterval(fetchInterested, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
