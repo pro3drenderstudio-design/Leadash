@@ -34,25 +34,29 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type Domain    = { id: string; workspace_id: string; [k: string]: unknown };
+  type Workspace = { id: string; name: string; owner_id: string };
+
   // Enrich with workspace names
-  const workspaceIds = [...new Set((domains ?? []).map(d => d.workspace_id))];
-  const wsMap = new Map<string, { name: string; owner_id: string }>();
+  const rows = (domains ?? []) as Domain[];
+  const workspaceIds = [...new Set(rows.map(d => d.workspace_id))];
+  const wsMap = new Map<string, Workspace>();
   if (workspaceIds.length) {
     const { data: workspaces } = await ctx.adminClient
       .from("workspaces")
       .select("id, name, owner_id")
       .in("id", workspaceIds);
-    (workspaces ?? []).forEach(w => wsMap.set(w.id, { name: w.name, owner_id: w.owner_id }));
+    (workspaces as Workspace[] ?? []).forEach(w => wsMap.set(w.id, w));
   }
 
   const ownerIds = [...new Set([...wsMap.values()].map(w => w.owner_id))];
   const ownerMap = new Map<string, string>();
   if (ownerIds.length) {
     const { data: { users } } = await ctx.adminClient.auth.admin.listUsers({ perPage: 1000 });
-    users.forEach(u => ownerMap.set(u.id, u.email ?? ""));
+    users.forEach((u: { id: string; email?: string }) => ownerMap.set(u.id, u.email ?? ""));
   }
 
-  const enriched = (domains ?? []).map(d => {
+  const enriched = rows.map(d => {
     const ws = wsMap.get(d.workspace_id);
     return {
       ...d,
