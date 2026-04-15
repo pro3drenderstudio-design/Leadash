@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PLANS } from "@/lib/billing/plans";
+import { getActivePlans, type PlanConfig } from "@/lib/billing/getActivePlans";
 
 // ─── Shared micro-components ──────────────────────────────────────────────────
 
