@@ -46,7 +46,7 @@ export default function OnboardingPage() {
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <button
               type="submit" disabled={loading || !name.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+              className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
             >
               {loading ? "Creating…" : "Create workspace →"}
             </button>

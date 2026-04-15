@@ -552,12 +552,12 @@ export default function InboxesClient() {
             >
               Import CSV
             </button>
-            <Link href="/inboxes/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+            <Link href="/inboxes/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
               + Add Inbox
             </Link>
           </>)}
           {activeTab === "domains" && (
-            <Link href="/inboxes/new/connect-domain" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+            <Link href="/inboxes/new/connect-domain" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
               + Connect Domain
             </Link>
           )}
@@ -587,7 +587,7 @@ export default function InboxesClient() {
               <div className="text-4xl mb-3">🌐</div>
               <p className="text-sm font-medium">No connected domains yet</p>
               <p className="text-xs mt-1">Connect a domain to get auto-provisioned inboxes with DKIM, DMARC, and MAIL FROM set up automatically</p>
-              <Link href="/inboxes/new/connect-domain" className="inline-block mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">
+              <Link href="/inboxes/new/connect-domain" className="inline-block mt-4 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">
                 Connect a Domain
               </Link>
             </div>
@@ -613,11 +613,11 @@ export default function InboxesClient() {
                       {/* Status badge */}
                       {isReconfiguring ? (
                         <div className="flex items-center gap-1.5">
-                          <svg className="w-3 h-3 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3 animate-spin text-orange-400" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                           </svg>
-                          <span className="text-blue-400 text-[10px] font-medium">{reconfiguringStep || "Applying…"}</span>
+                          <span className="text-orange-400 text-[10px] font-medium">{reconfiguringStep || "Applying…"}</span>
                         </div>
                       ) : isPolling ? (
                         <div className="flex items-center gap-1.5">
@@ -714,11 +714,11 @@ export default function InboxesClient() {
         {/* Bulk action bar */}
         {selected.size > 0 && (
           <div className="mb-3 space-y-2">
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-600/15 border border-blue-500/30 rounded-xl">
-              <span className="text-blue-300 text-xs font-semibold flex-1">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/15 border border-orange-500/30 rounded-xl">
+              <span className="text-orange-300 text-xs font-semibold flex-1">
                 {effectiveCount} inbox{effectiveCount !== 1 ? "es" : ""} selected
                 {!allSelected && inboxes.length > PAGE_SIZE && (
-                  <button onClick={selectAllInboxes} className="ml-2 text-blue-400 hover:text-blue-200 underline transition-colors">
+                  <button onClick={selectAllInboxes} className="ml-2 text-orange-400 hover:text-orange-200 underline transition-colors">
                     Select all {inboxes.length}
                   </button>
                 )}
@@ -735,7 +735,7 @@ export default function InboxesClient() {
         {/* Select-all row header */}
         <div className="flex items-center gap-3 px-1 pb-1">
           <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll}
-            className="w-4 h-4 rounded accent-blue-500 cursor-pointer flex-shrink-0" />
+            className="w-4 h-4 rounded accent-orange-500 cursor-pointer flex-shrink-0" />
           <span className="text-white/30 text-xs">{allPageSelected ? "Deselect all on page" : "Select all on page"}</span>
         </div>
 
@@ -747,10 +747,10 @@ export default function InboxesClient() {
               ? Math.min(100, Math.round(((inbox.warmup_current_daily ?? 0) / inbox.warmup_target_daily) * 100))
               : 0;
             return (
-              <div key={inbox.id} className={`bg-white/4 border rounded-xl px-4 py-3 flex items-center gap-3 transition-colors ${isSelected ? "border-blue-500/50 bg-blue-500/8" : "border-white/8 hover:border-white/12"}`}>
+              <div key={inbox.id} className={`bg-white/4 border rounded-xl px-4 py-3 flex items-center gap-3 transition-colors ${isSelected ? "border-orange-500/50 bg-orange-500/8" : "border-white/8 hover:border-white/12"}`}>
                 {/* Checkbox */}
                 <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(inbox.id)}
-                  className="w-4 h-4 rounded accent-blue-500 cursor-pointer flex-shrink-0" />
+                  className="w-4 h-4 rounded accent-orange-500 cursor-pointer flex-shrink-0" />
                 {/* Profile avatar */}
                 <InboxAvatar
                   inbox={inbox}
@@ -861,14 +861,14 @@ export default function InboxesClient() {
 
             <div className="p-6 space-y-5">
               {/* Info */}
-              <div className="bg-blue-500/8 border border-blue-500/20 rounded-xl p-4 space-y-1.5">
-                <p className="text-blue-300 text-xs font-semibold">Supports Gmail, Outlook, and custom SMTP</p>
+              <div className="bg-orange-500/8 border border-orange-500/20 rounded-xl p-4 space-y-1.5">
+                <p className="text-orange-300 text-xs font-semibold">Supports Gmail, Outlook, and custom SMTP</p>
                 <p className="text-white/40 text-xs">Gmail → use App Passwords with smtp.gmail.com · Outlook → smtp-mail.outlook.com · Microsoft 365 → smtp.office365.com</p>
                 <p className="text-white/40 text-xs">Each inbox is verified before saving. Provider is auto-detected from smtp_host.</p>
               </div>
 
               {/* Template download */}
-              <button onClick={downloadTemplate} className="text-blue-400 hover:text-blue-300 text-xs underline transition-colors">
+              <button onClick={downloadTemplate} className="text-orange-400 hover:text-orange-300 text-xs underline transition-colors">
                 Download CSV template (with examples)
               </button>
 
@@ -897,7 +897,7 @@ export default function InboxesClient() {
                         <select
                           value={colMapping[field.key] ?? ""}
                           onChange={(e) => setColMapping((m) => ({ ...m, [field.key]: e.target.value }))}
-                          className="flex-1 bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-blue-500/50"
+                          className="flex-1 bg-white/6 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-orange-500/50"
                         >
                           <option value="">— skip —</option>
                           {csvHeaders.map((h) => (
@@ -914,7 +914,7 @@ export default function InboxesClient() {
               <button
                 onClick={handleImport}
                 disabled={!importFile || importing}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 {importing ? (
                   <>
@@ -1011,27 +1011,27 @@ export default function InboxesClient() {
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Label</label>
                     <input value={(df("label") as string) ?? ""} onChange={(e) => setDf("label", e.target.value)}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-white/40 mb-1">First name</label>
                       <input value={(df("first_name") as string) ?? ""} onChange={(e) => setDf("first_name", e.target.value)}
                         placeholder="e.g. John"
-                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50" />
+                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50" />
                     </div>
                     <div>
                       <label className="block text-xs text-white/40 mb-1">Last name</label>
                       <input value={(df("last_name") as string) ?? ""} onChange={(e) => setDf("last_name", e.target.value)}
                         placeholder="e.g. Smith"
-                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50" />
+                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Signature (appended to emails)</label>
                     <textarea rows={3} value={(df("signature") as string) ?? ""} onChange={(e) => setDf("signature", e.target.value)}
                       placeholder="e.g. Best,&#10;John Smith&#10;ProPlan Studio"
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50 resize-none" />
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50 resize-none" />
                   </div>
                 </div>
               </section>
@@ -1043,18 +1043,18 @@ export default function InboxesClient() {
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Daily send limit</label>
                     <input type="number" min="1" max="500" value={(df("daily_send_limit") as number) ?? ""} onChange={(e) => setDf("daily_send_limit", parseInt(e.target.value))}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-white/40 mb-1">Window start</label>
                       <input type="time" value={(df("send_window_start") as string) ?? ""} onChange={(e) => setDf("send_window_start", e.target.value)}
-                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50" />
+                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50" />
                     </div>
                     <div>
                       <label className="block text-xs text-white/40 mb-1">Window end</label>
                       <input type="time" value={(df("send_window_end") as string) ?? ""} onChange={(e) => setDf("send_window_end", e.target.value)}
-                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50" />
+                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50" />
                     </div>
                   </div>
                   <p className="text-white/20 text-[10px]">Send window timezone is set per campaign, not per inbox.</p>
@@ -1072,7 +1072,7 @@ export default function InboxesClient() {
                     </div>
                     <div
                       onClick={() => setDf("warmup_enabled", !df("warmup_enabled"))}
-                      className={`w-10 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${df("warmup_enabled") ? "bg-blue-600" : "bg-white/15"}`}
+                      className={`w-10 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${df("warmup_enabled") ? "bg-orange-500" : "bg-white/15"}`}
                     >
                       <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${df("warmup_enabled") ? "translate-x-4" : "translate-x-0"}`} />
                     </div>
@@ -1096,12 +1096,12 @@ export default function InboxesClient() {
                         <div>
                           <label className="block text-xs text-white/40 mb-1">Target daily</label>
                           <input type="number" min="1" max="200" value={(df("warmup_target_daily") as number) ?? ""} onChange={(e) => setDf("warmup_target_daily", parseInt(e.target.value))}
-                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                         </div>
                         <div>
                           <label className="block text-xs text-white/40 mb-1">Ramp / week</label>
                           <input type="number" min="1" max="50" value={(df("warmup_ramp_per_week") as number) ?? ""} onChange={(e) => setDf("warmup_ramp_per_week", parseInt(e.target.value))}
-                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                         </div>
                       </div>
                     </>
@@ -1116,7 +1116,7 @@ export default function InboxesClient() {
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Status</label>
                     <select value={(df("status") as string) ?? "active"} onChange={(e) => setDf("status", e.target.value)}
-                      className="w-full bg-[#1e1e1e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50">
+                      className="w-full bg-[#1e1e1e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50">
                       <option value="active">Active</option>
                       <option value="paused">Paused</option>
                     </select>
@@ -1154,7 +1154,7 @@ export default function InboxesClient() {
                 Close
               </button>
               <button onClick={handleDrawerSave} disabled={drawerSaving || !Object.keys(drawerEdits).length}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
                 {drawerSaving ? "Saving…" : "Save Changes"}
               </button>
             </div>
@@ -1180,7 +1180,7 @@ export default function InboxesClient() {
                     type="text" placeholder="e.g. John"
                     value={bulkFields.first_name}
                     onChange={(e) => setBulkFields((f) => ({ ...f, first_name: e.target.value }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
                 <div>
@@ -1189,7 +1189,7 @@ export default function InboxesClient() {
                     type="text" placeholder="e.g. Smith"
                     value={bulkFields.last_name}
                     onChange={(e) => setBulkFields((f) => ({ ...f, last_name: e.target.value }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
                 <div>
@@ -1199,7 +1199,7 @@ export default function InboxesClient() {
                     placeholder="e.g. 50"
                     value={bulkFields.daily_send_limit}
                     onChange={(e) => setBulkFields((f) => ({ ...f, daily_send_limit: e.target.value }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
                 <div>
@@ -1207,7 +1207,7 @@ export default function InboxesClient() {
                   <select
                     value={bulkFields.status}
                     onChange={(e) => setBulkFields((f) => ({ ...f, status: e.target.value as "" | "active" | "paused" }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50"
                   >
                     <option value="">— no change —</option>
                     <option value="active">Active</option>
@@ -1220,7 +1220,7 @@ export default function InboxesClient() {
                     type="time"
                     value={bulkFields.send_window_start}
                     onChange={(e) => setBulkFields((f) => ({ ...f, send_window_start: e.target.value }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
                 <div>
@@ -1229,7 +1229,7 @@ export default function InboxesClient() {
                     type="time"
                     value={bulkFields.send_window_end}
                     onChange={(e) => setBulkFields((f) => ({ ...f, send_window_end: e.target.value }))}
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-orange-500/50"
                   />
                 </div>
               </div>
@@ -1241,7 +1241,7 @@ export default function InboxesClient() {
                   placeholder="e.g. America/New_York"
                   value={bulkFields.timezone}
                   onChange={(e) => setBulkFields((f) => ({ ...f, timezone: e.target.value }))}
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
                 />
               </div>
 
@@ -1279,7 +1279,7 @@ export default function InboxesClient() {
                 <button onClick={() => setShowBulkEdit(false)} className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-semibold rounded-xl transition-colors">
                   Cancel
                 </button>
-                <button onClick={handleBulkEdit} disabled={bulkWorking} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                <button onClick={handleBulkEdit} disabled={bulkWorking} className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
                   {bulkWorking ? "Saving…" : "Apply changes"}
                 </button>
               </div>

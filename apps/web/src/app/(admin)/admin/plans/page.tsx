@@ -35,7 +35,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
-        checked ? "bg-blue-500" : "bg-slate-300 dark:bg-white/20"
+        checked ? "bg-orange-500" : "bg-slate-300 dark:bg-white/20"
       }`}
     >
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
@@ -53,7 +53,7 @@ function NumInput({ value, onChange, min, placeholder }: {
       min={min}
       placeholder={placeholder}
       onChange={e => onChange(Number(e.target.value))}
-      className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500/30 tabular-nums"
+      className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white text-right focus:outline-none focus:ring-2 focus:ring-orange-500/30 tabular-nums"
     />
   );
 }
@@ -65,7 +65,7 @@ function TextInput({ value, onChange, placeholder }: { value: string; onChange: 
       value={value ?? ""}
       placeholder={placeholder ?? ""}
       onChange={e => onChange(e.target.value)}
-      className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 font-mono"
+      className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 font-mono"
     />
   );
 }
@@ -120,7 +120,7 @@ function PlanCard({
 
   return (
     <div className={`bg-white dark:bg-white/5 border rounded-2xl overflow-hidden transition-all ${
-      isDirty ? "border-blue-400 dark:border-blue-500/60 ring-1 ring-blue-400/30" : "border-slate-200 dark:border-white/10"
+      isDirty ? "border-orange-400 dark:border-orange-500/60 ring-1 ring-blue-400/30" : "border-slate-200 dark:border-white/10"
     }`}>
       {/* Header */}
       <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
@@ -129,7 +129,7 @@ function PlanCard({
             type="text"
             value={merged.name}
             onChange={e => set("name", e.target.value)}
-            className="text-base font-bold text-slate-800 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-white/20 focus:border-blue-400 focus:outline-none transition-colors w-full"
+            className="text-base font-bold text-slate-800 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-white/20 focus:border-orange-400 focus:outline-none transition-colors w-full"
           />
           <span className="text-[10px] text-slate-300 dark:text-white/20 font-mono">{plan.plan_id}</span>
         </div>
@@ -246,7 +246,7 @@ function PlanCard({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-400 disabled:opacity-50 transition-colors"
             >
               {saving ? "Saving…" : "Save & Sync"}
             </button>

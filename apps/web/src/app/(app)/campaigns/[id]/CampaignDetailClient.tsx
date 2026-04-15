@@ -18,11 +18,11 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
   draft:     "text-white/40 bg-white/8",
   active:    "text-green-400 bg-green-500/15",
   paused:    "text-amber-400 bg-amber-500/15",
-  completed: "text-blue-400 bg-blue-500/15",
+  completed: "text-orange-400 bg-orange-500/15",
 };
 
 const SEND_STATUS_COLORS: Record<string, string> = {
-  sent:     "text-blue-400 bg-blue-500/15",
+  sent:     "text-orange-400 bg-orange-500/15",
   opened:   "text-green-400 bg-green-500/15",
   replied:  "text-violet-400 bg-violet-500/15",
   bounced:  "text-red-400 bg-red-500/15",
@@ -32,7 +32,7 @@ const SEND_STATUS_COLORS: Record<string, string> = {
 
 const CRM_COLORS: Record<string, string> = {
   neutral:       "text-white/40",
-  interested:    "text-blue-400",
+  interested:    "text-orange-400",
   meeting_booked:"text-violet-400",
   won:           "text-green-400",
   not_interested:"text-red-400",
@@ -296,18 +296,18 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setEditing(false)} className="px-4 py-2 bg-white/8 hover:bg-white/12 text-white/60 text-sm rounded-xl border border-white/10 transition-colors">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">{saving ? "Saving…" : "Save Changes"}</button>
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">{saving ? "Saving…" : "Save Changes"}</button>
           </div>
         </div>
 
         <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Campaign Name</label>
-          <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500/50" /></div>
+          <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
 
-        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Sending Inboxes {editInboxes.length > 0 && <span className="text-blue-400 normal-case ml-1">{editInboxes.length} selected</span>}</label>
+        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Sending Inboxes {editInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{editInboxes.length} selected</span>}</label>
           <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
             {inboxes.map(inbox => (
-              <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${editInboxes.includes(inbox.id) ? "border-blue-500/40 bg-blue-600/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-                <input type="checkbox" checked={editInboxes.includes(inbox.id)} onChange={() => setEditInboxes(p => p.includes(inbox.id) ? p.filter(x => x !== inbox.id) : [...p, inbox.id])} className="accent-blue-500" />
+              <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${editInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
+                <input type="checkbox" checked={editInboxes.includes(inbox.id)} onChange={() => setEditInboxes(p => p.includes(inbox.id) ? p.filter(x => x !== inbox.id) : [...p, inbox.id])} className="accent-orange-500" />
                 <div><div className="text-white text-sm font-medium">{inbox.label}</div><div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div></div>
               </label>
             ))}
@@ -316,22 +316,22 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
         <div>
           <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Timezone</label>
-          <select value={editTimezone} onChange={e => setEditTimezone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50">
+          <select value={editTimezone} onChange={e => setEditTimezone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50">
             {COMMON_TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
           </select>
           <p className="text-white/25 text-xs mt-1">Send window times are interpreted in this timezone</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Window Start</label><input type="time" value={editStartTime} onChange={e => setEditStartTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" /></div>
-          <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Window End</label><input type="time" value={editEndTime} onChange={e => setEditEndTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" /></div>
+          <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Window Start</label><input type="time" value={editStartTime} onChange={e => setEditStartTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
+          <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Window End</label><input type="time" value={editEndTime} onChange={e => setEditEndTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
         </div>
 
         <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Send Days</label>
-          <div className="flex gap-2">{DAYS.map(d => <button key={d} onClick={() => setEditDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${editDays.includes(d) ? "bg-blue-600/20 border-blue-500/40 text-blue-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase()+d.slice(1,2)}</button>)}</div>
+          <div className="flex gap-2">{DAYS.map(d => <button key={d} onClick={() => setEditDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${editDays.includes(d) ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase()+d.slice(1,2)}</button>)}</div>
         </div>
 
-        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label><input type="number" value={editDailyCap} onChange={e => setEditDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" /></div>
+        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label><input type="number" value={editDailyCap} onChange={e => setEditDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
           <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Send Throttle</p>
@@ -371,7 +371,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     <div className="flex items-center gap-3">
                       {templates.length > 0 && (
                         <div className="relative">
-                          <button onClick={() => setLoadingTpl(loadingTpl===i?null:i)} className="text-blue-400 hover:text-blue-300 text-xs">Load Template ▾</button>
+                          <button onClick={() => setLoadingTpl(loadingTpl===i?null:i)} className="text-orange-400 hover:text-orange-300 text-xs">Load Template ▾</button>
                           {loadingTpl === i && (
                             <div className="absolute left-0 top-6 z-20 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-xl py-1 min-w-56 max-h-48 overflow-y-auto">
                               {templates.map(t => <button key={t.id} onClick={() => { setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:t.subject,body_template:t.body}:st2)); setLoadingTpl(null); }} className="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/6 transition-colors"><div className="font-medium text-white/90">{t.name}</div><div className="text-white/35 text-xs truncate">{t.subject}</div></button>)}
@@ -381,9 +381,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                       )}
                       <button onClick={() => { setTestStepIdx(i); setTestResult(null); setTestLeadId(""); setTestToEmail(""); setTestInboxId(editInboxes[0]??""); }} className="text-amber-400/80 hover:text-amber-300 text-xs ml-auto">Send Test ↗</button>
                     </div>
-                    <div><label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label><input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/40" /></div>
-                    <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><input value={s.subject_template_b} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:e.target.value}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/40" /></div>
-                    <textarea value={s.body_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,body_template:e.target.value}:st2))} rows={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/40 resize-none" />
+                    <div><label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label><input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" /></div>
+                    <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><input value={s.subject_template_b} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:e.target.value}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
+                    <textarea value={s.body_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,body_template:e.target.value}:st2))} rows={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40 resize-none" />
                   </>
                 )}
               </div>
@@ -397,7 +397,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
         <div className="flex justify-end gap-3 pt-4 border-t border-white/8">
           <button onClick={() => setEditing(false)} className="px-5 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors">Cancel</button>
-          <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">{saving ? "Saving…" : "Save Changes"}</button>
+          <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">{saving ? "Saving…" : "Save Changes"}</button>
         </div>
 
         {/* AI Generator modal */}
@@ -493,11 +493,11 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${tab === t ? "text-white border-blue-500" : "text-white/40 border-transparent hover:text-white/70"}`}
+            className={`px-4 py-2 text-sm font-medium capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${tab === t ? "text-white border-orange-500" : "text-white/40 border-transparent hover:text-white/70"}`}
           >
             {t}
             {t === "queue" && analytics && analytics.upcoming_queue.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 bg-blue-600/30 text-blue-300 text-[10px] rounded-full">{analytics.upcoming_queue.length}</span>
+              <span className="ml-1.5 px-1.5 py-0.5 bg-orange-500/30 text-orange-300 text-[10px] rounded-full">{analytics.upcoming_queue.length}</span>
             )}
             {t === "leads" && campaign && (campaign.total_enrolled ?? 0) > 0 && (
               <span className="ml-1.5 px-1.5 py-0.5 bg-white/10 text-white/50 text-[10px] rounded-full">{(campaign.total_enrolled ?? 0).toLocaleString()}</span>
@@ -520,7 +520,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           {/* Secondary pills */}
           <div className="flex flex-wrap gap-2">
             {[
-              { label: "Completed",    value: campaign.total_completed    ?? 0, color: "text-blue-400 bg-blue-500/10" },
+              { label: "Completed",    value: campaign.total_completed    ?? 0, color: "text-orange-400 bg-orange-500/10" },
               { label: "Bounced",      value: campaign.total_bounced      ?? 0, color: "text-red-400 bg-red-500/10" },
               { label: "Unsubscribed", value: campaign.total_unsubscribed ?? 0, color: "text-amber-400 bg-amber-500/10" },
               { label: "Clicked",      value: campaign.total_clicked      ?? 0, color: "text-violet-400 bg-violet-500/10" },
@@ -538,7 +538,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               {steps.map((s, i) => (
                 <div key={s.id} className="flex items-start gap-3">
                   <div className="flex flex-col items-center pt-1">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border flex-shrink-0 ${s.type === "wait" ? "bg-white/5 border-white/12 text-white/30" : "bg-blue-600/20 border-blue-500/30 text-blue-300"}`}>{i+1}</div>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border flex-shrink-0 ${s.type === "wait" ? "bg-white/5 border-white/12 text-white/30" : "bg-orange-500/20 border-orange-500/30 text-orange-300"}`}>{i+1}</div>
                     {i < steps.length - 1 && <div className="w-px h-6 bg-white/8" />}
                   </div>
                   <div className={`flex-1 rounded-xl border p-4 mb-1 ${s.type === "wait" ? "bg-white/2 border-white/6" : "bg-white/4 border-white/8"}`}>
@@ -547,7 +547,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     ) : (
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400/60 bg-blue-500/10 px-2 py-0.5 rounded-full">Email #{emailSteps.indexOf(s)+1}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400/60 bg-orange-500/10 px-2 py-0.5 rounded-full">Email #{emailSteps.indexOf(s)+1}</span>
                           {s.subject_template_b && <span className="text-[10px] text-violet-400/60 bg-violet-500/10 px-2 py-0.5 rounded-full">A/B</span>}
                         </div>
                         <p className="text-white font-medium text-sm">{s.subject_template || "(no subject)"}</p>
@@ -596,10 +596,10 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               <div className="space-y-2.5">
                 {[
                   { label: "Enrolled",     value: analytics.funnel.enrolled,     color: "bg-white/30",      pct: 100 },
-                  { label: "Sent",         value: analytics.funnel.sent,         color: "bg-blue-500",      pct: analytics.funnel.enrolled ? analytics.funnel.sent / analytics.funnel.enrolled * 100 : 0 },
+                  { label: "Sent",         value: analytics.funnel.sent,         color: "bg-orange-500",      pct: analytics.funnel.enrolled ? analytics.funnel.sent / analytics.funnel.enrolled * 100 : 0 },
                   { label: "Opened",       value: analytics.funnel.opened,       color: "bg-green-500",     pct: analytics.funnel.enrolled ? analytics.funnel.opened / analytics.funnel.enrolled * 100 : 0 },
                   { label: "Replied",      value: analytics.funnel.replied,      color: "bg-violet-500",    pct: analytics.funnel.enrolled ? analytics.funnel.replied / analytics.funnel.enrolled * 100 : 0 },
-                  { label: "Completed",    value: analytics.funnel.completed,    color: "bg-blue-400/50",   pct: analytics.funnel.enrolled ? analytics.funnel.completed / analytics.funnel.enrolled * 100 : 0 },
+                  { label: "Completed",    value: analytics.funnel.completed,    color: "bg-orange-400/50",   pct: analytics.funnel.enrolled ? analytics.funnel.completed / analytics.funnel.enrolled * 100 : 0 },
                   { label: "Bounced",      value: analytics.funnel.bounced,      color: "bg-red-500",       pct: analytics.funnel.enrolled ? analytics.funnel.bounced / analytics.funnel.enrolled * 100 : 0 },
                   { label: "Unsubscribed", value: analytics.funnel.unsubscribed, color: "bg-amber-500/60",  pct: analytics.funnel.enrolled ? analytics.funnel.unsubscribed / analytics.funnel.enrolled * 100 : 0 },
                 ].map(row => (
@@ -623,7 +623,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                 </div>
                 {analytics.per_step.filter(s => s.type === "email").map((s, i) => (
                   <div key={i} className="grid grid-cols-[auto_2fr_1fr_1fr_1fr_1fr] gap-3 items-center px-4 py-3 border-b border-white/4 last:border-0">
-                    <div className="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</div>
+                    <div className="w-7 h-7 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</div>
                     <div>
                       <p className="text-white/80 text-xs truncate">{s.subject_template || "(no subject)"}</p>
                       {s.subject_template_b && <p className="text-violet-400/60 text-[10px] truncate">B: {s.subject_template_b}</p>}
@@ -650,7 +650,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     return (
                       <div key={variant} className="bg-white/4 border border-white/8 rounded-xl p-5">
                         <div className="flex items-center gap-2 mb-4">
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${variant === "a" ? "bg-blue-600/30 text-blue-300" : "bg-violet-600/30 text-violet-300"}`}>{variant.toUpperCase()}</span>
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${variant === "a" ? "bg-orange-500/30 text-orange-300" : "bg-violet-600/30 text-violet-300"}`}>{variant.toUpperCase()}</span>
                           <span className="text-white/60 text-sm font-medium">Variant {variant.toUpperCase()}</span>
                         </div>
                         <div className="space-y-2">
@@ -678,7 +678,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         <div key={day.date} title={`${day.date}: ${day.sent} sent, ${day.opened} opened, ${day.replied} replied`} className="flex-1 flex flex-col justify-end gap-px group">
                           <div className="w-full bg-violet-500/70 rounded-[1px] transition-all group-hover:bg-violet-400" style={{ height: `${Math.max((day.replied / maxVal) * 88, day.replied > 0 ? 4 : 0)}px` }} />
                           <div className="w-full bg-green-500/70 rounded-[1px] transition-all group-hover:bg-green-400" style={{ height: `${Math.max((day.opened / maxVal) * 88, day.opened > 0 ? 4 : 0)}px` }} />
-                          <div className="w-full bg-blue-500/70 rounded-[1px] transition-all group-hover:bg-blue-400" style={{ height: `${Math.max((day.sent / maxVal) * 88, day.sent > 0 ? 4 : 0)}px` }} />
+                          <div className="w-full bg-orange-500/70 rounded-[1px] transition-all group-hover:bg-orange-400" style={{ height: `${Math.max((day.sent / maxVal) * 88, day.sent > 0 ? 4 : 0)}px` }} />
                         </div>
                       ))}
                     </div>
@@ -692,7 +692,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     </div>
                     {/* Legend */}
                     <div className="flex items-center gap-4 mt-2">
-                      {[{color:"bg-blue-500/70", label:"Sent"},{color:"bg-green-500/70", label:"Opened"},{color:"bg-violet-500/70", label:"Replied"}].map(l => (
+                      {[{color:"bg-orange-500/70", label:"Sent"},{color:"bg-green-500/70", label:"Opened"},{color:"bg-violet-500/70", label:"Replied"}].map(l => (
                         <div key={l.label} className="flex items-center gap-1.5"><div className={`w-2.5 h-2.5 rounded-[2px] ${l.color}`}/><span className="text-white/35 text-xs">{l.label}</span></div>
                       ))}
                     </div>
@@ -737,7 +737,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         <p className="text-white/40 text-xs truncate">{a.subject}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] font-semibold text-blue-400/60 bg-blue-500/10 px-1.5 py-0.5 rounded">Step {a.step_order + 1}</span>
+                        <span className="text-[10px] font-semibold text-orange-400/60 bg-orange-500/10 px-1.5 py-0.5 rounded">Step {a.step_order + 1}</span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEND_STATUS_COLORS[displayStatus] ?? "text-white/30 bg-white/6"}`}>{displayStatus}</span>
                         <span className="text-white/25 text-xs w-16 text-right">{timeAgo(a.replied_at ?? a.opened_at ?? a.sent_at)}</span>
                       </div>
@@ -786,7 +786,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     }
                   }}
                   disabled={triggering || campaign.status !== "active"}
-                  className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-blue-300 text-xs font-semibold rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-orange-300 text-xs font-semibold rounded-lg transition-colors"
                 >
                   {triggering ? "Sending…" : "⚡ Trigger Sends"}
                 </button>
@@ -809,7 +809,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         <p className="text-white/30 text-xs">{q.lead_email}</p>
                       </div>
                       <div className="text-white/50 text-sm truncate">{q.company ?? "—"}</div>
-                      <div className="text-blue-300/70 text-xs font-semibold">Step {q.current_step + 1}</div>
+                      <div className="text-orange-300/70 text-xs font-semibold">Step {q.current_step + 1}</div>
                       <div>
                         {isDue ? (
                           <span className="px-2 py-0.5 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full">Due now</span>
@@ -844,7 +844,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               <select
                 value={addListId}
                 onChange={e => setAddListId(e.target.value)}
-                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50"
               >
                 <option value="">— select a list —</option>
                 {lists.map(l => (
@@ -868,7 +868,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                 setLeadsData(data);
                 setCampaign(fresh);
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
             >
               {addingLeads ? "Enrolling…" : "Enroll"}
             </button>
@@ -886,7 +886,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               value={leadsSearch}
               onChange={e => setLeadsSearch(e.target.value)}
               placeholder="Search name / email…"
-              className="ml-auto w-48 bg-white/6 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-blue-500/50"
+              className="ml-auto w-48 bg-white/6 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-orange-500/50"
             />
           </div>
 
@@ -920,7 +920,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     const name = [e.lead?.first_name, e.lead?.last_name].filter(Boolean).join(" ") || e.lead?.email || "—";
                     const statusColors: Record<string, string> = {
                       active:       "text-green-400 bg-green-500/15",
-                      completed:    "text-blue-400 bg-blue-500/15",
+                      completed:    "text-orange-400 bg-orange-500/15",
                       replied:      "text-violet-400 bg-violet-500/15",
                       bounced:      "text-red-400 bg-red-500/15",
                       unsubscribed: "text-amber-400 bg-amber-500/15",

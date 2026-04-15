@@ -14,7 +14,7 @@ import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter, CrmNote } 
 const CRM_STATUSES: { value: CrmStatus; label: string; color: string }[] = [
   { value: "neutral",        label: "Neutral",        color: "text-white/50 bg-white/8 border-white/15" },
   { value: "interested",     label: "Interested",     color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" },
-  { value: "meeting_booked", label: "Meeting Booked", color: "text-blue-400 bg-blue-500/15 border-blue-500/30" },
+  { value: "meeting_booked", label: "Meeting Booked", color: "text-orange-400 bg-orange-500/15 border-orange-500/30" },
   { value: "won",            label: "Won",            color: "text-yellow-400 bg-yellow-500/15 border-yellow-500/30" },
   { value: "not_interested", label: "Not Interested", color: "text-red-400 bg-red-500/15 border-red-500/30" },
   { value: "ooo",            label: "OOO",            color: "text-orange-400 bg-orange-500/15 border-orange-500/30" },
@@ -104,17 +104,17 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
         <div className="flex items-center justify-end gap-2 mb-1">
           <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
           {msg.opened_at && <span className="text-emerald-400/50 text-[10px]">Opened</span>}
-          {msg.clicked_at && <span className="text-blue-400/50 text-[10px]">Clicked</span>}
-          <span className="text-blue-300/60 text-[10px] font-medium">You</span>
+          {msg.clicked_at && <span className="text-orange-400/50 text-[10px]">Clicked</span>}
+          <span className="text-orange-300/60 text-[10px] font-medium">You</span>
         </div>
         <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
-          <div className="bg-blue-600/12 border border-blue-500/20 rounded-2xl rounded-tr-sm overflow-hidden">
+          <div className="bg-orange-500/12 border border-orange-500/20 rounded-2xl rounded-tr-sm overflow-hidden">
             <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-blue-200/75 text-xs font-medium truncate">{msg.subject}</p>
-              <span className="text-blue-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
+              <p className="text-orange-200/75 text-xs font-medium truncate">{msg.subject}</p>
+              <span className="text-orange-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
             </div>
             {!collapsed && (
-              <div className="px-4 pb-4 border-t border-blue-500/10 pt-3">
+              <div className="px-4 pb-4 border-t border-orange-500/10 pt-3">
                 {isHtml ? (
                   <iframe
                     srcDoc={`<html><head><style>body{margin:0;font-family:sans-serif;font-size:13px;color:#ccc;background:transparent;line-height:1.6}a{color:#7dd3fc}*{max-width:100%}</style></head><body>${msg.body}</body></html>`}
@@ -127,7 +127,7 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
                     }}
                   />
                 ) : (
-                  <pre className="text-blue-100/55 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
+                  <pre className="text-orange-100/55 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
                 )}
               </div>
             )}
@@ -596,7 +596,7 @@ export default function CrmClient() {
           <button
             onClick={handleTrigger}
             disabled={triggering}
-            className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-40 text-blue-300 text-xs font-semibold rounded-lg transition-colors"
+            className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 disabled:opacity-40 text-orange-300 text-xs font-semibold rounded-lg transition-colors"
           >
             {triggering ? "Running…" : "⚡ Poll Now"}
           </button>
@@ -635,7 +635,7 @@ export default function CrmClient() {
                   placeholder="Search…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder-white/30 focus:outline-none focus:border-blue-500/40"
+                  className="flex-1 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder-white/30 focus:outline-none focus:border-orange-500/40"
                 />
                 <button onClick={() => loadThreads(true)} disabled={refreshing} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/6 hover:bg-white/12 text-white/50 hover:text-white transition-colors disabled:opacity-40">
                   <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -672,7 +672,7 @@ export default function CrmClient() {
                       if (composeRef.current) composeRef.current.innerHTML = "";
                       loadConversation(t.enrollment_id);
                     }}
-                    className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-blue-600/10 border-r-2 border-blue-500" : ""}`}
+                    className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-orange-500/10 border-r-2 border-orange-500" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -758,7 +758,7 @@ export default function CrmClient() {
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
                     {convLoading ? (
-                      [1,2,3].map((i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${i % 2 === 0 ? "bg-emerald-500/8 mr-12" : "bg-blue-600/10 ml-12"}`} />)
+                      [1,2,3].map((i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${i % 2 === 0 ? "bg-emerald-500/8 mr-12" : "bg-orange-500/10 ml-12"}`} />)
                     ) : conversation.length === 0 ? (
                       <div className="text-center py-12 text-white/20">
                         <p className="text-sm">No messages yet</p>
@@ -793,11 +793,11 @@ export default function CrmClient() {
                               value={linkUrl}
                               onChange={(e) => setLinkUrl(e.target.value)}
                               onKeyDown={(e) => e.key === "Enter" && handleInsertLink()}
-                              className="w-full px-2.5 py-1.5 bg-white/8 border border-white/10 rounded-lg text-xs text-white placeholder-white/25 focus:outline-none focus:border-blue-500/40 mb-2"
+                              className="w-full px-2.5 py-1.5 bg-white/8 border border-white/10 rounded-lg text-xs text-white placeholder-white/25 focus:outline-none focus:border-orange-500/40 mb-2"
                               autoFocus
                             />
                             <div className="flex gap-2">
-                              <button onClick={handleInsertLink} className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors">Insert</button>
+                              <button onClick={handleInsertLink} className="flex-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold rounded-lg transition-colors">Insert</button>
                               <button onClick={() => { setShowLinkDialog(false); setLinkUrl(""); }} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/50 text-xs rounded-lg transition-colors">Cancel</button>
                             </div>
                           </div>
@@ -833,7 +833,7 @@ export default function CrmClient() {
                     </div>
 
                     {/* Compose area */}
-                    <div className="relative bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-blue-500/40 transition-colors">
+                    <div className="relative bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-orange-500/40 transition-colors">
                       <div
                         ref={composeRef}
                         contentEditable
@@ -869,7 +869,7 @@ export default function CrmClient() {
                         <button
                           onClick={handleSendReply}
                           disabled={sending || !composeBody.trim()}
-                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                          className="px-4 py-1.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
                         >
                           {sending ? (
                             <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</>
@@ -979,7 +979,7 @@ export default function CrmClient() {
                   >
                     {promoting ? "Moving…" : "↗ Move to Inbox"}
                   </button>
-                  <button onClick={() => { setShowMatchModal(true); setMatchSearch(""); setMatchResults([]); }} className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold rounded-lg transition-colors">
+                  <button onClick={() => { setShowMatchModal(true); setMatchSearch(""); setMatchResults([]); }} className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 text-xs font-semibold rounded-lg transition-colors">
                     🔗 Match to Lead
                   </button>
                   <button onClick={() => handleIgnore(selectedUnmatched.id)} className="px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/50 text-xs rounded-lg transition-colors">
@@ -1041,7 +1041,7 @@ export default function CrmClient() {
                           [t.lead.first_name, t.lead.last_name, t.lead.email, t.lead.company].filter(Boolean).join(" ").toLowerCase().includes(q)
                         ) : []);
                       }}
-                      className="w-full px-3 py-2.5 bg-white/6 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/50 mb-3"
+                      className="w-full px-3 py-2.5 bg-white/6 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-orange-500/50 mb-3"
                     />
                     <div className="max-h-60 overflow-y-auto space-y-1">
                       {matchResults.map((t) => (
@@ -1080,7 +1080,7 @@ export default function CrmClient() {
               <h2 className="text-white font-semibold">Inbox Filter Rules</h2>
               <p className="text-white/40 text-sm mt-0.5">Rules are applied when polling inboxes. Matching emails are excluded or auto-categorized.</p>
             </div>
-            <button onClick={() => setShowAddFilter((v) => !v)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">
+            <button onClick={() => setShowAddFilter((v) => !v)} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">
               + Add Rule
             </button>
           </div>
@@ -1146,7 +1146,7 @@ export default function CrmClient() {
                 <button
                   onClick={() => handleAddFilter(newFilter)}
                   disabled={savingFilter || !newFilter.name || !newFilter.value}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
                 >
                   {savingFilter ? "Saving…" : "Save Rule"}
                 </button>
@@ -1177,7 +1177,7 @@ export default function CrmClient() {
                   <div className="text-xs">
                     {f.action === "exclude"
                       ? <span className="text-red-400/70">Exclude</span>
-                      : <span className="text-blue-400/70">→ {f.auto_status?.replace(/_/g, " ")}</span>
+                      : <span className="text-orange-400/70">→ {f.auto_status?.replace(/_/g, " ")}</span>
                     }
                   </div>
                   <button onClick={() => handleDeleteFilter(f.id)} className="text-white/20 hover:text-red-400 text-xs transition-colors px-1">✕</button>

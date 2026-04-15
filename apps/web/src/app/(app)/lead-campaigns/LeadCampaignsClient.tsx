@@ -8,7 +8,7 @@ import NewCampaignModal from "./NewCampaignModal";
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   "bg-white/8 text-white/50",
-  running:   "bg-blue-500/15 text-blue-400",
+  running:   "bg-orange-500/15 text-orange-400",
   completed: "bg-emerald-500/15 text-emerald-400",
   failed:    "bg-red-500/15 text-red-400",
   cancelled: "bg-white/8 text-white/30",
@@ -23,7 +23,7 @@ const MODE_LABELS: Record<string, string> = {
 const MODE_STYLES: Record<string, string> = {
   scrape:             "bg-violet-500/15 text-violet-400",
   verify_personalize: "bg-amber-500/15 text-amber-400",
-  full_suite:         "bg-blue-500/15 text-blue-400",
+  full_suite:         "bg-orange-500/15 text-orange-400",
 };
 
 export default function LeadCampaignsClient() {
@@ -77,7 +77,7 @@ export default function LeadCampaignsClient() {
           </Link>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             + New Campaign
           </button>
@@ -106,8 +106,8 @@ export default function LeadCampaignsClient() {
         </div>
       ) : campaigns.length === 0 ? (
         <div className="text-center py-20 border border-white/8 rounded-2xl">
-          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <div className="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
@@ -115,7 +115,7 @@ export default function LeadCampaignsClient() {
           <p className="text-white/40 text-sm mt-1 mb-5">Create your first lead generation campaign to start building your prospect list</p>
           <button
             onClick={() => setShowModal(true)}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="px-5 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             Create Campaign
           </button>
@@ -151,7 +151,7 @@ export default function LeadCampaignsClient() {
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ${STATUS_STYLES[c.status]}`}>
                       {c.status === "running" && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
                       )}
                       {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
                     </span>

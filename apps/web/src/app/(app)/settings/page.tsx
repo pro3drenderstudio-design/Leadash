@@ -33,7 +33,7 @@ function Input({ className = "", ...props }: React.InputHTMLAttributes<HTMLInput
   return (
     <input
       {...props}
-      className={`w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50 disabled:opacity-40 ${className}`}
+      className={`w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50 disabled:opacity-40 ${className}`}
     />
   );
 }
@@ -43,7 +43,7 @@ function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolea
     <button
       onClick={onClick}
       disabled={saving}
-      className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+      className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
     >
       {saving ? "Saving…" : saved ? "✓ Saved" : "Save changes"}
     </button>
@@ -54,7 +54,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <div
       onClick={() => onChange(!checked)}
-      className={`w-10 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${checked ? "bg-blue-600" : "bg-white/15"}`}
+      className={`w-10 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${checked ? "bg-orange-500" : "bg-white/15"}`}
     >
       <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
     </div>
@@ -97,7 +97,7 @@ function ProfileTab() {
     <div className="space-y-6">
       <Section title="Personal Information" description="Your name and email address.">
         <div className="flex items-center gap-4 pb-2">
-          <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-lg font-bold text-white flex-shrink-0">
+          <div className="w-14 h-14 rounded-full bg-orange-500 flex items-center justify-center text-lg font-bold text-white flex-shrink-0">
             {initials}
           </div>
           <div>
@@ -183,7 +183,7 @@ function SecurityTab() {
           <button
             onClick={changePassword}
             disabled={saving || !pw.next || !pw.confirm}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             {saving ? "Updating…" : "Update Password"}
           </button>
@@ -238,7 +238,7 @@ function TeamTab() {
 
   const ROLE_BADGE: Record<string, string> = {
     owner:  "bg-amber-500/15 text-amber-400",
-    admin:  "bg-blue-500/15 text-blue-400",
+    admin:  "bg-orange-500/15 text-orange-400",
     member: "bg-white/8 text-white/50",
   };
 
@@ -284,12 +284,12 @@ function TeamTab() {
             onChange={e => setInviteEmail(e.target.value)}
             onKeyDown={e => e.key === "Enter" && sendInvite()}
             placeholder="colleague@company.com"
-            className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50"
+            className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
           />
           <button
             onClick={sendInvite}
             disabled={inviting || !inviteEmail}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
           >
             {inviting ? "Sending…" : "Send Invite"}
           </button>
@@ -383,7 +383,7 @@ function BillingTab() {
               {currentPlan ? fmtPrice(currentPlan) : "Free"}
               {(currentPlan?.price_ngn ?? 0) > 0 && <span className="text-white/30 text-sm font-normal">/mo</span>}
             </p>
-            <a href="/api/billing/portal" className="text-blue-400 text-xs hover:underline mt-0.5 block">Manage subscription →</a>
+            <a href="/api/billing/portal" className="text-orange-400 text-xs hover:underline mt-0.5 block">Manage subscription →</a>
           </div>
         </div>
 
@@ -392,7 +392,7 @@ function BillingTab() {
           {plans.map(plan => (
             <div
               key={plan.plan_id}
-              className={`rounded-xl p-3 border text-center transition-colors ${plan.plan_id === planId ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/3"}`}
+              className={`rounded-xl p-3 border text-center transition-colors ${plan.plan_id === planId ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}
             >
               <p className="text-white text-xs font-semibold">{plan.name}</p>
               <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.price_ngn > 0 ? "/mo" : ""}</p>
@@ -423,12 +423,12 @@ function BillingTab() {
               <div
                 key={pack.id}
                 className={`relative border rounded-2xl p-4 flex flex-col gap-2 transition-colors ${
-                  isBest ? "border-blue-500/40 bg-blue-500/8" : "border-white/8 bg-white/4 hover:bg-white/6"
+                  isBest ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/4 hover:bg-white/6"
                 }`}
               >
                 {pack.savingsPct > 0 && (
                   <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[10px] font-semibold rounded-full whitespace-nowrap ${
-                    isBest ? "bg-blue-600 text-white" : "bg-white/10 text-white/60"
+                    isBest ? "bg-orange-500 text-white" : "bg-white/10 text-white/60"
                   }`}>
                     Save {pack.savingsPct}%
                   </span>
@@ -440,7 +440,7 @@ function BillingTab() {
                   onClick={() => handlePurchase(pack.id)}
                   disabled={!!purchasing}
                   className={`mt-auto py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-                    isBest ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-white/8 hover:bg-white/12 text-white"
+                    isBest ? "bg-orange-500 hover:bg-orange-400 text-white" : "bg-white/8 hover:bg-white/12 text-white"
                   }`}
                 >
                   {purchasing === pack.id ? "Loading…" : "Buy"}
@@ -583,7 +583,7 @@ function OutreachTab() {
               rows={2}
               value={settings.footer_custom_text}
               onChange={e => set("footer_custom_text", e.target.value)}
-              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-blue-500/50 resize-none"
+              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50 resize-none"
               placeholder="e.g. You received this email because…"
             />
           </Field>
@@ -593,7 +593,7 @@ function OutreachTab() {
           <div className="bg-white/3 border border-white/6 rounded-xl p-4 text-xs text-white/40 font-mono leading-relaxed">
             <p className="text-white/25 text-[10px] uppercase tracking-wider mb-2">Preview</p>
             <p>{settings.footer_custom_text}</p>
-            <p className="mt-1"><span className="text-blue-400/60">Unsubscribe</span> · {settings.footer_address}</p>
+            <p className="mt-1"><span className="text-orange-400/60">Unsubscribe</span> · {settings.footer_address}</p>
           </div>
         </div>
       </section>

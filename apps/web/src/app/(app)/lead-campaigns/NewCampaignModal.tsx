@@ -229,9 +229,9 @@ function MultiSelect({
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {selected.map(v => (
-            <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/15 border border-blue-500/25 rounded text-xs text-blue-400">
+            <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-500/15 border border-blue-500/25 rounded text-xs text-orange-400">
               {v}
-              <button type="button" onClick={() => toggle(v)} className="hover:text-blue-300">×</button>
+              <button type="button" onClick={() => toggle(v)} className="hover:text-orange-300">×</button>
             </span>
           ))}
         </div>
@@ -245,7 +245,7 @@ function MultiSelect({
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition-colors"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-white/30 focus:outline-none focus:border-orange-500/50 transition-colors"
             />
           </div>
           <div className="max-h-48 overflow-y-auto">
@@ -257,7 +257,7 @@ function MultiSelect({
                   type="checkbox"
                   checked={selected.includes(opt)}
                   onChange={() => toggle(opt)}
-                  className="w-3.5 h-3.5 accent-blue-500"
+                  className="w-3.5 h-3.5 accent-orange-500"
                 />
                 <span className={selected.includes(opt) ? "text-white" : "text-white/60"}>{opt}</span>
               </label>
@@ -280,7 +280,7 @@ function Field({ label, value, onChange, placeholder, hint }: {
       <input
         value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
       />
       {hint && <p className="text-white/30 text-xs mt-1">{hint}</p>}
     </div>
@@ -294,7 +294,7 @@ function StepBar({ step }: { step: Step }) {
       {([1, 2, 3] as Step[]).map(s => (
         <div
           key={s}
-          className={`h-1 flex-1 rounded-full transition-all duration-500 ${s <= step ? "bg-blue-500" : "bg-white/10"}`}
+          className={`h-1 flex-1 rounded-full transition-all duration-500 ${s <= step ? "bg-orange-500" : "bg-white/10"}`}
         />
       ))}
     </div>
@@ -328,7 +328,7 @@ function IconLink({ href, title, children }: { href: string; title: string; chil
     <a
       href={href} target="_blank" rel="noopener noreferrer" title={title}
       onClick={e => e.stopPropagation()}
-      className="w-6 h-6 rounded-md bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 flex items-center justify-center text-blue-400 hover:text-blue-300 transition-all flex-shrink-0"
+      className="w-6 h-6 rounded-md bg-orange-500/10 hover:bg-orange-400/20 border border-orange-500/20 hover:border-orange-500/40 flex items-center justify-center text-orange-400 hover:text-orange-300 transition-all flex-shrink-0"
     >
       {children}
     </a>
@@ -588,11 +588,11 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
               <button
                 type="button"
                 onClick={() => { set("mode", "scrape"); set("aiEnabled", false); setStep(1); }}
-                className="w-full text-left p-4 bg-white/4 border border-white/10 rounded-xl hover:border-blue-500/40 hover:bg-blue-500/5 transition-all group"
+                className="w-full text-left p-4 bg-white/4 border border-white/10 rounded-xl hover:border-orange-500/40 hover:bg-orange-400/5 transition-all group"
               >
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/8 group-hover:bg-blue-500/15 flex items-center justify-center flex-shrink-0 transition-colors">
-                    <svg className="w-5 h-5 text-white/60 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <div className="w-10 h-10 rounded-xl bg-white/8 group-hover:bg-orange-400/15 flex items-center justify-center flex-shrink-0 transition-colors">
+                    <svg className="w-5 h-5 text-white/60 group-hover:text-orange-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
                   </div>
@@ -612,21 +612,21 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
               <button
                 type="button"
                 onClick={() => { set("mode", "full_suite"); set("aiEnabled", true); setStep(1); }}
-                className="w-full text-left p-4 bg-blue-500/6 border border-blue-500/20 rounded-xl hover:border-blue-500/50 hover:bg-blue-500/10 transition-all group relative"
+                className="w-full text-left p-4 bg-orange-500/6 border border-orange-500/20 rounded-xl hover:border-orange-500/50 hover:bg-orange-400/10 transition-all group relative"
               >
                 <div className="absolute top-3 right-3">
-                  <span className="text-xs font-bold text-blue-300 bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 rounded-full">Most Popular</span>
+                  <span className="text-xs font-bold text-orange-300 bg-orange-500/20 border border-orange-500/30 px-2 py-0.5 rounded-full">Most Popular</span>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0 pr-24">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-white font-semibold text-sm">Scrape + AI Personalize</p>
-                      <span className="text-xs text-blue-400 font-medium bg-blue-500/15 px-2 py-0.5 rounded-full flex-shrink-0">4 cr / lead</span>
+                      <span className="text-xs text-orange-400 font-medium bg-orange-500/15 px-2 py-0.5 rounded-full flex-shrink-0">4 cr / lead</span>
                     </div>
                     <p className="text-white/40 text-xs mt-1 leading-relaxed">
                       Scrape leads then auto-generate a personalized first line for each prospect using AI — ready to drop into your sequences.
@@ -670,7 +670,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   value={form.name}
                   onChange={e => set("name", e.target.value)}
                   placeholder="e.g. Verified SaaS Founders"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                 />
               </div>
 
@@ -722,7 +722,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                           }}
                           className={`w-full text-left px-3.5 py-2.5 rounded-xl border transition-colors ${
                             form.sourceCampaignId === c.id
-                              ? "bg-blue-500/10 border-blue-500/40 text-white"
+                              ? "bg-orange-500/10 border-orange-500/40 text-white"
                               : "bg-white/4 border-white/10 text-white/70 hover:border-white/20"
                           }`}
                         >
@@ -743,7 +743,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 <div>
                   <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Upload CSV</label>
                   <label className={`flex flex-col items-center justify-center gap-2 w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
-                    form.uploadedFile ? "border-blue-500/40 bg-blue-500/5" : "border-white/15 hover:border-white/25 bg-white/3"
+                    form.uploadedFile ? "border-orange-500/40 bg-orange-500/5" : "border-white/15 hover:border-white/25 bg-white/3"
                   }`}>
                     <input
                       type="file"
@@ -753,7 +753,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     />
                     {form.uploadedFile ? (
                       <>
-                        <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="w-8 h-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p className="text-white text-sm font-medium">{form.uploadedFile.name}</p>
@@ -798,7 +798,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       type="range" min={sliderMin} max={sliderMax} step={sliderStep}
                       value={Math.min(Math.max(form.totalResults, sliderMin), sliderMax)}
                       onChange={e => set("totalResults", parseInt(e.target.value))}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-orange-500"
                     />
                     <div className="flex justify-between text-white/30 text-xs mt-1">
                       <span>{sliderMin.toLocaleString()}</span>
@@ -824,7 +824,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   value={form.name}
                   onChange={e => set("name", e.target.value)}
                   placeholder="e.g. SaaS Founders — US"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                 />
               </div>
 
@@ -925,7 +925,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       type="range" min={500} max={50_000} step={500}
                       value={Math.max(form.totalResults, 500)}
                       onChange={e => set("totalResults", parseInt(e.target.value))}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-orange-500"
                     />
                     <div className="flex justify-between text-white/30 text-xs mt-1">
                       <span>500</span>
@@ -943,7 +943,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       <input
                         type="number" min={0} value={form.startOffset}
                         onChange={e => set("startOffset", parseInt(e.target.value) || 0)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
                       />
                     </div>
                     <div>
@@ -969,7 +969,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                           type="checkbox"
                           checked={form[key] as boolean}
                           onChange={e => set(key, e.target.checked)}
-                          className="w-4 h-4 accent-blue-500"
+                          className="w-4 h-4 accent-orange-500"
                         />
                         <span className="text-white/70 text-sm">{label}</span>
                       </label>
@@ -984,10 +984,10 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
           {step === 2 && (
             <div className="space-y-5">
               {/* AI toggle card */}
-              <div className="flex items-center justify-between p-4 bg-blue-500/8 border border-blue-500/20 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-orange-500/8 border border-orange-500/20 rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                     </svg>
                   </div>
@@ -998,7 +998,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 </div>
                 <div
                   onClick={() => set("aiEnabled", !form.aiEnabled)}
-                  className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${form.aiEnabled ? "bg-blue-600" : "bg-white/15"}`}
+                  className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${form.aiEnabled ? "bg-orange-500" : "bg-white/15"}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${form.aiEnabled ? "translate-x-5" : "translate-x-0"}`} />
                 </div>
@@ -1014,7 +1014,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       maxLength={200}
                       rows={3}
                       placeholder="e.g. We help SaaS companies reduce churn by 40% using predictive AI"
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors resize-none"
                     />
                     <p className="text-white/30 text-xs mt-1">Craft a compelling hook that the AI will use to personalize each first line. 200 chars max.</p>
                   </div>
@@ -1027,7 +1027,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                     </div>
                     <div
                       onClick={() => set("personalizeValidOnly", !form.personalizeValidOnly)}
-                      className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ml-4 ${form.personalizeValidOnly ? "bg-blue-600" : "bg-white/15"}`}
+                      className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ml-4 ${form.personalizeValidOnly ? "bg-orange-500" : "bg-white/15"}`}
                     >
                       <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${form.personalizeValidOnly ? "translate-x-5" : "translate-x-0"}`} />
                     </div>
@@ -1039,7 +1039,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                       <select
                         value={form.toneOfVoice}
                         onChange={e => set("toneOfVoice", e.target.value as ToneOfVoice)}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
                       >
                         <option value="professional">Professional</option>
                         <option value="casual">Casual</option>
@@ -1090,7 +1090,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 <button
                   type="button"
                   onClick={() => { setStep(1); setPreviewLeads([]); setPreviewDone(false); }}
-                  className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 rounded-lg px-3 py-1.5"
+                  className="text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors border border-orange-500/30 rounded-lg px-3 py-1.5"
                 >
                   Modify Filters
                 </button>
@@ -1190,7 +1190,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   }
                   setError(null); setStep(s => (s + 1) as Step);
                 }}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                className="flex items-center gap-2 px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 Next Step
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1202,7 +1202,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                 type="button"
                 onClick={handleLaunch}
                 disabled={saving || !canAfford}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                className="flex items-center gap-2 px-6 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 {saving ? "Launching..." : (
                   <>

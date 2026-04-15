@@ -13,7 +13,7 @@ function cleanVal(v: string | null | undefined): string {
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   "bg-white/8 text-white/50",
-  running:   "bg-blue-500/15 text-blue-400",
+  running:   "bg-orange-500/15 text-orange-400",
   completed: "bg-emerald-500/15 text-emerald-400",
   failed:    "bg-red-500/15 text-red-400",
   cancelled: "bg-white/8 text-white/30",
@@ -62,7 +62,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   return (
     <div
       onClick={() => onChange(!value)}
-      className={`w-10 h-5.5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${value ? "bg-blue-600" : "bg-white/15"}`}
+      className={`w-10 h-5.5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${value ? "bg-orange-500" : "bg-white/15"}`}
       style={{ height: 22 }}
     >
       <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-5" : "translate-x-0"}`} />
@@ -203,7 +203,7 @@ export default function LeadCampaignDetailClient() {
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-white">{campaign.name}</h1>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium ${STATUS_STYLES[campaign.status]}`}>
-            {campaign.status === "running" && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
+            {campaign.status === "running" && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />}
             {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
           </span>
         </div>
@@ -230,7 +230,7 @@ export default function LeadCampaignDetailClient() {
           {leads.length > 0 && (
             <button
               onClick={() => setShowExport(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               Export to Leads Pool
             </button>
@@ -246,7 +246,7 @@ export default function LeadCampaignDetailClient() {
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
+            <div className="h-full bg-orange-500 rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
@@ -323,7 +323,7 @@ export default function LeadCampaignDetailClient() {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(0); }}
               placeholder="Search by name, email, company..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
             />
           </div>
 
@@ -332,7 +332,7 @@ export default function LeadCampaignDetailClient() {
             onClick={() => setShowFilters(s => !s)}
             className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-medium transition-colors ${
               showFilters || activeFilterCount > 0
-                ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
                 : "border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
             }`}
           >
@@ -341,7 +341,7 @@ export default function LeadCampaignDetailClient() {
             </svg>
             Filters
             {activeFilterCount > 0 && (
-              <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {activeFilterCount}
               </span>
             )}
@@ -350,7 +350,7 @@ export default function LeadCampaignDetailClient() {
           {selected.size > 0 && (
             <button
               onClick={() => setShowExport(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -371,7 +371,7 @@ export default function LeadCampaignDetailClient() {
                 value={industryFilter}
                 onChange={e => { setIndustryFilter(e.target.value); setPage(0); }}
                 placeholder="e.g. SaaS, Finance..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
             </div>
             <div className="flex-1">
@@ -380,7 +380,7 @@ export default function LeadCampaignDetailClient() {
                 value={titleFilter}
                 onChange={e => { setTitleFilter(e.target.value); setPage(0); }}
                 placeholder="e.g. CEO, Engineer..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
             </div>
             <div className="flex-1">
@@ -389,7 +389,7 @@ export default function LeadCampaignDetailClient() {
                 value={countryFilter}
                 onChange={e => { setCountryFilter(e.target.value); setPage(0); }}
                 placeholder="e.g. United States..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
             </div>
             {activeFilterCount > 0 && (
@@ -429,7 +429,7 @@ export default function LeadCampaignDetailClient() {
                   <th className="px-4 py-3 w-10">
                     <input
                       type="checkbox"
-                      className="accent-blue-500 cursor-pointer"
+                      className="accent-orange-500 cursor-pointer"
                       checked={selected.size === leads.length && leads.length > 0}
                       onChange={e => setSelected(e.target.checked ? new Set(leads.map(l => l.id)) : new Set())}
                       onClick={e => e.stopPropagation()}
@@ -459,7 +459,7 @@ export default function LeadCampaignDetailClient() {
                       <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                         <input
                           type="checkbox"
-                          className="accent-blue-500 cursor-pointer"
+                          className="accent-orange-500 cursor-pointer"
                           checked={selected.has(l.id)}
                           onChange={() => {}}
                           onClick={e => toggleSelect(l.id, e)}
@@ -520,7 +520,7 @@ export default function LeadCampaignDetailClient() {
                         <div className="flex items-center justify-center gap-1.5">
                           {l.linkedin_url && (
                             <a href={l.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                              className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 flex items-center justify-center text-blue-400 transition-all" title="LinkedIn">
+                              className="w-7 h-7 rounded-lg bg-orange-500/10 hover:bg-orange-400/20 border border-orange-500/20 hover:border-orange-500/40 flex items-center justify-center text-orange-400 transition-all" title="LinkedIn">
                               <LinkedInIcon />
                             </a>
                           )}
@@ -594,14 +594,14 @@ export default function LeadCampaignDetailClient() {
               <div
                 className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${
                   dlStatuses.length === DL_STATUS_OPTIONS.length
-                    ? "border-blue-500/40 bg-blue-500/8"
+                    ? "border-orange-500/40 bg-orange-500/8"
                     : "border-white/8 bg-white/3 hover:border-white/15"
                 }`}
                 onClick={() => setDlStatuses(
                   dlStatuses.length === DL_STATUS_OPTIONS.length ? [] : DL_STATUS_OPTIONS.map(o => o.key)
                 )}
               >
-                <input type="checkbox" className="accent-blue-500" readOnly
+                <input type="checkbox" className="accent-orange-500" readOnly
                   checked={dlStatuses.length === DL_STATUS_OPTIONS.length} />
                 <span className="text-white text-sm font-medium">All leads</span>
               </div>
@@ -611,12 +611,12 @@ export default function LeadCampaignDetailClient() {
                   key={opt.key}
                   className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${
                     dlStatuses.includes(opt.key)
-                      ? "border-blue-500/40 bg-blue-500/8"
+                      ? "border-orange-500/40 bg-orange-500/8"
                       : "border-white/8 bg-white/3 hover:border-white/15"
                   }`}
                   onClick={() => toggleDlStatus(opt.key)}
                 >
-                  <input type="checkbox" className="accent-blue-500" readOnly checked={dlStatuses.includes(opt.key)} />
+                  <input type="checkbox" className="accent-orange-500" readOnly checked={dlStatuses.includes(opt.key)} />
                   <span className={`w-2 h-2 rounded-full ${opt.dotCls} flex-shrink-0`} />
                   <span className="text-white/80 text-sm">{opt.label}</span>
                 </div>
@@ -626,7 +626,7 @@ export default function LeadCampaignDetailClient() {
             <button
               onClick={handleDownloadCsv}
               disabled={dlStatuses.length === 0}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               Download CSV
             </button>
@@ -664,7 +664,7 @@ export default function LeadCampaignDetailClient() {
                   <select
                     value={exportListId}
                     onChange={e => { setExportListId(e.target.value); setNewListName(""); }}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
                   >
                     <option value="">Select a list...</option>
                     {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -681,13 +681,13 @@ export default function LeadCampaignDetailClient() {
                     value={newListName}
                     onChange={e => { setNewListName(e.target.value); setExportListId(""); }}
                     placeholder="List name..."
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                   />
                 </div>
                 <button
                   onClick={handleExport}
                   disabled={exporting || (!exportListId && !newListName)}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
                 >
                   {exporting ? "Exporting..." : "Export Leads"}
                 </button>

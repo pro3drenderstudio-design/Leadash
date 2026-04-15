@@ -72,11 +72,11 @@ function NewInboxPageInner() {
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => router.push("/inboxes/new/connect-domain")}
-            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-blue-500/20 hover:border-blue-500/40 rounded-xl transition-all relative overflow-hidden col-span-2"
+            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-orange-500/20 hover:border-orange-500/40 rounded-xl transition-all relative overflow-hidden col-span-2"
           >
-            <div className="absolute top-3 right-3 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 tracking-wide">BRING YOUR OWN</div>
+            <div className="absolute top-3 right-3 px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-400 tracking-wide">BRING YOUR OWN</div>
             <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+              <div className="w-11 h-11 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="#60a5fa" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                 </svg>
@@ -192,7 +192,7 @@ function NewInboxPageInner() {
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               {saving ? "Adding…" : "Add inbox"}
             </button>
@@ -225,7 +225,7 @@ function Field({
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
       />
     </div>
   );

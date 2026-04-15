@@ -217,7 +217,7 @@ export default function EnrichPage() {
             <>
               <div className="mb-5">
                 <label className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-2 block">Your Product / Offer</label>
-                <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. We help SaaS companies reduce churn by 40% with AI-powered customer success workflows…" rows={3} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all resize-none" />
+                <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. We help SaaS companies reduce churn by 40% with AI-powered customer success workflows…" rows={3} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-orange-500/60 focus:bg-white/8 transition-all resize-none" />
               </div>
 
               <div onClick={() => fileRef.current?.click()} className="border-2 border-dashed border-white/10 rounded-2xl p-10 text-center cursor-pointer hover:border-white/20 hover:bg-white/3 transition-all mb-4">
@@ -235,7 +235,7 @@ export default function EnrichPage() {
                     <p className="text-white text-sm font-semibold">{fmt(leads.length)} leads ready</p>
                     <p className="text-white/40 text-xs mt-0.5">{cost} credits · {leads.length} × 0.5cr</p>
                   </div>
-                  <button onClick={handleEnrich} disabled={!prompt.trim()} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
+                  <button onClick={handleEnrich} disabled={!prompt.trim()} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
                     Start Enrichment
                   </button>
@@ -250,7 +250,7 @@ export default function EnrichPage() {
               <div className="px-5 py-5 bg-white/3 border border-white/8 rounded-2xl">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    <svg className="w-4 h-4 animate-spin text-orange-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                     <span className="text-white font-semibold text-sm">
                       {activeJob.status === "pending" ? "Queued — worker starting…" : "Generating openers…"}
                     </span>
@@ -258,7 +258,7 @@ export default function EnrichPage() {
                   <span className="text-white/40 text-sm tabular-nums">{fmt(activeJob.processed)} / {fmt(activeJob.total)}</span>
                 </div>
                 <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-1.5">
-                  <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/20 text-xs">Polling every 3s · results save automatically</span>
@@ -311,7 +311,7 @@ export default function EnrichPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-white text-sm font-semibold">{fmt(job.total)} leads</p>
                       {(job.status === "pending" || job.status === "running") && (
-                        <span className="flex items-center gap-1 text-xs text-blue-400">
+                        <span className="flex items-center gap-1 text-xs text-orange-400">
                           <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                           {job.status === "pending" ? "Queued" : `${fmt(job.processed)} / ${fmt(job.total)}`}
                         </span>
@@ -322,7 +322,7 @@ export default function EnrichPage() {
                     {job.prompt && <p className="text-white/25 text-xs mt-1.5 italic truncate">{job.prompt}</p>}
                     {job.status === "running" && (
                       <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.round((job.processed / job.total) * 100) : 0}%` }} />
+                        <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.round((job.processed / job.total) * 100) : 0}%` }} />
                       </div>
                     )}
                     {job.error && <p className="text-red-400 text-xs mt-2">{job.error}</p>}

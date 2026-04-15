@@ -190,7 +190,7 @@ export default function CampaignWizardClient() {
       <div className="flex items-center gap-2 mb-8">
         {STEP_LABELS.map((label, i) => (
           <div key={label} className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${i <= step ? "bg-blue-600 border-blue-500 text-white" : "bg-white/6 border-white/10 text-white/30"}`}>{i + 1}</div>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${i <= step ? "bg-orange-500 border-blue-500 text-white" : "bg-white/6 border-white/10 text-white/30"}`}>{i + 1}</div>
             <span className={`text-sm ${i === step ? "text-white font-medium" : "text-white/30"}`}>{label}</span>
             {i < 3 && <div className="w-8 h-px bg-white/10 mx-1" />}
           </div>
@@ -204,13 +204,13 @@ export default function CampaignWizardClient() {
         <div className="space-y-5">
           <div>
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Campaign Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Q2 Real Estate Outreach" className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/50" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Q2 Real Estate Outreach" className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/50" />
           </div>
 
           {/* Inboxes — scrollable */}
           <div>
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
-              Sending Inboxes {selectedInboxes.length > 0 && <span className="text-blue-400 normal-case ml-1">{selectedInboxes.length} selected</span>}
+              Sending Inboxes {selectedInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{selectedInboxes.length} selected</span>}
             </label>
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
               {inboxes.map((inbox) => {
@@ -218,8 +218,8 @@ export default function CampaignWizardClient() {
                 const isWarming    = !!warmupEndsAt && new Date(warmupEndsAt) > new Date();
                 const daysLeft     = isWarming ? Math.ceil((new Date(warmupEndsAt!).getTime() - Date.now()) / 86_400_000) : 0;
                 return (
-                  <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${selectedInboxes.includes(inbox.id) ? "border-blue-500/40 bg-blue-600/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
-                    <input type="checkbox" disabled={isWarming} checked={!isWarming && selectedInboxes.includes(inbox.id)} onChange={() => !isWarming && toggleInbox(inbox.id)} className="accent-blue-500 disabled:opacity-40" />
+                  <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${selectedInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
+                    <input type="checkbox" disabled={isWarming} checked={!isWarming && selectedInboxes.includes(inbox.id)} onChange={() => !isWarming && toggleInbox(inbox.id)} className="accent-orange-500 disabled:opacity-40" />
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-sm font-medium">{inbox.label}</div>
                       <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div>
@@ -228,18 +228,18 @@ export default function CampaignWizardClient() {
                   </label>
                 );
               })}
-              {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/inboxes/new" className="text-blue-400">Add one first.</a></p>}
+              {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/inboxes/new" className="text-orange-400">Add one first.</a></p>}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Send Window Start</label>
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" />
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Send Window End</label>
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" />
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
             </div>
           </div>
 
@@ -247,14 +247,14 @@ export default function CampaignWizardClient() {
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Send Days</label>
             <div className="flex gap-2">
               {DAYS.map((d) => (
-                <button key={d} onClick={() => toggleDay(d)} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${sendDays.includes(d) ? "bg-blue-600/20 border-blue-500/40 text-blue-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase() + d.slice(1,2)}</button>
+                <button key={d} onClick={() => toggleDay(d)} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${sendDays.includes(d) ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase() + d.slice(1,2)}</button>
               ))}
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label>
-            <input type="number" value={dailyCap} onChange={(e) => setDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50" />
+            <input type="number" value={dailyCap} onChange={(e) => setDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
           </div>
 
           {/* Throttle */}
@@ -263,11 +263,11 @@ export default function CampaignWizardClient() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-white/40 mb-1">Min Delay (seconds)</label>
-                <input type="number" value={minDelay} onChange={(e) => setMinDelay(parseInt(e.target.value) || 30)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/40" />
+                <input type="number" value={minDelay} onChange={(e) => setMinDelay(parseInt(e.target.value) || 30)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
               </div>
               <div>
                 <label className="block text-xs text-white/40 mb-1">Max Delay (seconds)</label>
-                <input type="number" value={maxDelay} onChange={(e) => setMaxDelay(parseInt(e.target.value) || 120)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/40" />
+                <input type="number" value={maxDelay} onChange={(e) => setMaxDelay(parseInt(e.target.value) || 120)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
               </div>
             </div>
             <p className="text-white/25 text-xs">A random delay between {minDelay}–{maxDelay}s is applied between each email send.</p>
@@ -311,15 +311,15 @@ export default function CampaignWizardClient() {
         <div className="space-y-4">
           <p className="text-white/60 text-sm">Select which lead lists to include in this campaign</p>
           {lists.map((list) => (
-            <label key={list.id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${selectedLists.includes(list.id) ? "border-blue-500/40 bg-blue-600/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-              <input type="checkbox" checked={selectedLists.includes(list.id)} onChange={() => toggleList(list.id)} className="accent-blue-500" />
+            <label key={list.id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${selectedLists.includes(list.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
+              <input type="checkbox" checked={selectedLists.includes(list.id)} onChange={() => toggleList(list.id)} className="accent-orange-500" />
               <div>
                 <div className="text-white text-sm font-medium">{list.name}</div>
                 <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
               </div>
             </label>
           ))}
-          {!lists.length && <p className="text-white/30 text-sm">No lead lists. <a href="/leads" className="text-blue-400">Create one first.</a></p>}
+          {!lists.length && <p className="text-white/30 text-sm">No lead lists. <a href="/leads" className="text-orange-400">Create one first.</a></p>}
         </div>
       )}
 
@@ -359,7 +359,7 @@ export default function CampaignWizardClient() {
                       <div className="relative">
                         <button
                           onClick={() => setLoadingTemplate(loadingTemplate === i ? null : i)}
-                          className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
+                          className="text-orange-400 hover:text-orange-300 text-xs transition-colors"
                         >
                           Load Template ▾
                         </button>
@@ -392,16 +392,16 @@ export default function CampaignWizardClient() {
                   {/* Subject A */}
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
-                    <input value={s.subject_template} onChange={(e) => updateStep(i, "subject_template", e.target.value)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/40" />
+                    <input value={s.subject_template} onChange={(e) => updateStep(i, "subject_template", e.target.value)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
                   {/* Subject B (A/B testing) */}
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(optional — 50% of sends use this)</span></label>
-                    <input value={s.subject_template_b} onChange={(e) => updateStep(i, "subject_template_b", e.target.value)} placeholder="Alternate subject for A/B test" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/40" />
+                    <input value={s.subject_template_b} onChange={(e) => updateStep(i, "subject_template_b", e.target.value)} placeholder="Alternate subject for A/B test" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
-                  <textarea value={s.body_template} onChange={(e) => updateStep(i, "body_template", e.target.value)} rows={5} placeholder="Email body (supports {{first_name}} etc)" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/40 resize-none" />
+                  <textarea value={s.body_template} onChange={(e) => updateStep(i, "body_template", e.target.value)} rows={5} placeholder="Email body (supports {{first_name}} etc)" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40 resize-none" />
                 </>
               )}
             </div>
@@ -437,7 +437,7 @@ export default function CampaignWizardClient() {
       <div className="flex justify-between mt-8">
         <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} className="px-5 py-2.5 bg-white/6 hover:bg-white/10 disabled:opacity-30 text-white/70 text-sm rounded-xl transition-colors">Back</button>
         {step < 3 ? (
-          <button onClick={() => { setError(null); setStep((s) => s + 1); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">Continue</button>
+          <button onClick={() => { setError(null); setStep((s) => s + 1); }} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">Continue</button>
         ) : (
           <button onClick={handleFinish} disabled={saving} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
             {saving ? "Creating & Enrolling…" : "Launch Campaign"}

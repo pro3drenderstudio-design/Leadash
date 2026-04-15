@@ -39,13 +39,13 @@ const CATEGORIES = [
 
 const PRIORITIES = [
   { value: "low",    label: "Low",    color: "text-white/40" },
-  { value: "medium", label: "Medium", color: "text-blue-400" },
+  { value: "medium", label: "Medium", color: "text-orange-400" },
   { value: "high",   label: "High",   color: "text-amber-400" },
   { value: "urgent", label: "Urgent", color: "text-red-400" },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  open:            { label: "Open",             color: "bg-blue-500/15 text-blue-300 border-blue-500/20",     dot: "bg-blue-400" },
+  open:            { label: "Open",             color: "bg-orange-500/15 text-orange-300 border-orange-500/20",     dot: "bg-orange-400" },
   in_progress:     { label: "In Progress",      color: "bg-amber-500/15 text-amber-300 border-amber-500/20", dot: "bg-amber-400" },
   waiting_on_you:  { label: "Waiting on you",   color: "bg-purple-500/15 text-purple-300 border-purple-500/20", dot: "bg-purple-400" },
   resolved:        { label: "Resolved",         color: "bg-green-500/15 text-green-300 border-green-500/20", dot: "bg-green-400" },
@@ -156,7 +156,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
               <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
                 msg.sender_type === "admin"
                   ? "bg-emerald-600/30 border border-emerald-500/30"
-                  : "bg-blue-600/30 border border-blue-500/30 text-blue-300"
+                  : "bg-orange-500/30 border border-orange-500/30 text-orange-300"
               }`}>
                 {msg.sender_type === "admin" ? (
                   <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -179,7 +179,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
         ) : (
           /* Fallback: show original message if no thread rows yet */
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-300">Y</div>
+            <div className="w-8 h-8 rounded-full bg-orange-500/30 border border-orange-500/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-orange-300">Y</div>
             <div className="flex-1 bg-white/4 border border-white/8 rounded-2xl rounded-tl-sm px-4 py-3">
               <p className="text-white/40 text-xs mb-2 font-medium">You · {timeAgo(ticket.created_at)}</p>
               <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{ticket.message}</p>
@@ -204,7 +204,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
             onChange={e => setReplyText(e.target.value)}
             placeholder="Send a follow-up message…"
             rows={4}
-            className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"
+            className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors resize-none"
           />
           {sendError && <p className="text-red-400 text-xs mt-1">{sendError}</p>}
           <div className="flex items-center justify-between mt-3">
@@ -212,7 +212,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
             <button
               type="submit"
               disabled={sending || !replyText.trim()}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+              className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
             >
               {sending && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -227,7 +227,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
       ) : (
         <div className="mt-6 p-4 bg-white/2 border border-white/6 rounded-xl text-center">
           <p className="text-white/30 text-sm">
-            This ticket is {ticket.status}. <button onClick={() => {}} className="text-blue-400 hover:underline">Open a new ticket</button> if you need more help.
+            This ticket is {ticket.status}. <button onClick={() => {}} className="text-orange-400 hover:underline">Open a new ticket</button> if you need more help.
           </p>
         </div>
       )}
@@ -342,7 +342,7 @@ export default function SupportPage() {
                     onClick={() => setCategory(cat.value)}
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
                       category === cat.value
-                        ? "bg-blue-600/15 border-blue-500/40 text-blue-300"
+                        ? "bg-orange-500/15 border-orange-500/40 text-orange-300"
                         : "bg-white/3 border-white/8 text-white/50 hover:border-white/15 hover:text-white/70"
                     }`}
                   >
@@ -390,7 +390,7 @@ export default function SupportPage() {
                 onChange={e => setSubject(e.target.value)}
                 placeholder="Brief description of the issue"
                 maxLength={120}
-                className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                 required
               />
             </div>
@@ -403,7 +403,7 @@ export default function SupportPage() {
                 onChange={e => setMessage(e.target.value)}
                 placeholder={"Describe what happened, what you expected, and any error messages you saw.\n\nThe more detail you provide, the faster we can help."}
                 rows={6}
-                className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"
+                className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors resize-none"
                 required
               />
             </div>
@@ -414,7 +414,7 @@ export default function SupportPage() {
               <button
                 type="submit"
                 disabled={submitting || !subject.trim() || !message.trim()}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
               >
                 {submitting && (
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -443,7 +443,7 @@ export default function SupportPage() {
         </div>
         <button
           onClick={() => setView("new")}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 flex-shrink-0"
+          className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 flex-shrink-0"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -483,10 +483,10 @@ export default function SupportPage() {
             className={`flex items-start gap-3 p-4 bg-white/3 border border-white/8 rounded-xl hover:border-white/15 hover:bg-white/5 transition-all text-left`}
           >
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-              card.color === "blue" ? "bg-blue-500/15" : card.color === "purple" ? "bg-purple-500/15" : "bg-emerald-500/15"
+              card.color === "blue" ? "bg-orange-500/15" : card.color === "purple" ? "bg-purple-500/15" : "bg-emerald-500/15"
             }`}>
               <svg className={`w-4 h-4 ${
-                card.color === "blue" ? "text-blue-400" : card.color === "purple" ? "text-purple-400" : "text-emerald-400"
+                card.color === "blue" ? "text-orange-400" : card.color === "purple" ? "text-purple-400" : "text-emerald-400"
               }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={card.icon} />
               </svg>
@@ -505,7 +505,7 @@ export default function SupportPage() {
           <h2 className="text-white/60 text-sm font-semibold">
             Your tickets
             {openCount > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 rounded-full text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30">{openCount} open</span>
+              <span className="ml-2 px-1.5 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-400 border border-orange-500/30">{openCount} open</span>
             )}
           </h2>
           {/* Filter tabs */}
@@ -540,7 +540,7 @@ export default function SupportPage() {
               {filter === "all" ? "No tickets yet." : `No ${filter.replace("_", " ")} tickets.`}
             </p>
             {filter === "all" && (
-              <button onClick={() => setView("new")} className="mt-4 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium rounded-xl transition-colors">
+              <button onClick={() => setView("new")} className="mt-4 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-300 text-sm font-medium rounded-xl transition-colors">
                 Submit your first ticket →
               </button>
             )}
@@ -565,7 +565,7 @@ export default function SupportPage() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-white text-sm font-medium truncate">{ticket.subject}</span>
                     {ticket.admin_reply && ticket.status !== "resolved" && (
-                      <span className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400" title="New reply" />
+                      <span className="flex-shrink-0 w-2 h-2 rounded-full bg-orange-400" title="New reply" />
                     )}
                   </div>
                   <p className="text-white/30 text-xs">

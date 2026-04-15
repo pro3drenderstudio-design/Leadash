@@ -22,7 +22,7 @@ interface UserDetail {
 function PlanBadge({ plan }: { plan: string }) {
   const map: Record<string, string> = {
     free:    "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50",
-    starter: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+    starter: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     growth:  "bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300",
     scale:   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
   };
@@ -31,7 +31,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    open:        "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+    open:        "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
     in_progress: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300",
     resolved:    "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
     closed:      "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
@@ -42,7 +42,7 @@ function StatusBadge({ status }: { status: string }) {
 function PriorityBadge({ priority }: { priority: string }) {
   const map: Record<string, string> = {
     low:      "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
-    medium:   "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+    medium:   "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     high:     "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     urgent:   "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   };
@@ -139,7 +139,7 @@ export default function UserDetailPage() {
     return (
       <div className="p-8 max-w-5xl mx-auto">
         <p className="text-red-500">{error ?? "User not found"}</p>
-        <Link href="/admin/users" className="text-sm text-blue-500 hover:underline mt-2 block">← Back to users</Link>
+        <Link href="/admin/users" className="text-sm text-orange-500 hover:underline mt-2 block">← Back to users</Link>
       </div>
     );
   }
@@ -149,7 +149,7 @@ export default function UserDetailPage() {
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-white/30">
-        <Link href="/admin/users" className="hover:text-blue-500 transition-colors">Users</Link>
+        <Link href="/admin/users" className="hover:text-orange-500 transition-colors">Users</Link>
         <span>/</span>
         <span className="text-slate-700 dark:text-white/70">{user.name || user.email}</span>
       </div>

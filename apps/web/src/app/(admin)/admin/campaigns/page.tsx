@@ -32,13 +32,13 @@ const MODE_LABELS: Record<string, string> = {
 
 const MODE_COLORS: Record<string, string> = {
   scrape:             "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
-  verify_personalize: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  verify_personalize: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   full_suite:         "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
-  running:   "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  running:   "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
   failed:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   cancelled: "bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-white/30",
@@ -56,7 +56,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${STATUS_COLORS[status] ?? STATUS_COLORS.pending}`}>
       {status === "running" && (
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
       )}
       {status}
     </span>
@@ -69,7 +69,7 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-500 rounded-full transition-all"
+          className="h-full bg-orange-500 rounded-full transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -130,7 +130,7 @@ function CampaignsInner() {
       {!loading && (
         <div className="flex gap-2 flex-wrap">
           {[
-            { label: "Running",   count: runningCount,   color: "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/20" },
+            { label: "Running",   count: runningCount,   color: "bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-500/20" },
             { label: "Failed",    count: failedCount,    color: "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/20" },
             { label: "Completed", count: completedCount, color: "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-300 border-green-200 dark:border-green-500/20" },
           ].map(s => s.count > 0 && (
@@ -156,13 +156,13 @@ function CampaignsInner() {
             placeholder="Search by campaign or workspace name…"
             defaultValue={search}
             onKeyDown={e => e.key === "Enter" && setParam("search", (e.target as HTMLInputElement).value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </div>
         <select
           value={status}
           onChange={e => setParam("status", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         >
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
@@ -174,7 +174,7 @@ function CampaignsInner() {
         <select
           value={mode}
           onChange={e => setParam("mode", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         >
           <option value="">All modes</option>
           <option value="scrape">Scrape</option>
@@ -223,7 +223,7 @@ function CampaignsInner() {
                 <td className="px-4 py-3 hidden md:table-cell">
                   <Link
                     href={`/admin/workspaces/${c.workspace_id}`}
-                    className="text-sm text-slate-600 dark:text-white/60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="text-sm text-slate-600 dark:text-white/60 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     {c.workspace_name}
                   </Link>
@@ -281,7 +281,7 @@ function CampaignsInner() {
                     onClick={() => setParam("page", String(p))}
                     className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                       p === page
-                        ? "bg-blue-500 text-white"
+                        ? "bg-orange-500 text-white"
                         : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
                     }`}
                   >

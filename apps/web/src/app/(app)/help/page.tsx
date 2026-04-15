@@ -87,8 +87,8 @@ export default function HelpPage() {
             href={card.href}
             className="p-4 bg-white/3 border border-white/8 rounded-xl hover:border-white/15 hover:bg-white/5 transition-all group"
           >
-            <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center mb-3">
-              <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center mb-3">
+              <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={card.icon} />
               </svg>
             </div>
@@ -124,12 +124,12 @@ export default function HelpPage() {
       ))}
 
       {/* Contact support */}
-      <div className="mt-10 p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl">
+      <div className="mt-10 p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-orange-500/20 rounded-2xl">
         <h3 className="text-white font-semibold mb-1">Still need help?</h3>
         <p className="text-white/40 text-sm mb-4">Can&apos;t find what you&apos;re looking for? Reach out and we&apos;ll get back to you within 24 hours.</p>
         <Link
           href="/support"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />

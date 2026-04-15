@@ -102,7 +102,7 @@ export default function WarmupClient() {
 
       {inboxes.length === 0 ? (
         <div className="text-center py-16 text-white/30">
-          <p>No inboxes yet. <a href="/inboxes/new" className="text-blue-400">Add an inbox first.</a></p>
+          <p>No inboxes yet. <a href="/inboxes/new" className="text-orange-400">Add an inbox first.</a></p>
         </div>
       ) : (
         <>
@@ -158,7 +158,7 @@ export default function WarmupClient() {
                   </div>
                   <div className="h-2 bg-white/8 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${pct >= 100 ? "bg-green-500" : "bg-blue-500"}`}
+                      className={`h-full rounded-full transition-all ${pct >= 100 ? "bg-green-500" : "bg-orange-500"}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -174,7 +174,7 @@ export default function WarmupClient() {
                       value={current}
                       onChange={(e) => setField(inbox.id, "warmup_current_daily", parseInt(e.target.value) || 0)}
                       min={0}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
                     />
                   </div>
                   <div>
@@ -184,7 +184,7 @@ export default function WarmupClient() {
                       value={target}
                       onChange={(e) => setField(inbox.id, "warmup_target_daily", parseInt(e.target.value) || 0)}
                       min={1}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
                     />
                   </div>
                   <div>
@@ -194,7 +194,7 @@ export default function WarmupClient() {
                       value={ramp}
                       onChange={(e) => setField(inbox.id, "warmup_ramp_per_week", parseInt(e.target.value) || 0)}
                       min={1}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
                     />
                   </div>
                 </div>
@@ -209,7 +209,7 @@ export default function WarmupClient() {
                     <button
                       onClick={() => handleSave(inbox)}
                       disabled={saving === inbox.id}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ml-3"
+                      className="px-4 py-1.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ml-3"
                     >
                       {saving === inbox.id ? "Saving…" : "Save"}
                     </button>

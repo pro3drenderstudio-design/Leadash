@@ -22,7 +22,7 @@ interface Props {
 
 const PLAN_STYLE: Record<string, string> = {
   free:       "text-slate-500 dark:text-white/40 bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/[0.08]",
-  pro:        "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20",
+  pro:        "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20",
   scale:      "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20",
   enterprise: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
 };

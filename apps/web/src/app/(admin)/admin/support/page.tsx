@@ -12,14 +12,14 @@ interface Ticket {
 }
 
 const STATUS_MAP: Record<string, string> = {
-  open:        "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  open:        "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   in_progress: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300",
   resolved:    "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
   closed:      "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
 };
 const PRIORITY_MAP: Record<string, string> = {
   low:    "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
-  medium: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+  medium: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
   high:   "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
   urgent: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
@@ -72,7 +72,7 @@ function SupportInner() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Support Tickets</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">
-            {total.toLocaleString()} total · {openCount > 0 && <span className="text-blue-500 font-semibold">{openCount} open on this page</span>}
+            {total.toLocaleString()} total · {openCount > 0 && <span className="text-orange-500 font-semibold">{openCount} open on this page</span>}
           </p>
         </div>
       </div>
@@ -88,11 +88,11 @@ function SupportInner() {
             placeholder="Search by subject…"
             defaultValue={search}
             onKeyDown={e => e.key === "Enter" && setParam("search", (e.target as HTMLInputElement).value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </div>
         <select value={status} onChange={e => setParam("status", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
           <option value="">All statuses</option>
           <option value="open">Open</option>
           <option value="in_progress">In progress</option>
@@ -100,7 +100,7 @@ function SupportInner() {
           <option value="closed">Closed</option>
         </select>
         <select value={priority} onChange={e => setParam("priority", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
           <option value="">All priorities</option>
           <option value="urgent">Urgent</option>
           <option value="high">High</option>
@@ -123,7 +123,7 @@ function SupportInner() {
           <Link
             key={t.id}
             href={`/admin/support/${t.id}`}
-            className="block bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-4 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors"
+            className="block bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-5 py-4 hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors"
           >
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
@@ -161,7 +161,7 @@ function SupportInner() {
               return (
                 <button key={p} onClick={() => setParam("page", String(p))}
                   className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
-                    p === page ? "bg-blue-500 text-white" : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
+                    p === page ? "bg-orange-500 text-white" : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
                   }`}>
                   {p}
                 </button>

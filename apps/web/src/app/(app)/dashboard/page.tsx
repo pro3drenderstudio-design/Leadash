@@ -16,7 +16,7 @@ interface RecentThread {
 const CRM_STATUS_STYLE: Record<string, { label: string; cls: string }> = {
   neutral:        { label: "Neutral",        cls: "text-white/40 bg-white/5" },
   interested:     { label: "Interested",     cls: "text-emerald-400 bg-emerald-500/10" },
-  meeting_booked: { label: "Meeting Booked", cls: "text-blue-400 bg-blue-500/10" },
+  meeting_booked: { label: "Meeting Booked", cls: "text-orange-400 bg-orange-500/10" },
   won:            { label: "Won",            cls: "text-yellow-400 bg-yellow-500/10" },
   not_interested: { label: "Not Interested", cls: "text-red-400 bg-red-500/10" },
   ooo:            { label: "OOO",            cls: "text-orange-400 bg-orange-500/10" },
@@ -144,7 +144,7 @@ export default async function DashboardPage() {
     : 0;
 
   const cards = [
-    { label: "Active Sequences", value: stats.activeCampaigns,             color: "text-blue-400",   glow: "rgba(59,130,246,0.15)",  icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",  href: "/campaigns" },
+    { label: "Active Sequences", value: stats.activeCampaigns,             color: "text-orange-400",   glow: "rgba(59,130,246,0.15)",  icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",  href: "/campaigns" },
     { label: "Active Inboxes",   value: stats.activeInboxes,               color: "text-emerald-400", glow: "rgba(16,185,129,0.15)",  icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4", href: "/inboxes" },
     { label: "Sent This Month",  value: stats.sentThisMonth.toLocaleString(), color: "text-violet-400", glow: "rgba(139,92,246,0.15)", icon: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8",  href: "/campaigns" },
     { label: "Open Rate",        value: `${stats.openRate}%`,               color: "text-amber-400",   glow: "rgba(245,158,11,0.15)",  icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z", href: "/campaigns" },
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
   ];
 
   const quickActions = [
-    { label: "New Sequence",    href: "/campaigns/new",      icon: "M12 4v16m8-8H4",                  color: "text-blue-400",   bg: "bg-blue-500/10 hover:bg-blue-500/15 border-blue-500/20" },
+    { label: "New Sequence",    href: "/campaigns/new",      icon: "M12 4v16m8-8H4",                  color: "text-orange-400",   bg: "bg-orange-500/10 hover:bg-orange-400/15 border-orange-500/20" },
     { label: "Add Inbox",       href: "/inboxes/new",        icon: "M12 4v16m8-8H4",                  color: "text-emerald-400", bg: "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/20" },
     { label: "Lead Campaign",   href: "/lead-campaigns",     icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z", color: "text-amber-400", bg: "bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/20" },
     { label: "CRM Inbox",       href: "/crm",                icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", color: "text-pink-400", bg: "bg-pink-500/10 hover:bg-pink-500/15 border-pink-500/20" },

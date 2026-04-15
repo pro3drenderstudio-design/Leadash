@@ -177,7 +177,7 @@ export default function LeadsClient() {
           <h1 className="text-xl font-bold text-white">Lead Lists</h1>
           <p className="text-white/40 text-sm mt-0.5">Upload and manage contact lists for campaigns</p>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
           + New List
         </button>
       </div>
@@ -189,8 +189,8 @@ export default function LeadsClient() {
       {/* Create list form */}
       {showCreate && (
         <form onSubmit={handleCreate} className="mb-6 flex gap-3">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="List name (e.g. Real Estate Developers NYC)" className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500/50" />
-          <button type="submit" disabled={creating} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold">Create</button>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="List name (e.g. Real Estate Developers NYC)" className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/50" />
+          <button type="submit" disabled={creating} className="px-4 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold">Create</button>
           <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 rounded-xl text-sm">Cancel</button>
         </form>
       )}
@@ -209,7 +209,7 @@ export default function LeadsClient() {
             <div key={list.id}>
               <div className="bg-white/4 border border-white/8 rounded-xl p-4 flex items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <Link href={`/leads/${list.id}`} className="text-white font-medium text-sm hover:text-blue-300 transition-colors">{list.name}</Link>
+                  <Link href={`/leads/${list.id}`} className="text-white font-medium text-sm hover:text-orange-300 transition-colors">{list.name}</Link>
                   {list.description && <p className="text-white/35 text-xs mt-0.5">{list.description}</p>}
                   <p className="text-white/30 text-xs mt-0.5">{(list.lead_count ?? 0).toLocaleString()} leads</p>
                 </div>
@@ -272,7 +272,7 @@ export default function LeadsClient() {
                               );
                             })}
                           </div>
-                          <button onClick={() => handleImport(list.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">Upload & Import</button>
+                          <button onClick={() => handleImport(list.id)} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">Upload & Import</button>
                         </>
                       )}
                     </>
@@ -286,10 +286,10 @@ export default function LeadsClient() {
                         {campaignsLoading ? (
                           <p className="text-white/30 text-xs">Loading campaigns…</p>
                         ) : campaigns.length === 0 ? (
-                          <p className="text-white/30 text-xs">No campaigns found. <Link href="/lead-campaigns" className="text-blue-400 underline">Create one first.</Link></p>
+                          <p className="text-white/30 text-xs">No campaigns found. <Link href="/lead-campaigns" className="text-orange-400 underline">Create one first.</Link></p>
                         ) : (
                           <select value={selectedCampaignId} onChange={e => setSelectedCampaignId(e.target.value)}
-                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50">
+                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50">
                             <option value="">— Choose a campaign —</option>
                             {campaigns.map(c => (
                               <option key={c.id} value={c.id}>
@@ -303,7 +303,7 @@ export default function LeadsClient() {
                       {/* Filter option */}
                       <label className="flex items-center gap-3 cursor-pointer">
                         <div onClick={() => setValidOnly(v => !v)}
-                          className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${validOnly ? "bg-blue-600" : "bg-white/15"}`}>
+                          className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${validOnly ? "bg-orange-500" : "bg-white/15"}`}>
                           <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${validOnly ? "translate-x-4" : "translate-x-0"}`} />
                         </div>
                         <span className="text-white/60 text-xs">Valid emails only (recommended)</span>
@@ -312,7 +312,7 @@ export default function LeadsClient() {
                       <button
                         onClick={() => handleCampaignImport(list.id)}
                         disabled={!selectedCampaignId || campaignImporting}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                        className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
                       >
                         {campaignImporting ? "Adding leads…" : "Add to this list"}
                       </button>

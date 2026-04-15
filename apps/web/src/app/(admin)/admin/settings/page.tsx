@@ -26,7 +26,7 @@ const PLAN_OPTIONS = ["free", "starter", "growth", "scale"];
 const BANNER_COLOR_OPTIONS: AnnouncementBanner["color"][] = ["blue", "green", "amber", "red"];
 
 const BANNER_COLOR_PREVIEW: Record<string, string> = {
-  blue:  "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300",
+  blue:  "bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-500/10 dark:border-orange-500/30 dark:text-orange-300",
   green: "bg-green-50 border-green-200 text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-300",
   amber: "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300",
   red:   "bg-red-50 border-red-200 text-red-800 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300",
@@ -39,8 +39,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-        checked ? "bg-blue-500" : "bg-slate-300 dark:bg-white/20"
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 ${
+        checked ? "bg-orange-500" : "bg-slate-300 dark:bg-white/20"
       }`}
     >
       <span
@@ -81,7 +81,7 @@ function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolea
       className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
         saved
           ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300"
-          : "bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+          : "bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-50"
       }`}
     >
       {saving ? "Saving…" : saved ? "Saved ✓" : "Save changes"}
@@ -247,7 +247,7 @@ export default function SettingsPage() {
             value={settings.announcement_banner.text}
             onChange={e => updateBanner("text", e.target.value)}
             placeholder="e.g. We'll be down for maintenance on Saturday…"
-            className="w-72 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-72 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </FieldRow>
         <FieldRow label="Color">
@@ -296,7 +296,7 @@ export default function SettingsPage() {
           <select
             value={settings.default_plan}
             onChange={e => update("default_plan", e.target.value)}
-            className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           >
             {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
           </select>
@@ -309,7 +309,7 @@ export default function SettingsPage() {
               max={365}
               value={settings.trial_days}
               onChange={e => update("trial_days", parseInt(e.target.value) || 0)}
-              className="w-20 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-right"
+              className="w-20 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-right"
             />
             <span className="text-sm text-slate-400 dark:text-white/30">days</span>
           </div>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
               min={0}
               value={settings.lead_credits_on_signup}
               onChange={e => update("lead_credits_on_signup", parseInt(e.target.value) || 0)}
-              className="w-24 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-right"
+              className="w-24 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-right"
             />
             <span className="text-sm text-slate-400 dark:text-white/30">credits</span>
           </div>
@@ -350,7 +350,7 @@ export default function SettingsPage() {
             type="email"
             value={settings.support_email}
             onChange={e => update("support_email", e.target.value)}
-            className="w-64 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-64 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </FieldRow>
         <div className="pt-4 flex justify-end">

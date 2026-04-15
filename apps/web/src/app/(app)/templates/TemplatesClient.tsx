@@ -43,7 +43,7 @@ export default function TemplatesClient() {
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors"
+          className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors"
         >
           + New Template
         </button>
@@ -100,7 +100,7 @@ export default function TemplatesClient() {
                   value={form.name}
                   onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Cold intro — contractor"
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50"
                 />
               </div>
               <div>
@@ -109,7 +109,7 @@ export default function TemplatesClient() {
                   value={form.subject}
                   onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))}
                   placeholder="e.g. Quick question for {{first_name}}"
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50"
                 />
               </div>
               <div>
@@ -119,7 +119,7 @@ export default function TemplatesClient() {
                   onChange={(e) => setForm(f => ({ ...f, body: e.target.value }))}
                   rows={8}
                   placeholder={"Hi {{first_name}},\n\nI wanted to reach out…"}
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-blue-500/50 resize-y font-mono"
+                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50 resize-y font-mono"
                 />
                 <p className="text-white/25 text-xs mt-1">Variables: {"{{first_name}}"} {"{{last_name}}"} {"{{company}}"} {"{{title}}"}</p>
               </div>
@@ -133,7 +133,7 @@ export default function TemplatesClient() {
                 <button
                   onClick={handleCreate}
                   disabled={!form.name || !form.subject || !form.body || saving}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
                 >
                   {saving ? "Saving…" : "Save Template"}
                 </button>

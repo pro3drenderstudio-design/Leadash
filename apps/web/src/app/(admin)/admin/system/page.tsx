@@ -56,8 +56,8 @@ function QueueCard({ q }: { q: QueueStat }) {
         {q.error
           ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">Error</span>
           : q.active > 0
-          ? <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
-              <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />Active
+          ? <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+              <span className="w-1 h-1 rounded-full bg-orange-500 animate-pulse" />Active
             </span>
           : <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-400 dark:bg-white/10 dark:text-white/30">Idle</span>
         }
@@ -65,7 +65,7 @@ function QueueCard({ q }: { q: QueueStat }) {
       <div className="grid grid-cols-2 gap-y-2 gap-x-4">
         {[
           { label: "Waiting",   value: q.waiting,   color: "text-amber-600 dark:text-amber-400" },
-          { label: "Active",    value: q.active,    color: "text-blue-600 dark:text-blue-400" },
+          { label: "Active",    value: q.active,    color: "text-orange-600 dark:text-orange-400" },
           { label: "Completed", value: q.completed, color: "text-green-600 dark:text-green-400" },
           { label: "Failed",    value: q.failed,    color: q.failed > 0 ? "text-red-600 dark:text-red-400" : "text-slate-400 dark:text-white/30" },
           { label: "Delayed",   value: q.delayed,   color: "text-slate-500 dark:text-white/50" },
@@ -183,7 +183,7 @@ export default function SystemPage() {
       {/* Queue summary bar */}
       <div className="flex gap-4 flex-wrap">
         {[
-          { label: `${totalActive} Active`,  color: totalActive > 0  ? "text-blue-600 dark:text-blue-400"  : "text-slate-400 dark:text-white/30" },
+          { label: `${totalActive} Active`,  color: totalActive > 0  ? "text-orange-600 dark:text-orange-400"  : "text-slate-400 dark:text-white/30" },
           { label: `${totalWaiting} Waiting`, color: totalWaiting > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-white/30" },
           { label: `${totalFailed} Failed`,   color: totalFailed > 0  ? "text-red-600 dark:text-red-400"    : "text-slate-400 dark:text-white/30" },
         ].map(s => (

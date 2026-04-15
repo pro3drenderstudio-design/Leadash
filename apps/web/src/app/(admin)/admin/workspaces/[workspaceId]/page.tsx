@@ -24,7 +24,7 @@ const PLAN_STATUSES = ["active", "trialing", "past_due", "canceled", "paused"] a
 function PlanBadge({ plan }: { plan: string }) {
   const map: Record<string, string> = {
     free:    "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50",
-    starter: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+    starter: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     growth:  "bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300",
     scale:   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
   };
@@ -125,7 +125,7 @@ export default function WorkspaceDetailPage() {
     return (
       <div className="p-8 max-w-5xl mx-auto">
         <p className="text-red-500">{error ?? "Workspace not found"}</p>
-        <Link href="/admin/workspaces" className="text-sm text-blue-500 hover:underline mt-2 block">← Back to workspaces</Link>
+        <Link href="/admin/workspaces" className="text-sm text-orange-500 hover:underline mt-2 block">← Back to workspaces</Link>
       </div>
     );
   }
@@ -135,7 +135,7 @@ export default function WorkspaceDetailPage() {
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-white/30">
-        <Link href="/admin/workspaces" className="hover:text-blue-500 transition-colors">Workspaces</Link>
+        <Link href="/admin/workspaces" className="hover:text-orange-500 transition-colors">Workspaces</Link>
         <span>/</span>
         <span className="text-slate-700 dark:text-white/70">{workspace.name}</span>
       </div>
@@ -153,7 +153,7 @@ export default function WorkspaceDetailPage() {
           </div>
           <Link
             href={`/admin/users/${workspace.owner_id}`}
-            className="text-sm text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            className="text-sm text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
           >
             Owner: {workspace.owner_email} →
           </Link>
@@ -195,7 +195,7 @@ export default function WorkspaceDetailPage() {
               <select
                 value={planForm.plan_id}
                 onChange={e => setPlanForm(f => ({ ...f, plan_id: e.target.value }))}
-                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               >
                 {PLANS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
               </select>
@@ -205,7 +205,7 @@ export default function WorkspaceDetailPage() {
               <select
                 value={planForm.plan_status}
                 onChange={e => setPlanForm(f => ({ ...f, plan_status: e.target.value }))}
-                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               >
                 {PLAN_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -218,7 +218,7 @@ export default function WorkspaceDetailPage() {
             <button
               type="submit"
               disabled={planLoading}
-              className="w-full py-2 text-sm font-semibold rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+              className="w-full py-2 text-sm font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
             >
               {planLoading ? "Saving…" : "Save Plan"}
             </button>
@@ -239,7 +239,7 @@ export default function WorkspaceDetailPage() {
                 value={creditForm.amount}
                 onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))}
                 placeholder="e.g. 500 or -100"
-                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
             </div>
             <div>
@@ -249,7 +249,7 @@ export default function WorkspaceDetailPage() {
                 value={creditForm.description}
                 onChange={e => setCreditForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="e.g. Promotional grant"
-                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
             </div>
             {creditMsg && (

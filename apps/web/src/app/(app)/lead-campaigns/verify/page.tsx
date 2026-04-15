@@ -72,8 +72,8 @@ function DownloadModal({ results, filename, onClose }: {
 
         <div className="space-y-2">
           {/* All */}
-          <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${allSelected ? "border-blue-500/40 bg-blue-500/10" : "border-white/8 hover:border-white/15"}`}>
-            <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-blue-500 w-4 h-4" />
+          <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${allSelected ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 hover:border-white/15"}`}>
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-orange-500 w-4 h-4" />
             <span className="text-white text-sm font-medium">All leads</span>
             <span className="ml-auto text-white/30 text-xs">{results.length}</span>
           </label>
@@ -83,8 +83,8 @@ function DownloadModal({ results, filename, onClose }: {
             const count = countFor(s);
             const on    = selected.includes(s);
             return (
-              <label key={s} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${on ? "border-blue-500/40 bg-blue-500/10" : "border-white/8 hover:border-white/15"}`}>
-                <input type="checkbox" checked={on} onChange={() => toggle(s)} className="accent-blue-500 w-4 h-4" />
+              <label key={s} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${on ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 hover:border-white/15"}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(s)} className="accent-orange-500 w-4 h-4" />
                 <span className={`w-2 h-2 rounded-full ${cfg.bar}`} />
                 <span className="text-white text-sm">{cfg.label}</span>
                 <span className="ml-auto text-white/30 text-xs">{count}</span>
@@ -96,7 +96,7 @@ function DownloadModal({ results, filename, onClose }: {
         <button
           onClick={() => { downloadCsv(results, selected, filename); onClose(); }}
           disabled={!selected.length}
-          className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+          className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
         >
           Download CSV
         </button>
@@ -353,8 +353,8 @@ export default function VerifyEmailPage() {
           {mode === "single" && (
             <>
               <form onSubmit={handleVerify} className="flex gap-3 mb-6">
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all" disabled={loading} autoFocus />
-                <button type="submit" disabled={loading || !email.trim()} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-orange-500/60 focus:bg-white/8 transition-all" disabled={loading} autoFocus />
+                <button type="submit" disabled={loading || !email.trim()} className="px-5 py-3 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
                   {loading && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
                   {loading ? "Verifying…" : "Verify · 0.5cr"}
                 </button>
@@ -424,7 +424,7 @@ export default function VerifyEmailPage() {
                         <p className="text-white text-sm font-semibold">{fmt(bulkEmails.length)} emails</p>
                         <p className="text-white/40 text-xs mt-0.5">{cost} credits · {bulkEmails.length} × 0.5cr</p>
                       </div>
-                      <button onClick={handleBulkVerify} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">Start Verification</button>
+                      <button onClick={handleBulkVerify} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">Start Verification</button>
                     </div>
                   )}
                 </>
@@ -436,7 +436,7 @@ export default function VerifyEmailPage() {
                   <div className="px-5 py-5 bg-white/3 border border-white/8 rounded-2xl">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        <svg className="w-4 h-4 animate-spin text-orange-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                         <span className="text-white font-semibold text-sm">
                           {activeJob.status === "pending" ? "Queued — worker starting…" : "Verifying emails…"}
                         </span>
@@ -444,7 +444,7 @@ export default function VerifyEmailPage() {
                       <span className="text-white/40 text-sm tabular-nums">{fmt(activeJob.processed)} / {fmt(activeJob.total)}</span>
                     </div>
                     <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-1.5">
-                      <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/20 text-xs">Polling every 3s · results save automatically</span>
@@ -509,7 +509,7 @@ export default function VerifyEmailPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-white text-sm font-semibold">{fmt(job.total)} emails</p>
                       {(job.status === "pending" || job.status === "running") && (
-                        <span className="flex items-center gap-1 text-xs text-blue-400">
+                        <span className="flex items-center gap-1 text-xs text-orange-400">
                           <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                           {job.status === "pending" ? "Queued" : `${fmt(job.processed)} / ${fmt(job.total)}`}
                         </span>
@@ -528,7 +528,7 @@ export default function VerifyEmailPage() {
                 {job.status === "done" && <StatusBar counts={jobCounts(job)} total={job.total} />}
                 {job.status === "running" && (
                   <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.round((job.processed / job.total) * 100) : 0}%` }} />
+                    <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.round((job.processed / job.total) * 100) : 0}%` }} />
                   </div>
                 )}
                 {job.error && <p className="text-red-400 text-xs mt-2">{job.error}</p>}

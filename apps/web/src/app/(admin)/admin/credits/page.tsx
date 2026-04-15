@@ -23,7 +23,7 @@ interface Summary {
 const TYPE_COLORS: Record<string, string> = {
   grant:       "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
   admin_grant: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
-  purchase:    "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  purchase:    "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   reserve:     "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
   consume:     "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
   admin_deduct:"bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
@@ -109,7 +109,7 @@ function CreditsInner() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard label="Total Granted"   value={summary.total_granted}   color="text-green-600 dark:text-green-400" />
-        <SummaryCard label="Total Purchased" value={summary.total_purchased} color="text-blue-600 dark:text-blue-400" />
+        <SummaryCard label="Total Purchased" value={summary.total_purchased} color="text-orange-600 dark:text-orange-400" />
         <SummaryCard label="Total Consumed"  value={summary.total_consumed}  color="text-red-600 dark:text-red-400" />
         <SummaryCard label="Net Balance"     value={netBalance}              color={netBalance >= 0 ? "text-slate-900 dark:text-white" : "text-red-600 dark:text-red-400"} />
       </div>
@@ -125,13 +125,13 @@ function CreditsInner() {
             placeholder="Filter by workspace…"
             defaultValue={search}
             onKeyDown={e => e.key === "Enter" && setParam("search", (e.target as HTMLInputElement).value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </div>
         <select
           value={type}
           onChange={e => setParam("type", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         >
           <option value="">All types</option>
           <option value="grant">Grant</option>
@@ -146,14 +146,14 @@ function CreditsInner() {
           type="date"
           value={dateFrom}
           onChange={e => setParam("dateFrom", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           title="From date"
         />
         <input
           type="date"
           value={dateTo}
           onChange={e => setParam("dateTo", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           title="To date"
         />
         {(search || type || dateFrom || dateTo) && (
@@ -200,7 +200,7 @@ function CreditsInner() {
                 <td className="px-5 py-3">
                   <Link
                     href={`/admin/workspaces/${tx.workspace_id}`}
-                    className="font-medium text-slate-800 dark:text-white/80 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="font-medium text-slate-800 dark:text-white/80 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     {tx.workspace_name || tx.workspace_id.slice(0, 8)}
                   </Link>
@@ -237,7 +237,7 @@ function CreditsInner() {
                     onClick={() => setParam("page", String(p))}
                     className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                       p === page
-                        ? "bg-blue-500 text-white"
+                        ? "bg-orange-500 text-white"
                         : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
                     }`}
                   >

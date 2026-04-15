@@ -18,7 +18,7 @@ function StatCard({ label, value, sub, href, color = "blue" }: {
   label: string; value: string | number; sub?: string; href?: string; color?: string;
 }) {
   const colorMap: Record<string, string> = {
-    blue:   "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    blue:   "bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400",
     green:  "bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400",
     purple: "bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400",
     amber:  "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -63,7 +63,7 @@ function PriorityBadge({ p }: { p: string }) {
 function PlanBadge({ plan }: { plan: string }) {
   const map: Record<string, string> = {
     free:   "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50",
-    starter:"bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+    starter:"bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     growth: "bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300",
     scale:  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
   };
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
             <p className="text-sm font-semibold text-slate-700 dark:text-white/80">New Workspaces — Last 30 Days</p>
             <p className="text-xs text-slate-400 dark:text-white/30 mt-0.5">Daily signup count</p>
           </div>
-          <div className="text-blue-500 dark:text-blue-400">
+          <div className="text-orange-500 dark:text-orange-400">
             <Sparkline data={stats.signupSparkline} />
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
             return (
               <div key={i} className="flex-1 flex flex-col justify-end group relative">
                 <div
-                  className="bg-blue-400/40 dark:bg-blue-400/30 hover:bg-blue-500/60 dark:hover:bg-blue-400/50 rounded-sm transition-all"
+                  className="bg-orange-400/40 dark:bg-orange-400/30 hover:bg-orange-500/60 dark:hover:bg-orange-400/50 rounded-sm transition-all"
                   style={{ height: `${Math.max(pct, d.count > 0 ? 8 : 2)}%` }}
                 />
                 {d.count > 0 && (
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700 dark:text-white/80">Recent Workspaces</p>
-            <Link href="/admin/workspaces" className="text-xs text-blue-500 hover:text-blue-600">View all →</Link>
+            <Link href="/admin/workspaces" className="text-xs text-orange-500 hover:text-orange-600">View all →</Link>
           </div>
           <div className="divide-y divide-slate-100 dark:divide-white/5">
             {stats.recentUsers.length === 0 && (
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700 dark:text-white/80">Recent Support Tickets</p>
-            <Link href="/admin/support" className="text-xs text-blue-500 hover:text-blue-600">View all →</Link>
+            <Link href="/admin/support" className="text-xs text-orange-500 hover:text-orange-600">View all →</Link>
           </div>
           <div className="divide-y divide-slate-100 dark:divide-white/5">
             {stats.recentTickets.length === 0 && (

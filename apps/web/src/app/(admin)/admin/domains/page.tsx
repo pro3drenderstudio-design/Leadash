@@ -28,7 +28,7 @@ interface Domain {
 const STATUS_COLORS: Record<string, string> = {
   pending:     "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
   purchasing:  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  dns_pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  dns_pending: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   verifying:   "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
   active:      "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
   failed:      "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
@@ -58,7 +58,7 @@ function DnsRecordsExpander({ records }: { records: Record<string, unknown> | nu
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
       >
         {open ? "Hide" : "Show"} DNS
       </button>
@@ -78,7 +78,7 @@ function ActionButtons({ domain, onAction }: { domain: Domain; onAction: (id: st
       {(status === "failed" || status === "dns_pending") && (
         <button
           onClick={() => onAction(domain.id, "retry_dns")}
-          className="text-[11px] font-medium px-2 py-1 rounded bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+          className="text-[11px] font-medium px-2 py-1 rounded bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/20 transition-colors"
         >
           Retry DNS
         </button>
@@ -196,13 +196,13 @@ function DomainsInner() {
             placeholder="Search by domain name…"
             defaultValue={search}
             onKeyDown={e => e.key === "Enter" && setParam("search", (e.target as HTMLInputElement).value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </div>
         <select
           value={status}
           onChange={e => setParam("status", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         >
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
@@ -259,7 +259,7 @@ function DomainsInner() {
                 <td className="px-4 py-4 hidden md:table-cell">
                   <Link
                     href={`/admin/workspaces/${d.workspace_id}`}
-                    className="text-sm text-slate-600 dark:text-white/60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="text-sm text-slate-600 dark:text-white/60 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     {d.workspace_name}
                   </Link>
@@ -312,7 +312,7 @@ function DomainsInner() {
                     onClick={() => setParam("page", String(p))}
                     className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                       p === page
-                        ? "bg-blue-500 text-white"
+                        ? "bg-orange-500 text-white"
                         : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
                     }`}
                   >

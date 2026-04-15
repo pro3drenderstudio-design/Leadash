@@ -257,7 +257,7 @@ export default function ConnectDomainPage() {
           {(["configure", "payment", "dns", "verifying"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step === s ? "bg-blue-600 text-white" :
+                step === s ? "bg-orange-500 text-white" :
                 (["configure","payment","dns","verifying"].indexOf(step) > i) ? "bg-green-600 text-white" :
                 "bg-white/10 text-white/30"
               }`}>{i + 1}</div>
@@ -291,7 +291,7 @@ export default function ConnectDomainPage() {
                   triggerNsDetect(val);
                 }}
                 placeholder="yourdomain.com"
-                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors pr-32"
+                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors pr-32"
               />
               {/* NS detection badge */}
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -350,14 +350,14 @@ export default function ConnectDomainPage() {
                 value={firstName}
                 onChange={e => { setFirstName(e.target.value); setSelectedPrefixes([]); }}
                 placeholder="First name"
-                className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
               <input
                 type="text"
                 value={lastName}
                 onChange={e => { setLastName(e.target.value); setSelectedPrefixes([]); }}
                 placeholder="Last name"
-                className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
             </div>
           </div>
@@ -380,7 +380,7 @@ export default function ConnectDomainPage() {
                     onClick={() => togglePrefix(p)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-mono transition-all border ${
                       selectedPrefixes.includes(p)
-                        ? "bg-blue-600/20 border-blue-500/40 text-blue-300"
+                        ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
                         : "bg-white/5 border-white/10 text-white/50 hover:border-white/20 hover:text-white/70"
                     }`}
                   >
@@ -401,7 +401,7 @@ export default function ConnectDomainPage() {
                   value={customPrefix}
                   onChange={e => setCustomPrefix(e.target.value)}
                   placeholder="sales, hello, outreach1 (comma-separated, max 5)"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                 />
                 {activePrefixes.length > 0 && domain && (
                   <p className="text-white/30 text-xs mt-2">{activePrefixes.map(p => `${p}@${domain}`).join(", ")}</p>
@@ -424,7 +424,7 @@ export default function ConnectDomainPage() {
             <button
               onClick={handleConfigure}
               disabled={loading || !domain.trim() || activePrefixes.length === 0}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               {loading ? "Setting up…" : cfInAccount ? "Continue → Auto-configure DNS" : "Continue → Add DNS records"}
             </button>
@@ -470,9 +470,9 @@ export default function ConnectDomainPage() {
             </div>
           </div>
 
-          <div className="flex gap-3 p-4 rounded-xl bg-blue-500/8 border border-blue-500/20">
-            <span className="text-blue-400 flex-shrink-0">ℹ</span>
-            <p className="text-blue-300/70 text-xs">No domain registration fee — you already own the domain. This is only for the managed inbox subscription.</p>
+          <div className="flex gap-3 p-4 rounded-xl bg-orange-500/8 border border-orange-500/20">
+            <span className="text-orange-400 flex-shrink-0">ℹ</span>
+            <p className="text-orange-300/70 text-xs">No domain registration fee — you already own the domain. This is only for the managed inbox subscription.</p>
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -481,7 +481,7 @@ export default function ConnectDomainPage() {
             <button
               onClick={handlePay}
               disabled={loading}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               {loading ? "Redirecting…" : `Pay ${globalCurrency === "NGN" ? `₦${monthlyNgn.toLocaleString()}` : `$${monthlyUsd}`}/mo →`}
             </button>
@@ -567,8 +567,8 @@ export default function ConnectDomainPage() {
           </div>
 
           {!autoConfigured && (
-            <div className="p-4 rounded-xl bg-blue-500/8 border border-blue-500/20 text-xs text-blue-300/70">
-              <strong className="text-blue-300">Where to add these:</strong> Log into your registrar (GoDaddy, Namecheap, Cloudflare, etc.) → DNS Management → Add each record above. TTL can be set to &quot;Auto&quot; or 1 hour.
+            <div className="p-4 rounded-xl bg-orange-500/8 border border-orange-500/20 text-xs text-orange-300/70">
+              <strong className="text-orange-300">Where to add these:</strong> Log into your registrar (GoDaddy, Namecheap, Cloudflare, etc.) → DNS Management → Add each record above. TTL can be set to &quot;Auto&quot; or 1 hour.
             </div>
           )}
 
@@ -577,7 +577,7 @@ export default function ConnectDomainPage() {
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleVerify}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               {autoConfigured ? "Verify DNS →" : "I've added the records → Verify"}
             </button>
@@ -621,7 +621,7 @@ export default function ConnectDomainPage() {
           </div>
           <button
             onClick={() => router.push("/inboxes")}
-            className="mt-4 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="mt-4 px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             View inboxes
           </button>

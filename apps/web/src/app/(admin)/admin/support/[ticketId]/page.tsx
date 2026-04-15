@@ -22,14 +22,14 @@ const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"] as const;
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"] as const;
 
 const STATUS_MAP: Record<string, string> = {
-  open:        "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  open:        "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   in_progress: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300",
   resolved:    "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
   closed:      "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
 };
 const PRIORITY_MAP: Record<string, string> = {
   low:    "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/30",
-  medium: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+  medium: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
   high:   "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
   urgent: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
@@ -131,7 +131,7 @@ export default function TicketDetailPage() {
     return (
       <div className="p-8 max-w-4xl mx-auto">
         <p className="text-red-500">{error ?? "Ticket not found"}</p>
-        <Link href="/admin/support" className="text-sm text-blue-500 hover:underline mt-2 block">← Back to tickets</Link>
+        <Link href="/admin/support" className="text-sm text-orange-500 hover:underline mt-2 block">← Back to tickets</Link>
       </div>
     );
   }
@@ -141,7 +141,7 @@ export default function TicketDetailPage() {
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-white/30">
-        <Link href="/admin/support" className="hover:text-blue-500 transition-colors">Support</Link>
+        <Link href="/admin/support" className="hover:text-orange-500 transition-colors">Support</Link>
         <span>/</span>
         <span className="text-slate-700 dark:text-white/70">#{ticket.ticket_number}</span>
       </div>
@@ -166,11 +166,11 @@ export default function TicketDetailPage() {
 
         {/* User + workspace */}
         <div className="mt-4 flex items-center gap-4 flex-wrap text-sm">
-          <Link href={`/admin/users/${ticket.user_id}`} className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          <Link href={`/admin/users/${ticket.user_id}`} className="text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
             {userEmail} →
           </Link>
           {workspaceName && (
-            <Link href={`/admin/workspaces/${ticket.workspace_id}`} className="text-slate-500 dark:text-white/40 hover:text-blue-500 transition-colors">
+            <Link href={`/admin/workspaces/${ticket.workspace_id}`} className="text-slate-500 dark:text-white/40 hover:text-orange-500 transition-colors">
               {workspaceName} ({workspacePlan})
             </Link>
           )}
@@ -183,17 +183,17 @@ export default function TicketDetailPage() {
             <div key={msg.id} className={`flex gap-3 ${msg.sender_type === "admin" ? "flex-row-reverse" : ""}`}>
               <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold ${
                 msg.sender_type === "admin"
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                  ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
                   : "bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-white/40"
               }`}>
                 {msg.sender_type === "admin" ? "A" : "U"}
               </div>
               <div className={`flex-1 rounded-xl px-3 py-2.5 ${
                 msg.sender_type === "admin"
-                  ? "bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20"
+                  ? "bg-orange-50 dark:bg-orange-500/10 border border-blue-100 dark:border-orange-500/20"
                   : "bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10"
               }`}>
-                <p className={`text-[10px] mb-1 font-medium ${msg.sender_type === "admin" ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-white/30"}`}>
+                <p className={`text-[10px] mb-1 font-medium ${msg.sender_type === "admin" ? "text-orange-500 dark:text-orange-400" : "text-slate-400 dark:text-white/30"}`}>
                   {msg.sender_type === "admin" ? "Admin" : "User"} · {new Date(msg.created_at).toLocaleString()}
                 </p>
                 <p className="text-sm text-slate-700 dark:text-white/70 whitespace-pre-wrap leading-relaxed">{msg.message}</p>
@@ -246,7 +246,7 @@ export default function TicketDetailPage() {
             onChange={e => setReply(e.target.value)}
             rows={6}
             placeholder="Type your reply to the user…"
-            className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+            className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
           />
           <div className="flex items-center gap-3">
             <select value={replyStatus} onChange={e => setReplyStatus(e.target.value)}
@@ -254,7 +254,7 @@ export default function TicketDetailPage() {
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
             </select>
             <button type="submit" disabled={saving || !reply.trim()}
-              className="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50">
+              className="flex-1 py-2 text-sm font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50">
               {saving ? "Saving…" : "Send Reply"}
             </button>
           </div>

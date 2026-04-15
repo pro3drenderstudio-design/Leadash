@@ -15,7 +15,7 @@ interface User {
 function PlanBadge({ plan }: { plan: string }) {
   const map: Record<string, string> = {
     free:    "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50",
-    starter: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300",
+    starter: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300",
     growth:  "bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300",
     scale:   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
   };
@@ -85,13 +85,13 @@ function UsersPageInner() {
             placeholder="Search by email or name…"
             defaultValue={search}
             onKeyDown={e => e.key === "Enter" && setParam("search", (e.target as HTMLInputElement).value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
         </div>
         <select
           value={plan}
           onChange={e => setParam("plan", e.target.value)}
-          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         >
           <option value="">All plans</option>
           <option value="free">Free</option>
@@ -137,7 +137,7 @@ function UsersPageInner() {
                     <div className="flex items-center gap-3">
                       <Avatar email={u.email} name={u.name} />
                       <div>
-                        <Link href={`/admin/users/${u.id}`} className="font-medium text-slate-800 dark:text-white/90 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                        <Link href={`/admin/users/${u.id}`} className="font-medium text-slate-800 dark:text-white/90 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                           {u.name || u.email}
                         </Link>
                         {u.name && <p className="text-xs text-slate-400 dark:text-white/30">{u.email}</p>}
@@ -163,7 +163,7 @@ function UsersPageInner() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/admin/users/${u.id}`}
-                      className="text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium"
+                      className="text-xs text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors font-medium"
                     >
                       View →
                     </Link>
@@ -189,7 +189,7 @@ function UsersPageInner() {
                     onClick={() => setParam("page", String(p))}
                     className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                       p === page
-                        ? "bg-blue-500 text-white"
+                        ? "bg-orange-500 text-white"
                         : "text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10"
                     }`}
                   >

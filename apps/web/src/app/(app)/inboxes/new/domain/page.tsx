@@ -284,7 +284,7 @@ export default function BuyDomainPage() {
           {(["search", "configure", "review"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step === s ? "bg-blue-600 text-white" :
+                step === s ? "bg-orange-500 text-white" :
                 (["search","configure","review"].indexOf(step) > i) ? "bg-green-600 text-white" :
                 "bg-white/10 text-white/30"
               }`}>{i + 1}</div>
@@ -332,12 +332,12 @@ export default function BuyDomainPage() {
                   onChange={e => setSld(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())}
                   onKeyDown={e => e.key === "Enter" && handleSearch()}
                   placeholder="yourcompany-outreach"
-                  className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors"
+                  className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
                 />
                 <button
                   onClick={handleSearch}
                   disabled={checking || !sld.trim() || !selectedTlds.length}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 min-w-[90px] justify-center"
+                  className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 min-w-[90px] justify-center"
                 >
                   {checking
                     ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Checking</>
@@ -357,7 +357,7 @@ export default function BuyDomainPage() {
                     )}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                       selectedTlds.includes(tld)
-                        ? "bg-blue-600/20 border-blue-500/50 text-blue-300"
+                        ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
                         : "bg-white/4 border-white/10 text-white/40 hover:border-white/20"
                     }`}
                   >
@@ -400,11 +400,11 @@ export default function BuyDomainPage() {
                         onClick={() => r.available && toggleDomain(r)}
                         className={`flex items-center justify-between px-4 py-3 border-b border-white/6 last:border-0 transition-colors ${
                           r.available ? "cursor-pointer" : "opacity-40 cursor-not-allowed"
-                        } ${isSelected ? "bg-blue-600/10" : "hover:bg-white/3"}`}
+                        } ${isSelected ? "bg-orange-500/10" : "hover:bg-white/3"}`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                            isSelected ? "bg-blue-600 border-blue-500" : "border-white/20"
+                            isSelected ? "bg-orange-500 border-blue-500" : "border-white/20"
                           }`}>
                             {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                           </div>
@@ -426,7 +426,7 @@ export default function BuyDomainPage() {
                     {/* Selected domains pills */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {selectedDomains.map(d => (
-                        <span key={d.domain} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/15 border border-blue-500/30 rounded-full text-blue-300 text-xs font-mono">
+                        <span key={d.domain} className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/15 border border-orange-500/30 rounded-full text-orange-300 text-xs font-mono">
                           {d.domain}
                           <button onClick={() => toggleDomain(d)} className="hover:text-white">×</button>
                         </span>
@@ -439,7 +439,7 @@ export default function BuyDomainPage() {
                     <div className="flex justify-end">
                       <button
                         onClick={() => setStep("configure")}
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                        className="px-5 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
                       >
                         Configure {selectedDomains.length} domain{selectedDomains.length > 1 ? "s" : ""} →
                       </button>
@@ -466,9 +466,9 @@ export default function BuyDomainPage() {
               <label className="block text-white/50 text-xs font-medium mb-3">Sender name</label>
               <div className="grid grid-cols-2 gap-4">
                 <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Alex"
-                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors" />
+                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors" />
                 <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Smith"
-                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors" />
+                  className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors" />
               </div>
             </div>
 
@@ -498,7 +498,7 @@ export default function BuyDomainPage() {
                                  : prev.length < 5 ? [...prev, c] : prev
                           )}
                             className={`px-3 py-1.5 rounded-lg border text-sm font-mono transition-all ${
-                              isOn ? "bg-blue-600/20 border-blue-500/50 text-blue-200"
+                              isOn ? "bg-orange-500/20 border-orange-500/50 text-orange-200"
                                    : "bg-white/4 border-white/10 text-white/50 hover:border-white/25"
                             }`}>
                             {c}
@@ -525,7 +525,7 @@ export default function BuyDomainPage() {
                 <div>
                   <input value={customPrefix} onChange={e => setCustomPrefix(e.target.value.toLowerCase())}
                     placeholder="john, j.smith, john.smith"
-                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 font-mono focus:outline-none focus:border-blue-500/60 transition-colors" />
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 font-mono focus:outline-none focus:border-orange-500/60 transition-colors" />
                   <p className="text-white/30 text-xs mt-1.5">Comma-separated local-parts, max 5. e.g. john, j.smith, john.smith</p>
                 </div>
               )}
@@ -597,7 +597,7 @@ export default function BuyDomainPage() {
               <button
                 onClick={() => setStep("review")}
                 disabled={activePrefixes.length === 0}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 Continue
               </button>
@@ -666,7 +666,7 @@ export default function BuyDomainPage() {
               onClick={handleCheckout}
               disabled={paying || registrantComplete === false}
               title={registrantComplete === false ? "Fill in registrant info in Settings → Outreach first" : undefined}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
             >
               {paying && <Spinner />}
               {paying ? "Redirecting…" : "Purchase & set up →"}
@@ -701,13 +701,13 @@ export default function BuyDomainPage() {
               return (
                 <div key={label} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
                   isDone   ? "border-green-500/20 bg-green-500/5" :
-                  isActive ? "border-blue-500/30 bg-blue-500/8" :
+                  isActive ? "border-orange-500/30 bg-orange-500/8" :
                   isFailed ? "border-red-500/30 bg-red-500/8" :
                              "border-white/6 opacity-30"
                 }`}>
                   <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
                     {isDone   ? <span className="text-green-400 text-sm">✓</span> :
-                     isActive ? <Spinner className="text-blue-400" /> :
+                     isActive ? <Spinner className="text-orange-400" /> :
                      isFailed ? <span className="text-red-400 text-sm">✗</span> :
                                 <span className="text-white/20 text-xs">{i + 1}</span>}
                   </div>
@@ -729,7 +729,7 @@ export default function BuyDomainPage() {
             <div className="mt-8 flex items-center gap-3">
               <button
                 onClick={() => router.push("/inboxes")}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 View inboxes →
               </button>
@@ -745,7 +745,7 @@ export default function BuyDomainPage() {
                   setProvisionErrors({});
                   startProvision(domainIds, returnedSessionId, returnedRef);
                 }}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-xl transition-colors"
               >
                 Retry provisioning
               </button>
@@ -808,7 +808,7 @@ function CapacityCard({ domainCount }: { domainCount: number }) {
           <span className="text-right">Full/month</span>
         </div>
         {rows.map(r => (
-          <div key={r.inboxes} className={`grid grid-cols-4 px-4 py-2.5 text-xs ${r.inboxes === domainCount * MAX_INBOXES_PER_DOMAIN ? "bg-blue-600/8" : ""}`}>
+          <div key={r.inboxes} className={`grid grid-cols-4 px-4 py-2.5 text-xs ${r.inboxes === domainCount * MAX_INBOXES_PER_DOMAIN ? "bg-orange-500/8" : ""}`}>
             <span className="text-white/70 font-medium">{r.inboxes} {r.inboxes === domainCount * MAX_INBOXES_PER_DOMAIN && <span className="text-white/30">(max)</span>}</span>
             <span className="text-right text-white/40">{r.warmupDay.toLocaleString()}</span>
             <span className="text-right text-white/70">{r.fullDay.toLocaleString()}</span>

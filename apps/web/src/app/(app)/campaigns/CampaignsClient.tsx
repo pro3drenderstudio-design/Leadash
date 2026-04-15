@@ -8,7 +8,7 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
   draft:     "text-white/40 bg-white/8",
   active:    "text-green-400 bg-green-500/15",
   paused:    "text-amber-400 bg-amber-500/15",
-  completed: "text-blue-400 bg-blue-500/15",
+  completed: "text-orange-400 bg-orange-500/15",
 };
 
 const ALL_STATUSES: Array<CampaignStatus | "all"> = ["all", "active", "paused", "draft", "completed"];
@@ -59,7 +59,7 @@ export default function CampaignsClient() {
           <h1 className="text-xl font-bold text-white">Sequences</h1>
           <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
         </div>
-        <Link href="/campaigns/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+        <Link href="/campaigns/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
           + New Sequence
         </Link>
       </div>
@@ -71,7 +71,7 @@ export default function CampaignsClient() {
           placeholder="Search campaigns…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-orange-500/50"
         />
         <div className="flex gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
           {ALL_STATUSES.map(s => (
@@ -120,7 +120,7 @@ export default function CampaignsClient() {
             return (
               <div key={c.id} className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px] gap-4 items-center px-5 py-4 border-b border-white/4 last:border-0 ${i % 2 === 0 ? "" : "bg-white/1"}`}>
                 <div>
-                  <Link href={`/campaigns/${c.id}`} className="text-white font-medium text-sm hover:text-blue-300 transition-colors">{c.name}</Link>
+                  <Link href={`/campaigns/${c.id}`} className="text-white font-medium text-sm hover:text-orange-300 transition-colors">{c.name}</Link>
                   <div className="text-white/30 text-xs mt-0.5">{c.send_days?.join(", ")} · {c.send_start_time}–{c.send_end_time}</div>
                   {c.status === "active" && enrolled > 0 && (
                     <div className="mt-1.5 flex items-center gap-2">

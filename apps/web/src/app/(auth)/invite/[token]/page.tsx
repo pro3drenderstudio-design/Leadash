@@ -53,7 +53,7 @@ export default function InvitePage() {
       </p>
       <button
         onClick={accept} disabled={accepting}
-        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
+        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
       >
         {accepting ? "Joining…" : "Accept invitation"}
       </button>

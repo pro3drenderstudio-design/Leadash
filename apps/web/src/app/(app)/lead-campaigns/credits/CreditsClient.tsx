@@ -94,12 +94,12 @@ export default function CreditsClient() {
             key={pack.id}
             className={`relative border rounded-2xl p-5 flex flex-col gap-3 ${
               pack.id === "pack_5000"
-                ? "border-blue-500/40 bg-blue-500/8"
+                ? "border-orange-500/40 bg-orange-500/8"
                 : "border-white/8 bg-white/4 hover:bg-white/6"
             } transition-colors`}
           >
             {pack.id === "pack_5000" && (
-              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded-full whitespace-nowrap">
+              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-orange-500 text-white text-xs font-semibold rounded-full whitespace-nowrap">
                 Best value
               </span>
             )}
@@ -114,7 +114,7 @@ export default function CreditsClient() {
               disabled={!!purchasing}
               className={`mt-auto py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
                 pack.id === "pack_5000"
-                  ? "bg-blue-600 hover:bg-blue-500 text-white"
+                  ? "bg-orange-500 hover:bg-orange-400 text-white"
                   : "bg-white/8 hover:bg-white/12 text-white"
               }`}
             >
@@ -131,7 +131,7 @@ export default function CreditsClient() {
           {[
             { label: "Scrape only",          cost: "1 cr / lead", color: "text-violet-400" },
             { label: "Verify + Personalize", cost: "3 cr / lead", color: "text-amber-400"  },
-            { label: "Full Suite",           cost: "4 cr / lead", color: "text-blue-400"   },
+            { label: "Full Suite",           cost: "4 cr / lead", color: "text-orange-400"   },
           ].map(r => (
             <div key={r.label}>
               <p className={`text-lg font-bold ${r.color}`}>{r.cost}</p>
