@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useCurrency } from "@/lib/currency";
 
 const NAV = [
   {
