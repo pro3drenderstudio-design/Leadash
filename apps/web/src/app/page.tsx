@@ -376,7 +376,7 @@ function HowItWorks() {
     <section id="how-it-works" className="py-28 px-6" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-blue-400 border border-blue-500/25 bg-blue-500/8 mb-5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-orange-400 border border-orange-500/25 bg-orange-500/8 mb-5">
             Simple by design
           </div>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4" style={{ letterSpacing: "-0.025em" }}>
