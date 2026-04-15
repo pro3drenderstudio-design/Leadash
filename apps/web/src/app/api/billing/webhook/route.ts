@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       const inv = event.data.object as Stripe.Invoice;
       // Only recurring subscription invoices (not the first draft or setup)
       if (inv.billing_reason !== "subscription_cycle" && inv.billing_reason !== "subscription_create") break;
-      if (!inv.customer || !inv.subscription) break;
+      if (!inv.customer) break;
 
       const { data: ws } = await db
         .from("workspaces")
