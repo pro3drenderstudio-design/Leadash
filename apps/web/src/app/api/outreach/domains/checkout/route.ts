@@ -184,6 +184,9 @@ export async function POST(req: NextRequest) {
       .eq("id", workspaceId)
       .single();
 
+    // inboxMonthlyNgn is the recurring amount per billing cycle (domain cost excluded)
+    const inboxMonthlyKoboPerDomain = Math.round((inboxMonthlyNgn / domains.length) * 100);
+
     const { authorizationUrl, reference } = await createPaystackCheckout({
       email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
       amountKobo:  totalNgn,
@@ -193,7 +196,10 @@ export async function POST(req: NextRequest) {
 
     await db
       .from("outreach_domains")
-      .update({ paystack_reference: reference })
+      .update({
+        paystack_reference:          reference,
+        paystack_inbox_monthly_kobo: inboxMonthlyKoboPerDomain,
+      })
       .in("id", insertedIds);
 
     return NextResponse.json({
