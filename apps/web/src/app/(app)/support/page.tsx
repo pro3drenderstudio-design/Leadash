@@ -74,6 +74,167 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// ─── Detail / Thread View ─────────────────────────────────────────────────────
+
+function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
+  ticket: Ticket;
+  wsId: string;
+  onBack: () => void;
+  onTicketUpdate: (t: Ticket) => void;
+}) {
+  const [messages, setMessages] = useState<TicketMessage[]>(ticket.messages ?? []);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [loadingThread, setLoadingThread] = useState(!ticket.messages);
+
+  useEffect(() => {
+    if (ticket.messages) { setMessages(ticket.messages); return; }
+    // Fetch full thread if not already loaded
+    setLoadingThread(true);
+    fetch(`/api/support/tickets/${ticket.id}`, { headers: { "x-workspace-id": wsId } })
+      .then(r => r.json())
+      .then(d => { setMessages(d.messages ?? []); onTicketUpdate({ ...ticket, ...d }); })
+      .catch(() => {})
+      .finally(() => setLoadingThread(false));
+  }, [ticket.id]);
+
+  async function sendReply(e: React.FormEvent) {
+    e.preventDefault();
+    if (!replyText.trim()) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch(`/api/support/tickets/${ticket.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body: JSON.stringify({ message: replyText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send");
+      setMessages(prev => [...prev, data as TicketMessage]);
+      setReplyText("");
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to send");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const isClosed = ticket.status === "closed" || ticket.status === "resolved";
+
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-10">
+      <button onClick={onBack} className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm transition-colors mb-6">
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+        Back to tickets
+      </button>
+
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-white/30 text-xs font-mono">#{ticket.ticket_number}</span>
+            <StatusBadge status={ticket.status} />
+          </div>
+          <h1 className="text-xl font-bold text-white">{ticket.subject}</h1>
+          <p className="text-white/30 text-xs mt-1">
+            {CATEGORIES.find(c => c.value === ticket.category)?.label ?? ticket.category}
+            {" · "}Submitted {timeAgo(ticket.created_at)}
+          </p>
+        </div>
+      </div>
+
+      {/* Conversation thread */}
+      <div className="space-y-4">
+        {loadingThread ? (
+          <div className="space-y-3">
+            {[1, 2].map(i => <div key={i} className="h-20 bg-white/4 rounded-2xl animate-pulse" />)}
+          </div>
+        ) : messages.length > 0 ? (
+          messages.map(msg => (
+            <div key={msg.id} className={`flex gap-3 ${msg.sender_type === "admin" ? "" : "flex-row"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                msg.sender_type === "admin"
+                  ? "bg-emerald-600/30 border border-emerald-500/30"
+                  : "bg-blue-600/30 border border-blue-500/30 text-blue-300"
+              }`}>
+                {msg.sender_type === "admin" ? (
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                ) : "Y"}
+              </div>
+              <div className={`flex-1 rounded-2xl rounded-tl-sm px-4 py-3 ${
+                msg.sender_type === "admin"
+                  ? "bg-emerald-500/8 border border-emerald-500/20"
+                  : "bg-white/4 border border-white/8"
+              }`}>
+                <p className={`text-xs mb-2 font-medium ${msg.sender_type === "admin" ? "text-emerald-400/60" : "text-white/40"}`}>
+                  {msg.sender_type === "admin" ? "Leadash Support" : "You"} · {timeAgo(msg.created_at)}
+                </p>
+                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+              </div>
+            </div>
+          ))
+        ) : (
+          /* Fallback: show original message if no thread rows yet */
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-300">Y</div>
+            <div className="flex-1 bg-white/4 border border-white/8 rounded-2xl rounded-tl-sm px-4 py-3">
+              <p className="text-white/40 text-xs mb-2 font-medium">You · {timeAgo(ticket.created_at)}</p>
+              <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{ticket.message}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Waiting indicator if no admin reply yet */}
+        {!loadingThread && !messages.some(m => m.sender_type === "admin") && !isClosed && (
+          <div className="flex items-center gap-3 py-4 px-4 bg-white/2 border border-white/6 rounded-xl">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-white/35 text-sm">Waiting for a reply from our team. We typically respond within 24 hours.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Reply form */}
+      {!isClosed ? (
+        <form onSubmit={sendReply} className="mt-6">
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            placeholder="Send a follow-up message…"
+            rows={4}
+            className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"
+          />
+          {sendError && <p className="text-red-400 text-xs mt-1">{sendError}</p>}
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-white/25 text-xs">We reply within 24 hours.</p>
+            <button
+              type="submit"
+              disabled={sending || !replyText.trim()}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+            >
+              {sending && (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                </svg>
+              )}
+              {sending ? "Sending…" : "Send reply"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-6 p-4 bg-white/2 border border-white/6 rounded-xl text-center">
+          <p className="text-white/30 text-sm">
+            This ticket is {ticket.status}. <button onClick={() => {}} className="text-blue-400 hover:underline">Open a new ticket</button> if you need more help.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SupportPage() {
