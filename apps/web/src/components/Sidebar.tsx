@@ -126,35 +126,6 @@ export default function Sidebar({ workspaceName, plan }: Props) {
         className="px-2 py-3 space-y-1"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
-        {/* Currency toggle */}
-        {detected && (
-          <div className="px-2.5 py-2 flex items-center justify-between">
-            <span className="text-slate-400 dark:text-white/30 text-xs">Currency</span>
-            <div className="flex items-center gap-0.5 bg-slate-200/70 dark:bg-white/6 rounded-lg p-0.5">
-              <button
-                onClick={() => setCurrency("USD")}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-                  currency === "USD"
-                    ? "bg-blue-600 text-white shadow"
-                    : "text-slate-500 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60"
-                }`}
-              >
-                USD
-              </button>
-              <button
-                onClick={() => setCurrency("NGN")}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-                  currency === "NGN"
-                    ? "bg-green-600 text-white shadow"
-                    : "text-slate-500 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60"
-                }`}
-              >
-                NGN
-              </button>
-            </div>
-          </div>
-        )}
-
         <button
           onClick={signOut}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
