@@ -130,14 +130,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    const { data: billingWs } = await db
+      .from("workspaces")
+      .select("billing_email")
+      .eq("id", workspaceId)
+      .single();
+
     const { paid, authorizationCode } = await verifyPaystackPayment(data.reference);
     if (!paid) return NextResponse.json({ received: true });
 
-    // Store authorization code for future recurring inbox billing
+    // Store authorization code + billing metadata for monthly recurring charges
     if (authorizationCode) {
+      const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       await db
         .from("outreach_domains")
-        .update({ paystack_auth_code: authorizationCode })
+        .update({
+          paystack_auth_code:      authorizationCode,
+          paystack_billing_email:  billingWs?.billing_email ?? null,
+          inbox_next_billing_date: nextBillingDate,
+        })
         .eq("id", domainRecordId);
     }
 
