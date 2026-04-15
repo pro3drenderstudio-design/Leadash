@@ -425,7 +425,7 @@ function Testimonials() {
       role: "Head of Growth",
       company: "Vertix Labs",
       avatar: "MC",
-      gradient: "from-blue-500 to-indigo-600",
+      gradient: "from-orange-500 to-orange-600",
     },
     {
       quote: "I run a cold email agency. Leadash lets me run 20 client campaigns simultaneously without a team. The warmup system alone has been worth every cent — no more inbox placement issues.",
