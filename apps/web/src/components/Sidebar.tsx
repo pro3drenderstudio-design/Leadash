@@ -96,7 +96,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                     }`}
                   >
                     <svg
-                      className={`w-4 h-4 flex-shrink-0 ${active ? "text-blue-500 dark:text-blue-400" : ""}`}
+                      className={`w-4 h-4 flex-shrink-0 ${active ? "text-orange-500 dark:text-orange-400" : ""}`}
                       fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
