@@ -261,7 +261,7 @@ export default async function DashboardPage() {
         {/* Right: Recent Activity */}
         <div className="xl:col-span-2">
           <div className="rounded-xl overflow-hidden h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--card-border)" }}>
               <div>
                 <h2 className="text-sm font-semibold text-white">Recent Replies</h2>
                 <p className="text-white/35 text-xs mt-0.5">Latest CRM conversations</p>
