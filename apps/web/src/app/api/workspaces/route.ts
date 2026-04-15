@@ -12,13 +12,16 @@ export async function POST(req: NextRequest) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const db   = createAdminClient();
 
-  // Create workspace
+  // Create workspace — free plan gets 5 inboxes and a 14-day trial
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data: workspace, error } = await db
     .from("workspaces")
     .insert({
-      name:  name.trim(),
-      slug:  `${slug}-${Date.now().toString(36)}`,
-      owner_id: user.id,
+      name:          name.trim(),
+      slug:          `${slug}-${Date.now().toString(36)}`,
+      owner_id:      user.id,
+      max_inboxes:   5,
+      trial_ends_at: trialEndsAt,
     })
     .select()
     .single();
