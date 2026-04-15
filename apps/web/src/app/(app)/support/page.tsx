@@ -137,70 +137,12 @@ export default function SupportPage() {
   // ── Detail view ─────────────────────────────────────────────────────────────
   if (view === "detail" && selectedTicket) {
     return (
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        <button onClick={() => { setView("list"); setSelectedTicket(null); }} className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm transition-colors mb-6">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
-          Back to tickets
-        </button>
-
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-white/30 text-xs font-mono">#{selectedTicket.ticket_number}</span>
-              <StatusBadge status={selectedTicket.status} />
-            </div>
-            <h1 className="text-xl font-bold text-white">{selectedTicket.subject}</h1>
-            <p className="text-white/30 text-xs mt-1">
-              {CATEGORIES.find(c => c.value === selectedTicket.category)?.label ?? selectedTicket.category}
-              {" · "}Submitted {timeAgo(selectedTicket.created_at)}
-            </p>
-          </div>
-        </div>
-
-        {/* Conversation thread */}
-        <div className="space-y-4">
-          {/* User message */}
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-300">
-              Y
-            </div>
-            <div className="flex-1 bg-white/4 border border-white/8 rounded-2xl rounded-tl-sm px-4 py-3">
-              <p className="text-white/40 text-xs mb-2 font-medium">You · {timeAgo(selectedTicket.created_at)}</p>
-              <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{selectedTicket.message}</p>
-            </div>
-          </div>
-
-          {/* Admin reply */}
-          {selectedTicket.admin_reply ? (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center flex-shrink-0 flex-shrink-0">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                </svg>
-              </div>
-              <div className="flex-1 bg-emerald-500/8 border border-emerald-500/20 rounded-2xl rounded-tl-sm px-4 py-3">
-                <p className="text-emerald-400/60 text-xs mb-2 font-medium">
-                  Leadash Support · {selectedTicket.admin_replied_at ? timeAgo(selectedTicket.admin_replied_at) : ""}
-                </p>
-                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{selectedTicket.admin_reply}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 py-4 px-4 bg-white/2 border border-white/6 rounded-xl">
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <p className="text-white/35 text-sm">Waiting for a reply from our team. We typically respond within 24 hours.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Status indicators */}
-        {selectedTicket.status === "waiting_on_you" && (
-          <div className="mt-6 p-4 bg-purple-500/8 border border-purple-500/25 rounded-xl">
-            <p className="text-purple-300 text-sm font-medium">Action needed</p>
-            <p className="text-purple-300/60 text-xs mt-0.5">Our team is waiting for more information from you. Please reply via email or submit a new ticket with more details.</p>
-          </div>
-        )}
-      </div>
+      <DetailView
+        ticket={selectedTicket}
+        wsId={wsId()}
+        onBack={() => { setView("list"); setSelectedTicket(null); }}
+        onTicketUpdate={updated => setSelectedTicket(updated)}
+      />
     );
   }
 
