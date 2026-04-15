@@ -1,13 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" fill="none">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1d4ed8"/>
-      <stop offset="100%" stop-color="#6d28d9"/>
-    </linearGradient>
-  </defs>
-  <!-- Mark -->
-  <rect width="40" height="40" rx="10" fill="url(#bg)"/>
-  <path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white"/>
+  <!-- Icon mark: Logo_Icon_White scaled to 40x40 (194 → 40, factor ≈ 0.20619) -->
+  <g transform="scale(0.20619)">
+    <circle cx="96.5" cy="16.5" r="16.5" fill="white"/>
+    <circle cx="153.5" cy="39.5" r="16.5" fill="white"/>
+    <circle cx="177.5" cy="96.5" r="16.5" fill="white"/>
+    <circle cx="153.5" cy="153.5" r="16.5" fill="white"/>
+    <circle cx="96.5" cy="177.5" r="16.5" fill="white"/>
+    <circle cx="39.5" cy="153.5" r="16.5" fill="white"/>
+    <circle cx="16.5" cy="96.5" r="16.5" fill="white"/>
+    <circle cx="39.5" cy="39.5" r="16.5" fill="white"/>
+    <rect width="134" height="12" transform="translate(30 91)" fill="white"/>
+    <rect width="134" height="12" transform="translate(53.4209 45.7568) rotate(44.5031)" fill="white"/>
+    <rect width="134" height="12" transform="translate(102.99 30.2432) rotate(90)" fill="white"/>
+    <rect width="134" height="12" transform="translate(148.609 53.8662) rotate(135)" fill="white"/>
+  </g>
   <!-- Wordmark -->
   <text x="50" y="27" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" fill="white">Leadash</text>
 </svg>
