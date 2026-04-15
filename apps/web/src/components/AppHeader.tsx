@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { wsGet } from "@/lib/workspace/client";
+import { useTheme } from "@/components/ThemeProvider";
 
 interface SearchResult {
   type: "lead_campaign" | "campaign";
@@ -20,10 +21,10 @@ interface Props {
 }
 
 const PLAN_STYLE: Record<string, string> = {
-  free:       "text-white/40 bg-white/5 border-white/8",
-  pro:        "text-blue-400 bg-blue-500/10 border-blue-500/20",
-  scale:      "text-violet-400 bg-violet-500/10 border-violet-500/20",
-  enterprise: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  free:       "text-slate-500 dark:text-white/40 bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/[0.08]",
+  pro:        "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20",
+  scale:      "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20",
+  enterprise: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
 };
 
 export default function AppHeader({ userEmail, userName, workspaceName, plan }: Props) {
@@ -34,11 +35,11 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
   const [credits, setCredits]         = useState<number | null>(null);
   const [notifCount, setNotifCount]   = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
+  const { theme, toggle } = useTheme();
 
   const displayName = userName || userEmail.split("@")[0];
   const initials    = displayName.split(/[\s.]+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 
-  // Fetch credits + notification count once
   useEffect(() => {
     wsGet<{ balance: number }>("/api/lead-campaigns/credits")
       .then(d => setCredits(d.balance ?? 0))
@@ -48,7 +49,6 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
       .catch(() => {});
   }, []);
 
-  // Close profile dropdown on outside click
   useEffect(() => {
     function h(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
@@ -57,7 +57,6 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // Debounced search
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
     const t = setTimeout(async () => {
@@ -93,17 +92,17 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
       style={{
         backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
-        background: "rgba(8,15,30,0.72)",
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--header-bg)",
+        borderBottom: "1px solid var(--header-border)",
       }}
     >
       {/* ── Search ── */}
       <div className="relative flex-1 max-w-sm">
         <div
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all"
-          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--search-bg)", border: "1px solid var(--search-border)" }}
         >
-          <svg className="w-3.5 h-3.5 text-white/30 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-3.5 h-3.5 text-slate-400 dark:text-white/30 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
           <input
@@ -113,10 +112,10 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
             onChange={e => setSearch(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setTimeout(() => setFocused(false), 150)}
-            className="flex-1 bg-transparent text-sm text-white/70 placeholder-white/25 outline-none w-0 min-w-0"
+            className="flex-1 bg-transparent text-sm text-slate-700 dark:text-white/70 placeholder-slate-400 dark:placeholder-white/25 outline-none w-0 min-w-0"
           />
           {search && (
-            <button onClick={() => { setSearch(""); setResults([]); }} className="text-white/20 hover:text-white/50 flex-shrink-0">
+            <button onClick={() => { setSearch(""); setResults([]); }} className="text-slate-400 dark:text-white/20 hover:text-slate-600 dark:hover:text-white/50 flex-shrink-0">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -128,18 +127,18 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
         {searchFocused && results.length > 0 && (
           <div
             className="absolute top-full mt-1.5 w-full rounded-xl overflow-hidden shadow-2xl"
-            style={{ background: "#0d1829", border: "1px solid rgba(255,255,255,0.08)" }}
+            style={{ background: "var(--dropdown-bg)", border: "1px solid var(--dropdown-border)" }}
           >
             {results.map(r => (
               <Link
                 key={r.type + r.id}
                 href={r.href}
-                className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/5 transition-colors group"
+                className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors group"
               >
                 <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${
                   r.type === "lead_campaign" ? "bg-amber-500/10" : "bg-blue-500/10"
                 }`}>
-                  <svg className={`w-3 h-3 ${r.type === "lead_campaign" ? "text-amber-400" : "text-blue-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className={`w-3 h-3 ${r.type === "lead_campaign" ? "text-amber-500 dark:text-amber-400" : "text-blue-500 dark:text-blue-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={
                       r.type === "lead_campaign"
                         ? "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
@@ -148,8 +147,8 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-white/70 truncate group-hover:text-white/90 transition-colors">{r.title}</p>
-                  <p className="text-xs text-white/25 capitalize">{r.subtitle}</p>
+                  <p className="text-sm text-slate-600 dark:text-white/70 truncate group-hover:text-slate-900 dark:group-hover:text-white/90 transition-colors">{r.title}</p>
+                  <p className="text-xs text-slate-400 dark:text-white/25 capitalize">{r.subtitle}</p>
                 </div>
               </Link>
             ))}
@@ -180,7 +179,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
         {/* Notifications */}
         <Link
           href="/crm"
-          className="relative w-8 h-8 flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all"
+          className="relative w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
           title="CRM Inbox"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -193,16 +192,34 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
           )}
         </Link>
 
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? (
+            /* Sun icon — shown in dark mode, click to go light */
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 6.343l-.707-.707m12.728 12.728l-.707-.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ) : (
+            /* Moon icon — shown in light mode, click to go dark */
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          )}
+        </button>
+
         {/* Divider */}
-        <div className="w-px h-5 bg-white/8 mx-1" />
+        <div className="w-px h-5 bg-slate-200 dark:bg-white/[0.08] mx-1" />
 
         {/* Profile identity card */}
         <div ref={profileRef} className="relative">
           <button
             onClick={() => setProfileOpen(o => !o)}
-            className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl hover:bg-white/5 transition-all group"
+            className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
           >
-            {/* Avatar */}
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)" }}
@@ -210,10 +227,10 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
               {initials}
             </div>
             <div className="text-left hidden sm:block leading-none">
-              <p className="text-xs font-semibold text-white/80 group-hover:text-white transition-colors truncate max-w-[96px]">{displayName}</p>
-              <p className="text-[10px] text-white/30 mt-0.5 truncate max-w-[96px]">{workspaceName}</p>
+              <p className="text-xs font-semibold text-slate-700 dark:text-white/80 group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate max-w-[96px]">{displayName}</p>
+              <p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5 truncate max-w-[96px]">{workspaceName}</p>
             </div>
-            <svg className="w-3 h-3 text-white/20 group-hover:text-white/40 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3 h-3 text-slate-400 dark:text-white/20 group-hover:text-slate-600 dark:group-hover:text-white/40 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -222,10 +239,10 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
           {profileOpen && (
             <div
               className="absolute right-0 top-full mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-50"
-              style={{ background: "#0d1829", border: "1px solid rgba(255,255,255,0.09)" }}
+              style={{ background: "var(--dropdown-bg)", border: "1px solid var(--dropdown-border)" }}
             >
               {/* Identity */}
-              <div className="px-4 py-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+              <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--divider-color)" }}>
                 <div className="flex items-center gap-2.5">
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
@@ -234,8 +251,8 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                     {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                    <p className="text-xs text-white/30 truncate">{userEmail}</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{displayName}</p>
+                    <p className="text-xs text-slate-400 dark:text-white/30 truncate">{userEmail}</p>
                   </div>
                 </div>
                 <div className="mt-2.5">
@@ -248,15 +265,15 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
               {/* Actions */}
               <div className="p-1.5 space-y-0.5">
                 {[
-                  { href: "/settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", label: "Settings" },
-                  { href: "/lead-campaigns/credits", icon: "M13 10V3L4 14h7v7l9-11h-7z", label: "Buy Credits" },
-                  { href: "/inboxes", icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4", label: "Manage Inboxes" },
+                  { href: "/settings",              icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", label: "Settings" },
+                  { href: "/lead-campaigns/credits", icon: "M13 10V3L4 14h7v7l9-11h-7z",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     label: "Buy Credits" },
+                  { href: "/inboxes",                icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      label: "Manage Inboxes" },
                 ].map(item => (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setProfileOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/55 hover:text-white hover:bg-white/5 transition-all"
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-white/55 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
                   >
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
@@ -266,10 +283,10 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                 ))}
               </div>
 
-              <div className="p-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="p-1.5" style={{ borderTop: "1px solid var(--divider-color)" }}>
                 <button
                   onClick={signOut}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-400/60 hover:text-red-400 hover:bg-red-500/5 transition-all"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-500/70 dark:text-red-400/60 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all"
                 >
                   <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
