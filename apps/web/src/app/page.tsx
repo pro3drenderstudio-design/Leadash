@@ -246,9 +246,9 @@ function Features() {
       title: "AI Lead Scraping",
       desc: "Pull verified contact data from 100M+ records. Filter by title, industry, company size, funding stage, and location. Every lead includes email, LinkedIn, phone, and org intelligence.",
       tag: "Lead Gen",
-      color: "from-blue-500/20 to-blue-600/5",
-      accent: "text-blue-400",
-      border: "border-blue-500/20",
+      color: "from-orange-500/20 to-orange-600/5",
+      accent: "text-orange-400",
+      border: "border-orange-500/20",
     },
     {
       icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
