@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { encrypt } from "@/lib/outreach/crypto";
+import { checkInboxAccess } from "@/lib/outreach/inbox-access";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
