@@ -614,7 +614,7 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
               }}
             >
               {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-xs font-bold text-white" style={{ background: "linear-gradient(135deg, #1d4ed8, #5b21b6)" }}>
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-xs font-bold text-white" style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}>
                   {plan.badge}
                 </div>
               )}
@@ -643,7 +643,7 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
                 href={`/signup?plan=${plan.id}`}
                 className="block w-full text-center py-3 rounded-xl text-sm font-bold transition-all"
                 style={plan.highlight
-                  ? { background: "linear-gradient(135deg, #1d4ed8, #5b21b6)", color: "white", boxShadow: "0 0 30px rgba(99,102,241,0.4)" }
+                  ? { background: "linear-gradient(135deg, #f97316, #ea580c)", color: "white", boxShadow: "0 0 30px rgba(99,102,241,0.4)" }
                   : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.1)" }
                 }
               >
@@ -766,7 +766,7 @@ function CTA() {
               <Link
                 href="/signup"
                 className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-10 py-4 rounded-2xl text-base font-bold text-white transition-all hover:scale-[1.02]"
-                style={{ background: "linear-gradient(135deg, #1d4ed8, #5b21b6)", boxShadow: "0 0 50px rgba(99,102,241,0.6), 0 10px 40px rgba(0,0,0,0.4)" }}
+                style={{ background: "linear-gradient(135deg, #f97316, #ea580c)", boxShadow: "0 0 50px rgba(99,102,241,0.6), 0 10px 40px rgba(0,0,0,0.4)" }}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
