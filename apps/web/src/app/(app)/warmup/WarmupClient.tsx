@@ -31,8 +31,8 @@ export default function WarmupClient() {
   useEffect(() => {
     Promise.all([
       getInboxes().catch(() => [] as OutreachInboxSafe[]),
-      fetch("/api/outreach/warmup/stats").then((r) => r.json()).catch(() => null),
-      fetch("/api/outreach/warmup/activity?limit=100").then((r) => r.json()).catch(() => []),
+      wsFetch("/api/outreach/warmup/stats").then((r) => r.json()).catch(() => null),
+      wsFetch("/api/outreach/warmup/activity?limit=100").then((r) => r.json()).catch(() => []),
     ]).then(([inboxList, poolStats, activityList]) => {
       setInboxes(Array.isArray(inboxList) ? inboxList : []);
       setStats(poolStats);
