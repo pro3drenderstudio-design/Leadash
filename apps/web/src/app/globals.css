@@ -10,7 +10,7 @@
   --foreground:          #0f172a;
   --card:                #ffffff;
   --card-foreground:     #0f172a;
-  --primary:             #1d4ed8;
+  --primary:             #f97316;
   --primary-foreground:  #ffffff;
   --secondary:           #f1f5f9;
   --secondary-foreground:#1e293b;
@@ -22,7 +22,7 @@
   --destructive-foreground: #ffffff;
   --border:              #e2e8f0;
   --input:               #e2e8f0;
-  --ring:                #1d4ed8;
+  --ring:                #f97316;
   --radius:              0.5rem;
   /* chart palette */
   --chart-1:             #3b82f6;
