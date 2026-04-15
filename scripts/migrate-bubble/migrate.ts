@@ -479,12 +479,16 @@ async function main() {
   const found = fs.readdirSync(EXPORTS_DIR);
   console.log(`   Files in exports/: ${found.length ? found.join(', ') : '(empty)'}`);
 
-  // Print column headers for each CSV so we can verify field mappings
+  // Print ALL column headers + first row values for each CSV
   for (const f of found.filter(f => f.endsWith('.csv'))) {
     const rows = readCsv(f);
     if (rows.length) {
       const cols = Object.keys(rows[0]);
-      console.log(`   ${f} columns: ${cols.slice(0, 8).join(' | ')}${cols.length > 8 ? ' …' : ''}`);
+      console.log(`\n   ── ${f} (${rows.length} rows, ${cols.length} cols) ──`);
+      for (const col of cols) {
+        const sampleVal = rows[0][col];
+        console.log(`      "${col}" = ${JSON.stringify(sampleVal)}`);
+      }
     }
   }
   console.log();
