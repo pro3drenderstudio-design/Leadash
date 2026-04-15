@@ -89,6 +89,18 @@ function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolea
   );
 }
 
+const DEFAULT_BANNER: AnnouncementBanner = { active: false, text: "", color: "blue" };
+
+const DEFAULT_SETTINGS: Settings = {
+  maintenance_mode:       false,
+  announcement_banner:    DEFAULT_BANNER,
+  signup_enabled:         true,
+  trial_days:             14,
+  default_plan:           "free",
+  lead_credits_on_signup: 25,
+  support_email:          "",
+};
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [meta, setMeta]         = useState<Record<string, Meta>>({});
@@ -99,16 +111,23 @@ export default function SettingsPage() {
   const [savingSection, setSavingSection] = useState<string | null>(null);
   const [savedSection, setSavedSection]   = useState<string | null>(null);
 
+  function applyData(d: { settings?: Record<string, unknown>; meta?: Record<string, Meta>; error?: string }) {
+    if (d.error) { setError(d.error); setLoading(false); return; }
+    const raw = (d.settings ?? {}) as Partial<Settings>;
+    setSettings({
+      ...DEFAULT_SETTINGS,
+      ...raw,
+      announcement_banner: { ...DEFAULT_BANNER, ...(raw.announcement_banner ?? {}) },
+    });
+    setMeta(d.meta ?? {});
+    setLoading(false);
+  }
+
   useEffect(() => {
     fetch("/api/admin/settings")
       .then(r => r.json())
-      .then(d => {
-        if (d.error) { setError(d.error); return; }
-        setSettings(d.settings as Settings);
-        setMeta(d.meta);
-        setLoading(false);
-      })
-      .catch(() => setError("Failed to load settings"));
+      .then(applyData)
+      .catch(() => { setError("Failed to load settings"); setLoading(false); });
   }, []);
 
   async function save(section: string, patch: Partial<Settings>) {
@@ -122,6 +141,11 @@ export default function SettingsPage() {
     const data = await res.json();
     setSavingSection(null);
     if (!res.ok) { alert(data.error ?? "Save failed"); return; }
+    // Re-fetch to confirm persistence
+    fetch("/api/admin/settings")
+      .then(r => r.json())
+      .then(applyData)
+      .catch(() => {});
     setSavedSection(section);
     setTimeout(() => setSavedSection(null), 2500);
   }
