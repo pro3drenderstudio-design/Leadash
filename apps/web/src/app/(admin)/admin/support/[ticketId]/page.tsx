@@ -46,6 +46,7 @@ export default function TicketDetailPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
 
   const [ticket, setTicket]     = useState<Ticket | null>(null);
+  const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [userEmail, setUserEmail]       = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspacePlan, setWorkspacePlan] = useState("");
