@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Enrich with workspace names and owner emails
-  const workspaceIds = [...new Set((campaigns ?? []).map(c => c.workspace_id))];
+  const workspaceIds = [...new Set((campaigns ?? []).map((c: { workspace_id: string }) => c.workspace_id))];
   const wsMap = new Map<string, { name: string; owner_id: string }>();
   if (workspaceIds.length) {
     const { data: workspaces } = await ctx.adminClient
