@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
     insertedIds.push(rec.id);
   }
 
-  const recurringPriceUsd = INBOX_MONTHLY_PRICE_USD * mailboxCount * domains.length;
+  // inbox_monthly_price_ngn from plan config (already in NGN, per mailbox)
+  const inboxMonthlyNgn   = workspacePlan.inbox_monthly_price_ngn * mailboxCount * domains.length;
   const domainIdsParam    = insertedIds.join(",");
 
   // ── Stripe ───────────────────────────────────────────────────────────────────
