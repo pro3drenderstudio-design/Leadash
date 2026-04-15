@@ -278,7 +278,7 @@ export async function POST(req: NextRequest) {
       // Find the workspace tied to this subscription
       const { data: ws } = await db
         .from("workspaces")
-        .select("id, plan_id, lead_credits_balance")
+        .select("id, plan_id, lead_credits_balance, subscription_credits_balance")
         .eq("paystack_sub_code", subCode)
         .maybeSingle();
 
