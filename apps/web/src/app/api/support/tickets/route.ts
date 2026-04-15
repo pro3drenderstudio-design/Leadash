@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { createAdminClient } from "@/lib/supabase/server";
+import { sendAdminNewTicketNotification } from "@/lib/email/notifications";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
