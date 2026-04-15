@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await getWorkspaceContext();
   if (!ctx) redirect("/onboarding"); // authed but no workspace yet
 
-  const workspace = ctx.workspace as { name: string; plan_id: string };
+  const workspace = ctx.workspace as { name: string; plan_id: string; trial_ends_at: string | null };
   const userName  = (user.user_metadata?.full_name as string | null) ?? null;
 
   return (
