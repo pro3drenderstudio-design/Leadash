@@ -30,13 +30,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ ticket
   const [
     { data: { user: ticketUser } },
     { data: workspace },
+    { data: messages },
   ] = await Promise.all([
     ctx.adminClient.auth.admin.getUserById(ticket.user_id),
     ctx.adminClient.from("workspaces").select("id, name, plan_id").eq("id", ticket.workspace_id).single(),
+    ctx.adminClient.from("ticket_messages")
+      .select("id, sender_type, message, created_at")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: true }),
   ]);
 
   return NextResponse.json({
     ticket,
+    messages:       messages ?? [],
     user_email:     ticketUser?.email ?? "",
     workspace_name: workspace?.name  ?? "",
     workspace_plan: workspace?.plan_id ?? "",
