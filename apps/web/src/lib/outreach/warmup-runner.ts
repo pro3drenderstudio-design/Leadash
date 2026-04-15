@@ -27,6 +27,26 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   const db = supabase();
   const result: WarmupResult = { sent: 0, replied: 0, rescued: 0 };
 
+  // ── Trial expiry guard ──────────────────────────────────────────────────────
+  // Free-plan workspaces with an expired trial have warmup disabled automatically.
+  const { data: ws } = await db
+    .from("workspaces")
+    .select("plan_id, trial_ends_at")
+    .eq("id", workspaceId)
+    .single();
+
+  if (ws?.plan_id === "free" && ws.trial_ends_at && new Date(ws.trial_ends_at) < new Date()) {
+    // Disable warmup for all inboxes in this workspace so the flag is accurate
+    await db
+      .from("outreach_inboxes")
+      .update({ warmup_enabled: false })
+      .eq("workspace_id", workspaceId)
+      .eq("warmup_enabled", true);
+    console.log(`[warmup] ws=${workspaceId} trial expired — warmup disabled`);
+    return result;
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const { data: pool } = await db
     .from("outreach_inboxes")
     .select("*")
