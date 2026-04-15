@@ -164,7 +164,8 @@ export interface ParsedInboundEmail {
   inReplyTo:  string | null;
   fromEmail:  string;
   fromName:   string | null;
-  toEmail:    string;   // which of our inboxes this was sent to
+  toEmail:    string;    // primary To address (first match)
+  toEmails:   string[];  // all To addresses — use for inbox lookup
   subject:    string | null;
   bodyText:   string | null;
   receivedAt: string;
