@@ -295,7 +295,7 @@ export default async function DashboardPage() {
                       key={t.enrollment_id}
                       href="/crm"
                       className="flex items-start gap-3 px-4 py-3.5 hover:bg-white/4 transition-colors group"
-                      style={{ borderColor: "rgba(255,255,255,0.05)" }}
+                      style={{ borderColor: "var(--card-border)" }}
                     >
                       {/* Avatar */}
                       <div
