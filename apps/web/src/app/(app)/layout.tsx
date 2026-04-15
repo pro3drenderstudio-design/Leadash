@@ -5,6 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import AppHeader from "@/components/AppHeader";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
 import { CurrencyProvider } from "@/lib/currency";
+import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Check auth first
