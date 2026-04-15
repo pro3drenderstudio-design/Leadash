@@ -396,21 +396,22 @@ async function migrateCreditTransactions() {
   let migrated = 0;
 
   for (const row of rows) {
-    const userBubbleId = pick(row, 'User', 'user');
-    const campaignBubbleId = pick(row, 'Campaign', 'campaign');
-    const workspaceId = workspaceMap.get(userBubbleId);
+    const userEmail = pick(row, 'user', 'User');
+    const campaignBubbleId = row['Campaign']?.trim() || row['campaign']?.trim() || '';
+    const workspaceId = workspaceMap.get(userEmail);
 
     if (!workspaceId) continue;
 
-    const amount = parseInt(pick(row, 'Credits', 'credits', 'Amount_paid', 'amount_paid') || '0', 10) || 0;
+    // Use credits as the amount; fall back to amount_paid
+    const amount = parseInt(row['credits']?.trim() || row['amount_paid']?.trim() || '0', 10) || 0;
 
     const { error } = await supabase.from('lead_credit_transactions').insert({
       workspace_id: workspaceId,
       amount,
-      type: mapTxType(pick(row, 'Transaction_Type', 'Transaction Type', 'transaction_type')),
+      type: mapTxType(pick(row, 'Transaction Type', 'Transaction_Type', 'transaction_type')),
       description: pick(row, 'Description', 'description') || null,
       lead_campaign_id: campaignMap.get(campaignBubbleId) || null,
-      created_at: parseDate(pick(row, 'Created Date', 'created_date')) ?? new Date().toISOString(),
+      created_at: parseDate(pick(row, 'Creation Date', 'Created Date')) ?? new Date().toISOString(),
     });
 
     if (error) {
