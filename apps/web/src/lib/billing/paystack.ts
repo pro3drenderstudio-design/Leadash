@@ -1,13 +1,15 @@
 /**
- * Paystack payment helper.
+ * Paystack payment helper — TEMPORARILY DISABLED.
+ * Switching to Stripe as the primary payment processor.
+ * Re-enable by uncommenting and restoring the imports when needed.
  *
- * Docs: https://paystack.com/docs/api/
- *
+ * Original docs: https://paystack.com/docs/api/
  * Required env vars:
  *   PAYSTACK_SECRET_KEY              — sk_live_... or sk_test_...
  *   NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY  — pk_live_... or pk_test_...
  */
 
+/*
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function authHeader(): string {
@@ -33,8 +35,6 @@ async function paystackFetch<T>(
   return json.data;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface InitializeResponse {
   authorization_url: string;
   access_code: string;
@@ -42,26 +42,21 @@ interface InitializeResponse {
 }
 
 interface VerifyResponse {
-  status: string; // "success" | "failed" | "abandoned" | ...
+  status: string;
   reference: string;
   amount: number;
   currency: string;
   metadata: Record<string, unknown>;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
 export interface PaystackCheckoutParams {
   email:       string;
-  amountKobo:  number;           // amount in kobo (1 NGN = 100 kobo)
+  amountKobo:  number;
   metadata:    Record<string, unknown>;
   callbackUrl: string;
   reference?:  string;
 }
 
-/**
- * Initialise a Paystack payment and return the hosted checkout URL.
- */
 export async function createPaystackCheckout(params: PaystackCheckoutParams): Promise<{
   authorizationUrl: string;
   reference: string;
@@ -74,32 +69,17 @@ export async function createPaystackCheckout(params: PaystackCheckoutParams): Pr
     callback_url: params.callbackUrl,
     ...(params.reference ? { reference: params.reference } : {}),
   });
-
-  return {
-    authorizationUrl: data.authorization_url,
-    reference:        data.reference,
-  };
+  return { authorizationUrl: data.authorization_url, reference: data.reference };
 }
 
-/**
- * Verify a Paystack transaction by reference.
- * Returns { paid: true } only when status is "success".
- */
 export async function verifyPaystackPayment(reference: string): Promise<{
   paid: boolean;
   metadata: Record<string, unknown>;
 }> {
   const data = await paystackFetch<VerifyResponse>("GET", `/transaction/verify/${encodeURIComponent(reference)}`);
-  return {
-    paid:     data.status === "success",
-    metadata: data.metadata ?? {},
-  };
+  return { paid: data.status === "success", metadata: data.metadata ?? {} };
 }
 
-/**
- * Verify a Paystack webhook signature.
- * Paystack signs the request body with HMAC-SHA512 using your secret key.
- */
 export function verifyPaystackSignature(rawBody: string, signature: string): boolean {
   const { createHmac } = require("crypto") as typeof import("crypto");
   const expected = createHmac("sha512", process.env.PAYSTACK_SECRET_KEY!)
@@ -107,3 +87,4 @@ export function verifyPaystackSignature(rawBody: string, signature: string): boo
     .digest("hex");
   return expected === signature;
 }
+*/
