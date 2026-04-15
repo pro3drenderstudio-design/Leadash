@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
   const cfSuffix    = connect_only && cf_auto ? "&cf=1" : "";
   const successBase = connect_only ? `${appUrl}/inboxes/new/connect-domain` : `${appUrl}/inboxes/new/domain`;
 
+  // Fetch workspace plan to get inbox_monthly_price_ngn
+  const { data: workspace_plan_row } = await db
+    .from("workspaces")
+    .select("plan_id")
+    .eq("id", workspaceId)
+    .single();
+  const workspacePlan = await getPlanById(workspace_plan_row?.plan_id ?? "free");
+
   // ── Insert one pending record per domain ─────────────────────────────────────
   const insertedIds: string[] = [];
   let totalOneTimeUsd = 0;
