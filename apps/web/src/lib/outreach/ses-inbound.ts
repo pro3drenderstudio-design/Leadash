@@ -340,6 +340,7 @@ export function parseRawEmail(raw: string): ParsedInboundEmail | null {
     fromEmail,
     fromName,
     toEmail,
+    toEmails,
     subject,
     bodyText,
     receivedAt,
