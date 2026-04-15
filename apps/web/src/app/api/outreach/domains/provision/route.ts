@@ -192,7 +192,15 @@ export async function POST(req: NextRequest) {
         if (inboxError) throw new Error(`Failed to create inbox ${email}: ${inboxError.message}`);
       } // end for logins
 
-      // ── Step 7: Mark domain active ───────────────────────────────────────────
+      // ── Step 7: Register inbound route in Postal ─────────────────────────────
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      try {
+        await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`);
+      } catch (err) {
+        console.warn(`[provision] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
+      }
+
+      // ── Step 8: Mark domain active ───────────────────────────────────────────
       await db
         .from("outreach_domains")
         .update({
