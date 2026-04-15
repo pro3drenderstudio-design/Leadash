@@ -193,7 +193,7 @@ export default async function DashboardPage() {
             key={c.label}
             href={c.href}
             className="group relative rounded-xl p-4 space-y-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}
           >
             <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={{ background: "rgba(255,255,255,0.05)" }}>
               <svg className={`w-4 h-4 ${c.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -215,7 +215,7 @@ export default async function DashboardPage() {
         <div className="xl:col-span-3 space-y-5">
 
           {/* Activity chart */}
-          <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="rounded-xl p-5" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-sm font-semibold text-white">Email Activity</h2>
@@ -229,7 +229,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Monthly quota */}
-          <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="rounded-xl p-5" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">Monthly Send Quota</h2>
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
 
         {/* Right: Recent Activity */}
         <div className="xl:col-span-2">
-          <div className="rounded-xl overflow-hidden h-full" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="rounded-xl overflow-hidden h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <div>
                 <h2 className="text-sm font-semibold text-white">Recent Replies</h2>
