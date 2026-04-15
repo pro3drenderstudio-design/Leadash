@@ -195,7 +195,7 @@ export default async function DashboardPage() {
             className="group relative rounded-xl p-4 space-y-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
             style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}
           >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={{ background: "rgba(255,255,255,0.05)" }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={{ background: "var(--card-icon-bg)" }}>
               <svg className={`w-4 h-4 ${c.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={c.icon} />
               </svg>
