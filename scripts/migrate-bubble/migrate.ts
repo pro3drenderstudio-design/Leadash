@@ -67,10 +67,14 @@ function readCsv(filename: string): Record<string, string>[] {
   return parse(content, { columns: true, skip_empty_lines: true, trim: true });
 }
 
-/** Return the first non-empty value for any of the given key variants. */
+/**
+ * Return the first non-empty, non-"0" value for any of the given key variants.
+ * Bubble exports empty/null fields as the string "0", so we treat "0" as empty.
+ */
 function pick(row: Record<string, string>, ...keys: string[]): string {
   for (const k of keys) {
-    if (row[k] && row[k].trim() !== '') return row[k].trim();
+    const v = row[k]?.trim();
+    if (v && v !== '0') return v;
   }
   return '';
 }
