@@ -33,6 +33,13 @@ export async function GET(req: NextRequest) {
     const email = userInfo.email ?? "";
 
     const db = createAdminClient();
+
+    const access = await checkInboxAccess(db, workspaceId, email);
+    if (!access.ok) {
+      const params = new URLSearchParams({ error: access.code, message: access.message });
+      return NextResponse.redirect(new URL(`/inboxes/new?${params}`, req.url));
+    }
+
     const { data: inbox, error: upsertErr } = await db
       .from("outreach_inboxes")
       .upsert({
