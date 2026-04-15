@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { CREDIT_PACKS } from "@/lib/billing/plans";
+import { createPaystackCheckout } from "@/lib/billing/paystack";
 
 export async function POST(req: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-  const auth   = await requireWorkspace(req);
+  const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
@@ -15,43 +14,25 @@ export async function POST(req: NextRequest) {
 
   const { data: workspace } = await db
     .from("workspaces")
-    .select("stripe_customer_id, billing_email, name")
+    .select("billing_email")
     .eq("id", workspaceId)
     .single();
 
   if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
-  let customerId = workspace.stripe_customer_id;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email:    workspace.billing_email ?? undefined,
-      name:     workspace.name,
-      metadata: { workspace_id: workspaceId },
-    });
-    customerId = customer.id;
-    await db.from("workspaces").update({ stripe_customer_id: customerId }).eq("id", workspaceId);
-  }
-
   const origin = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL;
-  const session = await stripe.checkout.sessions.create({
-    customer:    customerId,
-    mode:        "payment",
-    line_items:  [{
-      quantity: 1,
-      price_data: {
-        currency:     "usd",
-        unit_amount:  pack.priceUsd * 100,
-        product_data: { name: `${pack.label} – Lead Credits` },
-      },
-    }],
-    success_url: `${origin}/lead-campaigns/credits?purchase=success&credits=${pack.credits}`,
-    cancel_url:  `${origin}/lead-campaigns/credits`,
-    metadata:    {
+
+  const { authorizationUrl } = await createPaystackCheckout({
+    email:      workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
+    amountKobo: pack.priceNgn * 100,
+    callbackUrl: `${origin}/lead-campaigns/credits?purchase=success&credits=${pack.credits}`,
+    metadata: {
       workspace_id: workspaceId,
       pack_id:      pack.id,
       credits:      String(pack.credits),
+      type:         "credit_purchase",
     },
   });
 
-  return NextResponse.json({ url: session.url });
+  return NextResponse.json({ url: authorizationUrl });
 }
