@@ -36,10 +36,14 @@ export default function ForgotPasswordPage() {
         <p className="text-white/40 text-sm">We sent a reset link to <span className="text-white">{email}</span></p>
         <Link href="/login" className="mt-6 inline-block text-sm text-blue-400 hover:text-blue-300 transition-colors">← Back to sign in</Link>
       </div>
+      </div></div>
     );
   }
 
   return (
+    <div className="flex items-center justify-center min-h-screen px-4">
+    <div className="w-full max-w-[400px]">
+    <div className="flex justify-center mb-9"><img src="/logo.svg" alt="Leadash" className="h-10 w-auto" /></div>
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-sm p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]">
       <div className="mb-7 text-center">
         <h1 className="text-[22px] font-semibold tracking-tight text-white">Reset password</h1>
