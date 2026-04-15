@@ -31,5 +31,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </main>
       </div>
     </div>
+    </>
   );
 }
