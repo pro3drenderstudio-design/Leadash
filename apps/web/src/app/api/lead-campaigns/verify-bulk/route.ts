@@ -23,12 +23,15 @@ export async function POST(req: NextRequest) {
   const cost  = clean.length * COST_PER;
 
   // Check and deduct credits atomically
-  const { data: ws } = await db.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
+  const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
   if (!ws || (ws.lead_credits_balance as number) < cost)
     return NextResponse.json({ error: `Insufficient credits. Need ${cost}, have ${ws?.lead_credits_balance ?? 0}.` }, { status: 402 });
 
   await db.from("workspaces")
-    .update({ lead_credits_balance: (ws.lead_credits_balance as number) - cost })
+    .update({
+      lead_credits_balance:         (ws.lead_credits_balance as number) - cost,
+      subscription_credits_balance: Math.max(0, (ws.subscription_credits_balance ?? 0) - cost),
+    })
     .eq("id", workspaceId);
 
   await db.from("lead_credit_transactions").insert({
