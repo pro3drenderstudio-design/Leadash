@@ -11,6 +11,14 @@ async function requireAdmin() {
   return { user, adminClient };
 }
 
+function resolveName(meta: Record<string, unknown> | null | undefined): string | null {
+  if (!meta) return null;
+  if (meta.full_name) return String(meta.full_name);
+  const first = String(meta.first_name ?? "");
+  const last  = String(meta.last_name  ?? "");
+  return (first + " " + last).trim() || null;
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
