@@ -389,7 +389,7 @@ function HowItWorks() {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           {/* Connector line */}
-          <div className="hidden lg:block absolute top-10 left-[12.5%] right-[12.5%] h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(99,102,241,0.4) 20%, rgba(99,102,241,0.4) 80%, transparent)" }} />
+          <div className="hidden lg:block absolute top-10 left-[12.5%] right-[12.5%] h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(249,115,22,0.4) 20%, rgba(249,115,22,0.4) 80%, transparent)" }} />
 
           {steps.map((s, i) => (
             <div key={s.num} className="relative">
@@ -399,7 +399,7 @@ function HowItWorks() {
               >
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm mb-5 relative z-10"
-                  style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))", border: "1px solid rgba(99,102,241,0.4)", color: "#a5b4fc" }}
+                  style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))", border: "1px solid rgba(249,115,22,0.4)", color: "#a5b4fc" }}
                 >
                   {String(i + 1).padStart(2, "0")}
                 </div>
@@ -609,7 +609,7 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
               className={`relative rounded-2xl p-7 transition-all ${plan.highlight ? "scale-[1.03]" : ""}`}
               style={{
                 background: plan.highlight ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.025)",
-                border: plan.highlight ? "1px solid rgba(99,102,241,0.4)" : "1px solid rgba(255,255,255,0.07)",
+                border: plan.highlight ? "1px solid rgba(249,115,22,0.4)" : "1px solid rgba(255,255,255,0.07)",
                 boxShadow: plan.highlight ? "0 0 60px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.1)" : "inset 0 1px 0 rgba(255,255,255,0.05)",
               }}
             >
@@ -643,7 +643,7 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
                 href={`/signup?plan=${plan.id}`}
                 className="block w-full text-center py-3 rounded-xl text-sm font-bold transition-all"
                 style={plan.highlight
-                  ? { background: "linear-gradient(135deg, #f97316, #ea580c)", color: "white", boxShadow: "0 0 30px rgba(99,102,241,0.4)" }
+                  ? { background: "linear-gradient(135deg, #f97316, #ea580c)", color: "white", boxShadow: "0 0 30px rgba(249,115,22,0.4)" }
                   : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.1)" }
                 }
               >
