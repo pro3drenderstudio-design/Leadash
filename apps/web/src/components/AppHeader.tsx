@@ -143,7 +143,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                 className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors group"
               >
                 <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${
-                  r.type === "lead_campaign" ? "bg-amber-500/10" : "bg-blue-500/10"
+                  r.type === "lead_campaign" ? "bg-amber-500/10" : "bg-orange-500/10"
                 }`}>
                   <svg className={`w-3 h-3 ${r.type === "lead_campaign" ? "text-amber-500 dark:text-amber-400" : "text-blue-500 dark:text-blue-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={
