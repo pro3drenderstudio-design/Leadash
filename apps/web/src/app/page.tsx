@@ -532,7 +532,8 @@ function Comparison() {
             <div className="text-white/30 text-xs font-semibold uppercase tracking-wider">Feature</div>
             <div className="text-center">
               <span className="inline-flex items-center gap-1.5 text-sm font-bold text-white">
-                <svg className="w-4 h-4 text-blue-400" viewBox="0 0 40 40" fill="none"><defs><linearGradient id="cmp" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#1d4ed8"/><stop offset="100%" stopColor="#6d28d9"/></linearGradient></defs><rect width="40" height="40" rx="10" fill="url(#cmp)"/><path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white"/></svg>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/Logo_Icon_Colored.svg" className="w-4 h-4" alt="" />
                 Leadash
               </span>
             </div>
