@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
       const { data: ws } = await db
         .from("workspaces")
-        .select("id, plan_id, lead_credits_balance")
+        .select("id, plan_id, lead_credits_balance, subscription_credits_balance")
         .eq("stripe_customer_id", inv.customer as string)
         .maybeSingle();
 
@@ -61,14 +61,27 @@ export async function POST(req: NextRequest) {
       const planConfig = await getPlanById(ws.plan_id ?? "free");
       if (planConfig.included_credits <= 0) break;
 
+      const isRenewal = inv.billing_reason === "subscription_cycle";
+      const currentSub  = ws.subscription_credits_balance ?? 0;
+      const currentTotal = ws.lead_credits_balance ?? 0;
+
+      // On renewal: expire unused subscription credits, then grant new ones.
+      // On first activation: simply add the granted credits.
+      const newTotal = isRenewal
+        ? currentTotal - currentSub + planConfig.included_credits
+        : currentTotal + planConfig.included_credits;
+
       await db.from("workspaces")
-        .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + planConfig.included_credits })
+        .update({
+          lead_credits_balance:         Math.max(0, newTotal),
+          subscription_credits_balance: planConfig.included_credits,
+        })
         .eq("id", ws.id);
       await db.from("lead_credit_transactions").insert({
         workspace_id: ws.id,
         type:         "grant",
         amount:       planConfig.included_credits,
-        description:  `Monthly credits — ${planConfig.name} plan${inv.billing_reason === "subscription_cycle" ? " renewal" : ""}`,
+        description:  `Monthly credits — ${planConfig.name} plan${isRenewal ? " renewal" : ""}`,
       });
       break;
     }
