@@ -283,6 +283,30 @@ export default function CrmClient() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [loadThreads]);
 
+  // ── Auto-sync replies in background ──────────────────────────────────────
+  const [autoSyncing, setAutoSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt]   = useState<Date | null>(null);
+
+  const runAutoSync = useCallback(async () => {
+    if (autoSyncing) return;
+    setAutoSyncing(true);
+    try {
+      await fetch("/api/outreach/crm/sync", { method: "POST" });
+      setLastSyncAt(new Date());
+      loadThreads(true);
+    } catch { /* silent */ } finally {
+      setAutoSyncing(false);
+    }
+  }, [autoSyncing, loadThreads]);
+
+  useEffect(() => {
+    // Run once on mount after a 3s delay (let the page settle first)
+    const t = setTimeout(runAutoSync, 3000);
+    // Then every 5 minutes
+    const iv = setInterval(runAutoSync, 5 * 60 * 1000);
+    return () => { clearTimeout(t); clearInterval(iv); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (selected) {
       const updated = threads.find((t) => t.enrollment_id === selected.enrollment_id);
