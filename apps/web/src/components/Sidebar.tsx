@@ -102,7 +102,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                     </svg>
                     {item.label}
-                    {active && <span className="ml-auto w-1 h-4 rounded-full bg-blue-400/60" />}
+                    {active && <span className="ml-auto w-1 h-4 rounded-full bg-orange-400/60" />}
                   </Link>
                 );
               })}
