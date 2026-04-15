@@ -74,7 +74,7 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     for (let i = 0; i < toSend; i++) {
       const recipient  = recipients[i % recipients.length];
       const warmupId   = crypto.randomUUID();
-      const template   = selectSendTemplate(`${sender.id}-${recipient.id}-${Date.now()}`);
+      const template   = selectSendTemplate(`${sender.id}-${recipient.id}-${Date.now()}`, sender.first_name, recipient.first_name);
       const warmupHdr  = { "X-LD-Ref": warmupId };
       const htmlBody   = `<!--pps-ref:${warmupId}--><p>${template.body.replace(/\n/g, "</p><p>")}</p>`;
 
