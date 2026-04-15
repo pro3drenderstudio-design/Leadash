@@ -272,14 +272,20 @@ async function deductCredits(
 
   // Read current balance
   const { data: ws } = await db.from("workspaces")
-    .select("lead_credits_balance").eq("id", workspaceId).single();
+    .select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
   if (!ws) return;
 
   const deduct = Math.min(amount, Math.max(0, ws.lead_credits_balance));
   if (deduct === 0) return;
 
+  // Subscription credits are consumed first; track the remaining allocation
+  const newSubBalance = Math.max(0, (ws.subscription_credits_balance ?? 0) - deduct);
+
   await db.from("workspaces")
-    .update({ lead_credits_balance: ws.lead_credits_balance - deduct })
+    .update({
+      lead_credits_balance:         ws.lead_credits_balance - deduct,
+      subscription_credits_balance: newSubBalance,
+    })
     .eq("id", workspaceId);
 
   // Use rpc-style increment for credits_used to avoid stale reads
