@@ -3,6 +3,7 @@ import { createOAuth2Client, watchGmailInbox } from "@/lib/outreach/gmail";
 import { createAdminClient } from "@/lib/supabase/server";
 import { encrypt } from "@/lib/outreach/crypto";
 import { google } from "googleapis";
+import { checkInboxAccess } from "@/lib/outreach/inbox-access";
 
 export async function GET(req: NextRequest) {
   const url   = new URL(req.url);
