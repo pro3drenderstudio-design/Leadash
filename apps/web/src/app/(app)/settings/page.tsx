@@ -380,8 +380,8 @@ function BillingTab() {
           </div>
           <div className="text-right">
             <p className="text-white font-bold text-xl">
-              {fmtPrice(currentPlan)}
-              {currentPlan.priceNgn > 0 && <span className="text-white/30 text-sm font-normal">/mo</span>}
+              {currentPlan ? fmtPrice(currentPlan) : "Free"}
+              {(currentPlan?.price_ngn ?? 0) > 0 && <span className="text-white/30 text-sm font-normal">/mo</span>}
             </p>
             <a href="/api/billing/portal" className="text-blue-400 text-xs hover:underline mt-0.5 block">Manage subscription →</a>
           </div>
