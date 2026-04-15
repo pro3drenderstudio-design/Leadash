@@ -1,4 +1,19 @@
 import Link from "next/link";
+import { createAdminClient } from "@/lib/supabase/server";
+
+async function getSupportEmail(): Promise<string> {
+  try {
+    const db = createAdminClient();
+    const { data } = await db
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "support_email")
+      .single();
+    return (data?.value as string) ?? "support@leadash.io";
+  } catch {
+    return "support@leadash.io";
+  }
+}
 
 function Logo() {
   return (
