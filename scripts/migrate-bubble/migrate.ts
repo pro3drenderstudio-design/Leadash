@@ -100,12 +100,12 @@ function slugify(text: string): string {
 }
 
 function bubbleId(row: Record<string, string>): string {
-  // Try all known Bubble ID column name variants
-  const explicit = pick(row, '_id', 'Unique ID', 'unique_id', 'id', 'ID', 'Bubble ID', 'bubble_id');
+  // Bubble exports its primary key as the "Slug" column
+  const explicit = pick(row, 'Slug', 'slug', '_id', 'Unique ID', 'unique_id', 'id', 'ID', 'Bubble ID', 'bubble_id');
   if (explicit) return explicit;
-  // Last resort: use the very first column's value (Bubble puts the ID first)
+  // Last resort: use the very first column's value
   const firstVal = Object.values(row)[0]?.trim();
-  return firstVal || '';
+  return (firstVal && firstVal !== '0') ? firstVal : '';
 }
 
 // ─── 1. Users ─────────────────────────────────────────────────────────────────
