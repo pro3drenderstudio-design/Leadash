@@ -3,12 +3,11 @@ import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { checkDomains } from "@/lib/outreach/porkbun";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 
-// $2 per inbox per month (recurring)
-const INBOX_MONTHLY_PRICE_USD = 2;
 // $1 service fee on top of the at-cost domain price
 const DOMAIN_SERVICE_FEE_USD = 1;
-// Approximate NGN/USD exchange rate — update periodically or fetch live
+// Approximate NGN/USD exchange rate for domain cost conversion only
 const NGN_PER_USD = 1600;
 
 function getStripe() {
