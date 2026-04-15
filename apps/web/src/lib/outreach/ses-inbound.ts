@@ -324,7 +324,8 @@ export function parseRawEmail(raw: string): ParsedInboundEmail | null {
   if (!fromRaw || !toRaw) return null;
 
   const { email: fromEmail, name: fromName } = parseAddress(fromRaw);
-  const { email: toEmail }                   = parseAddress(toRaw);
+  const toEmails                             = parseAllAddresses(toRaw);
+  const toEmail                              = toEmails[0] ?? "";
 
   let receivedAt: string;
   try { receivedAt = new Date(dateRaw ?? "").toISOString(); }
