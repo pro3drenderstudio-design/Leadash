@@ -54,7 +54,7 @@ function Nav() {
           <Link
             href="/signup"
             className="text-sm font-semibold text-white px-5 py-2 rounded-xl transition-all"
-            style={{ background: "linear-gradient(135deg, #1d4ed8, #5b21b6)", boxShadow: "0 0 20px rgba(99,102,241,0.4)" }}
+            style={{ background: "linear-gradient(135deg, #f97316, #ea580c)", boxShadow: "0 0 20px rgba(249,115,22,0.4)" }}
           >
             Start for free
           </Link>
