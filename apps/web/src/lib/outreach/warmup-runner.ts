@@ -119,7 +119,7 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     if (!recipient || !sender) continue;
 
     const replyWarmupId = crypto.randomUUID();
-    const tpl   = selectReplyTemplate(`reply-${ws.id}`);
+    const tpl   = selectReplyTemplate(`reply-${ws.id}`, sender?.first_name);
     const subj  = ws.subject ? `Re: ${ws.subject}` : "Re: (no subject)";
     const html  = `<!--pps-ref:${replyWarmupId}--><p>${tpl.body}</p>`;
     const hdr   = { "X-LD-Ref": replyWarmupId };
