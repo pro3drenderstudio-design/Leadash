@@ -91,7 +91,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                     href={item.href}
                     className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
                       active
-                        ? "bg-blue-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
+                        ? "bg-orange-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
                         : "text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5"
                     }`}
                   >
