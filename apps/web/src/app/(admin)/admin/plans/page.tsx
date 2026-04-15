@@ -123,19 +123,19 @@ function PlanCard({
       isDirty ? "border-blue-400 dark:border-blue-500/60 ring-1 ring-blue-400/30" : "border-slate-200 dark:border-white/10"
     }`}>
       {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <input
             type="text"
             value={merged.name}
             onChange={e => set("name", e.target.value)}
-            className="text-base font-bold text-slate-800 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-white/20 focus:border-blue-400 focus:outline-none transition-colors"
+            className="text-base font-bold text-slate-800 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-white/20 focus:border-blue-400 focus:outline-none transition-colors w-full"
           />
-          <span className="text-xs text-slate-400 dark:text-white/30 font-mono">{plan.plan_id}</span>
+          <span className="text-[10px] text-slate-300 dark:text-white/20 font-mono">{plan.plan_id}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 dark:text-white/30">
-            {merged.is_active ? "Visible to users" : "Hidden"}
+        <div className="flex-shrink-0 flex items-center gap-2">
+          <span className="text-xs text-slate-400 dark:text-white/30 whitespace-nowrap">
+            {merged.is_active ? "Visible" : "Hidden"}
           </span>
           <Toggle checked={merged.is_active} onChange={v => set("is_active", v)} />
         </div>
