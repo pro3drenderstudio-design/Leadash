@@ -206,6 +206,10 @@ function NewInboxPageInner() {
   );
 }
 
+export default function NewInboxPage() {
+  return <Suspense><NewInboxPageInner /></Suspense>;
+}
+
 function Field({
   label, value, onChange, placeholder, type = "text", required,
 }: {
