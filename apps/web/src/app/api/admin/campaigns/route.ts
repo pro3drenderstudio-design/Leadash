@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Apply workspace name search after enrichment
-  let enriched = (campaigns ?? []).map(c => {
+  let enriched = (campaigns ?? []).map((c: Record<string, unknown> & { workspace_id: string; name: string }) => {
     const ws = wsMap.get(c.workspace_id);
     return {
       ...c,
