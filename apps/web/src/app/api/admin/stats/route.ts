@@ -44,13 +44,17 @@ export async function GET() {
     adminClient.from("workspaces").select("created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: true }),
   ]);
 
+  type CreditTx = { type: string; amount: number };
+  type SignupRow = { created_at: string };
+
   // Aggregate credit stats for this month
-  const creditsPurchased = (creditStats ?? []).filter(t => t.type === "purchase" || t.type === "grant").reduce((s, t) => s + (t.amount ?? 0), 0);
-  const creditsConsumed  = (creditStats ?? []).filter(t => t.type === "consume" || t.type === "reserve").reduce((s, t) => s + Math.abs(t.amount ?? 0), 0);
+  const creditRows = (creditStats ?? []) as CreditTx[];
+  const creditsPurchased = creditRows.filter(t => t.type === "purchase" || t.type === "grant").reduce((s, t) => s + (t.amount ?? 0), 0);
+  const creditsConsumed  = creditRows.filter(t => t.type === "consume" || t.type === "reserve").reduce((s, t) => s + Math.abs(t.amount ?? 0), 0);
 
   // Group signups by day for sparkline (last 30 days)
   const signupMap: Record<string, number> = {};
-  (signupsByDay ?? []).forEach(w => {
+  ((signupsByDay ?? []) as SignupRow[]).forEach(w => {
     const day = w.created_at.slice(0, 10);
     signupMap[day] = (signupMap[day] ?? 0) + 1;
   });
