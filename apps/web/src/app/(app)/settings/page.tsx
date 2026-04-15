@@ -321,10 +321,9 @@ const TX_COLORS: Record<string, string> = { grant: "text-emerald-400", purchase:
 
 type Transaction = { id: string; type: string; amount: number; description: string | null; created_at: string };
 
-const PLAN_ORDER = ["free", "starter", "growth", "scale", "enterprise"] as const;
-
 function BillingTab() {
   const [planId, setPlanId]         = useState("free");
+  const [plans, setPlans]           = useState<PlanConfig[]>([]);
   const [balance, setBalance]       = useState(0);
   const [transactions, setTx]       = useState<Transaction[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -336,10 +335,12 @@ function BillingTab() {
     Promise.all([
       wsGet<{ plan_id: string }>("/api/settings/profile"),
       wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits"),
-    ]).then(([profile, credits]) => {
+      fetch("/api/billing/plans").then(r => r.json()) as Promise<{ plans: PlanConfig[] }>,
+    ]).then(([profile, credits, plansData]) => {
       setPlanId(profile.plan_id ?? "free");
       setBalance(credits.balance ?? 0);
       setTx(credits.transactions ?? []);
+      setPlans(plansData.plans ?? []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -356,12 +357,11 @@ function BillingTab() {
     }
   }
 
-  const plans = PLAN_ORDER.map(id => PLANS[id]);
-  const currentPlan = PLANS[planId as keyof typeof PLANS] ?? PLANS.free;
+  const currentPlan = plans.find(p => p.plan_id === planId) ?? plans.find(p => p.plan_id === "free");
 
-  function fmtPrice(plan: typeof PLANS[keyof typeof PLANS]) {
-    if (plan.priceNgn === 0) return "Free";
-    return isNgn ? `₦${plan.priceNgn.toLocaleString()}` : `$${plan.price}`;
+  function fmtPrice(plan: PlanConfig) {
+    if (plan.price_ngn === 0) return "Free";
+    return isNgn ? `₦${plan.price_ngn.toLocaleString()}` : `$${plan.price_usd}`;
   }
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-2xl animate-pulse" />)}</div>;
