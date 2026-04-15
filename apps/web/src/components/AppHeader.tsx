@@ -229,7 +229,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
           >
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)" }}
+              style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
             >
               {initials}
             </div>
@@ -253,7 +253,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                 <div className="flex items-center gap-2.5">
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)" }}
+                    style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
                   >
                     {initials}
                   </div>
