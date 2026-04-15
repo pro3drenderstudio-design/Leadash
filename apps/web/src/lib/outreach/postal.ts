@@ -115,6 +115,40 @@ export async function deleteSmtpCredential(login: string): Promise<void> {
   await agentFetch<{ ok: boolean }>("DELETE", "/credentials", { name: login });
 }
 
+/**
+ * Create a catch-all inbound HTTP route for a domain in Postal.
+ * All mail arriving at *@domain will be forwarded as JSON POST to webhookUrl.
+ *
+ * Agent endpoint to implement:
+ *   POST /routes
+ *   Body: { domain: string, webhook_url: string }
+ *   Action: create (or upsert) a Postal HTTP endpoint route for the domain
+ *           that forwards every inbound message to webhook_url with JSON:
+ *           {
+ *             to, from, from_name, subject,
+ *             text, html, message_id,
+ *             in_reply_to, references, x_ld_ref,
+ *             received_at
+ *           }
+ *   Response: { ok: true }
+ */
+export async function createInboundRoute(domain: string, webhookUrl: string): Promise<void> {
+  await agentFetch<{ ok: boolean }>("POST", "/routes", { domain, webhook_url: webhookUrl });
+}
+
+/**
+ * Remove the inbound HTTP route for a domain (e.g. when the domain is deleted).
+ *
+ * Agent endpoint to implement:
+ *   DELETE /routes
+ *   Body: { domain: string }
+ *   Action: remove the Postal HTTP endpoint route for the domain
+ *   Response: { ok: true }
+ */
+export async function deleteInboundRoute(domain: string): Promise<void> {
+  await agentFetch<{ ok: boolean }>("DELETE", "/routes", { domain });
+}
+
 interface SmtpSettings {
   host:      string;
   port:      number;
