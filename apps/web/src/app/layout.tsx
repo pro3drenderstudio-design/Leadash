@@ -9,8 +9,8 @@ export const metadata: Metadata = {
   title: "Leadash — Cold outreach at scale",
   description: "Send personalized cold emails at scale with inbox warmup, AI reply detection, and deep analytics.",
   icons: {
-    icon:  [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/favicon.svg" }],
+    icon:  [{ url: "/Logo_Icon_Colored.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/Logo_Icon_Colored.svg" }],
   },
 };
 
