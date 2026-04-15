@@ -17,6 +17,9 @@ const TX_LABELS: Record<string, string> = {
   reserve:  "Reserved",
   consume:  "Used",
   refund:   "Refunded",
+  // Bubble migration types (capitalised)
+  Credit:   "Credit",
+  Debit:    "Debit",
 };
 
 const TX_COLORS: Record<string, string> = {
@@ -25,7 +28,15 @@ const TX_COLORS: Record<string, string> = {
   refund:   "text-emerald-400",
   reserve:  "text-amber-400",
   consume:  "text-red-400",
+  // Bubble migration types
+  Credit:   "text-emerald-400",
+  Debit:    "text-red-400",
 };
+
+// Returns true for any type that represents a debit/spend, even if amount is positive
+function isDebitType(type: string): boolean {
+  return type === "consume" || type === "reserve" || type === "Debit";
+}
 
 export default function CreditsClient() {
   const [balance, setBalance]           = useState(0);
