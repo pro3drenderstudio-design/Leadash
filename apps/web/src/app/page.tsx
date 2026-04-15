@@ -17,7 +17,7 @@ function Logo() {
 
 function GradientText({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{ background: "linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #818cf8 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+    <span style={{ background: "linear-gradient(135deg, #fdba74 0%, #f97316 50%, #fb923c 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
       {children}
     </span>
   );
