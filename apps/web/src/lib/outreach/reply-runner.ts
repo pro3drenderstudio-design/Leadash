@@ -409,10 +409,11 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
         if (!parsed) continue;
         if (parsed.messageId && seenIds.has(parsed.messageId)) continue;
 
-        // Route to the correct inbox by To: address
-        const inbox = sesInboxMap.get(parsed.toEmail);
+        // Route to the correct inbox — try all To: addresses (header may contain multiple)
+        const allTo = parsed.toEmails?.length ? parsed.toEmails : [parsed.toEmail];
+        const inbox = allTo.map(e => sesInboxMap.get(e)).find(Boolean);
         if (!inbox) {
-          console.log(`[reply-runner] SES S3: no inbox match for To: ${parsed.toEmail} (known: ${[...sesInboxMap.keys()].join(", ")})`);
+          console.log(`[reply-runner] SES S3: no inbox match for To: ${allTo.join(", ")} (known: ${[...sesInboxMap.keys()].join(", ")})`);
           continue;
         }
 
