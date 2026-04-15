@@ -364,7 +364,10 @@ export interface ReplyPollResult {
 }
 
 function isSesSmtpInbox(inbox: { imap_host?: string | null; smtp_host?: string | null; provider?: string | null }): boolean {
-  return !inbox.imap_host && (inbox.smtp_host ?? "").includes("amazonaws.com") && inbox.provider === "smtp";
+  // Any SMTP inbox without a dedicated IMAP host receives inbound mail via SES (S3 bucket).
+  // This covers both legacy SES-SMTP inboxes and Postal-provisioned inboxes whose MX records
+  // point to SES regardless of which SMTP server they use for sending.
+  return !inbox.imap_host && inbox.provider === "smtp";
 }
 
 export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promise<ReplyPollResult> {
