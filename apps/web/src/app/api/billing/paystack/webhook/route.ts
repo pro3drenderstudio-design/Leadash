@@ -190,11 +190,22 @@ export async function POST(req: NextRequest) {
 
       await purchaseDomain(domainRecord.domain, registrant);
 
+      // ── Register domain with Postal + get DKIM public key ──────────────────
       await setStatus("dns_pending");
-      const { dkimTokens } = await registerDomain(domainRecord.domain);
+      const postalDomain = await registerDomain(domainRecord.domain);
 
-      const dnsRecords = buildMailDnsRecords(domainRecord.domain, dkimTokens);
-      await publishDnsRecords(domainRecord.domain, dnsRecords);
+      // ── Add zone to Cloudflare + publish Postal DNS records ────────────────
+      const { addZone, publishDnsRecords: publishDns, buildPostalMailDnsRecords: buildDns } =
+        await import("@/lib/outreach/cloudflare");
+      await sleep(5_000);
+      const { nameservers } = await addZone(domainRecord.domain);
+      const { updateNameservers } = await import("@/lib/outreach/porkbun");
+      await updateNameservers(domainRecord.domain, nameservers);
+
+      const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+      if (!postalIp) throw new Error("POSTAL_SERVER_IP env var is not set");
+      const dnsRecords = buildDns(domainRecord.domain, postalIp, postalDomain.dkim_public_key);
+      await publishDns(domainRecord.domain, dnsRecords);
 
       await db
         .from("outreach_domains")
@@ -208,9 +219,9 @@ export async function POST(req: NextRequest) {
         verified = await isDomainVerified(domainRecord.domain);
         if (verified) break;
       }
-      if (verified) await enableDkimSigning(domainRecord.domain);
 
-      const smtp = getSmtpCredentials();
+      // ── Create per-mailbox Postal SMTP credentials + inboxes ──────────────
+      const smtpSettings = getSmtpSettings();
       const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
       const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
@@ -221,6 +232,7 @@ export async function POST(req: NextRequest) {
 
       for (const login of logins) {
         const email = `${login}@${domainRecord.domain}`;
+        const cred  = await createSmtpCredential(domainRecord.domain, email);
 
         await db.from("outreach_inboxes").insert({
           workspace_id:         workspaceId,
@@ -229,10 +241,10 @@ export async function POST(req: NextRequest) {
           email_address:        email,
           provider:             "smtp",
           status:               "active",
-          smtp_host:            smtp.host,
-          smtp_port:            smtp.port,
-          smtp_user:            smtp.username,
-          smtp_pass_encrypted:  encrypt(smtp.password),
+          smtp_host:            smtpSettings.host,
+          smtp_port:            smtpSettings.port,
+          smtp_user:            cred.username,
+          smtp_pass_encrypted:  encrypt(cred.password),
           imap_host:            null,
           imap_port:            null,
           daily_send_limit:     30,
@@ -243,6 +255,14 @@ export async function POST(req: NextRequest) {
           first_name:           domainRecord.first_name ?? null,
           last_name:            domainRecord.last_name  ?? null,
         });
+      }
+
+      // ── Register inbound route in Postal ───────────────────────────────────
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      try {
+        await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`);
+      } catch (err) {
+        console.warn(`[paystack-webhook] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
 
       await db
