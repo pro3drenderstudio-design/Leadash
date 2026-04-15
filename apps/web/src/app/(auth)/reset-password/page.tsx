@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
 
         <button
           type="submit" disabled={loading}
-          className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition-all hover:bg-blue-500 disabled:opacity-50 shadow-[0_1px_2px_rgba(0,0,0,0.4)]"
+          className="w-full rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white transition-all hover:bg-orange-400 disabled:opacity-50 shadow-[0_1px_2px_rgba(0,0,0,0.4)]"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
