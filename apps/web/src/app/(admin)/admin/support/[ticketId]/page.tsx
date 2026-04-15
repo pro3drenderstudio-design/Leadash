@@ -70,10 +70,11 @@ export default function TicketDetailPage() {
       .then(d => {
         if (d.error) { setError(d.error); setLoading(false); return; }
         setTicket(d.ticket);
+        setMessages(d.messages ?? []);
         setUserEmail(d.user_email);
         setWorkspaceName(d.workspace_name);
         setWorkspacePlan(d.workspace_plan);
-        setReply(d.ticket.admin_reply ?? "");
+        setReply("");
         setReplyStatus(d.ticket.status);
         setStatusVal(d.ticket.status);
         setPriorityVal(d.ticket.priority);
