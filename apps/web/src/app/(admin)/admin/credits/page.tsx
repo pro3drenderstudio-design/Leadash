@@ -81,7 +81,8 @@ function CreditsInner() {
         setTotal(d.total ?? 0);
         setSummary(d.summary ?? { total_granted: 0, total_purchased: 0, total_consumed: 0 });
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, [page, search, type, dateFrom, dateTo]);
 
   useEffect(() => { fetchCredits(); }, [fetchCredits]);
