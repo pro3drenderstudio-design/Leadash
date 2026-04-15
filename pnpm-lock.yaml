@@ -177,6 +177,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@azure/msal-node':
+        specifier: ^5.1.2
+        version: 5.1.2
+      '@microsoft/microsoft-graph-client':
+        specifier: ^3.0.7
+        version: 3.0.7
       '@supabase/supabase-js':
         specifier: ^2.49.4
         version: 2.103.0
