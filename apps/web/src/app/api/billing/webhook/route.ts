@@ -42,6 +42,36 @@ export async function POST(req: NextRequest) {
         .eq("stripe_customer_id", sub.customer as string);
       break;
     }
+
+    // Grant included monthly credits on successful invoice payment
+    case "invoice.payment_succeeded": {
+      const inv = event.data.object as Stripe.Invoice;
+      // Only recurring subscription invoices (not the first draft or setup)
+      if (inv.billing_reason !== "subscription_cycle" && inv.billing_reason !== "subscription_create") break;
+      if (!inv.customer || !inv.subscription) break;
+
+      const { data: ws } = await db
+        .from("workspaces")
+        .select("id, plan_id, lead_credits_balance")
+        .eq("stripe_customer_id", inv.customer as string)
+        .maybeSingle();
+
+      if (!ws) break;
+
+      const planConfig = await getPlanById(ws.plan_id ?? "free");
+      if (planConfig.included_credits <= 0) break;
+
+      await db.from("workspaces")
+        .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + planConfig.included_credits })
+        .eq("id", ws.id);
+      await db.from("lead_credit_transactions").insert({
+        workspace_id: ws.id,
+        type:         "grant",
+        amount:       planConfig.included_credits,
+        description:  `Monthly credits — ${planConfig.name} plan${inv.billing_reason === "subscription_cycle" ? " renewal" : ""}`,
+      });
+      break;
+    }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       await db
