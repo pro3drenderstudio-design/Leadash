@@ -16,8 +16,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
+// Resolve the script's own directory robustly across CJS and ESM/tsx modes
+function resolveScriptDir(): string {
+  // tsx in some configurations sets __dirname; fall back to process.cwd()
+  try {
+    if (typeof __dirname === 'string' && __dirname) return __dirname;
+  } catch {}
+  return process.cwd();
+}
+const SCRIPT_DIR = resolveScriptDir();
+
 // Load env from the web app
-dotenv.config({ path: path.join(__dirname, '../../apps/web/.env') });
+const envPath = path.resolve(SCRIPT_DIR, '../../apps/web/.env');
+dotenv.config({ path: envPath });
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -31,7 +42,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const EXPORTS_DIR = path.join(__dirname, 'exports');
+// Prefer cwd-relative exports (works when running via `npm run migrate` from this dir),
+// fall back to script-dir-relative exports.
+const EXPORTS_DIR = (() => {
+  const cwdBased = path.resolve(process.cwd(), 'exports');
+  if (fs.existsSync(cwdBased)) return cwdBased;
+  return path.resolve(SCRIPT_DIR, 'exports');
+})();
 
 // ─── Bubble slug → Supabase UUID maps ────────────────────────────────────────
 const userMap = new Map<string, string>();       // bubbleId → auth user UUID
