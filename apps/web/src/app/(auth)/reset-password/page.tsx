@@ -42,10 +42,12 @@ export default function ResetPasswordPage() {
         <p className="text-white/40 text-sm mb-6">You can now sign in with your new password.</p>
         <Link href="/login" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">Go to sign in →</Link>
       </div>
+      </Wrap>
     );
   }
 
   return (
+    <Wrap>
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-sm p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]">
       <div className="mb-7 text-center">
         <h1 className="text-[22px] font-semibold tracking-tight text-white">Set new password</h1>
