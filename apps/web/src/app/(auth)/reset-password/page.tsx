@@ -20,8 +20,18 @@ export default function ResetPasswordPage() {
     else setDone(true);
   }
 
+  const Wrap = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex items-center justify-center min-h-screen px-4">
+      <div className="w-full max-w-[400px]">
+        <div className="flex justify-center mb-9"><img src="/logo.svg" alt="Leadash" className="h-10 w-auto" /></div>
+        {children}
+      </div>
+    </div>
+  );
+
   if (done) {
     return (
+      <Wrap>
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-sm p-8 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15 border border-green-500/20">
           <svg className="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
