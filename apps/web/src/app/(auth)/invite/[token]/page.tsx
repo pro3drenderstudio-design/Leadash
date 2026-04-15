@@ -58,5 +58,6 @@ export default function InvitePage() {
         {accepting ? "Joining…" : "Accept invitation"}
       </button>
     </div>
+    </Wrap>
   );
 }
