@@ -96,8 +96,13 @@ export default function TicketDetailPage() {
     });
     const data = await res.json();
     setSaving(false);
-    if (data.ok) { setSaveMsg("Reply saved."); fetchTicket(); }
-    else setSaveMsg(`Error: ${data.error}`);
+    if (data.ok) {
+      setSaveMsg("Reply sent · User notified by email.");
+      setReply("");
+      fetchTicket();
+    } else {
+      setSaveMsg(`Error: ${data.error}`);
+    }
   }
 
   async function updateMeta() {
