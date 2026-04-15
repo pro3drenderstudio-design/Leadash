@@ -310,63 +310,56 @@ async function migrateLeadRecords() {
     const inserts = [];
 
     for (const row of batch) {
-      const userBubbleId = pick(row, 'User', 'user');
-      const campaignBubbleId = pick(row, 'Campaign', 'campaign');
-      const workspaceId = workspaceMap.get(userBubbleId);
+      // User FK = email; Campaign FK = campaign's unique id
+      const userEmail = pick(row, 'user', 'User');
+      const campaignBubbleId = row['campaign']?.trim() || row['Campaign']?.trim() || '';
+      const workspaceId = workspaceMap.get(userEmail);
       const campaignId = campaignMap.get(campaignBubbleId);
 
       if (!workspaceId || !campaignId) continue;
 
-      const email = pick(row, 'Email_address', 'email_address', 'Email', 'email');
+      const email = pick(row, 'email_address', 'Email_address', 'email', 'Email');
       if (!email) continue;
 
-      // Fields that don't have a dedicated column go into raw_data
+      // Fields without dedicated columns → raw_data
       const rawData: Record<string, string> = {};
-      const overflow = [
-        ['city', 'City', 'city'],
-        ['state', 'State', 'state'],
-        ['campaign_type', 'Campaign_Type', 'Campaign Type', 'campaign_type'],
-        ['company_domain', 'Company_domain', 'company_domain'],
-        ['company_full_address', 'Company_full_address', 'company_full_address'],
-        ['company_postal_code', 'Company_postal_code', 'company_postal_code'],
-        ['company_street_address', 'Company_street_address', 'Company_street_ad', 'company_street_address'],
-        ['company_technologies', 'Company_technologies', 'Company_technologi', 'company_technologies'],
-        ['company_total_funding', 'Company_total_funding', 'Company_total_fund', 'company_total_funding'],
-        ['company_annual_revenue_min', 'Company_annual_revenue_min', 'company_annual_re'],
-        ['keywords', 'Keywords', 'keywords'],
-      ] as [string, ...string[]][];
-
-      for (const [key, ...variants] of overflow) {
-        const v = pick(row, ...variants);
-        if (v) rawData[key] = v;
+      const overflowKeys = [
+        'city', 'state', 'Campaign_Type', 'company_domain', 'company_full_address',
+        'company_postal_code', 'company_street_address', 'company_technologies',
+        'company_total_funding', 'company_annual_revenue', 'company_annual_revenue_clean',
+        'keywords',
+      ];
+      for (const k of overflowKeys) {
+        const v = row[k]?.trim();
+        if (v && v !== '0') rawData[k] = v;
       }
 
       inserts.push({
         workspace_id: workspaceId,
         campaign_id: campaignId,
         email,
-        first_name: pick(row, 'First_name', 'first_name', 'First Name') || null,
-        last_name: pick(row, 'Last_name', 'last_name', 'Last Name') || null,
-        company: pick(row, 'Company_name', 'company_name', 'Company') || null,
-        title: pick(row, 'Job_title', 'job_title') || null,
-        website: pick(row, 'Company_website', 'company_website') || null,
-        linkedin_url: pick(row, 'Linkedin', 'linkedin', 'LinkedIn') || null,
-        phone: pick(row, 'Phone', 'phone') || null,
-        location: pick(row, 'Country', 'country') || null,
-        industry: pick(row, 'Industry', 'industry') || null,
-        verification_status: mapVerificationStatus(pick(row, 'Verification_status', 'verification_status')),
-        personalized_line: pick(row, 'Ai_first_line', 'ai_first_line') || null,
-        department: pick(row, 'Functional_level', 'functional_level') || null,
-        seniority: pick(row, 'Seniority_level', 'seniority_level') || null,
-        org_city: pick(row, 'Company_city', 'company_city') || null,
-        org_state: pick(row, 'Company_state', 'company_state') || null,
-        org_country: pick(row, 'Company_country', 'company_country') || null,
-        org_description: pick(row, 'Company_description', 'company_description') || null,
-        org_founded_year: pick(row, 'Company_founded_year', 'Company_founded', 'company_founded') || null,
-        org_size: pick(row, 'Company_size', 'company_size') || null,
-        org_linkedin_url: pick(row, 'Company_linkedin', 'company_linkedin') || null,
+        first_name: pick(row, 'first_name', 'First_name', 'First Name') || null,
+        last_name: pick(row, 'last_name', 'Last_name', 'Last Name') || null,
+        company: pick(row, 'company_name', 'Company_name', 'Company') || null,
+        title: pick(row, 'job_title', 'Job_title') || null,
+        website: pick(row, 'company_website', 'Company_website') || null,
+        linkedin_url: pick(row, 'linkedin', 'Linkedin', 'LinkedIn') || null,
+        phone: pick(row, 'phone', 'Phone') || null,
+        location: pick(row, 'country', 'Country') || null,
+        industry: pick(row, 'industry', 'Industry') || null,
+        verification_status: mapVerificationStatus(row['verification_status']?.trim() || ''),
+        personalized_line: pick(row, 'ai_first_line', 'Ai_first_line') || null,
+        department: pick(row, 'functional_level', 'Functional_level') || null,
+        seniority: pick(row, 'seniority_level', 'Seniority_level') || null,
+        org_city: pick(row, 'company_city', 'Company_city') || null,
+        org_state: pick(row, 'company_state', 'Company_state') || null,
+        org_country: pick(row, 'company_country', 'Company_country') || null,
+        org_description: pick(row, 'company_description', 'Company_description') || null,
+        org_founded_year: pick(row, 'company_founded_year', 'Company_founded_year') || null,
+        org_size: pick(row, 'company_size', 'Company_size') || null,
+        org_linkedin_url: pick(row, 'company_linkedin', 'Company_linkedin') || null,
         raw_data: Object.keys(rawData).length ? rawData : null,
-        created_at: parseDate(pick(row, 'Created Date', 'created_date')) ?? new Date().toISOString(),
+        created_at: parseDate(pick(row, 'Creation Date', 'Created Date')) ?? new Date().toISOString(),
       });
     }
 
