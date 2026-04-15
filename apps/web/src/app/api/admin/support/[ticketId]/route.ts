@@ -87,5 +87,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
     .single();
 
   if (error || !data) return NextResponse.json({ error: error?.message ?? "Update failed" }, { status: 400 });
+
+  // If a reply was included, insert into thread + email user
+  if (body.admin_reply) {
+    await ctx.adminClient.from("ticket_messages").insert({
+      ticket_id:   ticketId,
+      sender_type: "admin",
+      user_id:     ctx.user.id,
+      message:     body.admin_reply,
+    }).catch(() => null);
+
+    // Fire-and-forget email to user
+    (async () => {
+      try {
+        const [
+          { data: { user: ticketUser } },
+          { data: supportSetting },
+        ] = await Promise.all([
+          ctx.adminClient.auth.admin.getUserById(data.user_id),
+          ctx.adminClient.from("admin_settings").select("value").eq("key", "support_email").single(),
+        ]);
+        const userEmail    = ticketUser?.email ?? "";
+        const supportEmail = (supportSetting?.value as string) ?? "support@leadash.io";
+        if (userEmail) {
+          await sendUserReplyNotification({
+            userEmail,
+            ticketNumber: data.ticket_number,
+            subject:      data.subject,
+            adminReply:   body.admin_reply,
+            supportEmail,
+          });
+        }
+      } catch { /* non-fatal */ }
+    })();
+  }
+
   return NextResponse.json({ ok: true, ticket: data });
 }
