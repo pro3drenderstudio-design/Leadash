@@ -13,8 +13,7 @@ async function getActiveWorkspaceIds(): Promise<string[]> {
   const { data } = await db
     .from("workspaces")
     .select("id")
-    .in("plan_status", ["active", "trialing"])
-    .lt("sends_this_month", db.raw("max_monthly_sends") as unknown as number);
+    .in("plan_status", ["active", "trialing"]);
   return (data ?? []).map((r: { id: string }) => r.id);
 }
 
