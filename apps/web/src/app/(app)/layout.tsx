@@ -24,6 +24,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
     <CurrencyProvider>
       <ImpersonationBanner />
+      {workspace.plan_id === "free" && workspace.trial_ends_at && (
+        <TrialBanner trialEndsAt={workspace.trial_ends_at} />
+      )}
       <div className="flex h-screen overflow-hidden">
         <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} />
         <div className="flex-1 flex flex-col overflow-hidden">
