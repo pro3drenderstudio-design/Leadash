@@ -37,18 +37,22 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type Tx        = { id: string; workspace_id: string; [k: string]: unknown };
+  type Workspace = { id: string; name: string; owner_id: string };
+
   // Enrich with workspace names
-  const workspaceIds = [...new Set((transactions ?? []).map(t => t.workspace_id))];
-  const wsMap = new Map<string, { name: string; owner_id: string }>();
+  const rows = (transactions ?? []) as Tx[];
+  const workspaceIds = [...new Set(rows.map(t => t.workspace_id))];
+  const wsMap = new Map<string, Workspace>();
   if (workspaceIds.length) {
     const { data: workspaces } = await ctx.adminClient
       .from("workspaces")
       .select("id, name, owner_id")
       .in("id", workspaceIds);
-    (workspaces ?? []).forEach(w => wsMap.set(w.id, { name: w.name, owner_id: w.owner_id }));
+    (workspaces as Workspace[] ?? []).forEach(w => wsMap.set(w.id, w));
   }
 
-  let enriched = (transactions ?? []).map(t => ({
+  let enriched = rows.map(t => ({
     ...t,
     workspace_name: wsMap.get(t.workspace_id)?.name ?? "",
   }));
