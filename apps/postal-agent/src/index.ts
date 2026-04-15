@@ -24,7 +24,7 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import mysql from "mysql2/promise";
-import { generateKeyPairSync, randomBytes, createPublicKey, createPrivateKey } from "crypto";
+import { randomBytes, createPublicKey, createPrivateKey } from "crypto";
 import { readFileSync } from "fs";
 
 const app  = express();
