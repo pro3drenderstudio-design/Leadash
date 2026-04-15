@@ -40,7 +40,7 @@ export default function ResetPasswordPage() {
         </div>
         <h2 className="text-lg font-semibold text-white mb-2">Password updated</h2>
         <p className="text-white/40 text-sm mb-6">You can now sign in with your new password.</p>
-        <Link href="/login" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">Go to sign in →</Link>
+        <Link href="/login" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">Go to sign in →</Link>
       </div>
       </Wrap>
     );
