@@ -285,10 +285,10 @@ export function buildPostalMailDnsRecords(
       name:  "@",
       value: `v=spf1 ip4:${postalIp} ~all`,
     },
-    // DKIM — Postal-generated 2048-bit key, selector "postal"
+    // DKIM — Postal signing key, selector "postal-1"
     {
       type:  "TXT",
-      name:  "postal._domainkey",
+      name:  "postal-1._domainkey",
       value: `v=DKIM1; k=rsa; p=${dkimPublicKey}`,
     },
     // DMARC
