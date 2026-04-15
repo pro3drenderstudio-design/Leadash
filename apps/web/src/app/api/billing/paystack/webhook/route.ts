@@ -285,8 +285,15 @@ export async function POST(req: NextRequest) {
       if (ws) {
         const plan = await getPlanById(ws.plan_id ?? "free");
         if (plan.included_credits > 0) {
+          const currentSub   = ws.subscription_credits_balance ?? 0;
+          const currentTotal = ws.lead_credits_balance ?? 0;
+          // Renewal: expire unused subscription credits, grant new allocation
+          const newTotal = currentTotal - currentSub + plan.included_credits;
           await db.from("workspaces")
-            .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + plan.included_credits })
+            .update({
+              lead_credits_balance:         Math.max(0, newTotal),
+              subscription_credits_balance: plan.included_credits,
+            })
             .eq("id", ws.id);
           await db.from("lead_credit_transactions").insert({
             workspace_id: ws.id,
