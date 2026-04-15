@@ -74,6 +74,7 @@ export default function SupportPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading]       = useState(true);
   const [filter, setFilter]         = useState<string>("all");
+  const [supportEmail, setSupportEmail] = useState("support@leadash.io");
 
   // Form state
   const [subject, setSubject]       = useState("");
@@ -92,6 +93,10 @@ export default function SupportPage() {
       .then(d => setTickets(Array.isArray(d) ? d : []))
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetch("/api/public/settings")
+      .then(r => r.json())
+      .then(d => { if (d.settings?.support_email) setSupportEmail(d.settings.support_email as string); })
+      .catch(() => {});
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
