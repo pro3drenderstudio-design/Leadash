@@ -18,6 +18,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!admin) redirect("/dashboard");
 
   return (
+    <>
+    <ImpersonationBanner />
     <div className="flex h-screen overflow-hidden">
       <AdminSidebar
         adminEmail={user.email ?? ""}
