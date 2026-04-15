@@ -201,6 +201,28 @@ function parseAddress(val: string): { email: string; name: string | null } {
   return { email: decoded.trim().toLowerCase(), name: null };
 }
 
+/** Parse all addresses from a To/Cc header that may contain multiple recipients */
+function parseAllAddresses(val: string): string[] {
+  const decoded = decodeRfc2047(val);
+  const emails: string[] = [];
+  // Extract angle-bracket addresses first
+  const angleRe = /<([^>]+)>/g;
+  let m: RegExpExecArray | null;
+  let hasAngle = false;
+  while ((m = angleRe.exec(decoded)) !== null) {
+    emails.push(m[1].trim().toLowerCase());
+    hasAngle = true;
+  }
+  if (!hasAngle) {
+    // Bare comma-separated addresses
+    for (const part of decoded.split(",")) {
+      const e = part.trim().toLowerCase();
+      if (e.includes("@")) emails.push(e);
+    }
+  }
+  return emails.filter(e => e.includes("@"));
+}
+
 function decodeTransfer(body: string, headers: string): string {
   const encM = headers.match(/content-transfer-encoding:\s*(\S+)/i);
   const enc  = (encM?.[1] ?? "7bit").toLowerCase().trim();
