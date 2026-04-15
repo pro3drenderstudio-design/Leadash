@@ -151,7 +151,8 @@ async function migrateUsers() {
 
     if (!userId) { console.error(`    ❌ Could not resolve user ID for ${email}`); continue; }
 
-    userMap.set(id, userId);
+    // Key maps by EMAIL — all other CSVs reference users by email
+    userMap.set(email, userId);
 
     // Check if a workspace already exists for this owner
     const { data: existing } = await supabase
@@ -161,7 +162,7 @@ async function migrateUsers() {
       .maybeSingle();
 
     if (existing) {
-      workspaceMap.set(id, existing.id);
+      workspaceMap.set(email, existing.id);
       console.log(`    ✓ Using existing workspace`);
       continue;
     }
@@ -182,7 +183,7 @@ async function migrateUsers() {
 
     if (wsErr) { console.error(`    ❌ Workspace error: ${wsErr.message}`); continue; }
 
-    workspaceMap.set(id, ws.id);
+    workspaceMap.set(email, ws.id);
 
     // Add workspace member (owner role)
     await supabase.from('workspace_members').insert({
