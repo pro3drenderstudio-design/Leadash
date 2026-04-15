@@ -584,6 +584,15 @@ export default function CrmClient() {
               {triggerMsg}{pollDetails.some((d) => d.error) ? " ⚠" : ""}
             </button>
           )}
+          {autoSyncing && (
+            <span className="text-white/25 text-[10px] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60 animate-pulse inline-block" />
+              Checking replies…
+            </span>
+          )}
+          {!autoSyncing && lastSyncAt && (
+            <span className="text-white/20 text-[10px]">synced {timeAgo(lastSyncAt.toISOString())}</span>
+          )}
           <button
             onClick={handleTrigger}
             disabled={triggering}
