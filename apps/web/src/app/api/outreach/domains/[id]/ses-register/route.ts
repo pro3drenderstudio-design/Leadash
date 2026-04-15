@@ -93,6 +93,14 @@ export async function POST(
     }
   }
 
+  // Register inbound route in Postal so replies are delivered to the app
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  try {
+    await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`);
+  } catch (err) {
+    console.warn(`[ses-register] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
+  }
+
   return NextResponse.json({
     domain:          domainRecord.domain,
     dns_records:     dnsRecords,
