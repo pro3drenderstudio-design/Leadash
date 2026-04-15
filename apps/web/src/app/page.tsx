@@ -7,7 +7,7 @@ function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2.5 group">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/Logo_Icon_Colored.svg" className="w-8 h-8 flex-shrink-0" alt="" />
+      <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
       <span className="text-[17px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors select-none" style={{ letterSpacing: "-0.02em" }}>
         Leadash
       </span>
