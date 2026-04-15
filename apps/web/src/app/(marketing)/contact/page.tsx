@@ -80,9 +80,11 @@ function buildChannels(supportEmail: string) {
     desc: "Fastest response — typically under 2 hours",
     href: "/login",
   },
-];
+];}
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const supportEmail = await getSupportEmail();
+  const CHANNELS = buildChannels(supportEmail);
   return (
     <div className="min-h-screen" style={{ background: "#020617" }}>
       {/* Nav */}
