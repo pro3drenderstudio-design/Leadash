@@ -287,12 +287,14 @@ async function migrateLeadCampaigns() {
 // ─── 3. Lead Records ──────────────────────────────────────────────────────────
 
 function mapVerificationStatus(s: string): string | null {
-  const m: Record<string, string> = {
-    valid: 'valid', invalid: 'invalid',
-    catch_all: 'catch_all', catchall: 'catch_all',
-    disposable: 'disposable', unknown: 'unknown', pending: 'pending',
-  };
-  return m[s.toLowerCase()] ?? null;
+  const lower = s.toLowerCase().trim();
+  if (lower.startsWith('valid')) return 'valid';   // covers "valid", "valid & personalized", etc.
+  if (lower.startsWith('invalid')) return 'invalid';
+  if (lower === 'catch_all' || lower === 'catchall') return 'catch_all';
+  if (lower === 'disposable') return 'disposable';
+  if (lower === 'unknown') return 'unknown';
+  if (lower === 'pending') return 'pending';
+  return null;
 }
 
 async function migrateLeadRecords() {
