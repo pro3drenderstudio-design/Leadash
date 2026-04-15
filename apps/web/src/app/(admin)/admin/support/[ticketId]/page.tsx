@@ -3,6 +3,13 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
+interface TicketMessage {
+  id: string;
+  sender_type: "user" | "admin";
+  message: string;
+  created_at: string;
+}
+
 interface Ticket {
   id: string; ticket_number: number; subject: string; message: string;
   category: string; priority: string; status: string;
