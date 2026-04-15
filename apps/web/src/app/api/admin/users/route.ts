@@ -49,8 +49,10 @@ export async function GET(req: NextRequest) {
     wsMap.set(w.owner_id, arr);
   });
 
+  type AuthUser = { id: string; email?: string; user_metadata: Record<string, unknown>; created_at: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; banned_until?: string | null };
+
   // Enrich users
-  let enriched = allUsers.map(u => ({
+  let enriched = (allUsers as AuthUser[]).map(u => ({
     id:         u.id,
     email:      u.email ?? "",
     name:       resolveName(u.user_metadata),
