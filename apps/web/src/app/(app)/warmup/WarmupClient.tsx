@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getInboxes, updateInbox } from "@/lib/outreach/api";
+import { wsFetch } from "@/lib/workspace/client";
 import type { OutreachInboxSafe, WarmupPoolStats } from "@/types/outreach";
 
 interface WarmupActivity {
