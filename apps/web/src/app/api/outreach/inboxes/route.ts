@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
   const { workspaceId, db } = auth;
 
   const body = await req.json();
+
+  const access = await checkInboxAccess(db, workspaceId, body.email_address);
+  if (!access.ok) return NextResponse.json({ error: access.message, code: access.code }, { status: 403 });
   const insert: Record<string, unknown> = {
     workspace_id:       workspaceId,
     label:              body.label,
