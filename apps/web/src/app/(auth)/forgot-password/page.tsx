@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h2 className="text-lg font-semibold text-white mb-2">Check your inbox</h2>
         <p className="text-white/40 text-sm">We sent a reset link to <span className="text-white">{email}</span></p>
-        <Link href="/login" className="mt-6 inline-block text-sm text-orange-400 hover:text-blue-300 transition-colors">← Back to sign in</Link>
+        <Link href="/login" className="mt-6 inline-block text-sm text-orange-400 hover:text-orange-300 transition-colors">← Back to sign in</Link>
       </div>
       </div></div>
     );
