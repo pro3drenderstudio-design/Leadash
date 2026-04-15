@@ -169,10 +169,10 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
 
   // ── Step C: Spam rescue ───────────────────────────────────────────────────
   const { data: recentSends } = await db.from("outreach_warmup_sends")
-    .select("*").eq("workspace_id", workspaceId).gte("sent_at", since.toISOString()).eq("rescued_from_spam", false);
+    .select("*").in("to_inbox_id", [...localIds]).gte("sent_at", since.toISOString()).eq("rescued_from_spam", false);
 
   for (const ws of recentSends ?? []) {
-    const inbox = pool.find(p => p.id === ws.to_inbox_id);
+    const inbox = localPool.find((p: OutreachInbox) => p.id === ws.to_inbox_id);
     if (!inbox) continue;
 
     try {
