@@ -128,7 +128,7 @@ export default function SignupPage() {
 
           <h2 className="text-4xl xl:text-5xl font-bold text-white mb-4 leading-tight" style={{ letterSpacing: "-0.03em" }}>
             Outreach that<br />
-            <span style={{ background: "linear-gradient(135deg, #60a5fa, #a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+            <span style={{ background: "linear-gradient(135deg, #fdba74, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               actually converts
             </span>
           </h2>
