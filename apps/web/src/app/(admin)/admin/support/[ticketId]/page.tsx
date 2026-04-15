@@ -171,24 +171,40 @@ export default function TicketDetailPage() {
           )}
         </div>
 
-        {/* Original message */}
-        <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/10">
-          <p className="text-xs text-slate-400 dark:text-white/30 font-semibold uppercase tracking-wide mb-2">User message</p>
-          <p className="text-sm text-slate-700 dark:text-white/70 whitespace-pre-wrap leading-relaxed">{ticket.message}</p>
-        </div>
-
-        {/* Existing reply (if any) */}
-        {ticket.admin_reply && (
-          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/10">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-green-600 dark:text-green-400 font-semibold uppercase tracking-wide">Admin reply</p>
-              {ticket.admin_replied_at && (
-                <p className="text-xs text-slate-400 dark:text-white/30">{new Date(ticket.admin_replied_at).toLocaleString()}</p>
-              )}
+        {/* Conversation thread */}
+        <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/10 space-y-4">
+          <p className="text-xs text-slate-400 dark:text-white/30 font-semibold uppercase tracking-wide">Conversation</p>
+          {messages.length > 0 ? messages.map(msg => (
+            <div key={msg.id} className={`flex gap-3 ${msg.sender_type === "admin" ? "flex-row-reverse" : ""}`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold ${
+                msg.sender_type === "admin"
+                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                  : "bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-white/40"
+              }`}>
+                {msg.sender_type === "admin" ? "A" : "U"}
+              </div>
+              <div className={`flex-1 rounded-xl px-3 py-2.5 ${
+                msg.sender_type === "admin"
+                  ? "bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20"
+                  : "bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10"
+              }`}>
+                <p className={`text-[10px] mb-1 font-medium ${msg.sender_type === "admin" ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-white/30"}`}>
+                  {msg.sender_type === "admin" ? "Admin" : "User"} · {new Date(msg.created_at).toLocaleString()}
+                </p>
+                <p className="text-sm text-slate-700 dark:text-white/70 whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+              </div>
             </div>
-            <p className="text-sm text-slate-700 dark:text-white/70 whitespace-pre-wrap leading-relaxed">{ticket.admin_reply}</p>
-          </div>
-        )}
+          )) : (
+            /* Fallback: original message if no thread rows */
+            <div className="flex gap-3">
+              <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-slate-500 dark:text-white/40">U</div>
+              <div className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-xl px-3 py-2.5">
+                <p className="text-[10px] text-slate-400 dark:text-white/30 mb-1">User · {new Date(ticket.created_at).toLocaleString()}</p>
+                <p className="text-sm text-slate-700 dark:text-white/70 whitespace-pre-wrap leading-relaxed">{ticket.message}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Controls row */}
