@@ -240,7 +240,7 @@ export default async function DashboardPage() {
                 <span className="text-white/25 text-sm"> / {workspace.max_monthly_sends.toLocaleString()}</span>
               </div>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--card-icon-bg)" }}>
               <div
                 className="h-full rounded-full transition-all"
                 style={{
