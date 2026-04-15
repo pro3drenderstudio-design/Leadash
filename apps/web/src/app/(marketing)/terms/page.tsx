@@ -3,18 +3,8 @@ import Link from "next/link";
 function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2.5 group">
-      <div className="w-8 h-8 flex-shrink-0">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-          <defs>
-            <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#1d4ed8" />
-              <stop offset="100%" stopColor="#6d28d9" />
-            </linearGradient>
-          </defs>
-          <rect width="40" height="40" rx="10" fill="url(#lg)" />
-          <path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white" />
-        </svg>
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/Logo_Icon_Colored.svg" className="w-8 h-8 flex-shrink-0" alt="" />
       <span className="text-[17px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors select-none" style={{ letterSpacing: "-0.02em" }}>
         Leadash
       </span>
