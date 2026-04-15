@@ -82,6 +82,13 @@
   --dropdown-bg:         #0d1829;
   --dropdown-border:     rgba(255,255,255,0.09);
   --divider-color:       rgba(255,255,255,0.07);
+  --card-bg:             rgba(255,255,255,0.03);
+  --card-border:         rgba(255,255,255,0.07);
+  --card-icon-bg:        rgba(255,255,255,0.05);
+  --avatar-bg:           rgba(255,255,255,0.07);
+  --chart-grid:          rgba(255,255,255,0.05);
+  --chart-tick:          rgba(255,255,255,0.35);
+  --chart-legend:        rgba(255,255,255,0.5);
 }
 
 body {
