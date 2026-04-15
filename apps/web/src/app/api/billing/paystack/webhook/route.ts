@@ -3,8 +3,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPaystackSignature, verifyPaystackPayment } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { purchaseDomain, type RegistrantContact } from "@/lib/outreach/porkbun";
-import { registerDomain, isDomainVerified, enableDkimSigning, getSmtpCredentials } from "@/lib/outreach/ses";
-import { publishDnsRecords, buildMailDnsRecords } from "@/lib/outreach/cloudflare";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
+import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
 const WARMUP_DAYS = 21;
