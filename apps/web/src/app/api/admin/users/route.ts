@@ -40,8 +40,10 @@ export async function GET(req: NextRequest) {
     .from("workspaces")
     .select("id, owner_id, plan_id, name, lead_credits_balance, created_at");
 
-  const wsMap = new Map<string, typeof workspaces[0][]>();
-  (workspaces ?? []).forEach(w => {
+  type WsRow = { id: string; owner_id: string; plan_id: string | null; name: string; lead_credits_balance: number | null; created_at: string };
+  const wsRows = (workspaces ?? []) as WsRow[];
+  const wsMap = new Map<string, WsRow[]>();
+  wsRows.forEach(w => {
     const arr = wsMap.get(w.owner_id) ?? [];
     arr.push(w);
     wsMap.set(w.owner_id, arr);
