@@ -45,7 +45,8 @@ function GradientText({ children }: { children: React.ReactNode }) {
   );
 }
 
-const CHANNELS = [
+function buildChannels(supportEmail: string) {
+  return [
   {
     icon: (
       <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -64,9 +65,9 @@ const CHANNELS = [
       </svg>
     ),
     label: "Support",
-    value: "support@leadash.io",
+    value: supportEmail,
     desc: "For help with your account or campaigns",
-    href: "mailto:support@leadash.io",
+    href: `mailto:${supportEmail}`,
   },
   {
     icon: (
