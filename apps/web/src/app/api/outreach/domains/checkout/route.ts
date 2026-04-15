@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
       email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
       amountKobo:  totalNgn,
       callbackUrl: `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}${connect_only ? "&connect=1" : ""}${cfSuffix}`,
-      metadata:    { domain_record_ids: domainIdsParam, workspace_id: workspaceId },
+      metadata:    { domain_record_ids: domainIdsParam, domain_record_id: insertedIds[0], workspace_id: workspaceId },
     });
 
     await db
