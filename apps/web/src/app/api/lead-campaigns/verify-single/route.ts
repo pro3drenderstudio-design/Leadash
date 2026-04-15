@@ -18,9 +18,12 @@ export async function POST(req: NextRequest) {
   const [result] = await verifyEmails(apiKey, [email.trim().toLowerCase()]);
 
   const cost = 0.5;
-  const { data: ws } = await db.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
+  const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
   if (ws && ws.lead_credits_balance >= cost) {
-    await db.from("workspaces").update({ lead_credits_balance: ws.lead_credits_balance - cost }).eq("id", workspaceId);
+    await db.from("workspaces").update({
+      lead_credits_balance:         ws.lead_credits_balance - cost,
+      subscription_credits_balance: Math.max(0, (ws.subscription_credits_balance ?? 0) - cost),
+    }).eq("id", workspaceId);
     await db.from("lead_credit_transactions").insert({
       workspace_id: workspaceId,
       amount: -cost,
