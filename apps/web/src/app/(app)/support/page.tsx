@@ -5,6 +5,13 @@ import { getWorkspaceId } from "@/lib/workspace/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface TicketMessage {
+  id: string;
+  sender_type: "user" | "admin";
+  message: string;
+  created_at: string;
+}
+
 interface Ticket {
   id: string;
   ticket_number: number;
@@ -17,6 +24,7 @@ interface Ticket {
   admin_replied_at: string | null;
   created_at: string;
   updated_at: string;
+  messages?: TicketMessage[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
