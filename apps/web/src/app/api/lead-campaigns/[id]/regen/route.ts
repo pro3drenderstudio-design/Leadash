@@ -42,7 +42,7 @@ export async function POST(
 
   const { data: ws } = await db
     .from("workspaces")
-    .select("lead_credits_balance")
+    .select("lead_credits_balance, subscription_credits_balance")
     .eq("id", workspaceId)
     .single();
 
@@ -54,7 +54,10 @@ export async function POST(
   }
 
   await db.from("workspaces")
-    .update({ lead_credits_balance: ws.lead_credits_balance - cost })
+    .update({
+      lead_credits_balance:         ws.lead_credits_balance - cost,
+      subscription_credits_balance: Math.max(0, (ws.subscription_credits_balance ?? 0) - cost),
+    })
     .eq("id", workspaceId);
 
   type Lead = { id: string; first_name?: string | null; last_name?: string | null; title?: string | null; company?: string | null; industry?: string | null; website?: string | null };
