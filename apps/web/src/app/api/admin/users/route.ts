@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   let enriched = allUsers.map(u => ({
     id:         u.id,
     email:      u.email ?? "",
-    name:       (u.user_metadata?.full_name as string) ?? ((u.user_metadata?.first_name ?? "") + " " + (u.user_metadata?.last_name ?? "")).trim() || null,
+    name:       ((u.user_metadata?.full_name as string) ?? (((u.user_metadata?.first_name ?? "") + " " + (u.user_metadata?.last_name ?? "")).trim())) || null,
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at,
     email_confirmed: !!u.email_confirmed_at,
