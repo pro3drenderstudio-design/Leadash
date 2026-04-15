@@ -48,18 +48,19 @@ export async function POST(req: NextRequest) {
         const { paid } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const creditsNum = parseInt(credits, 10);
+          const { data: ws } = await db.from("workspaces")
+            .select("lead_credits_balance").eq("id", workspaceId).single();
+          if (ws) {
+            await db.from("workspaces")
+              .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + creditsNum })
+              .eq("id", workspaceId);
+          }
           await db.from("lead_credit_transactions").insert({
             workspace_id: workspaceId,
             type:         "purchase",
             amount:       creditsNum,
             description:  `Credit pack: ${packId}`,
           });
-          await db
-            .from("workspaces")
-            .update({ lead_credits_balance: db.rpc("coalesce_add", {}) })
-            .eq("id", workspaceId);
-          // Use raw SQL increment via RPC workaround
-          await db.rpc("increment_credits", { ws_id: workspaceId, delta: creditsNum });
         }
       }
       return NextResponse.json({ received: true });
