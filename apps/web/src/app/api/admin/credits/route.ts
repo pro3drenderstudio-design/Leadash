@@ -59,33 +59,9 @@ export async function GET(req: NextRequest) {
     enriched = enriched.filter(t => t.workspace_name.toLowerCase().includes(s));
   }
 
-  // Platform-wide totals (ungrouped summary)
-  const { data: totals } = await ctx.adminClient.rpc("admin_credit_summary").maybeSingle().catch(() => ({ data: null }));
-
-  // Fallback: compute totals from a full aggregate query if RPC doesn't exist
-  let summary = { total_granted: 0, total_purchased: 0, total_consumed: 0 };
-  if (!totals) {
-    const [granted, purchased, consumed] = await Promise.all([
-      ctx.adminClient
-        .from("lead_credit_transactions")
-        .select("amount")
-        .in("type", ["grant", "admin_grant"])
-        .then(r => (r.data ?? []).reduce((s, t) => s + t.amount, 0)),
-      ctx.adminClient
-        .from("lead_credit_transactions")
-        .select("amount")
-        .eq("type", "purchase")
-        .then(r => (r.data ?? []).reduce((s, t) => s + t.amount, 0)),
-      ctx.adminClient
-        .from("lead_credit_transactions")
-        .select("amount")
-        .in("type", ["consume", "admin_deduct"])
-        .then(r => (r.data ?? []).reduce((s, t) => s + Math.abs(t.amount), 0)),
-    ]);
-    summary = { total_granted: granted, total_purchased: purchased, total_consumed: consumed };
-  } else {
-    summary = totals;
-  }
+  // Platform-wide totals via single-scan aggregate function
+  const { data: totals } = await ctx.adminClient.rpc("admin_credit_summary").maybeSingle() as { data: { total_granted: number; total_purchased: number; total_consumed: number } | null };
+  const summary = totals ?? { total_granted: 0, total_purchased: 0, total_consumed: 0 };
 
   return NextResponse.json({
     transactions: enriched,
