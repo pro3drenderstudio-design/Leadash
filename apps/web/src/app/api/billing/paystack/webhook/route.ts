@@ -40,6 +40,27 @@ export async function POST(req: NextRequest) {
     const type       = meta.type as string | undefined;
     const workspaceId = meta.workspace_id as string | undefined;
 
+    // Credit pack purchase
+    if (type === "credit_purchase" && workspaceId) {
+      const packId  = meta.pack_id  as string | undefined;
+      const credits = meta.credits  as string | undefined;
+      if (packId && credits) {
+        const { paid } = await verifyPaystackPayment(data.reference);
+        if (paid) {
+          const creditsNum = parseInt(credits, 10);
+          // Debit/credit via the existing credits ledger table
+          await db.from("credit_transactions").insert({
+            workspace_id: workspaceId,
+            type:         "purchase",
+            amount:       creditsNum,
+            description:  `Credit pack: ${packId}`,
+          });
+          await db.rpc("add_credits", { ws_id: workspaceId, amount: creditsNum });
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Plan subscription payment
     if (type === "plan_subscription" && workspaceId) {
       const planId = meta.plan_id as string | undefined;
