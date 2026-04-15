@@ -35,15 +35,18 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type WsRow = { id: string; owner_id: string; [k: string]: unknown };
+
   // Enrich with owner emails
-  const ownerIds = [...new Set((workspaces ?? []).map(w => w.owner_id))];
+  const rows = (workspaces ?? []) as WsRow[];
+  const ownerIds = [...new Set(rows.map(w => w.owner_id))];
   const ownerMap = new Map<string, string>();
   if (ownerIds.length) {
     const { data: { users } } = await ctx.adminClient.auth.admin.listUsers({ perPage: 1000 });
-    users.forEach(u => ownerMap.set(u.id, u.email ?? ""));
+    users.forEach((u: { id: string; email?: string }) => ownerMap.set(u.id, u.email ?? ""));
   }
 
-  const enriched = (workspaces ?? []).map(w => ({
+  const enriched = rows.map(w => ({
     ...w,
     owner_email: ownerMap.get(w.owner_id) ?? "",
   }));
