@@ -123,25 +123,25 @@ app.post("/domains", async (req: Request, res: Response) => {
         [serverId(), domain],
       );
 
+      const { privateKey, publicKey } = getSigningKeyPair();
+
       if (existing.length > 0) {
-        // Already registered — return existing records
-        const row = existing[0] as { id: number; dkim_private_key: string };
-        const pubMatch = row.dkim_private_key.match(/-- already stored public: (.+)/);
-        // If we stored public key in a comment trick, extract it — otherwise re-derive
-        // For simplicity, just return success and let the caller re-fetch via GET /domains/:domain
-        res.json({ ok: true, already_exists: true, domain });
+        // Already registered — ensure dkim_status and identifier_string are set correctly
+        await conn.execute(
+          "UPDATE domains SET dkim_status = 'OK', dkim_identifier_string = '1', dkim_private_key = ? WHERE server_id = ? AND name = ?",
+          [privateKey, serverId(), domain],
+        );
+        res.json({ ok: true, already_exists: true, domain, dkim_selector: DKIM_SELECTOR, dkim_public_key: publicKey, smtp_host: process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com" });
         return;
       }
 
-      const { privateKey, publicKey } = generateDkimPair();
-      const selector = "postal";
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
       await conn.execute(
         `INSERT INTO domains
-          (server_id, uuid, name, dkim_private_key, dkim_identifier_string,
+          (server_id, uuid, name, dkim_private_key, dkim_identifier_string, dkim_status,
            owner_type, owner_id, verified_at, outgoing, incoming, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'postal', 'Server', ?, ?, 1, 1, ?, ?)`,
+         VALUES (?, ?, ?, ?, '1', 'OK', 'Server', ?, ?, 1, 1, ?, ?)`,
         [serverId(), genUuid(), domain, privateKey, serverId(), now, now, now],
       );
 
@@ -150,7 +150,7 @@ app.post("/domains", async (req: Request, res: Response) => {
       res.json({
         ok:               true,
         domain,
-        dkim_selector:   selector,
+        dkim_selector:   DKIM_SELECTOR,
         dkim_public_key: publicKey,
         smtp_host:       smtpHost,
       });
