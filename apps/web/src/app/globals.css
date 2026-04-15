@@ -138,7 +138,10 @@ html:not(.dark) {
   [class*="bg-violet-5"] .text-white,
   [class*="bg-violet-6"] .text-white,
   [class*="bg-indigo-5"] .text-white,
-  [class*="bg-indigo-6"] .text-white { color: #ffffff; }
+  [class*="bg-indigo-6"] .text-white,
+  [class*="bg-orange-4"] .text-white,
+  [class*="bg-orange-5"] .text-white,
+  [class*="bg-orange-6"] .text-white { color: #ffffff; }
 
   /* ── dark page / card backgrounds → light equivalents ── */
   .bg-gray-950    { background-color: #f8fafc; }
