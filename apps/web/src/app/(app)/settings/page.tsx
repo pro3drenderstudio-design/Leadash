@@ -3,7 +3,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsPost, wsPatch, wsDelete, wsFetch } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
-import { PLANS, CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
+import { CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
+import type { PlanConfig } from "@/lib/billing/getActivePlans";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
