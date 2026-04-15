@@ -48,14 +48,18 @@ export async function POST(req: NextRequest) {
         const { paid } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const creditsNum = parseInt(credits, 10);
-          // Debit/credit via the existing credits ledger table
-          await db.from("credit_transactions").insert({
+          await db.from("lead_credit_transactions").insert({
             workspace_id: workspaceId,
             type:         "purchase",
             amount:       creditsNum,
             description:  `Credit pack: ${packId}`,
           });
-          await db.rpc("add_credits", { ws_id: workspaceId, amount: creditsNum });
+          await db
+            .from("workspaces")
+            .update({ lead_credits_balance: db.rpc("coalesce_add", {}) })
+            .eq("id", workspaceId);
+          // Use raw SQL increment via RPC workaround
+          await db.rpc("increment_credits", { ws_id: workspaceId, delta: creditsNum });
         }
       }
       return NextResponse.json({ received: true });
