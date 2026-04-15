@@ -452,6 +452,9 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
       messages = sesMessagesByInbox.get(inbox.id) ?? [];
       if (!process.env.SES_INBOUND_BUCKET) {
         fetchError = "SES_INBOUND_BUCKET not configured — add it to environment variables";
+      } else if (inbox.last_error?.startsWith("IMAP poll:")) {
+        // Clear stale IMAP error now that inbox is correctly using SES
+        await db.from("outreach_inboxes").update({ last_error: null }).eq("id", inbox.id);
       }
     } else if (inbox.imap_host || deriveImapHost(inbox.smtp_host)) {
       const r = await fetchImapMessages(inbox, lookbackDays);
