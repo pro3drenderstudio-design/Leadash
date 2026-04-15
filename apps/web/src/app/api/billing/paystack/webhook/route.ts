@@ -87,16 +87,19 @@ export async function POST(req: NextRequest) {
             })
             .eq("id", workspaceId);
 
-          // Grant included monthly credits
+          // Grant included monthly credits (initial activation — not a renewal)
           if (plan.included_credits > 0) {
             const { data: ws } = await db
               .from("workspaces")
-              .select("lead_credits_balance")
+              .select("lead_credits_balance, subscription_credits_balance")
               .eq("id", workspaceId)
               .single();
             if (ws) {
               await db.from("workspaces")
-                .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + plan.included_credits })
+                .update({
+                  lead_credits_balance:         (ws.lead_credits_balance ?? 0) + plan.included_credits,
+                  subscription_credits_balance: plan.included_credits,
+                })
                 .eq("id", workspaceId);
             }
             await db.from("lead_credit_transactions").insert({
