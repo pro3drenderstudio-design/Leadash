@@ -1,6 +1,6 @@
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#07070f] flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#07070f] relative overflow-hidden">
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full bg-blue-700/10 blur-[130px]" />
@@ -17,12 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         }}
       />
 
-      <div className="w-full max-w-[400px] relative z-10">
-        {/* Logo */}
-        <div className="flex justify-center mb-9">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="Leadash" className="h-10 w-auto" />
-        </div>
+      <div className="relative z-10 min-h-screen">
         {children}
       </div>
     </div>
