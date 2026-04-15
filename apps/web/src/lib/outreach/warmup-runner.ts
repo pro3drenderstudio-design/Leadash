@@ -95,7 +95,7 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     const toSend        = Math.min(perRun, Math.max(0, sender.warmup_current_daily - alreadySent), remaining);
     if (toSend === 0) continue;
 
-    const recipients = pool.filter(r => r.id !== sender.id);
+    const recipients = globalPool.filter((r: OutreachInbox) => r.id !== sender.id);
     if (!recipients.length) continue;
 
     for (let i = 0; i < toSend; i++) {
