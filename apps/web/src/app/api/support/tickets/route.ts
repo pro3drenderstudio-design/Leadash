@@ -48,5 +48,41 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error || !data) return NextResponse.json({ error: error?.message ?? "Failed to create ticket" }, { status: 500 });
+
+  // Also insert the initial message into ticket_messages for thread continuity
+  await db.from("ticket_messages").insert({
+    ticket_id:   data.id,
+    sender_type: "user",
+    user_id:     userId,
+    message:     message.trim(),
+  }).select().single().catch(() => null);
+
+  // Notify admin (fire-and-forget — don't block the response)
+  (async () => {
+    try {
+      const adminDb = createAdminClient();
+      const [
+        { data: setting },
+        { data: { user: ticketUser } },
+      ] = await Promise.all([
+        adminDb.from("admin_settings").select("value").eq("key", "support_email").single(),
+        adminDb.auth.admin.getUserById(userId),
+      ]);
+      const adminEmail = (setting?.value as string) ?? "";
+      if (adminEmail && ticketUser?.email) {
+        await sendAdminNewTicketNotification({
+          adminEmail,
+          ticketNumber: data.ticket_number,
+          subject:      data.subject,
+          message:      message.trim(),
+          userEmail:    ticketUser.email,
+          category:     category ?? "general",
+          priority:     priority ?? "medium",
+          ticketId:     data.id,
+        });
+      }
+    } catch { /* non-fatal */ }
+  })();
+
   return NextResponse.json(data, { status: 201 });
 }
