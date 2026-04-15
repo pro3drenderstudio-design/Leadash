@@ -47,21 +47,28 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   }
   // ───────────────────────────────────────────────────────────────────────────
 
-  const { data: pool } = await db
+  // Global pool: all active warmup-enabled inboxes across every workspace.
+  // Used as the recipient universe so a workspace benefits from all server emails.
+  const { data: globalPool } = await db
     .from("outreach_inboxes")
     .select("*")
-    .eq("workspace_id", workspaceId)
     .eq("status", "active")
     .eq("warmup_enabled", true);
 
-  if (!pool || pool.length < 2) return result;
+  // Local pool: only this workspace's inboxes — we only send/reply/rescue from
+  // inboxes we control (i.e. have credentials for in this workspace).
+  const localPool = (globalPool ?? []).filter((i: OutreachInbox) => i.workspace_id === workspaceId);
+
+  if (!localPool.length || !globalPool || globalPool.length < 2) return result;
+
+  const localIds = new Set(localPool.map((i: OutreachInbox) => i.id));
 
   // ── Step A: Send warmup emails ────────────────────────────────────────────
   const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
   const { data: todayCounts } = await db
     .from("outreach_warmup_sends")
     .select("from_inbox_id")
-    .eq("workspace_id", workspaceId)
+    .in("from_inbox_id", localPool.map((i: OutreachInbox) => i.id))
     .gte("sent_at", todayStart.toISOString());
 
   const sentToday = new Map<string, number>();
