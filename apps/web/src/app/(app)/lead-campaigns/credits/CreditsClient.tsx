@@ -166,8 +166,8 @@ export default function CreditsClient() {
                     <span className={`text-xs font-medium ${TX_COLORS[tx.type] ?? "text-white/50"}`}>{TX_LABELS[tx.type] ?? tx.type}</span>
                   </td>
                   <td className="px-4 py-3 text-white/50 text-xs truncate max-w-xs">{tx.description ?? "—"}</td>
-                  <td className={`px-4 py-3 text-right font-semibold text-sm ${tx.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
+                  <td className={`px-4 py-3 text-right font-semibold text-sm ${isDebitType(tx.type) ? "text-red-400" : "text-emerald-400"}`}>
+                    {isDebitType(tx.type) ? "-" : "+"}{Math.abs(tx.amount).toLocaleString()}
                   </td>
                 </tr>
               ))}
