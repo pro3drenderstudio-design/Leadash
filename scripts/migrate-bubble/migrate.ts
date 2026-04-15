@@ -99,13 +99,14 @@ function slugify(text: string): string {
   return `${base}-${rand}`;
 }
 
+/** Returns the Bubble unique id for a row (the "unique id" column). */
 function bubbleId(row: Record<string, string>): string {
-  // Bubble exports its primary key as the "Slug" column
-  const explicit = pick(row, 'Slug', 'slug', '_id', 'Unique ID', 'unique_id', 'id', 'ID', 'Bubble ID', 'bubble_id');
-  if (explicit) return explicit;
-  // Last resort: use the very first column's value
-  const firstVal = Object.values(row)[0]?.trim();
-  return (firstVal && firstVal !== '0') ? firstVal : '';
+  // Bubble exports the primary key as "unique id" (lowercase, with space)
+  const v = row['unique id']?.trim();
+  if (v && v !== '0') return v;
+  // Fallbacks for other export formats
+  const explicit = pick(row, 'Slug', 'slug', '_id', 'Unique ID', 'unique_id', 'id', 'ID');
+  return explicit;
 }
 
 // ─── 1. Users ─────────────────────────────────────────────────────────────────
