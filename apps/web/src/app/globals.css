@@ -168,9 +168,13 @@ html:not(.dark) {
   .bg-white\/20        { background-color: rgb(0 0 0 / 0.09); }
 
   /* hover variants */
+  .hover\:bg-white\/4:hover   { background-color: rgb(0 0 0 / 0.02); }
   .hover\:bg-white\/5:hover   { background-color: rgb(0 0 0 / 0.03); }
   .hover\:bg-white\/8:hover   { background-color: rgb(0 0 0 / 0.05); }
   .hover\:bg-white\/10:hover  { background-color: rgb(0 0 0 / 0.06); }
+
+  /* divide lines */
+  .divide-white\/5 > * + * { border-color: rgb(0 0 0 / 0.06); }
 
   /* ── semi-transparent white borders ── */
   .border-white\/5     { border-color: rgb(0 0 0 / 0.06); }
