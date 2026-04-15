@@ -65,18 +65,8 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
       {/* Logo + admin badge */}
       <div className="px-4 py-4 flex items-center gap-2.5" style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}>
         <Link href="/admin" className="flex items-center gap-2.5 group">
-          <div className="flex-shrink-0 w-8 h-8 relative">
-            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-              <defs>
-                <linearGradient id="adm" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#dc2626"/>
-                  <stop offset="100%" stopColor="#7c3aed"/>
-                </linearGradient>
-              </defs>
-              <rect width="40" height="40" rx="10" fill="url(#adm)"/>
-              <path d="M22 5L10 22H19L18 35L30 18H21L22 5Z" fill="white"/>
-            </svg>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo_Icon_Colored.svg" className="w-8 h-8 flex-shrink-0" alt="" />
           <div>
             <span className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-white/90 select-none" style={{ letterSpacing: "-0.02em" }}>
               Leadash
