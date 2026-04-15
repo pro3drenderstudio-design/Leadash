@@ -122,7 +122,7 @@ export default function SignupPage() {
         <div className="relative z-10 flex-1 flex flex-col justify-center py-12">
           <div className="mb-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-orange-400 w-fit"
             style={{ background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)" }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
             Free 14-day trial · No credit card needed
           </div>
 
