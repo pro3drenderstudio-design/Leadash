@@ -300,7 +300,7 @@ export default async function DashboardPage() {
                       {/* Avatar */}
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white/80 flex-shrink-0 mt-0.5"
-                        style={{ background: "rgba(255,255,255,0.07)" }}
+                        style={{ background: "var(--avatar-bg)" }}
                       >
                         {initials}
                       </div>
