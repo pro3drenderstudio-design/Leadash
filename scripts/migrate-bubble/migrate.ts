@@ -434,21 +434,21 @@ async function migrateSupportMessages() {
   let migrated = 0;
 
   for (const row of rows) {
-    const userBubbleId = pick(row, 'User', 'user');
-    const workspaceId = workspaceMap.get(userBubbleId);
-    const userId = userMap.get(userBubbleId);
+    const userEmail = pick(row, 'user', 'User');
+    const workspaceId = workspaceMap.get(userEmail);
+    const userId = userMap.get(userEmail);
 
     if (!workspaceId || !userId) continue;
 
     const { error } = await supabase.from('support_tickets').insert({
       workspace_id: workspaceId,
       user_id: userId,
-      subject: pick(row, 'Subject', 'subject') || '(no subject)',
-      message: pick(row, 'Message', 'message') || '',
+      subject: pick(row, 'subject', 'Subject') || '(no subject)',
+      message: pick(row, 'message', 'Message') || '',
       category: 'general',
       priority: 'medium',
       status: 'open',
-      created_at: parseDate(pick(row, 'Created Date', 'created_date')) ?? new Date().toISOString(),
+      created_at: parseDate(pick(row, 'Creation Date', 'Created Date')) ?? new Date().toISOString(),
     });
 
     if (error) {
