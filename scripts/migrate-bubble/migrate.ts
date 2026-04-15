@@ -456,14 +456,20 @@ async function migrateSupportMessages() {
 
 async function main() {
   console.log('🚀 Bubble.io → Supabase Migration');
-  console.log(`   Project: ${SUPABASE_URL}`);
-  console.log(`   Exports: ${EXPORTS_DIR}\n`);
+  console.log(`   Project:    ${SUPABASE_URL}`);
+  console.log(`   Script dir: ${SCRIPT_DIR}`);
+  console.log(`   CWD:        ${process.cwd()}`);
+  console.log(`   Exports:    ${EXPORTS_DIR}\n`);
 
   if (!fs.existsSync(EXPORTS_DIR)) {
     console.error(`exports/ directory not found at ${EXPORTS_DIR}`);
     console.error('Create it and place your Bubble CSV exports inside.');
     process.exit(1);
   }
+
+  // List every file Node.js actually sees in the exports directory
+  const found = fs.readdirSync(EXPORTS_DIR);
+  console.log(`   Files in exports/: ${found.length ? found.join(', ') : '(empty)'}\n`);
 
   await migrateUsers();
   await migrateLeadCampaigns();
