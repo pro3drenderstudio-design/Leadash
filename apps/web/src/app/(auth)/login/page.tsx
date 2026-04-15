@@ -100,7 +100,7 @@ export default function LoginPage() {
           <p className="text-white/25 text-xs">New to Leadash?</p>
           <Link
             href="/signup"
-            className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1.5"
+            className="text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1.5"
           >
             Create a free account
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
