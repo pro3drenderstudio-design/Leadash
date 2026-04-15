@@ -31,12 +31,22 @@ export default function InvitePage() {
     else window.location.href = "/dashboard";
   }
 
-  if (loading) return <div className="bg-gray-900 border border-white/10 rounded-xl p-8 text-center text-gray-400">Loading…</div>;
-  if (error)   return <div className="bg-gray-900 border border-white/10 rounded-xl p-8 text-center text-red-400">{error}</div>;
+  const Wrap = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex items-center justify-center min-h-screen px-4">
+      <div className="w-full max-w-[400px]">
+        <div className="flex justify-center mb-9"><img src="/logo.svg" alt="Leadash" className="h-10 w-auto" /></div>
+        {children}
+      </div>
+    </div>
+  );
+
+  if (loading) return <Wrap><div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8 text-center text-white/40">Loading…</div></Wrap>;
+  if (error)   return <Wrap><div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8 text-center text-red-400">{error}</div></Wrap>;
   if (!invite) return null;
 
   return (
-    <div className="bg-gray-900 border border-white/10 rounded-xl p-8 text-center">
+    <Wrap>
+    <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-8 text-center">
       <h2 className="text-xl font-semibold text-white mb-2">You're invited!</h2>
       <p className="text-gray-400 text-sm mb-6">
         Join <span className="text-white font-medium">{invite.workspace_name}</span> on Leadash
