@@ -78,7 +78,7 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   const { data: campaignCounts } = await db
     .from("outreach_sends")
     .select("inbox_id")
-    .in("inbox_id", pool.map((i: OutreachInbox) => i.id))
+    .in("inbox_id", localPool.map((i: OutreachInbox) => i.id))
     .in("status", ["sent", "queued"])
     .gte("created_at", todayStart.toISOString());
 
@@ -87,7 +87,7 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     campaignSentToday.set(r.inbox_id, (campaignSentToday.get(r.inbox_id) ?? 0) + 1);
   }
 
-  for (const sender of pool) {
+  for (const sender of localPool) {
     const campaignUsed  = campaignSentToday.get(sender.id) ?? 0;
     const remaining     = Math.max(0, (sender.daily_send_limit ?? 30) - campaignUsed);
     const perRun        = Math.max(1, Math.floor(sender.warmup_current_daily / 6));
