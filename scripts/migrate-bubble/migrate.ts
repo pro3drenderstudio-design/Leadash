@@ -230,42 +230,45 @@ async function migrateLeadCampaigns() {
     }
 
     // Pack all filter/config fields into apify_input JSONB
+    // Column names come directly from the CSV (actual Bubble export names)
     const apifyInput: Record<string, string> = {};
     const filterKeys = [
-      'AI_depth', 'AI_tone', 'Offer_angle', 'Additional_titles', 'Similar_titles',
-      'Job_titles_included', 'Job_titles_excluded',
-      'Keywords_included', 'Keywords_excluded',
-      'Industries_included', 'Industries_excluded',
-      'Company_size', 'Funding', 'Minimum_revenue', 'Maximum_revenue',
-      'Countries_company_included', 'Countries_company_excluded',
-      'Cities_company_included', 'Cities_company_excluded',
-      'Countries_personnel_included', 'Countries_personnel_excluded',
-      'Cities_personnel_included', 'Cities_personnel_excluded',
-      'Company_name_included', 'Company_name_excluded', 'Company_name_max',
-      'Company_website_domain', 'Company_website_exclude', 'Company_website_include',
+      'AI Depth', 'AI Tone', 'offer_angle', 'additional_titles', 'similar_titles',
+      'job_titles_included', 'job_titles_excluded',
+      'keywords_included', 'keywords_excluded',
+      'industries_included', 'industries_excluded',
+      'company_size', 'funding', 'minimum_revenue', 'maximum_revenue',
+      'countries_company_include', 'countries_company_exclude',
+      'cities_company_include', 'cities_company_exclude',
+      'countries_personnel_include', 'countries_personnel_exclude',
+      'cities_personnel_include', 'cities_personnel_exclude',
+      'company_name_include', 'company_name_exclude', 'company_name_match',
+      'company_website_domain_match_mode', 'company_website_exclude', 'company_website_include',
       'Company_keywords_included', 'Company_keywords_excluded',
-      'Seniority_level_included', 'Seniority_level_excluded',
-      'Functional_level_included', 'Functional_level_excluded',
+      'seniority_level_included', 'seniority_level_excluded',
+      'functional_level_include', 'functional_level_excluded',
     ];
     for (const k of filterKeys) {
-      const v = pick(row, k, k.toLowerCase());
-      if (v) apifyInput[k.toLowerCase()] = v;
+      const v = row[k]?.trim();
+      if (v && v !== '0') apifyInput[k] = v;
     }
+
+    const leadsProcessed = parseInt(row['Leads Processed'] || '0', 10) || 0;
 
     const { data, error } = await supabase
       .from('lead_campaigns')
       .insert({
         workspace_id: workspaceId,
-        name: pick(row, 'Campaign_name', 'campaign_name', 'Name', 'name') || 'Imported Campaign',
+        name: pick(row, 'campaign_name', 'Campaign_name', 'name') || 'Imported Campaign',
         mode: 'scrape',
-        status: mapCampaignStatus(pick(row, 'Status', 'status')),
-        apify_run_id: pick(row, 'Apify_run_id', 'apify_run_id') || null,
+        status: mapCampaignStatus(pick(row, 'status', 'Status')),
+        apify_run_id: pick(row, 'apify_run_id', 'Apify_run_id') || null,
         apify_input: Object.keys(apifyInput).length ? apifyInput : null,
-        max_leads: parseInt(pick(row, 'Lead_quantity', 'lead_quantity') || '100', 10) || 100,
-        total_scraped: parseInt(pick(row, 'Leads_processed', 'leads_processed') || '0', 10) || 0,
-        total_valid: parseInt(pick(row, 'Leads_processed', 'leads_processed') || '0', 10) || 0,
-        credits_used: parseInt(pick(row, 'Credits_spent', 'credits_spent') || '0', 10) || 0,
-        created_at: parseDate(pick(row, 'Created Date', 'created_date')) ?? new Date().toISOString(),
+        max_leads: parseInt(row['lead_quantity'] || '100', 10) || 100,
+        total_scraped: leadsProcessed,
+        total_valid: leadsProcessed,
+        credits_used: parseInt(row['credits_spent'] || '0', 10) || 0,
+        created_at: parseDate(pick(row, 'Creation Date', 'Created Date')) ?? new Date().toISOString(),
       })
       .select('id')
       .single();
@@ -274,7 +277,7 @@ async function migrateLeadCampaigns() {
       console.error(`  ❌ Campaign ${id}: ${error.message}`);
     } else {
       campaignMap.set(id, data.id);
-      console.log(`  ✓ ${pick(row, 'Campaign_name', 'Name') || id}`);
+      console.log(`  ✓ ${row['campaign_name'] || id}`);
     }
   }
 
