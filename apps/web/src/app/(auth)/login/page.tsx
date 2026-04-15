@@ -75,7 +75,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex-1 flex flex-col justify-center py-12">
           <h2 className="text-4xl xl:text-[44px] font-bold text-white leading-tight mb-5" style={{ letterSpacing: "-0.03em" }}>
             Welcome back<br />
-            <span style={{ background: "linear-gradient(135deg, #60a5fa, #a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+            <span style={{ background: "linear-gradient(135deg, #fdba74, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               to Leadash
             </span>
           </h2>
