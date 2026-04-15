@@ -135,14 +135,17 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   }
 
   // ── Step B: Reply to warmup emails (~40%) ─────────────────────────────────
+  // Query by to_inbox_id so we catch emails sent to our inboxes by other workspaces.
   const since = new Date(Date.now() - 24 * 3_600_000);
   const { data: pending } = await db.from("outreach_warmup_sends")
-    .select("*").eq("workspace_id", workspaceId).gte("sent_at", since.toISOString()).is("replied_at", null);
+    .select("*").in("to_inbox_id", [...localIds]).gte("sent_at", since.toISOString()).is("replied_at", null);
 
   for (const ws of pending ?? []) {
     if (Math.random() > 0.4) continue;
-    const recipient = pool.find(p => p.id === ws.to_inbox_id);
-    const sender    = pool.find(p => p.id === ws.from_inbox_id);
+    // recipient must be one of our local inboxes (we have its credentials)
+    const recipient = localPool.find((p: OutreachInbox) => p.id === ws.to_inbox_id);
+    // sender can be any inbox in the global pool (we only need their email address)
+    const sender    = globalPool.find((p: OutreachInbox) => p.id === ws.from_inbox_id);
     if (!recipient || !sender) continue;
 
     const replyWarmupId = crypto.randomUUID();
