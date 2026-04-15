@@ -134,5 +134,5 @@ export async function getPlansMap(): Promise<Map<string, PlanConfig>> {
 
 /** Called by the admin PATCH route after saving to invalidate the cache. */
 export function invalidatePlanCache(): void {
-  revalidateTag("plan_configs");
+  revalidateTag("plan_configs", {});
 }
