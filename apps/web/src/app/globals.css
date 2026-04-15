@@ -40,6 +40,13 @@
   --dropdown-bg:         #ffffff;
   --dropdown-border:     rgba(0,0,0,0.09);
   --divider-color:       rgba(0,0,0,0.07);
+  --card-bg:             rgba(0,0,0,0.025);
+  --card-border:         rgba(0,0,0,0.08);
+  --card-icon-bg:        rgba(0,0,0,0.05);
+  --avatar-bg:           rgba(0,0,0,0.07);
+  --chart-grid:          rgba(0,0,0,0.07);
+  --chart-tick:          rgba(15,23,42,0.45);
+  --chart-legend:        rgba(15,23,42,0.5);
 }
 
 .dark, [data-theme="dark"] {
