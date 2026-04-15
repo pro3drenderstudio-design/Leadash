@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   const ownerMap = new Map<string, string>();
   if (ownerIds.length) {
     const { data: { users } } = await ctx.adminClient.auth.admin.listUsers({ perPage: 1000 });
-    users.forEach(u => ownerMap.set(u.id, u.email ?? ""));
+    users.forEach((u: { id: string; email?: string }) => ownerMap.set(u.id, u.email ?? ""));
   }
 
   // Apply workspace name search after enrichment
