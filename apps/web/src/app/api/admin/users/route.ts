@@ -11,12 +11,15 @@ async function requireAdmin() {
   return { user, adminClient };
 }
 
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
 function resolveName(meta: Record<string, unknown> | null | undefined): string | null {
   if (!meta) return null;
-  if (meta.full_name) return String(meta.full_name);
-  const first = String(meta.first_name ?? "");
-  const last  = String(meta.last_name  ?? "");
-  return (first + " " + last).trim() || null;
+  if (str(meta.full_name))  return str(meta.full_name);
+  const name = (str(meta.first_name) + " " + str(meta.last_name)).trim();
+  return name || null;
 }
 
 export async function GET(req: NextRequest) {
