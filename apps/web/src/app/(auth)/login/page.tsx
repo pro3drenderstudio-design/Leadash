@@ -201,7 +201,7 @@ export default function LoginPage() {
             <button
               type="submit" disabled={loading || googleLoading}
               className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-all disabled:opacity-50 mt-1"
-              style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)", boxShadow: "0 4px 20px rgba(99,102,241,0.3)" }}
+              style={{ background: "linear-gradient(135deg, #f97316, #ea580c)", boxShadow: "0 4px 20px rgba(249,115,22,0.3)" }}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
