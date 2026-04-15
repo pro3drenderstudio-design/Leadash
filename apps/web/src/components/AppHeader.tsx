@@ -145,7 +145,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
                 <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${
                   r.type === "lead_campaign" ? "bg-amber-500/10" : "bg-orange-500/10"
                 }`}>
-                  <svg className={`w-3 h-3 ${r.type === "lead_campaign" ? "text-amber-500 dark:text-amber-400" : "text-blue-500 dark:text-blue-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className={`w-3 h-3 ${r.type === "lead_campaign" ? "text-amber-500 dark:text-amber-400" : "text-orange-500 dark:text-orange-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={
                       r.type === "lead_campaign"
                         ? "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
