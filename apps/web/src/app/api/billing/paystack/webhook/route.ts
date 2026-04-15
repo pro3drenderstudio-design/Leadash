@@ -86,6 +86,26 @@ export async function POST(req: NextRequest) {
               updated_at:           new Date().toISOString(),
             })
             .eq("id", workspaceId);
+
+          // Grant included monthly credits
+          if (plan.included_credits > 0) {
+            const { data: ws } = await db
+              .from("workspaces")
+              .select("lead_credits_balance")
+              .eq("id", workspaceId)
+              .single();
+            if (ws) {
+              await db.from("workspaces")
+                .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + plan.included_credits })
+                .eq("id", workspaceId);
+            }
+            await db.from("lead_credit_transactions").insert({
+              workspace_id: workspaceId,
+              type:         "grant",
+              amount:       plan.included_credits,
+              description:  `Monthly credits — ${plan.name} plan`,
+            });
+          }
         }
       }
       return NextResponse.json({ received: true });
