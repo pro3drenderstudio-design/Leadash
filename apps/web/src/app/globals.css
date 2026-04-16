@@ -197,4 +197,21 @@ html:not(.dark) {
   /* ── placeholder text ── */
   .placeholder-white\/25::placeholder { color: rgb(15 23 42 / 0.3); }
   .placeholder-white\/30::placeholder { color: rgb(15 23 42 / 0.35); }
+
+  /* ── native select/option: force dark text so options are readable ── */
+  select { color: #0f172a; }
+  option { background-color: #ffffff; color: #0f172a; }
+}
+
+/* ── native select/option: dark mode ────────────────────────────────────────
+   The browser renders the native <option> list outside the DOM so CSS
+   color-scheme alone controls it. Adding explicit colours as a fallback. */
+.dark select,
+[data-theme="dark"] select {
+  color: #f8fafc;
+}
+.dark option,
+[data-theme="dark"] option {
+  background-color: #0f172a;
+  color: #f8fafc;
 }
