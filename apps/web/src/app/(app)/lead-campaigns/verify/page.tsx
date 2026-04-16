@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 import type { VerifyBulkJob, VerifyResult } from "@/types/lead-campaigns";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
