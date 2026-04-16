@@ -30,12 +30,15 @@ export async function POST(req: NextRequest) {
 
   if (!member) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
 
-  const { name, reason } = await req.json() as { name?: string; reason?: string };
+  const { name, email: formEmail, reason } = await req.json() as { name?: string; email?: string; reason?: string };
+
+  // Use the email from the form if provided (could differ from auth email), otherwise fall back to auth email
+  const contactEmail = formEmail?.trim() || user.email || "";
 
   const { error } = await db.from("beta_enrollments").insert({
     user_id:      user.id,
     workspace_id: member.workspace_id,
-    email:        user.email ?? "",
+    email:        contactEmail,
     name:         name ?? null,
     reason:       reason ?? null,
     status:       "pending",
