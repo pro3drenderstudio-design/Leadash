@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
       { href: "/admin/users",      label: "Users",        icon: "M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" },
       { href: "/admin/workspaces", label: "Workspaces",   icon: "M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" },
       { href: "/admin/plans",      label: "Plans",        icon: "M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" },
+      { href: "/admin/beta",       label: "Beta Programme", icon: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" },
     ],
   },
   {
@@ -50,6 +52,16 @@ interface Props { adminEmail: string; adminRole: string; }
 
 export default function AdminSidebar({ adminEmail, adminRole }: Props) {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Close on route change
+  useEffect(() => { setIsOpen(false); }, [pathname]);
+
+  // Prevent body scroll when open
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
 
   async function signOut() {
     const supabase = createClient();
@@ -57,14 +69,11 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
     window.location.href = "/login";
   }
 
-  return (
-    <aside
-      className="w-56 flex-shrink-0 flex flex-col h-screen sticky top-0"
-      style={{ background: "var(--sidebar-bg)", borderRight: "1px solid var(--sidebar-border)" }}
-    >
+  const navContent = (
+    <>
       {/* Logo + admin badge */}
-      <div className="px-4 py-4 flex items-center gap-2.5" style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}>
-        <Link href="/admin" className="flex items-center gap-2.5 group">
+      <div className="px-4 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}>
+        <Link href="/admin" className="flex items-center gap-2.5 group" onClick={() => setIsOpen(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
           <div>
@@ -74,6 +83,16 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
             <span className="block text-[9px] font-bold uppercase tracking-widest text-red-500">Admin</span>
           </div>
         </Link>
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setIsOpen(false)}
+          className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+          aria-label="Close menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -91,6 +110,7 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={() => setIsOpen(false)}
                     className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
                       active
                         ? "bg-red-50 dark:bg-red-500/10 text-slate-900 dark:text-white font-medium"
@@ -121,6 +141,7 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
         </div>
         <Link
           href="/dashboard"
+          onClick={() => setIsOpen(false)}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -138,6 +159,54 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
           Sign out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div
+        className="fixed top-0 left-0 right-0 h-12 z-30 flex items-center px-4 gap-3 lg:hidden"
+        style={{ background: "var(--sidebar-bg)", borderBottom: "1px solid var(--sidebar-border)" }}
+      >
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+          aria-label="Open menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <Link href="/admin" className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo_Icon_Colored.svg" className="w-5 h-5" alt="" />
+          <span className="text-sm font-bold text-slate-800 dark:text-white/90" style={{ letterSpacing: "-0.02em" }}>Leadash</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-red-500">Admin</span>
+        </Link>
+      </div>
+
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 flex flex-col
+          transition-transform duration-250 ease-in-out
+          lg:static lg:inset-auto lg:w-56 lg:flex-shrink-0 lg:h-screen lg:sticky lg:top-0 lg:translate-x-0
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+        style={{ background: "var(--sidebar-bg)", borderRight: "1px solid var(--sidebar-border)" }}
+      >
+        {navContent}
+      </aside>
+    </>
   );
 }
