@@ -80,6 +80,180 @@ export async function sendAdminNewTicketNotification(opts: {
   });
 }
 
+// ─── Beta programme ───────────────────────────────────────────────────────────
+
+export async function sendBetaApplicationConfirmation(opts: {
+  userEmail: string;
+  userName: string | null;
+}): Promise<void> {
+  const name = opts.userName ?? "there";
+  await sendEmail({
+    to: opts.userEmail,
+    subject: "Your Leadash Beta application is received!",
+    text: [
+      `Hi ${name},`,
+      ``,
+      `Thanks for applying to the Leadash Beta Programme!`,
+      ``,
+      `We review applications manually and will get back to you within 24 hours.`,
+      ``,
+      `What you'll get if approved:`,
+      `• 1 month free Starter plan access`,
+      `• 500 lead credits to get started`,
+      `• Early access to new features`,
+      `• Priority support from the founding team`,
+      ``,
+      `You can check the status of your application at any time:`,
+      `${APP_URL}/beta`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:32px 32px 24px;border-radius:16px 16px 0 0;text-align:center">
+          <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:16px">
+            <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.25);padding:2px 6px;border-radius:4px;letter-spacing:0.5px">Beta</span>
+          </div>
+          <p style="color:#fb923c;font-size:13px;font-weight:600;margin:0">Application Received</p>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;margin-top:0">Hi ${name},</p>
+          <p style="color:#6b7280">Thanks for applying to the <strong style="color:#374151">Leadash Beta Programme!</strong> We review every application manually and will get back to you within 24 hours.</p>
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:20px;margin:24px 0">
+            <p style="margin:0 0 12px;font-weight:600;color:#9a3412;font-size:13px;text-transform:uppercase;letter-spacing:0.5px">What you get if approved</p>
+            <table style="font-size:14px;color:#374151;border-spacing:0">
+              <tr><td style="padding:4px 0">🚀</td><td style="padding:4px 0 4px 10px"><strong>1 month free Starter plan</strong></td></tr>
+              <tr><td style="padding:4px 0">✨</td><td style="padding:4px 0 4px 10px"><strong>500 lead credits</strong> to get started</td></tr>
+              <tr><td style="padding:4px 0">🔬</td><td style="padding:4px 0 4px 10px">Early access to new features</td></tr>
+              <tr><td style="padding:4px 0">💬</td><td style="padding:4px 0 4px 10px">Priority support from the founding team</td></tr>
+            </table>
+          </div>
+          <p style="color:#6b7280;font-size:14px">You can check your application status anytime:</p>
+          <p><a href="${APP_URL}/beta" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View Application Status →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendBetaAdminNotification(opts: {
+  adminEmail: string;
+  userName: string | null;
+  userEmail: string;
+  reason: string | null;
+  enrollmentId: string;
+}): Promise<void> {
+  const name = opts.userName ?? opts.userEmail;
+  await sendEmail({
+    to: opts.adminEmail,
+    subject: `[Beta] New application from ${name}`,
+    text: [
+      `New beta programme application`,
+      ``,
+      `Name: ${opts.userName ?? "(not provided)"}`,
+      `Email: ${opts.userEmail}`,
+      `Reason: ${opts.reason ?? "(not provided)"}`,
+      ``,
+      `Review: ${APP_URL}/admin/beta`,
+    ].join("\n"),
+    html: `
+      <p>New beta programme application from <strong>${name}</strong> (${opts.userEmail})</p>
+      ${opts.reason ? `<div style="background:#f9fafb;border-left:3px solid #f97316;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;font-family:sans-serif;font-size:14px;color:#374151">${opts.reason.replace(/\n/g, "<br>")}</div>` : ""}
+      <p><a href="${APP_URL}/admin/beta" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">Review Application →</a></p>
+    `,
+  });
+}
+
+export async function sendBetaDecisionEmail(opts: {
+  userEmail: string;
+  userName: string | null;
+  approved: boolean;
+  reviewNote: string | null;
+}): Promise<void> {
+  const name = opts.userName ?? "there";
+  if (opts.approved) {
+    await sendEmail({
+      to: opts.userEmail,
+      subject: "You're in! Welcome to the Leadash Beta",
+      text: [
+        `Hi ${name},`,
+        ``,
+        `Great news — your Leadash Beta application has been approved!`,
+        ``,
+        `Your account has been upgraded to the Starter plan for 1 month and you've been credited 500 lead credits.`,
+        ``,
+        `Go to your dashboard to get started:`,
+        `${APP_URL}/dashboard`,
+        ``,
+        `— The Leadash Team`,
+      ].join("\n"),
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+          <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:32px 32px 24px;border-radius:16px 16px 0 0;text-align:center">
+            <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:16px">
+              <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.25);padding:2px 6px;border-radius:4px;letter-spacing:0.5px">Beta</span>
+            </div>
+            <div style="width:48px;height:48px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+              <span style="font-size:22px">🎉</span>
+            </div>
+            <p style="color:#4ade80;font-size:14px;font-weight:700;margin:0">You're approved!</p>
+          </div>
+          <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+            <p style="font-size:16px;margin-top:0">Hi ${name},</p>
+            <p>Your Leadash Beta application has been <strong style="color:#16a34a">approved!</strong> Welcome aboard.</p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:24px 0">
+              <p style="margin:0 0 12px;font-weight:600;color:#15803d;font-size:13px;text-transform:uppercase;letter-spacing:0.5px">Your account has been upgraded</p>
+              <table style="font-size:14px;color:#374151;border-spacing:0">
+                <tr><td style="padding:4px 0">✅</td><td style="padding:4px 0 4px 10px">Starter plan active for <strong>30 days</strong></td></tr>
+                <tr><td style="padding:4px 0">💳</td><td style="padding:4px 0 4px 10px"><strong>500 lead credits</strong> added to your account</td></tr>
+              </table>
+            </div>
+            <p><a href="${APP_URL}/dashboard" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Go to Dashboard →</a></p>
+            <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+          </div>
+        </div>
+      `,
+    });
+  } else {
+    await sendEmail({
+      to: opts.userEmail,
+      subject: "Update on your Leadash Beta application",
+      text: [
+        `Hi ${name},`,
+        ``,
+        `Thanks for your interest in the Leadash Beta Programme.`,
+        ``,
+        `Unfortunately, we weren't able to accept your application at this time. We received more applications than expected and had to be selective.`,
+        ``,
+        opts.reviewNote ? `Note from our team: ${opts.reviewNote}` : `We hope to open more spots in future rounds.`,
+        ``,
+        `You can still use Leadash on the free plan:`,
+        `${APP_URL}/dashboard`,
+        ``,
+        `— The Leadash Team`,
+      ].join("\n"),
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+          <div style="background:#f9fafb;padding:32px;border-radius:16px 16px 0 0;text-align:center">
+            <span style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.5px">Leadash</span>
+          </div>
+          <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+            <p style="font-size:16px;margin-top:0">Hi ${name},</p>
+            <p>Thanks for applying to the Leadash Beta Programme. After reviewing your application, we weren't able to accept it for this round — we received more applications than expected and had to be selective.</p>
+            ${opts.reviewNote ? `<div style="background:#fef2f2;border-left:3px solid #fca5a5;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;font-size:14px;color:#7f1d1d">${opts.reviewNote}</div>` : `<p style="color:#6b7280">We hope to open more spots in future rounds.</p>`}
+            <p>You can still use Leadash on the free plan:</p>
+            <p><a href="${APP_URL}/dashboard" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Go to Dashboard →</a></p>
+            <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+          </div>
+        </div>
+      `,
+    });
+  }
+}
+
 export async function sendUserReplyNotification(opts: {
   userEmail: string;
   ticketNumber: number;
