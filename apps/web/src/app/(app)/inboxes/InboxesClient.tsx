@@ -197,6 +197,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [importFile, setImportFile]     = useState<File | null>(null);
   const [importing, setImporting]       = useState(false);
   const [importResult, setImportResult] = useState<InboxImportResult | null>(null);
+  const [importError, setImportError]   = useState<string | null>(null);
   const [csvHeaders, setCsvHeaders]     = useState<string[]>([]);
   const [colMapping, setColMapping]     = useState<Record<string, string>>({});
   const [showMapping, setShowMapping]   = useState(false);
