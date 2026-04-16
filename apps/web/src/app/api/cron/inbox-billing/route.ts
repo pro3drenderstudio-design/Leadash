@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const { data: domains, error } = await db
     .from("outreach_domains")
-    .select("id, domain, workspace_id, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo")
+    .select("id, domain, workspace_id, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, workspaces(id, owner_id)")
     .eq("status", "active")
     .eq("payment_provider", "paystack")
     .not("paystack_auth_code",          "is", null)
