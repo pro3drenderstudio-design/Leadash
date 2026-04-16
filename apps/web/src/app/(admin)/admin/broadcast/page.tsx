@@ -111,13 +111,19 @@ ${APP_URL}`,
 
 interface SendResult {
   total: number;
+  page_count: number;
+  offset: number;
+  next_offset: number | null;
   sent: number;
   failed: number;
+  succeeded: string[];
   errors: string[];
 }
 
 interface PreviewResult {
   count: number;
+  page_count: number;
+  offset: number;
   sample: string[];
 }
 
