@@ -652,11 +652,20 @@ export default function BuyDomainPage() {
               <p className="text-white text-sm font-semibold">
                 {currency === "stripe" ? "USD · via Stripe" : "NGN · via Paystack"}
               </p>
-              <p className="text-white/60 text-sm font-mono mt-0.5">
-                {currency === "stripe"
-                  ? `$${oneTimeUsd.toFixed(2)} one-time + $${recurringUsd}/mo`
-                  : `₦${totalNgn.toLocaleString()} one-time`}
-              </p>
+              {currency === "stripe" ? (
+                <p className="text-white/60 text-sm font-mono mt-0.5">
+                  ${oneTimeUsd.toFixed(2)} domain + ${recurringUsd}/mo
+                </p>
+              ) : (
+                <>
+                  <p className="text-white/60 text-sm font-mono mt-0.5">
+                    ₦{totalNgn.toLocaleString()} charged now
+                  </p>
+                  <p className="text-white/35 text-xs mt-0.5">
+                    ₦{domainOnlyNgn.toLocaleString()} domain + ₦{recurringNgn.toLocaleString()} 1st month · then ₦{recurringNgn.toLocaleString()}/mo
+                  </p>
+                </>
+              )}
             </div>
             <p className="text-white/30 text-xs">Change in sidebar</p>
           </div>
