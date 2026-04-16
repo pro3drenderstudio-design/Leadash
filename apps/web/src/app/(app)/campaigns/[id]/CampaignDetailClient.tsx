@@ -420,7 +420,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                           )}
                         </div>
                       )}
-                      <button onClick={() => { setTestStepIdx(i); setTestResult(null); setTestLeadId(""); setTestToEmail(""); setTestInboxId(editInboxes[0]??""); }} className="text-amber-400/80 hover:text-amber-300 text-xs ml-auto">Send Test ↗</button>
+                      <button onClick={() => { setTestStepIdx(i); setTestResult(null); setTestSampleIdx(-1); setTestToEmail(""); setTestInboxId(editInboxes[0]??""); }} className="text-amber-400/80 hover:text-amber-300 text-xs ml-auto">Send Test ↗</button>
                     </div>
                     <div><label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label><input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" /></div>
                     <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><input value={s.subject_template_b} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:e.target.value}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
