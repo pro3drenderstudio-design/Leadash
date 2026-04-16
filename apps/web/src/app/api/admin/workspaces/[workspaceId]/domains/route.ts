@@ -34,24 +34,26 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Attach inbox counts
-  const domainIds = (domains ?? []).map((d: { id: string }) => d.id);
-  const { data: inboxes } = domainIds.length
-    ? await ctx.db.from("outreach_inboxes").select("id, domain_id, email_address, status").in("domain_id", domainIds)
-    : { data: [] };
+  type DomainRow = NonNullable<typeof domains>[number];
+  type InboxRow  = { id: string; domain_id: string; email_address: string; status: string };
 
-  const inboxMap = new Map<string, typeof inboxes>();
-  for (const inbox of (inboxes ?? [])) {
+  const rows = (domains ?? []) as DomainRow[];
+
+  // Attach inboxes
+  const domainIds = rows.map(d => d.id);
+  const { data: inboxData } = domainIds.length
+    ? await ctx.db.from("outreach_inboxes").select("id, domain_id, email_address, status").in("domain_id", domainIds)
+    : { data: [] as InboxRow[] };
+
+  const inboxMap = new Map<string, InboxRow[]>();
+  for (const inbox of (inboxData ?? []) as InboxRow[]) {
     const arr = inboxMap.get(inbox.domain_id) ?? [];
     arr.push(inbox);
     inboxMap.set(inbox.domain_id, arr);
   }
 
   return NextResponse.json({
-    domains: (domains ?? []).map((d: { id: string }) => ({
-      ...d,
-      inboxes: inboxMap.get(d.id) ?? [],
-    })),
+    domains: rows.map(d => ({ ...d, inboxes: inboxMap.get(d.id) ?? [] })),
   });
 }
 
