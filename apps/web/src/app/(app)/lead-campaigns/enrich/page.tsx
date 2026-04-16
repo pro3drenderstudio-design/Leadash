@@ -165,6 +165,10 @@ export default function EnrichPage() {
 
   async function handleEnrich() {
     if (!leads.length || !prompt.trim()) return;
+    if (balance !== null && balance < cost) {
+      setCreditsModal({ needed: cost, have: balance });
+      return;
+    }
     setError(null); setActiveJob(null); setResultPage(1); setView("running");
     try {
       const res = await wsFetch("/api/lead-campaigns/enrich", {
