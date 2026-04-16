@@ -6,6 +6,7 @@ import { purchaseDomain, type RegistrantContact } from "@/lib/outreach/porkbun";
 import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
 import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
+import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/pool-quota";
 
 const WARMUP_DAYS = 21;
 
