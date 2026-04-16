@@ -24,13 +24,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
     <CurrencyProvider>
+    <SidebarProvider>
       <ImpersonationBanner />
       {workspace.plan_id === "free" && workspace.trial_ends_at && (
         <TrialBanner trialEndsAt={workspace.trial_ends_at} />
       )}
       <div className="flex h-screen overflow-hidden">
         <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <AppHeader
             userEmail={user.email ?? ""}
             userName={userName}
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+    </SidebarProvider>
     </CurrencyProvider>
     </WorkspaceProvider>
   );
