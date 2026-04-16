@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { wsGet, wsFetch } from "@/lib/workspace/client";
 import type { EnrichBulkJob, EnrichedLead, LeadInput } from "@/types/lead-campaigns";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 // ─── CSV helpers ──────────────────────────────────────────────────────────────
 
