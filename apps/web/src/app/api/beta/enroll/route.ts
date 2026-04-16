@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   // Fire-and-forget notifications — don't block the response
   const adminEmail = process.env.NOTIFY_ADMIN_EMAIL ?? process.env.NOTIFY_FROM_EMAIL;
   Promise.all([
-    sendBetaApplicationConfirmation({ userEmail: user.email ?? "", userName: name ?? null }).catch(() => {}),
+    sendBetaApplicationConfirmation({ userEmail: contactEmail, userName: name ?? null }).catch(() => {}),
     adminEmail
       ? sendBetaAdminNotification({ adminEmail, userName: name ?? null, userEmail: user.email ?? "", reason: reason ?? null, enrollmentId: "" }).catch(() => {})
       : Promise.resolve(),
