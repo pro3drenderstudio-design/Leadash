@@ -28,11 +28,11 @@ export default function BetaBanner() {
   if (dismissed || status !== "approved") return null;
 
   return (
-    <div className="relative flex items-center gap-3 px-4 py-2.5 text-sm" style={{ background: "linear-gradient(90deg, rgba(249,115,22,0.12) 0%, rgba(234,88,12,0.08) 100%)", borderBottom: "1px solid rgba(249,115,22,0.2)" }}>
+    <div className="w-full relative flex items-center justify-center gap-3 px-4 py-2.5 text-sm" style={{ background: "linear-gradient(90deg, rgba(249,115,22,0.12) 0%, rgba(234,88,12,0.08) 100%)", borderBottom: "1px solid rgba(249,115,22,0.2)" }}>
       {/* Glow dot */}
       <span className="flex-shrink-0 w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
 
-      <p className="flex-1 text-orange-300/90 text-xs font-medium">
+      <p className="text-orange-300/90 text-xs font-medium text-center">
         <span className="font-bold text-orange-300">You&apos;re part of the Leadash Beta!</span>
         {" "}You have free Starter access for 30 days.{" "}
         <Link href="/beta" className="underline underline-offset-2 hover:text-orange-200 transition-colors">
@@ -42,7 +42,7 @@ export default function BetaBanner() {
 
       <button
         onClick={dismiss}
-        className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-orange-400/60 hover:text-orange-300 transition-colors"
+        className="absolute right-3 w-5 h-5 flex items-center justify-center rounded text-orange-400/60 hover:text-orange-300 transition-colors"
         aria-label="Dismiss"
       >
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
