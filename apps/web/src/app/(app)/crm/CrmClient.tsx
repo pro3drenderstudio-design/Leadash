@@ -764,7 +764,7 @@ export default function CrmClient() {
               <div className="flex flex-1 overflow-hidden relative">
                 {/* Thread */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                  <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 space-y-3">
                     {convLoading ? (
                       [1,2,3].map((i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${i % 2 === 0 ? "bg-white/5 mr-12" : "bg-white/8 ml-12"}`} />)
                     ) : conversation.length === 0 ? (
