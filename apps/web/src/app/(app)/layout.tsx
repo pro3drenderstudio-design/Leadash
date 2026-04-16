@@ -10,6 +10,37 @@ import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
 
+async function claimBetaIfApproved(userId: string, email: string, workspaceId: string) {
+  const db = createAdminClient();
+  const { data: enrollment } = await db
+    .from("beta_enrollments")
+    .select("id")
+    .eq("email", email)
+    .eq("status", "approved")
+    .is("user_id", null)
+    .maybeSingle();
+  if (!enrollment) return;
+
+  const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await db.from("workspaces").update({
+    plan_id: "starter", plan_status: "active",
+    max_inboxes: 5, max_monthly_sends: 5000, max_seats: 3,
+    trial_ends_at: trialEnd, updated_at: new Date().toISOString(),
+  }).eq("id", workspaceId);
+
+  const { data: ws } = await db.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
+  const CREDITS = 500;
+  await db.from("workspaces")
+    .update({ lead_credits_balance: (ws?.lead_credits_balance ?? 0) + CREDITS })
+    .eq("id", workspaceId);
+  await db.from("lead_credit_transactions").insert({
+    workspace_id: workspaceId, type: "grant", amount: CREDITS, description: "Beta programme — starter credits",
+  });
+  await db.from("beta_enrollments").update({
+    user_id: userId, workspace_id: workspaceId, updated_at: new Date().toISOString(),
+  }).eq("id", enrollment.id);
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Check auth first
   const supabase = await createClient();
