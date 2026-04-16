@@ -171,9 +171,18 @@ export async function sendBetaDecisionEmail(opts: {
   userName: string | null;
   approved: boolean;
   reviewNote: string | null;
+  needsSignup?: boolean;
 }): Promise<void> {
   const name = opts.userName ?? "there";
+  const signupUrl = `${APP_URL}/signup?email=${encodeURIComponent(opts.userEmail)}&beta=1`;
+
   if (opts.approved) {
+    const ctaUrl  = opts.needsSignup ? signupUrl : `${APP_URL}/dashboard`;
+    const ctaText = opts.needsSignup ? "Create Your Account →" : "Go to Dashboard →";
+    const upgradeNote = opts.needsSignup
+      ? "Once you create your account your Starter plan and 500 credits will be applied automatically."
+      : "Your account has been upgraded to the Starter plan for 1 month and you've been credited 500 lead credits.";
+
     await sendEmail({
       to: opts.userEmail,
       subject: "You're in! Welcome to the Leadash Beta",
@@ -182,10 +191,10 @@ export async function sendBetaDecisionEmail(opts: {
         ``,
         `Great news — your Leadash Beta application has been approved!`,
         ``,
-        `Your account has been upgraded to the Starter plan for 1 month and you've been credited 500 lead credits.`,
+        upgradeNote,
         ``,
-        `Go to your dashboard to get started:`,
-        `${APP_URL}/dashboard`,
+        opts.needsSignup ? `Create your account (use this email address):` : `Go to your dashboard to get started:`,
+        ctaUrl,
         ``,
         `— The Leadash Team`,
       ].join("\n"),
@@ -205,13 +214,19 @@ export async function sendBetaDecisionEmail(opts: {
             <p style="font-size:16px;margin-top:0">Hi ${name},</p>
             <p>Your Leadash Beta application has been <strong style="color:#16a34a">approved!</strong> Welcome aboard.</p>
             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:24px 0">
-              <p style="margin:0 0 12px;font-weight:600;color:#15803d;font-size:13px;text-transform:uppercase;letter-spacing:0.5px">Your account has been upgraded</p>
+              <p style="margin:0 0 12px;font-weight:600;color:#15803d;font-size:13px;text-transform:uppercase;letter-spacing:0.5px">
+                ${opts.needsSignup ? "What you get" : "Your account has been upgraded"}
+              </p>
               <table style="font-size:14px;color:#374151;border-spacing:0">
-                <tr><td style="padding:4px 0">✅</td><td style="padding:4px 0 4px 10px">Starter plan active for <strong>30 days</strong></td></tr>
-                <tr><td style="padding:4px 0">💳</td><td style="padding:4px 0 4px 10px"><strong>500 lead credits</strong> added to your account</td></tr>
+                <tr><td style="padding:4px 0">✅</td><td style="padding:4px 0 4px 10px">Starter plan free for <strong>30 days</strong></td></tr>
+                <tr><td style="padding:4px 0">💳</td><td style="padding:4px 0 4px 10px"><strong>500 lead credits</strong> on us</td></tr>
               </table>
             </div>
-            <p><a href="${APP_URL}/dashboard" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Go to Dashboard →</a></p>
+            ${opts.needsSignup ? `
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#9a3412">
+              <strong>Important:</strong> Sign up using <strong>${opts.userEmail}</strong> so your benefits are applied automatically.
+            </div>` : ""}
+            <p><a href="${ctaUrl}" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">${ctaText}</a></p>
             <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
           </div>
         </div>
