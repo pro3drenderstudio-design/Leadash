@@ -103,7 +103,7 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
       <div className="max-w-[82%] w-full">
         <div className="flex items-center justify-end gap-2 mb-1">
           <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
-          {msg.opened_at && <span className="text-emerald-400/50 text-[10px]">Opened</span>}
+          {msg.opened_at && <span className="text-white/30 text-[10px]">Opened</span>}
           {msg.clicked_at && <span className="text-white/30 text-[10px]">Clicked</span>}
           <span className="text-white/40 text-[10px] font-medium">You</span>
         </div>
