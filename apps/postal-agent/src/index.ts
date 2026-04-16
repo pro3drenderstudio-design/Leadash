@@ -277,6 +277,108 @@ app.delete("/credentials", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /routes
+ * Create (or upsert) a catch-all HTTP endpoint route for a domain in Postal.
+ * All mail arriving at *@domain is forwarded as JSON POST to webhook_url.
+ * Body: { domain: string, webhook_url: string }
+ */
+app.post("/routes", async (req: Request, res: Response) => {
+  const { domain, webhook_url } = req.body as { domain: string; webhook_url: string };
+  if (!domain)      { res.status(400).json({ error: "domain is required" });      return; }
+  if (!webhook_url) { res.status(400).json({ error: "webhook_url is required" }); return; }
+
+  try {
+    const conn = await pool.getConnection();
+    try {
+      // Find the domain row
+      const [domainRows] = await conn.execute<mysql.RowDataPacket[]>(
+        "SELECT id FROM domains WHERE server_id = ? AND name = ? LIMIT 1",
+        [serverId(), domain],
+      );
+      if (!domainRows.length) {
+        res.status(404).json({ error: `Domain '${domain}' not found in Postal` });
+        return;
+      }
+      const domainId = (domainRows[0] as { id: number }).id;
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+      // Check if an HTTP endpoint already exists for this domain
+      const [epRows] = await conn.execute<mysql.RowDataPacket[]>(
+        "SELECT id FROM http_endpoints WHERE server_id = ? AND url = ? LIMIT 1",
+        [serverId(), webhook_url],
+      );
+
+      let endpointId: number;
+      if (epRows.length) {
+        endpointId = (epRows[0] as { id: number }).id;
+      } else {
+        const [result] = await conn.execute<mysql.OkPacket>(
+          `INSERT INTO http_endpoints (server_id, uuid, name, url, format, strip_replies, include_attachments, timeout, created_at, updated_at)
+           VALUES (?, ?, 'leadash-inbound', ?, 'Hash', 0, 1, 10, ?, ?)`,
+          [serverId(), genUuid(), webhook_url, now, now],
+        );
+        endpointId = result.insertId;
+      }
+
+      // Upsert a route: domain → endpoint
+      const [routeRows] = await conn.execute<mysql.RowDataPacket[]>(
+        "SELECT id FROM routes WHERE server_id = ? AND domain_id = ? AND endpoint_type = 'HTTPEndpoint' AND endpoint_id = ? LIMIT 1",
+        [serverId(), domainId, endpointId],
+      );
+
+      if (!routeRows.length) {
+        await conn.execute(
+          `INSERT INTO routes (server_id, uuid, token, domain_id, endpoint_type, endpoint_id, spam_mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'HTTPEndpoint', ?, 'Mark', ?, ?)`,
+          [serverId(), genUuid(), genKey(8), domainId, endpointId, now, now],
+        );
+      }
+
+      res.json({ ok: true });
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[POST /routes]", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/**
+ * DELETE /routes
+ * Remove the inbound HTTP route for a domain.
+ * Body: { domain: string }
+ */
+app.delete("/routes", async (req: Request, res: Response) => {
+  const { domain } = req.body as { domain: string };
+  if (!domain) { res.status(400).json({ error: "domain is required" }); return; }
+
+  try {
+    const conn = await pool.getConnection();
+    try {
+      const [domainRows] = await conn.execute<mysql.RowDataPacket[]>(
+        "SELECT id FROM domains WHERE server_id = ? AND name = ? LIMIT 1",
+        [serverId(), domain],
+      );
+      if (!domainRows.length) { res.json({ ok: true }); return; } // already gone
+      const domainId = (domainRows[0] as { id: number }).id;
+
+      await conn.execute(
+        "DELETE FROM routes WHERE server_id = ? AND domain_id = ? AND endpoint_type = 'HTTPEndpoint'",
+        [serverId(), domainId],
+      );
+      res.json({ ok: true });
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/**
  * GET /smtp-settings
  * Returns the SMTP connection settings for this Postal server.
  */
