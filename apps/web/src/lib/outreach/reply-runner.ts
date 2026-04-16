@@ -50,7 +50,7 @@ function applyFilters(
 const VALID_CATEGORIES = new Set(["interested","meeting_booked","not_interested","ooo","follow_up","neutral"]);
 
 async function aiClassify(subject: string | null, bodyText: string | null): Promise<{ category: string; confidence: number }> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return { category: "neutral", confidence: 0 };
 
   const snippet = (bodyText ?? "").slice(0, 500).replace(/\s+/g, " ");
@@ -61,11 +61,23 @@ Body: ${snippet}
 Respond with JSON only: {"category": "...", "confidence": 0.0-1.0}`;
 
   try {
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genai = new GoogleGenerativeAI(apiKey);
-    const model = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const text   = result.response.text().trim().replace(/```json|```/g, "").trim();
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are an email classification assistant. Respond with JSON only." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 60,
+        temperature: 0,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) return { category: "neutral", confidence: 0 };
+    const data   = await res.json();
+    const text   = (data?.choices?.[0]?.message?.content ?? "").trim();
     const parsed = JSON.parse(text);
     const category   = VALID_CATEGORIES.has(parsed.category) ? parsed.category : "neutral";
     const confidence = typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5;
