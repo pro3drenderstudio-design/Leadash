@@ -2,7 +2,7 @@
  * Core outreach send loop — workspace-scoped for multi-tenant use.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getDueEnrollments, checkDailyLimits, advanceEnrollment, computeNextSendAt } from "@/lib/outreach/scheduler";
 import { renderEmail } from "@/lib/outreach/template";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
@@ -13,8 +13,14 @@ import type { OutreachInbox, OutreachSequenceStep, OutreachCampaign } from "@/ty
 const BOUNCE_PATTERN     = /5\d\d|user unknown|mailbox not found|no such user|does not exist|invalid.*address|recipient.*rejected/i;
 const AUTH_ERROR_PATTERN = /invalid_grant|token.*expired|token.*revoked|access.*denied|unauthorized|authentication.*fail|auth.*fail|535|534|530|credentials|wrong.*password|password.*incorrect|account.*suspended|account.*disabled|login.*fail|AUTHENTICATIONFAILED|AUTH.*FAILED/i;
 
-function supabase() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+// Module-level singleton — shared across all concurrent runSendBatch calls within
+// the same Vercel function invocation, avoiding redundant client construction.
+let _db: SupabaseClient | null = null;
+function supabase(): SupabaseClient {
+  if (!_db) {
+    _db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  }
+  return _db;
 }
 
 export interface SendRunResult {
