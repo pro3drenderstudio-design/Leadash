@@ -121,6 +121,8 @@ app.post("/inbound-relay", async (req: Request, res: Response) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // Authenticate with the Leadash app using the shared agent secret
+        "x-agent-secret": process.env.AGENT_SECRET ?? "",
         // Pass through Postal's own headers so the app can validate the source
         ...(req.headers["x-postal-signature"] ? { "x-postal-signature": req.headers["x-postal-signature"] as string } : {}),
       },
