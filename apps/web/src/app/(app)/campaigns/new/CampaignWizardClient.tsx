@@ -469,7 +469,7 @@ export default function CampaignWizardClient() {
               {aiError && <div className="px-3 py-2 bg-red-500/15 border border-red-500/30 rounded-lg text-red-400 text-xs">{aiError}</div>}
               <div>
                 <label className="block text-xs text-white/40 mb-1">Product / Service</label>
-                <input value={aiProduct} onChange={(e) => setAiProduct(e.target.value)} placeholder="ProPlan Studio — AI project planning SaaS" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
+                <input value={aiProduct} onChange={(e) => setAiProduct(e.target.value)} placeholder="Acme Corp — B2B sales automation software" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
               </div>
               <div>
                 <label className="block text-xs text-white/40 mb-1">Target Audience</label>
