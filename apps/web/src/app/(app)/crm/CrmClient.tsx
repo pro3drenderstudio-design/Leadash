@@ -114,7 +114,7 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
               <span className="text-white/20 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
             </div>
             {!collapsed && (
-              <div className="px-4 pb-4 border-t border-orange-500/10 pt-3">
+              <div className="px-4 pb-4 border-t border-white/8 pt-3">
                 {isHtml ? (
                   <iframe
                     srcDoc={`<html><head><style>body{margin:0;font-family:sans-serif;font-size:13px;color:#ccc;background:transparent;line-height:1.6}a{color:#7dd3fc}*{max-width:100%}</style></head><body>${msg.body}</body></html>`}
