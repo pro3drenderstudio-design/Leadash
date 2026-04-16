@@ -258,6 +258,38 @@ export async function runSendBatch(
     }
   }
 
+  // ── Bounce rate enforcement: pause any campaign over 2% ─────────────────────
+  // Only evaluate after a minimum sample size (20 sends) to avoid false positives
+  // on brand-new campaigns with 1 bounce out of 2 sends.
+  for (const [campaignId] of byCampaign.entries()) {
+    const [{ count: sentCount }, { count: bouncedCount }] = await Promise.all([
+      db.from("outreach_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .in("status", ["sent", "opened", "replied", "clicked"]),
+      db.from("outreach_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .eq("status", "bounced"),
+    ]);
+
+    const sent    = sentCount    ?? 0;
+    const bounced = bouncedCount ?? 0;
+    const total   = sent + bounced;
+
+    if (total >= 20 && bounced / total > 0.02) {
+      await db
+        .from("outreach_campaigns")
+        .update({ status: "paused", updated_at: new Date().toISOString() })
+        .eq("id", campaignId)
+        .eq("status", "active"); // only pause if still active
+      console.warn(
+        `[send-runner] Campaign ${campaignId} auto-paused: bounce rate ` +
+        `${(bounced / total * 100).toFixed(1)}% (${bounced}/${total} sends)`,
+      );
+    }
+  }
+
   return result;
 }
 
