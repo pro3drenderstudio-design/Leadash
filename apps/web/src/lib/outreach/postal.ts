@@ -72,23 +72,28 @@ export async function registerDomain(domain: string): Promise<RegisterDomainResu
  * without depending on the Lambda's local DNS resolver.
  */
 export async function isDomainVerified(domain: string): Promise<boolean> {
-  try {
-    const name = `postal._domainkey.${domain}`;
-    const res  = await fetch(
-      `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=TXT`,
-      { signal: AbortSignal.timeout(8_000) },
-    );
-    if (!res.ok) return false;
-    const json = await res.json() as {
-      Status: number;
-      Answer?: Array<{ type: number; data: string }>;
-    };
-    // Status 0 = NOERROR. Type 16 = TXT.
-    if (json.Status !== 0 || !json.Answer) return false;
-    return json.Answer.some(r => r.type === 16 && r.data.includes("v=DKIM1"));
-  } catch {
-    return false;
+  // Check both selector variants — "postal-1" is what buildPostalMailDnsRecords generates,
+  // "postal" is the legacy selector used by some older Postal installs.
+  const selectors = ["postal-1", "postal"];
+  for (const selector of selectors) {
+    try {
+      const name = `${selector}._domainkey.${domain}`;
+      const res  = await fetch(
+        `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=TXT`,
+        { signal: AbortSignal.timeout(8_000) },
+      );
+      if (!res.ok) continue;
+      const json = await res.json() as {
+        Status: number;
+        Answer?: Array<{ type: number; data: string }>;
+      };
+      if (json.Status !== 0 || !json.Answer) continue;
+      if (json.Answer.some(r => r.type === 16 && r.data.includes("v=DKIM1"))) return true;
+    } catch {
+      continue;
+    }
   }
+  return false;
 }
 
 interface SmtpCredential {
