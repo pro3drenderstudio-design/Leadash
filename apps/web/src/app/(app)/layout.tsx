@@ -7,6 +7,7 @@ import WorkspaceProvider from "@/components/WorkspaceProvider";
 import { CurrencyProvider } from "@/lib/currency";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
+import BetaBanner from "@/components/BetaBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
