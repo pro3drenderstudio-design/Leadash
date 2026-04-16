@@ -131,15 +131,20 @@ export default function BroadcastPage() {
   const [subject,  setSubject]  = useState(V2_TEMPLATE.subject);
   const [html,     setHtml]     = useState(V2_TEMPLATE.html);
   const [text,     setText]     = useState(V2_TEMPLATE.text);
-  const [filter,   setFilter]   = useState<"all" | "active">("all");
-  const [tab,      setTab]      = useState<"html" | "text" | "preview">("html");
+  const [filter,     setFilter]     = useState<"all" | "active">("all");
+  const [tab,        setTab]        = useState<"html" | "text" | "preview">("html");
+  const [batchLimit, setBatchLimit] = useState<string>("10");
+  const [offset,     setOffset]     = useState<number>(0);
 
   const [previewing, setPreviewing] = useState(false);
   const [sending,    setSending]    = useState(false);
   const [preview,    setPreview]    = useState<PreviewResult | null>(null);
   const [result,     setResult]     = useState<SendResult | null>(null);
+  const [allResults, setAllResults] = useState<SendResult[]>([]);
   const [error,      setError]      = useState("");
   const [confirmed,  setConfirmed]  = useState(false);
+
+  const limitNum = parseInt(batchLimit) || 0;
 
   async function handlePreview() {
     setPreviewing(true);
@@ -148,7 +153,7 @@ export default function BroadcastPage() {
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, html, text, filter, preview: true }),
+        body: JSON.stringify({ subject, html, text, filter, preview: true, limit: limitNum || undefined, offset }),
       });
       const d = await res.json() as PreviewResult & { error?: string };
       if (!res.ok) { setError(d.error ?? "Preview failed"); return; }
@@ -169,18 +174,24 @@ export default function BroadcastPage() {
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, html, text, filter }),
+        body: JSON.stringify({ subject, html, text, filter, limit: limitNum || undefined, offset }),
       });
       const d = await res.json() as SendResult & { error?: string };
       if (!res.ok) { setError(d.error ?? "Send failed"); return; }
       setResult(d);
+      setAllResults(prev => [...prev, d]);
       setConfirmed(false);
+      // Auto-advance offset for next batch
+      if (d.next_offset !== null) setOffset(d.next_offset);
     } catch {
       setError("Network error");
     } finally {
       setSending(false);
     }
   }
+
+  // All succeeded emails across all batches sent this session
+  const allSucceeded = allResults.flatMap(r => r.succeeded);
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
