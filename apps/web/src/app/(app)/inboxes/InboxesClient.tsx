@@ -465,24 +465,31 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (!importFile) return;
     setImporting(true);
     setImportResult(null);
+    setImportError(null);
 
-    const rawText = await importFile.text();
-    const csvText = (showMapping && Object.keys(colMapping).length > 0)
-      ? remapCsv(rawText, colMapping)
-      : rawText;
-    const rows = parseCsvRows(csvText);
+    try {
+      const rawText = await importFile.text();
+      const csvText = (showMapping && Object.keys(colMapping).length > 0)
+        ? remapCsv(rawText, colMapping)
+        : rawText;
+      const rows = parseCsvRows(csvText);
 
-    const result = await importInboxes(rows);
-    setImportResult(result);
-    setImporting(false);
-    if (result.imported > 0) {
-      showToast(`Imported ${result.imported} inbox${result.imported !== 1 ? "es" : ""}`);
-      load();
+      const result = await importInboxes(rows);
+      setImportResult(result);
+      if (result.imported > 0) {
+        showToast(`Imported ${result.imported} inbox${result.imported !== 1 ? "es" : ""}`);
+        load();
+      }
+      setImportFile(null);
+      setShowMapping(false);
+      setCsvHeaders([]);
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Import failed";
+      setImportError(msg);
+    } finally {
+      setImporting(false);
     }
-    setImportFile(null);
-    setShowMapping(false);
-    setCsvHeaders([]);
-    if (fileRef.current) fileRef.current.value = "";
   }
 
   async function toggleStatus(inbox: OutreachInboxSafe) {
