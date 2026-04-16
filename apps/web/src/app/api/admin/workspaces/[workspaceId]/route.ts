@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ wo
     if (!amount || amount === 0) return NextResponse.json({ error: "amount required (non-zero)" }, { status: 400 });
 
     // Insert transaction record
-    const txType = amount > 0 ? "admin_grant" : "admin_deduct";
+    const txType = amount > 0 ? "grant" : "refund";
     const { error: txError } = await ctx.adminClient
       .from("lead_credit_transactions")
       .insert({ workspace_id: workspaceId, amount, type: txType, description });
