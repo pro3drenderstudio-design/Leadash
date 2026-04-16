@@ -19,6 +19,7 @@ const PERKS = [
 export default function BetaPage() {
   const [enrollment, setEnrollment] = useState<Enrollment | null | undefined>(undefined);
   const [name, setName]             = useState("");
+  const [email, setEmail]           = useState("");
   const [reason, setReason]         = useState("");
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState("");
@@ -27,7 +28,11 @@ export default function BetaPage() {
   useEffect(() => {
     fetch("/api/beta/enroll")
       .then(r => r.json())
-      .then(d => setEnrollment(d.enrollment ?? null))
+      .then(d => {
+        setEnrollment(d.enrollment ?? null);
+        // Pre-fill email if user is logged in
+        if (d.email) setEmail(d.email);
+      })
       .catch(() => setEnrollment(null));
   }, []);
 
@@ -38,7 +43,7 @@ export default function BetaPage() {
     const res = await fetch("/api/beta/enroll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, reason }),
+      body: JSON.stringify({ name, email, reason }),
     });
     const data = await res.json() as { ok?: boolean; error?: string };
     setLoading(false);
