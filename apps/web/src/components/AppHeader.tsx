@@ -18,6 +18,7 @@ interface Props {
   userName: string | null;
   workspaceName: string;
   plan: string;
+  trialEndsAt?: string | null;
 }
 
 const PLAN_STYLE: Record<string, string> = {
