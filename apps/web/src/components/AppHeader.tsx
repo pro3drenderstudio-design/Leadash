@@ -178,6 +178,29 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
       {/* ── Right cluster ── */}
       <div className="flex items-center gap-2 ml-auto">
 
+        {/* Trial countdown — free plan only */}
+        {plan === "free" && trialEndsAt && (() => {
+          const msLeft   = new Date(trialEndsAt).getTime() - Date.now();
+          const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+          const expired  = daysLeft === 0;
+          const color    = expired ? "#ef4444" : daysLeft <= 3 ? "#f97316" : daysLeft <= 7 ? "#f59e0b" : "#10b981";
+          const bg       = expired ? "rgba(239,68,68,0.1)" : daysLeft <= 3 ? "rgba(249,115,22,0.1)" : daysLeft <= 7 ? "rgba(245,158,11,0.1)" : "rgba(16,185,129,0.1)";
+          const border   = expired ? "rgba(239,68,68,0.2)" : daysLeft <= 3 ? "rgba(249,115,22,0.2)" : daysLeft <= 7 ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)";
+          const label    = expired ? "Trial expired" : daysLeft === 1 ? "1 day left" : `${daysLeft}d trial`;
+          return (
+            <Link
+              href="/settings?tab=billing"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={{ background: bg, border: `1px solid ${border}`, color }}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {label}
+            </Link>
+          );
+        })()}
+
         {/* Credits */}
         {credits !== null && (
           <Link
