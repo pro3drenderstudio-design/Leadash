@@ -175,7 +175,13 @@ function InboxAvatar({
   );
 }
 
-export default function InboxesClient() {
+interface InboxesClientProps {
+  trialExpired?: boolean;
+  planId?: string;
+  maxInboxes?: number;
+}
+
+export default function InboxesClient({ trialExpired = false, planId = "free", maxInboxes = 5 }: InboxesClientProps) {
   const params = useSearchParams();
   const [activeTab, setActiveTab]       = useState<"inboxes" | "domains">("inboxes");
   const [inboxes, setInboxes]           = useState<OutreachInboxSafe[]>([]);
