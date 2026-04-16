@@ -137,9 +137,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .in("id", toInsert.map(l => l.id));
   }
 
+  const skippedByPool = typedLeads.filter(l => !existingEmails.has(l.email)).length - toInsert.length;
+
   return NextResponse.json({
     exported,
-    skipped_duplicate: campaignLeads.length - toInsert.length,
+    skipped_duplicate: campaignLeads.length - typedLeads.filter(l => !existingEmails.has(l.email)).length,
+    skipped_pool_limit: skippedByPool > 0 ? skippedByPool : undefined,
     list_id: targetListId,
+    pool_remaining: poolRemaining === Infinity ? null : Math.max(0, poolRemaining - exported),
   });
 }
