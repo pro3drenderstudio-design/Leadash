@@ -35,7 +35,7 @@ export async function GET(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Attach inbox counts
-  const domainIds = (domains ?? []).map(d => d.id);
+  const domainIds = (domains ?? []).map((d: { id: string }) => d.id);
   const { data: inboxes } = domainIds.length
     ? await ctx.db.from("outreach_inboxes").select("id, domain_id, email_address, status").in("domain_id", domainIds)
     : { data: [] };
