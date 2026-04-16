@@ -98,6 +98,7 @@ export default function EnrichPage() {
   const [prompt, setPrompt]            = useState("");
   const [leads, setLeads]              = useState<LeadInput[]>([]);
   const [balance, setBalance]          = useState<number | null>(null);
+  const [creditsModal, setCreditsModal] = useState<{ needed: number; have: number } | null>(null);
   const [error, setError]              = useState<string | null>(null);
   const [activeJob, setActiveJob]      = useState<EnrichBulkJob | null>(null);
   const [resultPage, setResultPage]    = useState(1);
