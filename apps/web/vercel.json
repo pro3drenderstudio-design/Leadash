@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/send",          "schedule": "0 8 * * *" },
+    { "path": "/api/cron/send",          "schedule": "0 7,9,11,13,15,17 * * *" },
     { "path": "/api/cron/replies",       "schedule": "0 9 * * *" },
     { "path": "/api/cron/warmup",        "schedule": "0 7 * * *" },
     { "path": "/api/cron/inbox-billing", "schedule": "0 2 * * *" },
