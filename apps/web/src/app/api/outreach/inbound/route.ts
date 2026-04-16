@@ -126,6 +126,56 @@ export async function POST(req: NextRequest) {
     .eq("email_address", to)
     .maybeSingle();
 
+  // ── DSN bounce notification — handle before inbox lookup ─────────────────────
+  // Bounce-back emails arrive addressed TO our sending inbox (the original From:).
+  // We detect them by sender/subject, extract the original recipient, and suppress them.
+  if (to && from && isDsnBounce(from, subject)) {
+    const bouncedEmail = extractBouncedEmail(text);
+    if (bouncedEmail) {
+      // Suppress the bounced address globally
+      await db.from("email_suppressions").upsert(
+        { email: bouncedEmail, reason: "hard_bounce" },
+        { onConflict: "email", ignoreDuplicates: true },
+      );
+
+      // Mark the lead bounced across all workspaces that have this email
+      await db
+        .from("outreach_leads")
+        .update({ status: "bounced" })
+        .eq("email", bouncedEmail)
+        .neq("status", "bounced");
+
+      // Mark any active enrollment for this lead as bounced
+      const { data: bouncedLeads } = await db
+        .from("outreach_leads")
+        .select("id")
+        .eq("email", bouncedEmail);
+
+      if (bouncedLeads?.length) {
+        const leadIds = bouncedLeads.map((l: { id: string }) => l.id);
+        await db
+          .from("outreach_enrollments")
+          .update({ status: "bounced" })
+          .in("lead_id", leadIds)
+          .in("status", ["active", "paused"]);
+
+        // Mark the most recent queued/sent send record as bounced
+        await db
+          .from("outreach_sends")
+          .update({ status: "bounced", bounced_at: new Date().toISOString() })
+          .in("lead_id", leadIds)
+          .in("status", ["queued", "sent"]);
+      }
+
+      console.log(`[inbound] DSN bounce processed: ${bouncedEmail} suppressed globally`);
+      return NextResponse.json({ ok: true, type: "dsn_bounce", bounced: bouncedEmail });
+    }
+
+    // DSN detected but couldn't parse recipient — log and drop
+    console.warn(`[inbound] DSN bounce from ${from} but could not extract bounced address. Subject: ${subject}`);
+    return NextResponse.json({ ok: true, type: "dsn_unresolved" });
+  }
+
   if (!inbox) {
     // Unknown address — ignore silently (could be catch-all receiving unrelated mail)
     return NextResponse.json({ ok: true, note: "inbox not found" });
