@@ -27,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CurrencyProvider>
     <SidebarProvider>
       <ImpersonationBanner />
+      <BetaBanner />
       {workspace.plan_id === "free" && workspace.trial_ends_at && (
         <TrialBanner trialEndsAt={workspace.trial_ends_at} />
       )}
