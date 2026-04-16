@@ -23,7 +23,12 @@ export async function POST(req: NextRequest) {
     .select("workspace_id")
     .eq("status", "active");
 
-  const workspaceIds: string[] = [...new Set((activeRows ?? []).map((r: { workspace_id: string }) => r.workspace_id))];
+  const seen = new Set<string>();
+  const workspaceIds: string[] = [];
+  for (const row of activeRows ?? []) {
+    const id = (row as { workspace_id: string }).workspace_id;
+    if (!seen.has(id)) { seen.add(id); workspaceIds.push(id); }
+  }
   if (!workspaceIds.length) return NextResponse.json({ workspaces: 0, sent: 0 });
 
   // Process in chunks so we don't open hundreds of parallel DB connections
