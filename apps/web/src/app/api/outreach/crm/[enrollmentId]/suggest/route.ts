@@ -63,11 +63,26 @@ ${context}
 Write the reply now:`;
 
   try {
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genai  = new GoogleGenerativeAI(apiKey);
-    const model  = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const suggestion = result.response.text().trim();
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a professional sales assistant. Write concise, natural reply bodies. Never include a subject line, greeting prefix, or signature — just the reply body text." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      }),
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { const e = await res.json(); detail = e?.error?.message ?? ""; } catch { /* ignore */ }
+      return NextResponse.json({ error: `OpenAI error ${res.status}${detail ? `: ${detail}` : ""}` }, { status: 500 });
+    }
+    const data = await res.json();
+    const suggestion = (data?.choices?.[0]?.message?.content ?? "").trim();
     if (!suggestion) return NextResponse.json({ error: "No suggestion generated" }, { status: 500 });
     return NextResponse.json({ suggestion });
   } catch (err) {
