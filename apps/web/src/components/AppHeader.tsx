@@ -28,7 +28,7 @@ const PLAN_STYLE: Record<string, string> = {
   enterprise: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
 };
 
-export default function AppHeader({ userEmail, userName, workspaceName, plan }: Props) {
+export default function AppHeader({ userEmail, userName, workspaceName, plan, trialEndsAt }: Props) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [search, setSearch]           = useState("");
   const [results, setResults]         = useState<SearchResult[]>([]);
