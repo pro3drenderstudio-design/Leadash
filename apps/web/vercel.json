@@ -3,6 +3,7 @@
     { "path": "/api/cron/send",          "schedule": "0 8 * * *" },
     { "path": "/api/cron/replies",       "schedule": "0 9 * * *" },
     { "path": "/api/cron/warmup",        "schedule": "0 7 * * *" },
-    { "path": "/api/cron/inbox-billing", "schedule": "0 2 * * *" }
+    { "path": "/api/cron/inbox-billing", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/cleanup",       "schedule": "0 3 * * 0" }
   ]
 }
