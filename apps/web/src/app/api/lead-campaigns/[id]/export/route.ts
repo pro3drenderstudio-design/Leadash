@@ -139,12 +139,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .in("id", toInsert.map(l => l.id));
   }
 
-  const skippedByPool = typedLeads.filter(l => !existingEmails.has(l.email)).length - toInsert.length;
-
   return NextResponse.json({
     exported,
-    skipped_duplicate: campaignLeads.length - typedLeads.filter(l => !existingEmails.has(l.email)).length,
-    skipped_pool_limit: skippedByPool > 0 ? skippedByPool : undefined,
+    skipped_duplicate: skippedDuplicate,
+    ...(skippedPoolLimit > 0 ? { skipped_pool_limit: skippedPoolLimit, pool_limit_message: "Outreach leads pool capacity reached — upgrade your plan to add more." } : {}),
     list_id: targetListId,
     pool_remaining: poolRemaining === Infinity ? null : Math.max(0, poolRemaining - exported),
   });
