@@ -292,6 +292,43 @@ export default function BroadcastPage() {
             </div>
           </div>
 
+          {/* Batch controls */}
+          <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-5 space-y-3">
+            <p className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider">Batch Controls</p>
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-white/40 mb-1">Recipients per batch</label>
+              <input
+                type="number"
+                min="1"
+                max="500"
+                value={batchLimit}
+                onChange={e => setBatchLimit(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-orange-400 dark:focus:border-orange-500/60 transition-colors"
+                placeholder="e.g. 10"
+              />
+              <p className="text-[10px] text-slate-400 dark:text-white/25 mt-1">Leave empty to send to all at once.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-white/40 mb-1">Start from (#)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={offset}
+                  onChange={e => setOffset(parseInt(e.target.value) || 0)}
+                  className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-orange-400 dark:focus:border-orange-500/60 transition-colors"
+                />
+                <button
+                  onClick={() => setOffset(0)}
+                  className="px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-white/25 mt-1">After sending, offset auto-advances to the next batch.</p>
+            </div>
+          </div>
+
           {/* Preview */}
           <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-5">
             <p className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider mb-3">Dry Run</p>
@@ -303,10 +340,12 @@ export default function BroadcastPage() {
               {previewing ? "Checking…" : "Check recipient count"}
             </button>
             {preview && (
-              <div className="mt-3 p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{preview.count.toLocaleString()} recipients</p>
+              <div className="mt-3 p-3 bg-slate-50 dark:bg-white/5 rounded-lg space-y-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {preview.page_count} of {preview.count.toLocaleString()} recipients (offset {preview.offset})
+                </p>
                 {preview.sample.length > 0 && (
-                  <p className="text-xs text-slate-400 dark:text-white/30 mt-1 leading-relaxed">
+                  <p className="text-xs text-slate-400 dark:text-white/30 leading-relaxed">
                     {preview.sample.join(", ")}{preview.count > preview.sample.length ? `, +${preview.count - preview.sample.length} more` : ""}
                   </p>
                 )}
@@ -325,7 +364,7 @@ export default function BroadcastPage() {
                 className="mt-0.5 accent-orange-500"
               />
               <span className="text-xs text-slate-500 dark:text-white/40 leading-relaxed">
-                I confirm I want to send this email to {filter === "all" ? "all confirmed users" : "all active users"}. This cannot be undone.
+                I confirm I want to send this email to {limitNum ? `${limitNum} recipients` : (filter === "all" ? "all confirmed users" : "all active users")} starting at #{offset}. This cannot be undone.
               </span>
             </label>
             <button
@@ -338,7 +377,7 @@ export default function BroadcastPage() {
                   <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                   Sending…
                 </span>
-              ) : "Send broadcast"}
+              ) : `Send batch (offset ${offset}${limitNum ? `, up to ${limitNum}` : ""})`}
             </button>
           </div>
 
@@ -349,21 +388,56 @@ export default function BroadcastPage() {
             </div>
           )}
 
-          {/* Result */}
+          {/* Latest batch result */}
           {result && (
-            <div className="p-4 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
-              <p className="text-sm font-semibold text-green-700 dark:text-green-400 mb-2">Broadcast complete</p>
-              <p className="text-xs text-green-600 dark:text-green-400/70">{result.sent} sent · {result.failed} failed · {result.total} total</p>
+            <div className="p-4 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 space-y-2">
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">Batch complete</p>
+              <p className="text-xs text-green-600 dark:text-green-400/70">
+                {result.sent} sent · {result.failed} failed · {result.page_count} attempted
+                {result.next_offset !== null && (
+                  <span className="ml-2 text-orange-500 font-semibold">→ Next offset: {result.next_offset}</span>
+                )}
+              </p>
+              {result.succeeded.length > 0 && (
+                <details open>
+                  <summary className="text-xs text-green-600 dark:text-green-400 cursor-pointer font-medium">
+                    ✓ {result.succeeded.length} succeeded
+                  </summary>
+                  <ul className="mt-1.5 space-y-0.5 max-h-40 overflow-y-auto">
+                    {result.succeeded.map((e, i) => (
+                      <li key={i} className="text-xs text-green-600 dark:text-green-400/80 font-mono">{e}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
               {result.errors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="text-xs text-red-500 cursor-pointer">Show errors ({result.errors.length})</summary>
-                  <ul className="mt-1 space-y-0.5">
+                <details>
+                  <summary className="text-xs text-red-500 cursor-pointer">✗ {result.errors.length} failed</summary>
+                  <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
                     {result.errors.map((e, i) => (
                       <li key={i} className="text-xs text-red-400 font-mono">{e}</li>
                     ))}
                   </ul>
                 </details>
               )}
+            </div>
+          )}
+
+          {/* Session total across all batches */}
+          {allResults.length > 1 && (
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-2">
+              <p className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider">Session Total</p>
+              <p className="text-sm text-slate-700 dark:text-white/70">
+                {allResults.reduce((a, r) => a + r.sent, 0)} sent across {allResults.length} batches
+              </p>
+              <details>
+                <summary className="text-xs text-slate-400 dark:text-white/30 cursor-pointer">All succeeded ({allSucceeded.length})</summary>
+                <ul className="mt-1.5 space-y-0.5 max-h-48 overflow-y-auto">
+                  {allSucceeded.map((e, i) => (
+                    <li key={i} className="text-xs text-slate-500 dark:text-white/50 font-mono">{e}</li>
+                  ))}
+                </ul>
+              </details>
             </div>
           )}
         </div>
