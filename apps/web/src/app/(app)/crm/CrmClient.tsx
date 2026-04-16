@@ -932,7 +932,7 @@ export default function CrmClient() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-white/20">
+            <div className="hidden md:flex flex-1 items-center justify-center text-white/20">
               <div className="text-center"><div className="text-5xl mb-4">←</div><p className="text-sm">Select a conversation</p></div>
             </div>
           )}
