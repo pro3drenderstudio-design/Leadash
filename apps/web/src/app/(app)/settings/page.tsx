@@ -800,15 +800,15 @@ function SettingsInner() {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Left nav */}
-      <nav className="w-48 flex-shrink-0 border-r border-white/8 p-4 space-y-0.5">
-        <p className="px-2 mb-3 text-xs font-semibold text-white/30 uppercase tracking-wider">Settings</p>
+    <div className="flex flex-col md:flex-row h-full">
+      {/* Nav: horizontal scroll on mobile, vertical sidebar on md+ */}
+      <nav className="flex-shrink-0 flex flex-row overflow-x-auto gap-0.5 border-b border-white/8 px-3 py-2 md:flex-col md:w-48 md:border-r md:border-b-0 md:p-4 md:space-y-0.5 md:overflow-x-visible">
+        <p className="hidden md:block px-2 mb-3 text-xs font-semibold text-white/30 uppercase tracking-wider">Settings</p>
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => navigate(tab.id)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+            className={`flex-shrink-0 md:w-full md:text-left px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap ${
               active === tab.id ? "bg-white/10 text-white font-medium" : "text-white/50 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -818,7 +818,7 @@ function SettingsInner() {
       </nav>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8 max-w-2xl">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-2xl">
         {active === "profile"  && <ProfileTab />}
         {active === "security" && <SecurityTab />}
         {active === "team"     && <TeamTab />}
