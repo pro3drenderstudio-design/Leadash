@@ -218,6 +218,27 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, leadsPage, leadsStatus, campaignId]);
 
+  // Load sample leads when test modal opens
+  useEffect(() => {
+    if (testStepIdx === null) return;
+    getCampaignEnrollments(campaignId, 0, 20, "all")
+      .then(d => setTestSampleLeads((d as { enrollments: CampaignEnrollmentRow[] }).enrollments ?? []))
+      .catch(() => {});
+  }, [testStepIdx, campaignId]);
+
+  // Variable substitution for email preview
+  function renderTemplate(tmpl: string, lead: CampaignEnrollmentRow["lead"]): string {
+    if (!tmpl) return "";
+    const vars: Record<string, string> = {
+      first_name:  lead?.first_name  ?? "Jane",
+      last_name:   lead?.last_name   ?? "Smith",
+      company:     lead?.company     ?? "Acme Corp",
+      title:       lead?.title       ?? "CEO",
+      email:       lead?.email       ?? "jane@example.com",
+    };
+    return tmpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+  }
+
   function openEdit() {
     if (!campaign) return;
     setEditName(campaign.name);
