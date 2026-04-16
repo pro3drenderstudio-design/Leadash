@@ -3,6 +3,9 @@ import { Queue } from "bullmq";
 import { connection } from "../lib/redis";
 import { adminClient } from "../lib/supabase";
 
+const APP_URL     = process.env.APP_URL     ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+const CRON_SECRET = process.env.CRON_SECRET ?? "";
+
 const sendQueue           = new Queue("leadash:send",           { connection });
 const replyQueue          = new Queue("leadash:reply-poll",     { connection });
 const warmupQueue         = new Queue("leadash:warmup",         { connection });
