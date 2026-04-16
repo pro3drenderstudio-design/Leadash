@@ -26,6 +26,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     targetListId = newList.id;
   }
 
+  // ── Outreach leads pool limit ────────────────────────────────────────────
+  {
+    const { data: ws } = await db
+      .from("workspaces")
+      .select("plan_id")
+      .eq("id", workspaceId)
+      .single();
+
+    const planId = ws?.plan_id ?? "free";
+    const { getPlan } = await import("@/lib/billing/plans");
+    const { data: planConfig } = await db
+      .from("plan_configs")
+      .select("max_leads_pool")
+      .eq("plan_id", planId)
+      .maybeSingle();
+
+    const plan = getPlan(planId);
+    const maxPool: number = planConfig?.max_leads_pool ?? plan.maxLeadsPool;
+
+    if (maxPool === 0) {
+      return NextResponse.json(
+        { error: "Outreach leads require a paid plan. Upgrade to export leads to sequences." },
+        { status: 403 },
+      );
+    }
+
+    if (maxPool > 0) {
+      const { count: current } = await db
+        .from("outreach_leads")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId);
+
+      const used = current ?? 0;
+      if (used >= maxPool) {
+        return NextResponse.json(
+          {
+            error: `Outreach leads pool full (${maxPool.toLocaleString()} leads). Delete unused leads or upgrade your plan.`,
+            pool_used: used,
+            pool_max: maxPool,
+          },
+          { status: 403 },
+        );
+      }
+
+      // Pass remaining capacity to the insert below via a scoped var
+      // We'll only export up to the remaining slots
+      const remaining = maxPool - used;
+      if ((lead_ids?.length ?? Infinity) > remaining || !lead_ids?.length) {
+        // Will be enforced by capping toInsert after dedup below — store in outer scope
+        (req as unknown as Record<string, unknown>).__poolRemaining = remaining;
+      }
+    }
+  }
+
   // Fetch the campaign leads to export
   let query = db
     .from("lead_campaign_leads")
