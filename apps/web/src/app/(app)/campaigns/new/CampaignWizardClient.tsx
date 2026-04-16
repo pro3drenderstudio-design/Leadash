@@ -414,7 +414,7 @@ export default function CampaignWizardClient() {
 
                     {/* Test send button */}
                     <button
-                      onClick={() => { setTestStepIdx(i); setTestResult(null); setTestLeadId(""); setTestToEmail(""); setTestInboxId(selectedInboxes[0] ?? ""); }}
+                      onClick={() => { setTestStepIdx(i); setTestResult(null); setTestSampleIdx(-1); setTestToEmail(""); setTestInboxId(selectedInboxes[0] ?? ""); }}
                       className="text-amber-400/80 hover:text-amber-300 text-xs transition-colors ml-auto"
                     >
                       Send Test ↗
