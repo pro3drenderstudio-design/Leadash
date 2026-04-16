@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   const { data: workspace } = await db
     .from("workspaces")
-    .select("lead_credits_balance")
+    .select("lead_credits_balance, plan_id, max_inboxes")
     .eq("id", workspaceId)
     .single();
 
@@ -70,6 +70,45 @@ export async function POST(req: NextRequest) {
       { error: `Insufficient credits. Need ${creditsNeeded}, have ${workspace?.lead_credits_balance ?? 0}.` },
       { status: 402 },
     );
+  }
+
+  // ── Leads pool limit (scrape mode only) ────────────────────────────────────
+  if (mode === "scrape" || mode === "full_suite") {
+    const { data: planConfig } = await db
+      .from("plan_configs")
+      .select("max_leads_pool")
+      .eq("plan_id", workspace.plan_id ?? "free")
+      .maybeSingle();
+
+    const { getPlan } = await import("@/lib/billing/plans");
+    const plan = getPlan(workspace.plan_id ?? "free");
+    const maxPool = planConfig?.max_leads_pool ?? plan.maxLeadsPool;
+
+    if (maxPool === 0) {
+      return NextResponse.json(
+        { error: "Lead scraping is not available on your current plan. Upgrade to access this feature." },
+        { status: 403 },
+      );
+    }
+
+    if (maxPool > 0) {
+      // Count existing scraped leads for this workspace
+      const { count: existingLeads } = await db
+        .from("lead_campaign_leads")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId);
+
+      const current = existingLeads ?? 0;
+      if (current + max_leads > maxPool) {
+        const remaining = Math.max(0, maxPool - current);
+        return NextResponse.json(
+          {
+            error: `Leads pool limit reached. Your plan allows ${maxPool.toLocaleString()} leads total. You have ${current.toLocaleString()} and are requesting ${max_leads}. ${remaining > 0 ? `Reduce max leads to ${remaining} or upgrade your plan.` : "Upgrade your plan to scrape more leads."}`,
+          },
+          { status: 403 },
+        );
+      }
+    }
   }
 
   // Credits are NOT deducted upfront. The processor deducts per-lead as they are processed.
