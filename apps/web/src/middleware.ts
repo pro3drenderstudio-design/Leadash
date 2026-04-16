@@ -15,10 +15,13 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/api/billing/webhook",
+  "/api/billing/paystack",
   "/api/track",
   "/api/outreach/unsubscribe",
+  "/api/outreach/inbound",
   "/api/auth/callback",
   "/api/cron",
+  "/api/beta",
 ];
 
 function isPublic(path: string) {
