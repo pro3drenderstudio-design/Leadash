@@ -195,7 +195,7 @@ export default function CampaignWizardClient() {
       <div className="flex items-center gap-2 mb-8">
         {STEP_LABELS.map((label, i) => (
           <div key={label} className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${i <= step ? "bg-orange-500 border-blue-500 text-white" : "bg-white/6 border-white/10 text-white/30"}`}>{i + 1}</div>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${i <= step ? "bg-orange-500 border-orange-500 text-white" : "bg-white/6 border-white/10 text-white/30"}`}>{i + 1}</div>
             <span className={`text-sm ${i === step ? "text-white font-medium" : "text-white/30"}`}>{label}</span>
             {i < 3 && <div className="w-8 h-px bg-white/10 mx-1" />}
           </div>
