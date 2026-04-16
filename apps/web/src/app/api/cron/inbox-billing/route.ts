@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
+import { sendInboxPaymentSuccess, sendInboxPaymentFailed } from "@/lib/email/notifications";
 
 export async function GET(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
