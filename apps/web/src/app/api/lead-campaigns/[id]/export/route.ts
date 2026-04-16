@@ -99,12 +99,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .in("email", emails);
 
   const existingEmails = new Set((existing ?? []).map((l: { email: string }) => l.email));
-  let toInsert = typedLeads.filter(l => !existingEmails.has(l.email));
+  const dedupedLeads = typedLeads.filter(l => !existingEmails.has(l.email));
+  const skippedDuplicate = campaignLeads.length - dedupedLeads.length;
 
   // Enforce pool capacity — cap to remaining slots
-  if (toInsert.length > poolRemaining) {
-    toInsert = toInsert.slice(0, poolRemaining);
-  }
+  const toInsert = dedupedLeads.length > poolRemaining
+    ? dedupedLeads.slice(0, poolRemaining)
+    : dedupedLeads;
+  const skippedPoolLimit = dedupedLeads.length - toInsert.length;
 
   let exported = 0;
   const BATCH = 100;
