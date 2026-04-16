@@ -213,6 +213,11 @@ function UsersPageInner() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
 
+      {/* Send Message Modal */}
+      {messageTarget && (
+        <SendMessageModal target={messageTarget} onClose={() => setMessageTarget(null)} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
