@@ -57,7 +57,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
         className="px-4 py-4 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}
       >
-        <Link href="/dashboard" className="flex items-center gap-2.5 group" onClick={close}>
+        <Link href="/dashboard" className="flex items-center gap-2 group" onClick={close}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
           <span
@@ -65,6 +65,9 @@ export default function Sidebar({ workspaceName, plan }: Props) {
             style={{ letterSpacing: "-0.02em" }}
           >
             Leadash
+          </span>
+          <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/25 select-none">
+            Beta
           </span>
         </Link>
         {/* Close button — mobile only */}
