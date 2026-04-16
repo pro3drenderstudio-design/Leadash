@@ -104,14 +104,14 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
         <div className="flex items-center justify-end gap-2 mb-1">
           <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
           {msg.opened_at && <span className="text-emerald-400/50 text-[10px]">Opened</span>}
-          {msg.clicked_at && <span className="text-orange-400/50 text-[10px]">Clicked</span>}
-          <span className="text-orange-300/60 text-[10px] font-medium">You</span>
+          {msg.clicked_at && <span className="text-white/30 text-[10px]">Clicked</span>}
+          <span className="text-white/40 text-[10px] font-medium">You</span>
         </div>
         <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
-          <div className="bg-orange-500/12 border border-orange-500/20 rounded-2xl rounded-tr-sm overflow-hidden">
+          <div className="bg-white/6 border border-white/10 rounded-2xl rounded-tr-sm overflow-hidden">
             <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-orange-200/75 text-xs font-medium truncate">{msg.subject}</p>
-              <span className="text-orange-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
+              <p className="text-white/60 text-xs font-medium truncate">{msg.subject}</p>
+              <span className="text-white/20 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
             </div>
             {!collapsed && (
               <div className="px-4 pb-4 border-t border-orange-500/10 pt-3">
