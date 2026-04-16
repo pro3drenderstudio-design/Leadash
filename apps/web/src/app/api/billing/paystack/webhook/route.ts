@@ -380,17 +380,15 @@ export async function POST(req: NextRequest) {
         .select("id")
         .maybeSingle();
 
-      // Log pool overage — free plan has 0 pool quota so ANY existing leads are over-limit.
-      // We do NOT delete them: they stay accessible but the workspace can't add more.
+      // Free plan has pool quota 0 — any existing leads are over-limit.
+      // Pause all active campaigns. Leads are preserved but additions blocked until resubscription.
       if (updatedWs?.id) {
-        const { count } = await db
-          .from("outreach_leads")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", updatedWs.id);
-        if ((count ?? 0) > 0) {
+        const quota = await getPoolQuotaStatus(db, updatedWs.id);
+        if (quota.used > 0) {
+          const paused = await pauseCampaignsForPoolOverage(db, updatedWs.id);
           console.warn(
-            `[billing] Subscription disabled: workspace=${updatedWs.id} has ${count} outreach leads ` +
-            `over free-plan quota (0). Leads preserved but additions blocked until resubscription.`,
+            `[billing] Subscription disabled: workspace=${updatedWs.id} has ${quota.used} outreach leads ` +
+            `over free-plan quota (0). Campaigns paused: ${paused}. Leads preserved until resubscription.`,
           );
         }
       }
