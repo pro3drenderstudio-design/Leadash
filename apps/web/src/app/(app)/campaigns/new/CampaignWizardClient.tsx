@@ -57,12 +57,17 @@ export default function CampaignWizardClient() {
   const [aiError, setAiError]           = useState<string | null>(null);
 
   // Test email modal
-  const [testStepIdx, setTestStepIdx]     = useState<number | null>(null);
-  const [testInboxId, setTestInboxId]     = useState("");
-  const [testToEmail, setTestToEmail]     = useState("");
-  const [testLeadId, setTestLeadId]       = useState("");
-  const [testSending, setTestSending]     = useState(false);
-  const [testResult, setTestResult]       = useState<string | null>(null);
+  const [testStepIdx, setTestStepIdx]         = useState<number | null>(null);
+  const [testInboxId, setTestInboxId]         = useState("");
+  const [testInboxOpen, setTestInboxOpen]     = useState(false);
+  const [testToEmail, setTestToEmail]         = useState("");
+  const [testSending, setTestSending]         = useState(false);
+  const [testResult, setTestResult]           = useState<string | null>(null);
+  const [testPreviewTab, setTestPreviewTab]   = useState<"preview" | "plain">("preview");
+  const [testSampleLeads, setTestSampleLeads] = useState<CampaignEnrollmentRow[]>([]);
+  const [testSampleIdx, setTestSampleIdx]     = useState<number>(-1);
+  const [testDns, setTestDns]                 = useState<Awaited<ReturnType<typeof checkInboxDns>> | null>(null);
+  const [testDnsLoading, setTestDnsLoading]   = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
