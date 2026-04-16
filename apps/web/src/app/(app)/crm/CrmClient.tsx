@@ -626,8 +626,8 @@ export default function CrmClient() {
       {mainTab === "inbox" && (
         <div className="flex flex-1 overflow-hidden" onClick={() => setStatusDropdown(false)}>
 
-          {/* Thread list */}
-          <div className="w-80 flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
+          {/* Thread list — full-width on mobile when no thread selected, hidden when one is selected */}
+          <div className={`${selected ? "hidden md:flex" : "flex"} w-full md:w-80 md:flex-shrink-0 border-r border-white/8 flex-col overflow-hidden`}>
             <div className="px-3 py-2.5 border-b border-white/8 space-y-2 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <input
