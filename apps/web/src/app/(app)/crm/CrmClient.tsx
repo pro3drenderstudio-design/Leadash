@@ -690,7 +690,7 @@ export default function CrmClient() {
                       </div>
                     </div>
                     {t.latest_reply?.body_text ? (
-                      <p className="text-emerald-400/50 text-xs mt-1.5 line-clamp-1">{t.latest_reply.body_text.slice(0, 80)}</p>
+                      <p className="text-white/40 text-xs mt-1.5 line-clamp-1">{t.latest_reply.body_text.slice(0, 80)}</p>
                     ) : (
                       <p className="text-white/30 text-xs mt-1.5 line-clamp-1">{t.latest_send?.subject}</p>
                     )}
