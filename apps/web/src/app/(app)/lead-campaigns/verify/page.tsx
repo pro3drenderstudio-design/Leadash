@@ -190,6 +190,7 @@ export default function VerifyEmailPage() {
   const [tab, setTab]         = useState<Tab>("verify");
   const [mode, setMode]       = useState<Mode>("single");
   const [balance, setBalance] = useState<number | null>(null);
+  const [creditsModal, setCreditsModal] = useState<{ needed: number; have: number } | null>(null);
 
   // ── Single ──
   const [email, setEmail]         = useState("");
