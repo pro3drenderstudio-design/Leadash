@@ -469,6 +469,8 @@ export async function runReplyPoll(workspaceId: string, lookbackDays = 7): Promi
         // Clear stale IMAP error now that inbox is correctly using SES
         await db.from("outreach_inboxes").update({ last_error: null }).eq("id", inbox.id);
       }
+    } else if (inbox.provider === "postal") {
+      // Postal delivers replies via webhook — no polling needed, skip silently
     } else if (inbox.imap_host || deriveImapHost(inbox.smtp_host)) {
       const r = await fetchImapMessages(inbox, lookbackDays);
       messages = r.messages; fetchError = r.error;
