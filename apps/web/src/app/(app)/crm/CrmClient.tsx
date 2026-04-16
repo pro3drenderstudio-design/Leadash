@@ -892,7 +892,7 @@ export default function CrmClient() {
 
                 {/* Notes drawer */}
                 {showNotesDrawer && (
-                  <div className="w-72 flex-shrink-0 border-l border-white/8 bg-[#0a0a0a] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute inset-0 z-10 md:relative md:inset-auto md:z-auto md:w-72 md:flex-shrink-0 border-l border-white/8 bg-[#0a0a0a] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
                       <h3 className="text-white/70 text-sm font-semibold">Notes</h3>
                       <button onClick={() => setShowNotesDrawer(false)} className="text-white/30 hover:text-white/60 transition-colors">
