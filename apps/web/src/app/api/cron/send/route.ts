@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { runSendBatch } from "@/lib/outreach/send-runner";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+// Process this many workspaces concurrently. Keeps DB connections bounded
+// and prevents the function from hitting Vercel's memory limit under load.
+const WORKSPACE_CHUNK_SIZE = 15;
 
 export async function POST(req: NextRequest) {
   // Verify cron secret (Vercel sets this automatically for cron jobs)
@@ -14,28 +18,29 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient();
 
   // Get all active workspaces that have active campaigns
-  const { data: workspaces } = await db
-    .from("workspaces")
-    .select("id")
-    .in("id",
-      (await db
-        .from("outreach_campaigns")
-        .select("workspace_id")
-        .eq("status", "active")
-      ).data?.map((r: { workspace_id: string }) => r.workspace_id) ?? []
+  const { data: activeRows } = await db
+    .from("outreach_campaigns")
+    .select("workspace_id")
+    .eq("status", "active");
+
+  const workspaceIds = [...new Set((activeRows ?? []).map((r: { workspace_id: string }) => r.workspace_id))];
+  if (!workspaceIds.length) return NextResponse.json({ workspaces: 0, sent: 0 });
+
+  // Process in chunks so we don't open hundreds of parallel DB connections
+  const results: Array<{ workspace_id: string; sent?: number; error?: string }> = [];
+  for (let i = 0; i < workspaceIds.length; i += WORKSPACE_CHUNK_SIZE) {
+    const chunk = workspaceIds.slice(i, i + WORKSPACE_CHUNK_SIZE);
+    const chunkResults = await Promise.all(
+      chunk.map(async (id: string) => {
+        const r = await runSendBatch(id, 50, 1_000, 3_000).catch(e => ({ error: String(e) }));
+        return { workspace_id: id, ...r };
+      })
     );
+    results.push(...chunkResults);
+  }
 
-  if (!workspaces?.length) return NextResponse.json({ workspaces: 0 });
+  const totalSent = results.reduce((s, r) => s + (("sent" in r ? (r.sent ?? 0) : 0)), 0);
+  console.log(`[cron/send] workspaces=${workspaceIds.length} totalSent=${totalSent}`);
 
-  const results = await Promise.all(
-    workspaces.map(async ({ id }: { id: string }) => {
-      const r = await runSendBatch(id, 50, 1_000, 3_000).catch(e => ({ workspace_id: id, error: String(e) }));
-      return { workspace_id: id, ...r };
-    })
-  );
-
-  const totalSent = results.reduce((s, r) => s + (("sent" in r ? r.sent : 0)), 0);
-  console.log(`[cron/send] workspaces=${workspaces.length} totalSent=${totalSent}`);
-
-  return NextResponse.json({ workspaces: workspaces.length, results });
+  return NextResponse.json({ workspaces: workspaceIds.length, sent: totalSent, results });
 }
