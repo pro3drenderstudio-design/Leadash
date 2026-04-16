@@ -109,25 +109,30 @@ export default function CampaignWizardClient() {
     }
     setAiGenerating(true);
     setAiError(null);
-    const result = await generateSequence({
-      product_name: aiProduct,
-      target_audience: aiAudience,
-      value_prop: aiValueProp,
-      tone: aiTone,
-      num_emails: aiNumEmails,
-      wait_days_between: aiWaitDays,
-    });
-    setAiGenerating(false);
-    if (result.error) { setAiError(result.error); return; }
-    if (result.steps) {
-      setSeqSteps(result.steps.map((s: { type: string; subject?: string; body?: string; wait_days?: number }) => ({
-        type: s.type as "email" | "wait",
-        wait_days: s.wait_days ?? aiWaitDays,
-        subject_template: s.subject ?? "",
-        subject_template_b: "",
-        body_template: s.body ?? "",
-      })));
-      setShowAiGen(false);
+    try {
+      const result = await generateSequence({
+        product_name: aiProduct,
+        target_audience: aiAudience,
+        value_prop: aiValueProp,
+        tone: aiTone,
+        num_emails: aiNumEmails,
+        wait_days_between: aiWaitDays,
+      });
+      if (result.error) { setAiError(result.error); return; }
+      if (result.steps) {
+        setSeqSteps(result.steps.map((s: { type: string; subject?: string; body?: string; wait_days?: number }) => ({
+          type: s.type as "email" | "wait",
+          wait_days: s.wait_days ?? aiWaitDays,
+          subject_template: s.subject ?? "",
+          subject_template_b: "",
+          body_template: s.body ?? "",
+        })));
+        setShowAiGen(false);
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiGenerating(false);
     }
   }
 
