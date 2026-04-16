@@ -75,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               userName={userName}
               workspaceName={workspace.name}
               plan={workspace.plan_id}
+              trialEndsAt={workspace.trial_ends_at}
             />
           </div>
           <main className="flex-1 overflow-y-auto overflow-x-hidden">
