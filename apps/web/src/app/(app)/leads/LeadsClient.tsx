@@ -111,7 +111,7 @@ function ListCard({
   );
 }
 
-export default function LeadsClient() {
+export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: number; poolMax?: number }) {
   const [lists, setLists]           = useState<OutreachList[]>([]);
   const [loading, setLoading]       = useState(true);
   const [newName, setNewName]       = useState("");
