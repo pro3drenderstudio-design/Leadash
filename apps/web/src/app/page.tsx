@@ -864,7 +864,7 @@ export default async function LandingPage() {
   const plans = await getActivePlans();
   return (
     <div className="min-h-screen" style={{ background: "#020617" }}>
-      <Nav />
+      <SiteNav />
       <Hero />
       <LogoBar />
       <Features />
@@ -874,7 +874,7 @@ export default async function LandingPage() {
       <Pricing plans={plans} />
       <FAQ />
       <CTA />
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
