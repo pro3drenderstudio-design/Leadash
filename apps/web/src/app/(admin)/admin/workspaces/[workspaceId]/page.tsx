@@ -272,66 +272,103 @@ export default function WorkspaceDetailPage() {
         </div>
       </div>
 
-      {/* Campaigns */}
-      {campaigns.length > 0 && (
-        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-white/10">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Lead Campaigns</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-white/10">
-                {["Name", "Status", "Leads", "Credits used", "Created"].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {campaigns.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-3 text-slate-800 dark:text-white/80 font-medium">{c.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50">{c.status}</span>
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-white/60">{(c.total_scraped ?? 0).toLocaleString()}</td>
-                  <td className="px-4 py-3 tabular-nums text-slate-500 dark:text-white/40 text-xs">{(c.credits_used ?? 0).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-white/40 text-xs">{new Date(c.created_at).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Tables row — 2 columns */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-      {/* Credit transaction log */}
-      {credits.length > 0 && (
-        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-white/10">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Credit Transactions <span className="text-slate-400 dark:text-white/30 font-normal">(last 30)</span></h2>
+        {/* Campaigns */}
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden flex flex-col">
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Lead Campaigns</h2>
+            <span className="text-xs text-slate-400 dark:text-white/30">{campaigns.length} total</span>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-white/10">
-                {["Type", "Amount", "Description", "Date"].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {credits.map(tx => (
-                <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-3"><TxBadge type={tx.type} /></td>
-                  <td className={`px-4 py-3 tabular-nums font-semibold text-sm ${tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                    {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-white/50 text-xs">{tx.description}</td>
-                  <td className="px-4 py-3 text-slate-400 dark:text-white/30 text-xs">{new Date(tx.created_at).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {campaigns.length === 0 ? (
+            <p className="px-5 py-8 text-center text-xs text-slate-400 dark:text-white/30">No campaigns yet</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-white/10">
+                      {["Name", "Status", "Leads", "Credits", "Date"].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {campaigns.slice(campaignPage * PAGE_SIZE, (campaignPage + 1) * PAGE_SIZE).map(c => (
+                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3 text-slate-800 dark:text-white/80 font-medium max-w-[120px] truncate">{c.name}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50">{c.status}</span>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-white/60">{(c.total_scraped ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 tabular-nums text-slate-500 dark:text-white/40 text-xs">{(c.credits_used ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-white/40 text-xs">{new Date(c.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {campaigns.length > PAGE_SIZE && (
+                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-white/10 flex items-center justify-between text-xs text-slate-400 dark:text-white/30">
+                  <span>{campaignPage * PAGE_SIZE + 1}–{Math.min((campaignPage + 1) * PAGE_SIZE, campaigns.length)} of {campaigns.length}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setCampaignPage(p => Math.max(0, p - 1))} disabled={campaignPage === 0} className="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">←</button>
+                    <button onClick={() => setCampaignPage(p => p + 1)} disabled={(campaignPage + 1) * PAGE_SIZE >= campaigns.length} className="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">→</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+
+        {/* Credit transaction log */}
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden flex flex-col">
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Credit Transactions</h2>
+            <span className="text-xs text-slate-400 dark:text-white/30">{credits.length} total</span>
+          </div>
+          {credits.length === 0 ? (
+            <p className="px-5 py-8 text-center text-xs text-slate-400 dark:text-white/30">No transactions yet</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-white/10">
+                      {["Type", "Amount", "Description", "Date"].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {credits.slice(txPage * PAGE_SIZE, (txPage + 1) * PAGE_SIZE).map(tx => (
+                      <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3"><TxBadge type={tx.type} /></td>
+                        <td className={`px-4 py-3 tabular-nums font-semibold text-sm ${tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                          {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-white/50 text-xs max-w-[100px] truncate">{tx.description}</td>
+                        <td className="px-4 py-3 text-slate-400 dark:text-white/30 text-xs">{new Date(tx.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {credits.length > PAGE_SIZE && (
+                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-white/10 flex items-center justify-between text-xs text-slate-400 dark:text-white/30">
+                  <span>{txPage * PAGE_SIZE + 1}–{Math.min((txPage + 1) * PAGE_SIZE, credits.length)} of {credits.length}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setTxPage(p => Math.max(0, p - 1))} disabled={txPage === 0} className="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">←</button>
+                    <button onClick={() => setTxPage(p => p + 1)} disabled={(txPage + 1) * PAGE_SIZE >= credits.length} className="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">→</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+      </div>
 
     </div>
   );
