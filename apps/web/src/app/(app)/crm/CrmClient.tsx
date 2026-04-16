@@ -672,7 +672,7 @@ export default function CrmClient() {
                       if (composeRef.current) composeRef.current.innerHTML = "";
                       loadConversation(t.enrollment_id);
                     }}
-                    className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-orange-500/10 border-r-2 border-orange-500" : ""}`}
+                    className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-white/6 border-r-2 border-white/30" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
