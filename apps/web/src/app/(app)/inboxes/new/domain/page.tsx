@@ -263,9 +263,11 @@ export default function BuyDomainPage() {
   const totalInboxes   = selectedDomains.length * mailboxCount;
   const cap            = domainCapacity(selectedDomains.length, mailboxCount);
 
-  const oneTimeUsd   = selectedDomains.reduce((s, d) => s + d.price + DOMAIN_SERVICE_FEE_USD, 0);
-  const recurringUsd = INBOX_PRICE_USD * totalInboxes;
-  const totalNgn     = Math.round((oneTimeUsd + recurringUsd) * NGN_PER_USD);
+  const oneTimeUsd    = selectedDomains.reduce((s, d) => s + d.price + DOMAIN_SERVICE_FEE_USD, 0);
+  const recurringUsd  = INBOX_PRICE_USD * totalInboxes;
+  const totalNgn      = Math.round((oneTimeUsd + recurringUsd) * NGN_PER_USD);
+  const domainOnlyNgn = Math.round(oneTimeUsd  * NGN_PER_USD);
+  const recurringNgn  = Math.round(recurringUsd * NGN_PER_USD);
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
