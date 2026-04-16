@@ -27,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // ── Outreach leads pool limit ────────────────────────────────────────────
+  let poolRemaining = Infinity; // -1 means unlimited
   {
     const { data: ws } = await db
       .from("workspaces")
@@ -69,14 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           { status: 403 },
         );
       }
-
-      // Pass remaining capacity to the insert below via a scoped var
-      // We'll only export up to the remaining slots
-      const remaining = maxPool - used;
-      if ((lead_ids?.length ?? Infinity) > remaining || !lead_ids?.length) {
-        // Will be enforced by capping toInsert after dedup below — store in outer scope
-        (req as unknown as Record<string, unknown>).__poolRemaining = remaining;
-      }
+      poolRemaining = maxPool - used;
     }
   }
 
