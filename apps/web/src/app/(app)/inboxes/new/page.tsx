@@ -65,7 +65,7 @@ function NewInboxPageInner() {
       </div>
 
       <h1 className="text-xl font-bold text-white mb-2">Add a sending inbox</h1>
-      <p className="text-white/40 text-sm mb-8">Connect a Gmail, Outlook, or custom SMTP account to send campaigns.</p>
+      <p className="text-white/40 text-sm mb-8">Connect a domain or custom SMTP account to send campaigns.</p>
 
       {!provider && (
         <div className="grid grid-cols-2 gap-4">
