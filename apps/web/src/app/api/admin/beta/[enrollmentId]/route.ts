@@ -27,10 +27,10 @@ export async function PATCH(
     return NextResponse.json({ error: "action must be approve or reject" }, { status: 400 });
   }
 
-  // Fetch enrollment to get workspace_id
+  // Fetch enrollment to get workspace_id + user details for notification
   const { data: enrollment } = await ctx.db
     .from("beta_enrollments")
-    .select("workspace_id, user_id, status")
+    .select("workspace_id, user_id, status, email, name")
     .eq("id", enrollmentId)
     .single();
 
