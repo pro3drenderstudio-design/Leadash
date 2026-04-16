@@ -321,6 +321,8 @@ const TX_COLORS: Record<string, string> = { grant: "text-emerald-400", purchase:
 
 type Transaction = { id: string; type: string; amount: number; description: string | null; created_at: string };
 
+const TX_PAGE_SIZE = 10;
+
 function BillingTab() {
   const [planId, setPlanId]         = useState("free");
   const [plans, setPlans]           = useState<PlanConfig[]>([]);
@@ -328,6 +330,8 @@ function BillingTab() {
   const [transactions, setTx]       = useState<Transaction[]>([]);
   const [loading, setLoading]       = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [upgrading, setUpgrading]   = useState<string | null>(null);
+  const [txPage, setTxPage]         = useState(0);
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
 
@@ -357,7 +361,22 @@ function BillingTab() {
     }
   }
 
-  const currentPlan = plans.find(p => p.plan_id === planId) ?? plans.find(p => p.plan_id === "free");
+  async function handleUpgrade(targetPlanId: string) {
+    setUpgrading(targetPlanId);
+    try {
+      const data = await wsPost<{ url?: string }>("/api/billing/checkout", { plan_id: targetPlanId });
+      if (data.url) window.location.href = data.url;
+      else { alert("Upgrade failed"); setUpgrading(null); }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Upgrade failed");
+      setUpgrading(null);
+    }
+  }
+
+  const currentPlan    = plans.find(p => p.plan_id === planId) ?? plans.find(p => p.plan_id === "free");
+  const currentPrice   = currentPlan?.price_ngn ?? 0;
+  const txPageCount    = Math.ceil(transactions.length / TX_PAGE_SIZE);
+  const txSlice        = transactions.slice(txPage * TX_PAGE_SIZE, (txPage + 1) * TX_PAGE_SIZE);
 
   function fmtPrice(plan: PlanConfig) {
     if (plan.price_ngn === 0) return "Free";
