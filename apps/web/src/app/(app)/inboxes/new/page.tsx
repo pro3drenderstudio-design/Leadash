@@ -10,7 +10,7 @@ type Provider = "smtp";
 function NewInboxPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlError = searchParams.get("message") ?? (searchParams.get("error") === "oauth_denied" ? "OAuth connection was cancelled." : null);
+  const urlError = searchParams.get("message") ?? null;
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [saving, setSaving] = useState(false);
