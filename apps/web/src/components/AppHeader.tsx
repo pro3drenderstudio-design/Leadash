@@ -37,6 +37,11 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
   const profileRef = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
 
+  // Lazy-import sidebar context to avoid breaking if provider is missing
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useSidebar } = require("@/components/SidebarContext") as { useSidebar: () => { open: () => void } };
+  const { open: openSidebar } = useSidebar();
+
   const displayName = userName || userEmail.split("@")[0];
   const initials    = displayName.split(/[\s.]+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 
