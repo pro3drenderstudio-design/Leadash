@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useSidebar } from "@/components/SidebarContext";
 
 const NAV = [
   {
@@ -41,6 +42,7 @@ interface Props {
 
 export default function Sidebar({ workspaceName, plan }: Props) {
   const pathname = usePathname();
+  const { isOpen, close } = useSidebar();
 
   async function signOut() {
     const supabase = createClient();
@@ -48,17 +50,14 @@ export default function Sidebar({ workspaceName, plan }: Props) {
     window.location.href = "/login";
   }
 
-  return (
-    <aside
-      className="w-56 flex-shrink-0 flex flex-col h-screen sticky top-0"
-      style={{ background: "var(--sidebar-bg)", borderRight: "1px solid var(--sidebar-border)" }}
-    >
+  const sidebarContent = (
+    <>
       {/* Logo */}
       <div
-        className="px-4 py-4 flex items-center"
+        className="px-4 py-4 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--sidebar-border)", minHeight: 56 }}
       >
-        <Link href="/dashboard" className="flex items-center gap-2.5 group">
+        <Link href="/dashboard" className="flex items-center gap-2.5 group" onClick={close}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
           <span
@@ -68,6 +67,16 @@ export default function Sidebar({ workspaceName, plan }: Props) {
             Leadash
           </span>
         </Link>
+        {/* Close button — mobile only */}
+        <button
+          onClick={close}
+          className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+          aria-label="Close menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -89,6 +98,7 @@ export default function Sidebar({ workspaceName, plan }: Props) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={close}
                     className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
                       active
                         ? "bg-orange-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
@@ -126,6 +136,32 @@ export default function Sidebar({ workspaceName, plan }: Props) {
           Sign out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Backdrop — mobile only */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={close}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 flex flex-col
+          transition-transform duration-250 ease-in-out
+          lg:static lg:inset-auto lg:w-56 lg:flex-shrink-0 lg:h-screen lg:sticky lg:top-0 lg:translate-x-0
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+        style={{ background: "var(--sidebar-bg)", borderRight: "1px solid var(--sidebar-border)" }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
