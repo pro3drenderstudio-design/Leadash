@@ -50,6 +50,7 @@
 }
 
 .dark, [data-theme="dark"] {
+  color-scheme: dark;
   --background:          #020617;
   --foreground:          #f8fafc;
   --card:                #0f172a;
