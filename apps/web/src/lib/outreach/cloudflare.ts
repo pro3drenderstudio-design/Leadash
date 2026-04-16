@@ -263,13 +263,13 @@ export async function setEmailForwarding(domain: string, forwardTo: string): Pro
 }
 
 /**
- * Build mail DNS records for a domain provisioned via Postal (self-hosted SMTP).
- * - SPF: authorises the Postal VPS IP (or hostname)
- * - DKIM: single TXT record with Postal-generated public key (selector "postal")
+ * Build mail DNS records for a domain provisioned via Postal (self-hosted SMTP + inbound).
+ * - SPF: authorises the Postal VPS IP
+ * - DKIM: single TXT record with Postal-generated public key (selector "postal-1")
  * - DMARC: quarantine policy
- * - MX: kept pointing to SES inbound for reply detection (unchanged)
+ * - MX: points to Postal server for inbound reply detection
  *
- * postalIp: the public IPv4 of the Hetzner VPS (used in SPF)
+ * postalIp: the public IPv4 of the Postal VPS (used in SPF)
  * dkimPublicKey: base64 RSA public key returned by postal-agent
  */
 export function buildPostalMailDnsRecords(
@@ -277,7 +277,8 @@ export function buildPostalMailDnsRecords(
   postalIp: string,
   dkimPublicKey: string,
 ): DnsRecord[] {
-  const region = process.env.AWS_REGION ?? "us-east-1";
+  // MX hostname: use POSTAL_MX_HOST if set, otherwise fall back to POSTAL_SMTP_HOST, then the IP directly
+  const mxHost = process.env.POSTAL_MX_HOST ?? process.env.POSTAL_SMTP_HOST ?? postalIp;
   return [
     // SPF — authorise Postal VPS IP
     {
@@ -297,11 +298,11 @@ export function buildPostalMailDnsRecords(
       name:  "_dmarc",
       value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}; pct=100`,
     },
-    // MX — keep SES inbound for reply detection (no change)
+    // MX — Postal handles inbound replies
     {
       type:     "MX",
       name:     "@",
-      value:    `inbound-smtp.${region}.amazonaws.com`,
+      value:    mxHost,
       priority: 10,
     },
   ];
