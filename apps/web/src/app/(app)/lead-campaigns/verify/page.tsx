@@ -326,6 +326,14 @@ export default function VerifyEmailPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
+      {creditsModal && (
+        <InsufficientCreditsModal
+          needed={creditsModal.needed}
+          have={creditsModal.have}
+          onClose={() => setCreditsModal(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
