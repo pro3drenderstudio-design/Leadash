@@ -167,8 +167,8 @@ export async function PATCH(req: NextRequest) {
       smtp_port:            smtpSettings.port,
       smtp_user:            cred.username,
       smtp_pass_encrypted:  encrypt(cred.password),
-      imap_host:            null, // SES handles inbound replies
-      imap_port:            null,
+      imap_host:            smtpSettings.imap_host,
+      imap_port:            smtpSettings.imap_port,
       daily_send_limit:     30,
       warmup_enabled:       true,
       warmup_target_daily:  30,
