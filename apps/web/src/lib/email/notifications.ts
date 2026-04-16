@@ -1,5 +1,5 @@
 /**
- * Transactional notification emails for support tickets.
+ * Transactional notification emails for support tickets and beta programme.
  * Uses Resend — requires RESEND_API_KEY and RESEND_FROM_EMAIL env vars.
  */
 
