@@ -62,19 +62,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <ImpersonationBanner />
-          <BetaBanner />
-          {workspace.plan_id === "free" && workspace.trial_ends_at && (
-            <TrialBanner trialEndsAt={workspace.trial_ends_at} />
-          )}
-          <AppHeader
-            userEmail={user.email ?? ""}
-            userName={userName}
-            workspaceName={workspace.name}
-            plan={workspace.plan_id}
-          />
-          <main className="flex-1 overflow-y-auto">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Banners + header as a single sticky-top block */}
+          <div className="flex-shrink-0 z-30 relative">
+            <ImpersonationBanner />
+            <BetaBanner />
+            {workspace.plan_id === "free" && workspace.trial_ends_at && (
+              <TrialBanner trialEndsAt={workspace.trial_ends_at} />
+            )}
+            <AppHeader
+              userEmail={user.email ?? ""}
+              userName={userName}
+              workspaceName={workspace.name}
+              plan={workspace.plan_id}
+            />
+          </div>
+          <main className="flex-1 overflow-y-auto overflow-x-hidden">
             {children}
           </main>
         </div>
