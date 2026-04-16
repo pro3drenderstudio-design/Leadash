@@ -490,7 +490,7 @@ function BillingTab() {
       {transactions.length > 0 && (
         <Section title="Credit History">
           <div className="divide-y divide-white/6">
-            {transactions.slice(0, 20).map(tx => (
+            {txSlice.map(tx => (
               <div key={tx.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                 <div>
                   <span className={`text-xs font-medium ${TX_COLORS[tx.type] ?? "text-white/50"}`}>{TX_LABELS[tx.type] ?? tx.type}</span>
@@ -505,6 +505,29 @@ function BillingTab() {
               </div>
             ))}
           </div>
+          {txPageCount > 1 && (
+            <div className="flex items-center justify-between pt-3 border-t border-white/6 mt-2">
+              <p className="text-white/30 text-xs">
+                {txPage * TX_PAGE_SIZE + 1}–{Math.min((txPage + 1) * TX_PAGE_SIZE, transactions.length)} of {transactions.length}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTxPage(p => p - 1)}
+                  disabled={txPage === 0}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setTxPage(p => p + 1)}
+                  disabled={txPage >= txPageCount - 1}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </Section>
       )}
     </div>
