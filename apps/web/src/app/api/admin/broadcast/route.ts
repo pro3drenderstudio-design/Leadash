@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   type AuthUser = (typeof users)[number];
-  let recipients = (users ?? [])
+  type Recipient = { id: string; email: string };
+  let recipients: Recipient[] = (users ?? [])
     .filter((u: AuthUser) => !!u.email && u.email_confirmed_at)
     .map((u: AuthUser) => ({ id: u.id, email: u.email! }));
 
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       .select("owner_id")
       .not("owner_id", "is", null);
     const activeIds = new Set((wsRows ?? []).map((r: { owner_id: string }) => r.owner_id));
-    recipients = recipients.filter(r => activeIds.has(r.id));
+    recipients = recipients.filter((r: Recipient) => activeIds.has(r.id));
   }
 
   if (preview) {
