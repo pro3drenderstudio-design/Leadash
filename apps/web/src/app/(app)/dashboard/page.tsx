@@ -159,23 +159,23 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-5">
+    <div className="p-4 sm:p-6 max-w-[1400px] mx-auto space-y-5">
 
-      {/* Greeting */}
-      <div className="flex items-center justify-between">
+      {/* Greeting + Quick actions */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Dashboard</h1>
           <p className="text-white/35 text-sm mt-0.5">
             Welcome back to <span className="text-white/55">{workspace.name}</span>
           </p>
         </div>
-        {/* Quick actions */}
-        <div className="hidden lg:flex items-center gap-2">
+        {/* Quick actions — scrollable on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 flex-shrink-0">
           {quickActions.map(a => (
             <Link
               key={a.href}
               href={a.href}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${a.color} ${a.bg}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${a.color} ${a.bg}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={a.icon} />
@@ -186,21 +186,21 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* Stat cards — 2 cols mobile, 3 cols sm, 5 cols lg; last card spans 2 on xs to avoid orphan */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         {cards.map(c => (
           <Link
             key={c.label}
             href={c.href}
-            className="group relative rounded-xl p-4 space-y-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
+            className="group relative rounded-xl p-4 flex flex-col gap-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
             style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}
           >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={{ background: "var(--card-icon-bg)" }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center relative flex-shrink-0" style={{ background: "var(--card-icon-bg)" }}>
               <svg className={`w-4 h-4 ${c.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={c.icon} />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-xs text-white/35 leading-tight">{c.label}</p>
               <p className={`text-2xl font-bold mt-0.5 tabular-nums ${c.color}`}>{c.value}</p>
             </div>
@@ -209,36 +209,33 @@ export default async function DashboardPage() {
       </div>
 
       {/* Main body: chart + activity side-by-side */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
-        {/* Left: chart + quota */}
-        <div className="xl:col-span-3 space-y-5">
-
-          {/* Activity chart */}
-          <div className="rounded-xl p-5" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+        {/* Left: chart */}
+        <div className="lg:col-span-3">
+          <div className="rounded-xl p-4 sm:p-5 h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-sm font-semibold text-white">Email Activity</h2>
                 <p className="text-white/35 text-xs mt-0.5">Sends, opens &amp; replies — last 30 days</p>
               </div>
-              <Link href="/campaigns" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+              <Link href="/campaigns" className="text-xs text-white/30 hover:text-white/60 transition-colors whitespace-nowrap ml-4">
                 View sequences →
               </Link>
             </div>
             <DashboardChart data={stats.chartData} />
           </div>
-
         </div>
 
         {/* Right: Recent Activity */}
-        <div className="xl:col-span-2">
+        <div className="lg:col-span-2">
           <div className="rounded-xl overflow-hidden h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--card-border)" }}>
+            <div className="px-4 sm:px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--card-border)" }}>
               <div>
                 <h2 className="text-sm font-semibold text-white">Recent Replies</h2>
                 <p className="text-white/35 text-xs mt-0.5">Latest CRM conversations</p>
               </div>
-              <Link href="/crm" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+              <Link href="/crm" className="text-xs text-white/30 hover:text-white/60 transition-colors whitespace-nowrap ml-4">
                 Open CRM →
               </Link>
             </div>
