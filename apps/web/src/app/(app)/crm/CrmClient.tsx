@@ -145,22 +145,22 @@ function ReplyBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: 
     <div className="flex flex-col items-start">
       <div className="max-w-[82%] w-full">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-emerald-300/60 text-[10px] font-medium">{msg.from_name || msg.from_email}</span>
-          {isDifferentEmail && <span className="text-amber-400/45 text-[10px]">({msg.from_email})</span>}
+          <span className="text-white/55 text-[10px] font-medium">{msg.from_name || msg.from_email}</span>
+          {isDifferentEmail && <span className="text-white/30 text-[10px]">({msg.from_email})</span>}
           <span className="text-white/25 text-[10px]">{msg.received_at ? new Date(msg.received_at).toLocaleString() : ""}</span>
           {msg.ai_category && msg.ai_category !== "neutral" && (msg.ai_confidence ?? 0) >= 0.7 && (
-            <span className="text-violet-400/50 text-[10px]">AI: {msg.ai_category.replace(/_/g, " ")} {Math.round((msg.ai_confidence ?? 0) * 100)}%</span>
+            <span className="text-white/30 text-[10px]">AI: {msg.ai_category.replace(/_/g, " ")} {Math.round((msg.ai_confidence ?? 0) * 100)}%</span>
           )}
         </div>
         <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
-          <div className="bg-emerald-500/9 border border-emerald-500/20 rounded-2xl rounded-tl-sm overflow-hidden">
+          <div className="bg-white/4 border border-white/8 rounded-2xl rounded-tl-sm overflow-hidden">
             <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-emerald-200/65 text-xs font-medium truncate">{msg.subject ?? "(reply)"}</p>
-              <span className="text-emerald-300/30 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
+              <p className="text-white/60 text-xs font-medium truncate">{msg.subject ?? "(reply)"}</p>
+              <span className="text-white/20 text-[10px] flex-shrink-0 ml-2">{collapsed ? "▸" : "▾"}</span>
             </div>
             {!collapsed && (
-              <div className="px-4 pb-4 border-t border-emerald-500/10 pt-3">
-                <pre className="text-emerald-100/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+              <div className="px-4 pb-4 border-t border-white/6 pt-3">
+                <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {msg.body_text ?? "(No body captured — reply detected via header matching)"}
                 </pre>
                 <AttachmentList attachments={msg.attachments ?? []} />
