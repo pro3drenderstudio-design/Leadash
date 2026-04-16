@@ -249,7 +249,7 @@ export default function EnrichPage() {
                     <p className="text-white text-sm font-semibold">{fmt(leads.length)} leads ready</p>
                     <p className="text-white/40 text-xs mt-0.5">{cost} credits · {leads.length} × 0.5cr</p>
                   </div>
-                  <button onClick={handleEnrich} disabled={!prompt.trim()} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
+                  <button onClick={handleEnrich} disabled={!prompt.trim() || (balance !== null && balance < cost)} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2" title={balance !== null && balance < cost ? `Need ${cost} credits, have ${balance}` : undefined}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
                     Start Enrichment
                   </button>
