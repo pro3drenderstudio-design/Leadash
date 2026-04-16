@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { enqueueSend } from "@/lib/queue/client";
+import { getPoolQuotaStatus } from "@/lib/billing/pool-quota";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
