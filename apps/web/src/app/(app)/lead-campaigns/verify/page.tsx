@@ -289,6 +289,11 @@ export default function VerifyEmailPage() {
   // ── Start bulk job ──
   async function handleBulkVerify() {
     if (!bulkEmails.length) return;
+    const needed = bulkEmails.length * 0.5;
+    if (balance !== null && balance < needed) {
+      setCreditsModal({ needed, have: balance });
+      return;
+    }
     setBulkErr(null); setActiveJob(null); setResultPage(1); setBulkView("running");
     try {
       const res = await wsFetch("/api/lead-campaigns/verify-bulk", {
