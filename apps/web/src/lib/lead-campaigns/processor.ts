@@ -175,8 +175,20 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
       if (pending?.length) {
         type PendingLead = { id: string; email: string };
         const typedPending = pending as PendingLead[];
-        const reoonKey = process.env.REOON_API_KEY ?? "";
-        const results = await verifyEmails(reoonKey, typedPending.map(l => l.email));
+        const emails = typedPending.map(l => l.email);
+
+        // Prefer self-hosted verifier if configured, fall back to Reoon
+        let results: { email: string; status: string; score: number }[];
+        if (process.env.VERIFIER_URL && process.env.VERIFIER_SECRET) {
+          results = await verifyEmailsSelfHosted(emails);
+        } else {
+          const reoonKey = process.env.REOON_API_KEY;
+          if (!reoonKey) {
+            results = emails.map(email => ({ email, status: "unknown", score: 0 }));
+          } else {
+            results = await verifyEmailsReoon(reoonKey, emails);
+          }
+        }
 
         for (const result of results) {
           const lead = typedPending.find(l => l.email === result.email);
