@@ -6,7 +6,7 @@ import { createSmtpInbox } from "@/lib/outreach/api";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import { Suspense } from "react";
 
-type Provider = "gmail" | "outlook" | "smtp";
+type Provider = "smtp";
 
 function NewInboxPageInner() {
   const router = useRouter();
