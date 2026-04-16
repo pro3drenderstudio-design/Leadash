@@ -12,13 +12,13 @@ import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter, CrmNote } 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CRM_STATUSES: { value: CrmStatus; label: string; color: string }[] = [
-  { value: "neutral",        label: "Neutral",        color: "text-white/50 bg-white/8 border-white/15" },
+  { value: "neutral",        label: "Neutral",        color: "text-white/40 bg-white/6 border-white/10" },
   { value: "interested",     label: "Interested",     color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" },
-  { value: "meeting_booked", label: "Meeting Booked", color: "text-orange-400 bg-orange-500/15 border-orange-500/30" },
-  { value: "won",            label: "Won",            color: "text-yellow-400 bg-yellow-500/15 border-yellow-500/30" },
-  { value: "not_interested", label: "Not Interested", color: "text-red-400 bg-red-500/15 border-red-500/30" },
-  { value: "ooo",            label: "OOO",            color: "text-orange-400 bg-orange-500/15 border-orange-500/30" },
-  { value: "follow_up",      label: "Follow Up",      color: "text-violet-400 bg-violet-500/15 border-violet-500/30" },
+  { value: "meeting_booked", label: "Meeting Booked", color: "text-white/60 bg-white/8 border-white/15" },
+  { value: "won",            label: "Won",            color: "text-white/60 bg-white/8 border-white/15" },
+  { value: "not_interested", label: "Not Interested", color: "text-white/40 bg-white/6 border-white/10" },
+  { value: "ooo",            label: "OOO",            color: "text-white/50 bg-white/6 border-white/12" },
+  { value: "follow_up",      label: "Follow Up",      color: "text-white/60 bg-white/8 border-white/15" },
 ];
 
 const FILTER_TYPES = [
