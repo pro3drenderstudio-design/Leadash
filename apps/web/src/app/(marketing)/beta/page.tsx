@@ -48,7 +48,6 @@ export default function BetaPage() {
     const data = await res.json() as { ok?: boolean; error?: string };
     setLoading(false);
     if (data.ok) { setDone(true); }
-    else if (res.status === 401) { window.location.href = "/login?redirectTo=/beta"; }
     else { setError(data.error ?? "Failed to submit"); }
   }
 
