@@ -88,32 +88,6 @@ function NewInboxPageInner() {
             </div>
           </button>
           <button
-            onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/gmail?workspace_id=${wsId}`; }}
-            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
-          >
-            <div className="w-11 h-11 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 48 48" className="w-5 h-5"><path fill="#4285F4" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#34A853" d="M6.3 14.7l6.6 4.8C14.5 15.8 18.9 12 24 12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.4 4.3-17.7 10.7z"/><path fill="#FBBC05" d="M24 44c5.2 0 9.9-1.9 13.4-5.1l-6.2-5.2C29.4 35.6 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#EA4335" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.2 5.2C36.9 37.2 44 32 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
-            </div>
-            <div className="text-center">
-              <p className="text-white font-medium text-sm">Gmail</p>
-              <p className="text-white/40 text-xs mt-0.5">Connect with OAuth</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { const wsId = getWorkspaceId() ?? ""; window.location.href = `/api/outreach/inboxes/oauth/microsoft?workspace_id=${wsId}`; }}
-            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
-          >
-            <div className="w-11 h-11 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 23 23" className="w-5 h-5"><path fill="#F35325" d="M0 0h11v11H0z"/><path fill="#81BC06" d="M12 0h11v11H12z"/><path fill="#05A6F0" d="M0 12h11v11H0z"/><path fill="#FFBA08" d="M12 12h11v11H12z"/></svg>
-            </div>
-            <div className="text-center">
-              <p className="text-white font-medium text-sm">Outlook</p>
-              <p className="text-white/40 text-xs mt-0.5">Connect with OAuth</p>
-            </div>
-          </button>
-
-          <button
             onClick={() => setProvider("smtp")}
             className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-white/10 hover:border-white/20 rounded-xl transition-all"
           >
