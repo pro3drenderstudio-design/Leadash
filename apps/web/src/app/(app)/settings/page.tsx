@@ -406,16 +406,33 @@ function BillingTab() {
         </div>
 
         {/* Plan comparison */}
-        <div className="grid grid-cols-5 gap-2 mt-2">
-          {plans.map(plan => (
-            <div
-              key={plan.plan_id}
-              className={`rounded-xl p-3 border text-center transition-colors ${plan.plan_id === planId ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}
-            >
-              <p className="text-white text-xs font-semibold">{plan.name}</p>
-              <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.price_ngn > 0 ? "/mo" : ""}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
+          {plans.map(plan => {
+            const isCurrent  = plan.plan_id === planId;
+            const isUpgrade  = plan.price_ngn > currentPrice;
+            return (
+              <div
+                key={plan.plan_id}
+                className={`rounded-xl p-3 border flex flex-col gap-2 transition-colors ${isCurrent ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}
+              >
+                <div className="text-center">
+                  <p className="text-white text-xs font-semibold">{plan.name}</p>
+                  <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.price_ngn > 0 ? "/mo" : ""}</p>
+                </div>
+                {isCurrent ? (
+                  <span className="text-[10px] font-semibold text-orange-400 text-center">Current</span>
+                ) : isUpgrade ? (
+                  <button
+                    onClick={() => handleUpgrade(plan.plan_id)}
+                    disabled={!!upgrading}
+                    className="text-[10px] font-semibold py-1 rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
+                  >
+                    {upgrading === plan.plan_id ? "…" : "Upgrade"}
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </Section>
 
