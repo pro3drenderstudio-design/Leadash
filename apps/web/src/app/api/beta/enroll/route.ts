@@ -3,55 +3,68 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendBetaApplicationConfirmation, sendBetaAdminNotification } from "@/lib/email/notifications";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const db = createAdminClient();
 
-  // Check for existing enrollment
+  // Auth is optional — logged-in users get their workspace linked; others just store email
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { name, email: formEmail, reason } = await req.json() as { name?: string; email?: string; reason?: string };
+
+  const contactEmail = formEmail?.trim().toLowerCase() || user?.email || "";
+  if (!contactEmail) return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+
+  // Check for existing enrollment by email
   const { data: existing } = await db
     .from("beta_enrollments")
     .select("id, status")
-    .eq("user_id", user.id)
+    .eq("email", contactEmail)
     .maybeSingle();
 
   if (existing) {
     return NextResponse.json({ error: "Already enrolled", status: existing.status }, { status: 409 });
   }
 
-  // Get workspace
-  const { data: member } = await db
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
+  // If logged in, also check by user_id
+  if (user) {
+    const { data: byUser } = await db
+      .from("beta_enrollments")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (byUser) return NextResponse.json({ error: "Already enrolled", status: byUser.status }, { status: 409 });
+  }
 
-  if (!member) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
-
-  const { name, email: formEmail, reason } = await req.json() as { name?: string; email?: string; reason?: string };
-
-  // Use the email from the form if provided (could differ from auth email), otherwise fall back to auth email
-  const contactEmail = formEmail?.trim() || user.email || "";
+  // Get workspace if logged in
+  let workspaceId: string | null = null;
+  if (user) {
+    const { data: member } = await db
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    workspaceId = member?.workspace_id ?? null;
+  }
 
   const { error } = await db.from("beta_enrollments").insert({
-    user_id:      user.id,
-    workspace_id: member.workspace_id,
+    user_id:      user?.id      ?? null,
+    workspace_id: workspaceId   ?? null,
     email:        contactEmail,
-    name:         name ?? null,
-    reason:       reason ?? null,
+    name:         name.trim(),
+    reason:       reason?.trim() ?? null,
     status:       "pending",
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Fire-and-forget notifications — don't block the response
+  // Fire-and-forget notifications
   const adminEmail = process.env.NOTIFY_ADMIN_EMAIL ?? process.env.NOTIFY_FROM_EMAIL;
   Promise.all([
-    sendBetaApplicationConfirmation({ userEmail: contactEmail, userName: name ?? null }).catch(() => {}),
+    sendBetaApplicationConfirmation({ userEmail: contactEmail, userName: name }).catch(() => {}),
     adminEmail
-      ? sendBetaAdminNotification({ adminEmail, userName: name ?? null, userEmail: user.email ?? "", reason: reason ?? null, enrollmentId: "" }).catch(() => {})
+      ? sendBetaAdminNotification({ adminEmail, userName: name, userEmail: contactEmail, reason: reason ?? null, enrollmentId: "" }).catch(() => {})
       : Promise.resolve(),
   ]);
 
@@ -64,10 +77,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ enrollment: null, email: null });
 
   const db = createAdminClient();
+
+  // Find enrollment by user_id or by email
   const { data } = await db
     .from("beta_enrollments")
     .select("id, status, created_at, review_note")
-    .eq("user_id", user.id)
+    .or(`user_id.eq.${user.id},email.eq.${user.email}`)
     .maybeSingle();
 
   return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null });
