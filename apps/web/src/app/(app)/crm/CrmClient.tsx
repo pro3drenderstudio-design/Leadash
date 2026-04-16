@@ -700,11 +700,19 @@ export default function CrmClient() {
             </div>
           </div>
 
-          {/* Detail panel */}
+          {/* Detail panel — full-width on mobile when thread selected, hidden otherwise */}
           {selected ? (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex flex-1 flex-col overflow-hidden">
               {/* Contact header */}
-              <div className="flex-shrink-0 px-6 py-4 border-b border-white/8 bg-white/2">
+              <div className="flex-shrink-0 px-4 md:px-6 py-4 border-b border-white/8 bg-white/2">
+                {/* Back button — mobile only */}
+                <button
+                  onClick={() => setSelected(null)}
+                  className="md:hidden flex items-center gap-1.5 text-white/50 hover:text-white text-xs mb-3 transition-colors"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd"/></svg>
+                  Back to inbox
+                </button>
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center flex-shrink-0">
                     <span className="text-xs font-bold text-white uppercase">{(selected.lead.first_name?.[0] ?? selected.lead.email[0]).toUpperCase()}</span>
