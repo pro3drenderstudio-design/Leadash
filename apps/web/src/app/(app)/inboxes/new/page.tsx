@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createSmtpInbox } from "@/lib/outreach/api";
-import { getWorkspaceId } from "@/lib/workspace/client";
 import { Suspense } from "react";
 
 type Provider = "smtp";
