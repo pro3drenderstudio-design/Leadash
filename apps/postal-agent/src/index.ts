@@ -59,8 +59,6 @@ function auth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-app.use(auth);
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function genUuid(): string {
