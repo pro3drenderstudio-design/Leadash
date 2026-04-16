@@ -37,6 +37,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .eq("workspace_id", workspaceId)
     .single();
 
+  // Block activation when outreach leads pool is over plan quota
+  if (update.status === "active" && before?.status !== "active") {
+    const quota = await getPoolQuotaStatus(db, workspaceId);
+    if (quota.isOver) {
+      return NextResponse.json(
+        {
+          error: `Cannot activate campaign: outreach leads pool over limit ` +
+            `(${quota.used.toLocaleString()} / ${quota.max.toLocaleString()} leads). ` +
+            `Delete leads to get under the limit, then re-activate.`,
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   const { data, error } = await db
     .from("outreach_campaigns")
     .update(update)
