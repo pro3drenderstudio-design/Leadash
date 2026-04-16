@@ -34,6 +34,47 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  // ── Outreach leads pool limit ────────────────────────────────────────────
+  {
+    const { data: ws } = await db
+      .from("workspaces")
+      .select("plan_id")
+      .eq("id", workspaceId)
+      .single();
+
+    const planId = ws?.plan_id ?? "free";
+    const { getPlan } = await import("@/lib/billing/plans");
+    const { data: planConfig } = await db
+      .from("plan_configs")
+      .select("max_leads_pool")
+      .eq("plan_id", planId)
+      .maybeSingle();
+
+    const plan = getPlan(planId);
+    const maxPool: number = planConfig?.max_leads_pool ?? plan.maxLeadsPool;
+
+    if (maxPool === 0) {
+      return NextResponse.json(
+        { error: "Outreach leads require a paid plan." },
+        { status: 403 },
+      );
+    }
+
+    if (maxPool > 0) {
+      const { count } = await db
+        .from("outreach_leads")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId);
+
+      if ((count ?? 0) >= maxPool) {
+        return NextResponse.json(
+          { error: `Outreach leads pool full (${maxPool.toLocaleString()} leads). Delete unused leads or upgrade your plan.` },
+          { status: 403 },
+        );
+      }
+    }
+  }
+
   // Check unsubscribe list
   const { data: unsub } = await db
     .from("outreach_unsubscribes")
