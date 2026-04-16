@@ -127,7 +127,7 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
                     }}
                   />
                 ) : (
-                  <pre className="text-orange-100/55 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
+                  <pre className="text-white/50 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
                 )}
               </div>
             )}
