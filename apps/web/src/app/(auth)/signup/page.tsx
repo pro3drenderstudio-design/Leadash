@@ -196,27 +196,6 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* Google */}
-          <button
-            onClick={handleGoogle}
-            disabled={googleLoading || loading}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium text-white transition-all hover:bg-white/8 disabled:opacity-50 mb-6"
-            style={{ borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}
-          >
-            {googleLoading
-              ? <span className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-              : <GoogleIcon />
-            }
-            Continue with Google
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.07)" }} />
-            <span className="text-xs text-white/25 font-medium">or sign up with email</span>
-            <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.07)" }} />
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
