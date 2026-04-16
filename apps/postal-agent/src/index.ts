@@ -100,6 +100,52 @@ function getSigningKeyPair(): { privateKey: string; publicKey: string } {
   return { privateKey: privateKeyPem, publicKey };
 }
 
+// ─── Inbound relay (no auth — Postal doesn't know the agent secret) ──────────
+
+/**
+ * POST /inbound-relay
+ * Postal calls this URL when an inbound message arrives for a domain whose
+ * HTTP endpoint route points here (172.17.0.1:3001/inbound-relay from Docker).
+ * We forward the raw JSON body to the Next.js app's /api/outreach/inbound.
+ */
+app.post("/inbound-relay", async (req: Request, res: Response) => {
+  const appUrl = (process.env.APP_URL ?? process.env.POSTAL_SMTP_HOST?.replace(/^mail\./, "https://") ?? "").replace(/\/$/, "");
+  if (!appUrl) {
+    console.error("[inbound-relay] APP_URL not configured — cannot forward");
+    res.status(500).json({ error: "APP_URL not configured" });
+    return;
+  }
+
+  try {
+    const forwardRes = await fetch(`${appUrl}/api/outreach/inbound`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Pass through Postal's own headers so the app can validate the source
+        ...(req.headers["x-postal-signature"] ? { "x-postal-signature": req.headers["x-postal-signature"] as string } : {}),
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const responseText = await forwardRes.text();
+    if (!forwardRes.ok) {
+      console.error(`[inbound-relay] App returned ${forwardRes.status}: ${responseText}`);
+      res.status(forwardRes.status).send(responseText);
+      return;
+    }
+
+    console.log(`[inbound-relay] Forwarded to app — ${forwardRes.status}`);
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[inbound-relay] Forward error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Apply auth middleware to all routes below this point
+app.use(auth);
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 /**
