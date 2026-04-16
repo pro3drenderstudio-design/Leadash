@@ -35,7 +35,6 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
   const [credits, setCredits]         = useState<number | null>(null);
   const [notifCount, setNotifCount]   = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
-  const { theme, toggle } = useTheme();
   const { open: openSidebar } = useSidebar();
 
   const displayName = userName || userEmail.split("@")[0];
