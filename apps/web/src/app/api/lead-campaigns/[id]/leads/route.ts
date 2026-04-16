@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq("workspace_id", workspaceId);
 
   if (filter === "valid") {
-    query = query.in("verification_status", ["safe", "valid", "catch_all"]);
+    query = query.in("verification_status", ["safe", "valid"]);
   } else if (filter === "catch_all") {
     query = query.in("verification_status", ["catch_all", "risky"]);
   } else if (filter === "invalid") {
