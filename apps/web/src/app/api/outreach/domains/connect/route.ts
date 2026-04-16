@@ -161,7 +161,7 @@ export async function PATCH(req: NextRequest) {
       domain_id:            domain_record_id,
       label:                email,
       email_address:        email,
-      provider:             "smtp",
+      provider:             "postal",
       status:               "active",
       smtp_host:            smtpSettings.host,
       smtp_port:            smtpSettings.port,
