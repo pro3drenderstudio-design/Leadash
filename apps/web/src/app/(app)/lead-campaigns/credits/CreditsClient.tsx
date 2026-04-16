@@ -43,12 +43,36 @@ export default function CreditsClient() {
   const [transactions, setTransactions] = useState<LeadCreditTransaction[]>([]);
   const [loading, setLoading]           = useState(true);
   const [purchasing, setPurchasing]     = useState<string | null>(null);
+  const [verifying, setVerifying]       = useState(false);
+  const verified = useRef(false);
+
+  async function loadCredits() {
+    const d = await fetch("/api/lead-campaigns/credits").then(r => r.json());
+    setBalance(d.balance ?? 0);
+    setTransactions(d.transactions ?? []);
+  }
 
   useEffect(() => {
-    fetch("/api/lead-campaigns/credits")
-      .then(r => r.json())
-      .then(d => { setBalance(d.balance ?? 0); setTransactions(d.transactions ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+    const params    = new URLSearchParams(window.location.search);
+    const reference = params.get("reference");
+    const isPurchase = params.get("purchase") === "success";
+
+    if (isPurchase && reference && !verified.current) {
+      verified.current = true;
+      setVerifying(true);
+      // Strip query params from URL without reload
+      window.history.replaceState({}, "", window.location.pathname);
+      fetch("/api/lead-campaigns/credits/verify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ reference }),
+      })
+        .then(() => loadCredits())
+        .catch(() => {})
+        .finally(() => { setVerifying(false); setLoading(false); });
+    } else {
+      loadCredits().finally(() => setLoading(false));
+    }
   }, []);
 
   async function handlePurchase(packId: string) {
