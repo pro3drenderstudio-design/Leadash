@@ -93,10 +93,14 @@ export async function POST(
     }
   }
 
-  // Register inbound route in Postal so replies are delivered to the app
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Register inbound route in Postal so replies are delivered to the app.
+  // Use POSTAL_INBOUND_RELAY_URL if set (e.g. http://172.17.0.1:3001/inbound-relay
+  // for Docker-hosted Postal that can't reach the Vercel app directly).
+  // Falls back to the public app URL.
+  const inboundWebhook = process.env.POSTAL_INBOUND_RELAY_URL
+    ?? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/outreach/inbound`;
   try {
-    await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`);
+    await createInboundRoute(domainRecord.domain, inboundWebhook);
   } catch (err) {
     console.warn(`[ses-register] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
   }
