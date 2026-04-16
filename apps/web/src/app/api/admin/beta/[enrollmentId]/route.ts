@@ -27,7 +27,6 @@ export async function PATCH(
     return NextResponse.json({ error: "action must be approve or reject" }, { status: 400 });
   }
 
-  // Fetch enrollment to get workspace_id + user details for notification
   const { data: enrollment } = await ctx.db
     .from("beta_enrollments")
     .select("workspace_id, user_id, status, email, name")
@@ -54,50 +53,55 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // If approved: upgrade workspace to starter for 1 month
+  const hasAccount = !!enrollment.user_id && !!enrollment.workspace_id;
+
   if (action === "approve") {
-    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await ctx.db
-      .from("workspaces")
-      .update({
-        plan_id:           "starter",
-        plan_status:       "active",
-        max_inboxes:       5,
-        max_monthly_sends: 5000,
-        max_seats:         3,
-        trial_ends_at:     trialEnd,
-        updated_at:        new Date().toISOString(),
-      })
-      .eq("id", enrollment.workspace_id);
-
-    // Grant starter monthly credits
-    const { data: ws } = await ctx.db
-      .from("workspaces")
-      .select("lead_credits_balance")
-      .eq("id", enrollment.workspace_id)
-      .single();
-
-    if (ws) {
-      const STARTER_CREDITS = 500;
-      await ctx.db.from("workspaces")
-        .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + STARTER_CREDITS })
+    if (hasAccount) {
+      // User already has an account — upgrade workspace immediately
+      const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await ctx.db
+        .from("workspaces")
+        .update({
+          plan_id:           "starter",
+          plan_status:       "active",
+          max_inboxes:       5,
+          max_monthly_sends: 5000,
+          max_seats:         3,
+          trial_ends_at:     trialEnd,
+          updated_at:        new Date().toISOString(),
+        })
         .eq("id", enrollment.workspace_id);
-      await ctx.db.from("lead_credit_transactions").insert({
-        workspace_id: enrollment.workspace_id,
-        type:         "grant",
-        amount:       STARTER_CREDITS,
-        description:  "Beta programme — starter credits",
-      });
+
+      const { data: ws } = await ctx.db
+        .from("workspaces")
+        .select("lead_credits_balance")
+        .eq("id", enrollment.workspace_id)
+        .single();
+
+      if (ws) {
+        const STARTER_CREDITS = 500;
+        await ctx.db.from("workspaces")
+          .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + STARTER_CREDITS })
+          .eq("id", enrollment.workspace_id);
+        await ctx.db.from("lead_credit_transactions").insert({
+          workspace_id: enrollment.workspace_id,
+          type:         "grant",
+          amount:       STARTER_CREDITS,
+          description:  "Beta programme — starter credits",
+        });
+      }
     }
+    // If no account: the upgrade is deferred — handled by /api/beta/claim after signup
   }
 
   // Fire-and-forget decision email
   if (enrollment.email) {
     sendBetaDecisionEmail({
-      userEmail:  enrollment.email,
-      userName:   (enrollment as { name?: string | null }).name ?? null,
-      approved:   action === "approve",
-      reviewNote: review_note ?? null,
+      userEmail:   enrollment.email,
+      userName:    (enrollment as { name?: string | null }).name ?? null,
+      approved:    action === "approve",
+      reviewNote:  review_note ?? null,
+      needsSignup: action === "approve" && !hasAccount,
     }).catch(() => {});
   }
 
