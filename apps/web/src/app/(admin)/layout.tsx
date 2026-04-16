@@ -25,8 +25,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         adminEmail={user.email ?? ""}
         adminRole={admin.role}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f1117]">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f1117] pt-12 lg:pt-0">
           {children}
         </main>
       </div>
