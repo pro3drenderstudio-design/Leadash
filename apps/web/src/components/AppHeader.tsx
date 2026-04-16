@@ -97,7 +97,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
 
   return (
     <header
-      className="fixed top-0 left-56 right-0 z-30 h-14 flex items-center px-5 gap-4"
+      className="fixed top-0 left-0 lg:left-56 right-0 z-30 h-14 flex items-center px-4 lg:px-5 gap-3 lg:gap-4"
       style={{
         backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
@@ -105,6 +105,17 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan }: 
         borderBottom: "1px solid var(--header-border)",
       }}
     >
+      {/* ── Hamburger — mobile only ── */}
+      <button
+        onClick={openSidebar}
+        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex-shrink-0"
+        aria-label="Open menu"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
       {/* ── Search ── */}
       <div className="relative flex-1 max-w-sm">
         <div
