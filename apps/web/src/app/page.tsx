@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getActivePlans, type PlanConfig } from "@/lib/billing/getActivePlans";
+import SiteNav from "@/components/SiteNav";
+import SiteFooter from "@/components/SiteFooter";
 
 // ─── Shared micro-components ──────────────────────────────────────────────────
 
