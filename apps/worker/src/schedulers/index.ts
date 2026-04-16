@@ -90,5 +90,50 @@ export function startSchedulers() {
     console.log("[scheduler:reset] Monthly send counters reset");
   });
 
+  // ── Inbox billing: daily at 02:00 UTC ────────────────────────────────────
+  // Delegates to the Vercel API route — Paystack charging + email notifications
+  // are kept in one place.
+  cron.schedule("0 2 * * *", async () => {
+    if (!APP_URL || !CRON_SECRET) {
+      console.warn("[scheduler:inbox-billing] APP_URL or CRON_SECRET not set — skipping");
+      return;
+    }
+    try {
+      const res = await fetch(`${APP_URL}/api/cron/inbox-billing`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      const data = await res.json() as { charged?: number };
+      console.log(`[scheduler:inbox-billing] charged=${data?.charged ?? 0}`);
+    } catch (e) {
+      console.error("[scheduler:inbox-billing] failed:", e);
+    }
+  });
+
+  // ── Data cleanup: every Sunday at 03:00 UTC ──────────────────────────────
+  // Deletes lead campaign records older than 60 days.
+  cron.schedule("0 3 * * 0", async () => {
+    const db      = adminClient();
+    const cutoff  = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const results: Record<string, number> = {};
+
+    const tables: Array<{ table: string; extra?: Record<string, string[]> }> = [
+      { table: "lead_campaign_leads" },
+      { table: "lead_campaigns",  extra: { status: ["done", "failed", "cancelled"] } },
+      { table: "enrich_jobs",     extra: { status: ["done", "failed"] } },
+      { table: "verify_jobs",     extra: { status: ["done", "failed"] } },
+    ];
+
+    for (const { table, extra } of tables) {
+      let q = db.from(table).delete({ count: "exact" }).lt("created_at", cutoff);
+      if (extra?.status) q = (q as typeof q).in("status", extra.status);
+      const { count, error } = await q;
+      if (!error) results[table] = count ?? 0;
+      else console.error(`[scheduler:cleanup] ${table}:`, error.message);
+    }
+
+    console.log("[scheduler:cleanup] done:", results);
+  });
+
   console.log("[schedulers] All schedulers started");
 }
