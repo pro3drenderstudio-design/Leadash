@@ -2,9 +2,10 @@
  * POST /api/admin/broadcast
  *
  * Admin-only endpoint to send a broadcast email to all users (or a subset).
- * Body: { subject, html, text, filter?: "all" | "active" }
+ * Body: { subject, html, text, filter?, preview?, limit?, offset? }
  *
- * Sends in batches of 50 with a small delay to stay within Resend rate limits.
+ * Sends sequentially with a 210 ms gap (≈4.8/s) to stay under Resend's 5/s limit.
+ * Use `limit` + `offset` to send in pages across multiple calls.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
@@ -37,10 +38,12 @@ export async function POST(req: NextRequest) {
     html?: string;
     text?: string;
     filter?: "all" | "active";
-    preview?: boolean; // dry-run: just return recipient count
+    preview?: boolean;
+    limit?: number;   // max recipients to send to in this call
+    offset?: number;  // start from this index (for paging)
   };
 
-  const { subject, html, text, filter = "all", preview = false } = body;
+  const { subject, html, text, filter = "all", preview = false, limit, offset = 0 } = body;
 
   if (!preview && (!subject || !html || !text)) {
     return NextResponse.json({ error: "subject, html and text are required" }, { status: 400 });
@@ -58,7 +61,6 @@ export async function POST(req: NextRequest) {
     .map((u: AuthUser) => ({ id: u.id, email: u.email! }));
 
   if (filter === "active") {
-    // Only users who have at least one workspace (have onboarded)
     const { data: wsRows } = await admin
       .from("workspaces")
       .select("owner_id")
@@ -67,53 +69,66 @@ export async function POST(req: NextRequest) {
     recipients = recipients.filter((r: Recipient) => activeIds.has(r.id));
   }
 
+  const total = recipients.length;
+
+  // Apply offset + limit for paged sending
+  const page = recipients.slice(offset, limit ? offset + limit : undefined);
+
   if (preview) {
-    return NextResponse.json({ count: recipients.length, sample: recipients.slice(0, 5).map(r => r.email) });
+    return NextResponse.json({
+      count: total,
+      page_count: page.length,
+      offset,
+      sample: recipients.slice(0, 5).map(r => r.email),
+    });
   }
 
-  // Send in batches of 50
-  const BATCH = 50;
+  // Send sequentially — 210 ms between each (≈4.8/s, under Resend's 5/s limit)
+  const DELAY_MS = 210;
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
+  const succeeded: string[] = [];
 
-  for (let i = 0; i < recipients.length; i += BATCH) {
-    const batch = recipients.slice(i, i + BATCH);
-
-    await Promise.all(batch.map(async r => {
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: `Leadash <${FROM}>`,
-            to: [r.email],
-            subject,
-            html,
-            text,
-          }),
-        });
-        if (!res.ok) {
-          const b = await res.text();
-          errors.push(`${r.email}: ${res.status} ${b}`);
-          failed++;
-        } else {
-          sent++;
-        }
-      } catch (e) {
-        errors.push(`${r.email}: ${String(e)}`);
+  for (let i = 0; i < page.length; i++) {
+    const r = page[i];
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: `Leadash <${FROM}>`,
+          to: [r.email],
+          subject,
+          html,
+          text,
+        }),
+      });
+      if (!res.ok) {
+        const b = await res.text();
+        errors.push(`${r.email}: ${res.status} ${b}`);
         failed++;
+      } else {
+        succeeded.push(r.email);
+        sent++;
       }
-    }));
+    } catch (e) {
+      errors.push(`${r.email}: ${String(e)}`);
+      failed++;
+    }
 
-    // Respect Resend rate limits (100 req/s on paid, be conservative)
-    if (i + BATCH < recipients.length) await sleep(600);
+    // Rate-limit gap between sends (skip after last one)
+    if (i < page.length - 1) await sleep(DELAY_MS);
   }
 
   return NextResponse.json({
-    total: recipients.length,
+    total,           // total matching recipients
+    page_count: page.length,  // how many were attempted this run
+    offset,
+    next_offset: offset + page.length < total ? offset + page.length : null,
     sent,
     failed,
-    errors: errors.slice(0, 20), // cap error list
+    succeeded,
+    errors: errors.slice(0, 50),
   });
 }
