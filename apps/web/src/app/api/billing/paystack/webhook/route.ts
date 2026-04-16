@@ -93,23 +93,16 @@ export async function POST(req: NextRequest) {
             })
             .eq("id", workspaceId);
 
-          // Check for pool overage after plan change (e.g. downgrade from enterprise → starter)
+          // Check for pool overage after plan change — pause active campaigns if over limit
           void (async () => {
-            const { getPlan } = await import("@/lib/billing/plans");
-            const newPlan = getPlan(planId);
-            const maxPool: number = newPlan.maxLeadsPool;
-            if (maxPool > 0) {
-              const { count } = await db
-                .from("outreach_leads")
-                .select("id", { count: "exact", head: true })
-                .eq("workspace_id", workspaceId);
-              const used = count ?? 0;
-              if (used > maxPool) {
-                console.warn(
-                  `[billing] Pool overage on plan change: workspace=${workspaceId} ` +
-                  `plan=${planId} pool_max=${maxPool} pool_used=${used} overage=${used - maxPool}`,
-                );
-              }
+            const quota = await getPoolQuotaStatus(db, workspaceId);
+            if (quota.isOver) {
+              const paused = await pauseCampaignsForPoolOverage(db, workspaceId);
+              console.warn(
+                `[billing] Pool overage on plan change: workspace=${workspaceId} ` +
+                `plan=${planId} pool_max=${quota.max} pool_used=${quota.used} overage=${quota.overage} ` +
+                `campaigns_paused=${paused}`,
+              );
             }
           })().catch(() => {});
 
