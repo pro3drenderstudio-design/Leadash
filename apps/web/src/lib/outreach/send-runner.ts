@@ -116,6 +116,18 @@ export async function runSendBatch(
       const { data: lead } = await db.from("outreach_leads").select("*").eq("id", enrollment.lead_id).single();
       if (!lead) { result.skipped++; continue; }
 
+      // Global suppression check (cross-workspace hard bounces, spam complaints)
+      const { data: suppressed } = await db
+        .from("email_suppressions")
+        .select("email")
+        .eq("email", lead.email.toLowerCase())
+        .maybeSingle();
+      if (suppressed) {
+        await db.from("outreach_enrollments").update({ status: "bounced" }).eq("id", enrollment.id);
+        await db.from("outreach_leads").update({ status: "bounced" }).eq("id", lead.id);
+        result.skipped++; continue;
+      }
+
       // Unsubscribe check
       const { data: unsub } = await db.from("outreach_unsubscribes").select("id")
         .eq("workspace_id", workspaceId).eq("email", lead.email.toLowerCase()).single();
