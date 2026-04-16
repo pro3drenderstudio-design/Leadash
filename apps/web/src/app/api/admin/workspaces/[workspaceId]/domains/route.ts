@@ -226,6 +226,13 @@ export async function PATCH(
     });
   }
 
+  // Set up Postal inbound HTTP route so replies are forwarded to the webhook
+  const appUrl = process.env.POSTAL_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const webhookUrl = `${appUrl}/api/outreach/inbound`;
+  await createInboundRoute(domainRecord.domain, webhookUrl).catch(() => {
+    // Non-fatal
+  });
+
   await ctx.db.from("outreach_domains")
     .update({ status: "active", warmup_ends_at: warmupEndsAt, updated_at: new Date().toISOString() })
     .eq("id", domain_record_id);
