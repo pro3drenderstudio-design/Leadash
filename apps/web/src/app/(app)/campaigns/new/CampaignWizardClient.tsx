@@ -544,72 +544,218 @@ export default function CampaignWizardClient() {
       )}
 
       {/* Send Test Email modal */}
-      {testStepIdx !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-              <h2 className="text-white font-semibold text-sm">Send Test Email — Step {testStepIdx + 1}</h2>
-              <button onClick={() => { setTestStepIdx(null); setTestResult(null); }} className="text-white/40 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Send From Inbox</label>
-                <select
-                  value={testInboxId}
-                  onChange={(e) => setTestInboxId(e.target.value)}
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/40"
-                >
-                  <option value="">Select inbox…</option>
-                  {inboxes.map((inbox) => (
-                    <option key={inbox.id} value={inbox.id}>{inbox.label} ({inbox.email_address})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Send To (test recipient)</label>
-                <input
-                  type="email"
-                  value={testToEmail}
-                  onChange={(e) => setTestToEmail(e.target.value)}
-                  placeholder="you@yourdomain.com"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-amber-500/40"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Use Variables From Lead ID <span className="text-white/20">(optional)</span></label>
-                <input
-                  value={testLeadId}
-                  onChange={(e) => setTestLeadId(e.target.value)}
-                  placeholder="Leave blank to use sample data"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-amber-500/40"
-                />
-                <p className="text-white/25 text-[10px] mt-1">If blank, variables render as: Test Lead, Acme Corp, Manager</p>
-              </div>
+      {testStepIdx !== null && (() => {
+        const step = seqSteps[testStepIdx];
+        const sampleLead = testSampleIdx >= 0 ? testSampleLeads[testSampleIdx]?.lead ?? null : null;
+        const renderedSubject = renderTemplate(step?.subject_template ?? "", sampleLead);
+        const renderedBody    = renderTemplate(step?.body_template    ?? "", sampleLead);
+        const selectedInbox   = inboxes.find(i => i.id === testInboxId);
+        const isHtml          = /<[a-z][\s\S]*>/i.test(renderedBody);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setTestInboxOpen(false)}>
+            <div className="bg-[#161616] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[88vh]" onClick={e => e.stopPropagation()}>
 
-              {testResult && (
-                <div className={`px-3 py-2 rounded-lg text-xs ${testResult.startsWith("Error") ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>
-                  {testResult}
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-white font-semibold text-sm">Send Test Email</h2>
+                  <div className="flex items-center gap-1">
+                    {seqSteps.filter(s => s.type === "email").map((_, i) => {
+                      const emailSteps = seqSteps.map((s, idx) => ({ s, idx })).filter(({ s }) => s.type === "email");
+                      const actualIdx = emailSteps[i]?.idx ?? -1;
+                      return (
+                        <button key={i} onClick={() => { setTestStepIdx(actualIdx); setTestResult(null); setTestDns(null); }}
+                          className={`w-6 h-6 rounded-full text-[11px] font-semibold transition-colors ${actualIdx === testStepIdx ? "bg-orange-500 text-white" : "bg-white/10 text-white/40 hover:bg-white/20 hover:text-white/70"}`}>
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-white/20 text-xs">Step {testStepIdx + 1}</span>
                 </div>
-              )}
+                <button onClick={() => { setTestStepIdx(null); setTestResult(null); setTestDns(null); setTestInboxOpen(false); }} className="text-white/40 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
 
-              <button
-                onClick={handleTestSend}
-                disabled={testSending}
-                className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {testSending ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    Sending…
-                  </>
-                ) : "Send Test Email"}
-              </button>
+              {/* Body */}
+              <div className="flex flex-1 overflow-hidden">
+
+                {/* ── LEFT: Config ── */}
+                <div className="w-72 flex-shrink-0 border-r border-white/8 flex flex-col overflow-y-auto">
+                  <div className="p-5 space-y-4 flex-1">
+
+                    {/* Send From */}
+                    <div>
+                      <label className="block text-xs text-white/40 mb-2 font-medium">Send From</label>
+                      <div className="relative">
+                        <button type="button" onClick={e => { e.stopPropagation(); setTestInboxOpen(v => !v); }}
+                          className="w-full flex items-center gap-2.5 bg-white/6 border border-white/10 rounded-xl px-3 py-2.5 hover:bg-white/8 transition-colors text-left">
+                          {selectedInbox ? (
+                            <>
+                              <div className="w-7 h-7 bg-orange-500/20 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-orange-300">
+                                {selectedInbox.email_address[0].toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-white text-xs font-medium truncate">{selectedInbox.email_address}</p>
+                                {selectedInbox.label && <p className="text-white/35 text-[10px] truncate">{selectedInbox.label}</p>}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-white/30 text-sm flex-1">Select inbox…</span>
+                          )}
+                          <svg className={`w-4 h-4 text-white/25 flex-shrink-0 transition-transform ${testInboxOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        {testInboxOpen && (
+                          <div className="absolute top-full mt-1 left-0 right-0 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl z-20 max-h-52 overflow-y-auto">
+                            {inboxes.map(inbox => (
+                              <button key={inbox.id} type="button"
+                                onClick={() => { setTestInboxId(inbox.id); setTestInboxOpen(false); setTestDns(null); }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/6 transition-colors text-left ${testInboxId === inbox.id ? "bg-white/8" : ""}`}>
+                                <div className="w-7 h-7 bg-orange-500/15 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-orange-300/70">
+                                  {inbox.email_address[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-white text-xs font-medium truncate">{inbox.email_address}</p>
+                                  {inbox.label && <p className="text-white/30 text-[10px] truncate">{inbox.label}</p>}
+                                </div>
+                                {testInboxId === inbox.id && <svg className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Send To */}
+                    <div>
+                      <label className="block text-xs text-white/40 mb-2 font-medium">Send To</label>
+                      <input type="email" value={testToEmail} onChange={e => setTestToEmail(e.target.value)}
+                        placeholder="you@domain.com"
+                        className="w-full bg-white/6 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-white/25 transition-colors" />
+                    </div>
+
+                    {/* Lead Sample */}
+                    <div>
+                      <label className="block text-xs text-white/40 mb-2 font-medium">
+                        Lead Sample <span className="text-white/20 font-normal">(for variable preview)</span>
+                      </label>
+                      <select value={testSampleIdx} onChange={e => setTestSampleIdx(Number(e.target.value))}
+                        className="w-full bg-[#1e1e1e] border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs focus:outline-none focus:border-white/25 transition-colors appearance-none">
+                        <option value={-1}>Sample data (Jane Smith, Acme Corp)</option>
+                        {testSampleLeads.map((e, i) => e.lead && (
+                          <option key={e.id} value={i}>
+                            {[e.lead.first_name, e.lead.last_name].filter(Boolean).join(" ") || e.lead.email}
+                            {e.lead.company ? ` · ${e.lead.company}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Deliverability Check */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs text-white/40 font-medium">Deliverability</label>
+                        {testDns?.score !== undefined && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${testDns.score === 4 ? "bg-emerald-500/15 text-emerald-400" : testDns.score >= 2 ? "bg-amber-500/15 text-amber-400" : "bg-red-500/15 text-red-400"}`}>
+                            {testDns.score}/{testDns.max_score} checks passed
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={handleCheckDns} disabled={!testInboxId || testDnsLoading}
+                        className="w-full py-2 bg-white/6 hover:bg-white/10 disabled:opacity-40 border border-white/10 text-white/70 text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+                        {testDnsLoading ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Checking DNS…</> : "Check SPF / DKIM / DMARC"}
+                      </button>
+                      {testDns && !("error" in testDns && testDns.error) && testDns.checks && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-[10px] text-white/25 font-medium uppercase tracking-wide">{testDns.domain}</p>
+                          {(Object.entries(testDns.checks) as [string, { pass: boolean; detail: string }][]).map(([key, check]) => (
+                            <div key={key} className="flex items-start gap-2">
+                              <div className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-bold ${check.pass ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+                                {check.pass ? "✓" : "✗"}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide">{key} </span>
+                                <span className="text-[10px] text-white/30">{check.detail}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {testDns && "error" in testDns && testDns.error && (
+                        <p className="mt-2 text-[10px] text-red-400/70">{String(testDns.error)}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Send button pinned to bottom */}
+                  <div className="p-5 border-t border-white/8 space-y-2 flex-shrink-0">
+                    {testResult && (
+                      <div className={`px-3 py-2 rounded-lg text-xs ${testResult.startsWith("Error") ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                        {testResult}
+                      </div>
+                    )}
+                    <button onClick={handleTestSend} disabled={testSending || !testInboxId || !testToEmail}
+                      className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 transition-colors">
+                      {testSending ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</> : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>Send Test Email</>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── RIGHT: Preview ── */}
+                <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+                  {/* Subject bar */}
+                  <div className="px-6 py-3 border-b border-white/8 flex-shrink-0">
+                    <p className="text-[10px] text-white/30 font-medium uppercase tracking-wide mb-1">Subject</p>
+                    <p className="text-white/80 text-sm font-medium truncate">{renderedSubject || <span className="text-white/20 italic">No subject</span>}</p>
+                  </div>
+
+                  {/* Preview tabs */}
+                  <div className="flex items-center gap-1 px-6 py-2.5 border-b border-white/8 flex-shrink-0">
+                    <button onClick={() => setTestPreviewTab("preview")}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${testPreviewTab === "preview" ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60"}`}>
+                      Preview
+                    </button>
+                    <button onClick={() => setTestPreviewTab("plain")}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${testPreviewTab === "plain" ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60"}`}>
+                      Plain Text
+                    </button>
+                    <div className="flex-1" />
+                    {sampleLead && (
+                      <span className="text-[10px] text-white/25">Previewing as {sampleLead.first_name ?? sampleLead.email}</span>
+                    )}
+                  </div>
+
+                  {/* Email body */}
+                  <div className="flex-1 overflow-auto bg-white/2">
+                    {testPreviewTab === "preview" ? (
+                      isHtml ? (
+                        <iframe
+                          key={renderedBody}
+                          srcDoc={`<!DOCTYPE html><html><head><style>body{margin:0;padding:24px;font-family:sans-serif;font-size:14px;color:#333;line-height:1.6;background:#fff}a{color:#1a73e8}*{max-width:100%;box-sizing:border-box}</style></head><body>${renderedBody}</body></html>`}
+                          sandbox="allow-same-origin"
+                          className="w-full border-0 bg-white"
+                          style={{ minHeight: "400px" }}
+                          onLoad={e => { const f = e.currentTarget; if (f.contentDocument?.body) f.style.height = f.contentDocument.body.scrollHeight + 48 + "px"; }}
+                        />
+                      ) : (
+                        <div className="p-6">
+                          <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">{renderedBody || <span className="text-white/20 italic">No body content</span>}</pre>
+                        </div>
+                      )
+                    ) : (
+                      <div className="p-6">
+                        <pre className="text-white/50 text-xs whitespace-pre-wrap font-mono leading-relaxed break-all">{step?.body_template || "(empty)"}</pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
