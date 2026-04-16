@@ -54,13 +54,19 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { full_name: name }, emailRedirectTo: `${location.origin}/api/auth/callback` },
-    });
-    if (error) { setError(error.message); setLoading(false); }
-    else setDone(true);
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: name || undefined }),
+      });
+      const d = await res.json() as { error?: string };
+      if (!res.ok) { setError(d.error ?? "Something went wrong. Please try again."); setLoading(false); }
+      else setDone(true);
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
   }
 
   const strengthScore = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : password.length < 14 ? 3 : 4;
