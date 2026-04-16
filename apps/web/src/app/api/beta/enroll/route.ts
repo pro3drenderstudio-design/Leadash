@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { sendBetaApplicationConfirmation, sendBetaAdminNotification } from "@/lib/email/notifications";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
