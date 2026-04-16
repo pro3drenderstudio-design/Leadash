@@ -51,9 +51,10 @@ export async function POST(req: NextRequest) {
   const { data: { users }, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  type AuthUser = (typeof users)[number];
   let recipients = (users ?? [])
-    .filter(u => !!u.email && u.email_confirmed_at)
-    .map(u => ({ id: u.id, email: u.email! }));
+    .filter((u: AuthUser) => !!u.email && u.email_confirmed_at)
+    .map((u: AuthUser) => ({ id: u.id, email: u.email! }));
 
   if (filter === "active") {
     // Only users who have at least one workspace (have onboarded)
