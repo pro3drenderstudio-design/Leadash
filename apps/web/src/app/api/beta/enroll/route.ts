@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ enrollment: null });
+  if (!user) return NextResponse.json({ enrollment: null, email: null });
 
   const db = createAdminClient();
   const { data } = await db
@@ -70,5 +70,5 @@ export async function GET() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  return NextResponse.json({ enrollment: data ?? null });
+  return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null });
 }
