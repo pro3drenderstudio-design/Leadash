@@ -142,6 +142,26 @@ export default function CampaignWizardClient() {
     }
   }
 
+  function renderTemplate(tpl: string, lead: CampaignEnrollmentRow["lead"] | null): string {
+    const vars: Record<string, string> = {
+      first_name: lead?.first_name ?? "Jane",
+      last_name:  lead?.last_name  ?? "Smith",
+      company:    lead?.company    ?? "Acme Corp",
+      title:      lead?.title      ?? "Manager",
+      email:      lead?.email      ?? "jane@acme.com",
+    };
+    return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+  }
+
+  async function handleCheckDns() {
+    if (!testInboxId) return;
+    setTestDnsLoading(true);
+    setTestDns(null);
+    const result = await checkInboxDns(testInboxId).catch(e => ({ error: e.message } as never));
+    setTestDns(result);
+    setTestDnsLoading(false);
+  }
+
   async function handleTestSend() {
     if (testStepIdx === null) return;
     if (!testInboxId || !testToEmail) {
@@ -149,6 +169,7 @@ export default function CampaignWizardClient() {
       return;
     }
     const s = seqSteps[testStepIdx];
+    const sampleLead = testSampleIdx >= 0 ? testSampleLeads[testSampleIdx]?.lead : null;
     setTestSending(true);
     setTestResult(null);
     const res = await sendTestEmail({
@@ -156,10 +177,10 @@ export default function CampaignWizardClient() {
       to_email: testToEmail,
       subject_template: s.subject_template,
       body_template: s.body_template,
-      lead_id: testLeadId || undefined,
+      lead_id: sampleLead?.id || undefined,
     });
     setTestSending(false);
-    setTestResult(res.message ?? (res.error ? `Error: ${res.error}` : "Sent"));
+    setTestResult(res.message ?? (res.error ? `Error: ${res.error}` : "Sent! Check your inbox."));
   }
 
   async function handleFinish() {
