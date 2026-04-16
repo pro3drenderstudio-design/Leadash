@@ -19,11 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await getWorkspaceContext();
   if (!ctx) redirect("/onboarding"); // authed but no workspace yet
 
-  // Silently claim any approved beta enrollment linked to this email (fire-and-forget)
-  fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/beta/claim`, {
-    method: "POST",
-    headers: { cookie: (await import("next/headers")).cookies().toString() },
-  }).catch(() => {});
+  // Silently claim any approved beta enrollment linked to this email (no account at apply-time)
+  claimBetaIfApproved(user.id, user.email ?? "", ctx.workspaceId).catch(() => {});
 
   const workspace = ctx.workspace as { name: string; plan_id: string; trial_ends_at: string | null };
   const userName  = (user.user_metadata?.full_name as string | null) ?? null;
