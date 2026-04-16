@@ -157,14 +157,17 @@ interface SmtpSettings {
 }
 
 /**
- * Returns SMTP connection settings for inboxes provisioned via Postal.
- * IMAP is null — reply detection is handled by SES inbound (unchanged).
+ * Returns SMTP + IMAP connection settings for inboxes provisioned via Postal.
+ * Postal handles both outbound (SMTP) and inbound (IMAP) mail.
+ * Set POSTAL_IMAP_HOST to override; defaults to POSTAL_SMTP_HOST.
  */
 export function getSmtpSettings(): SmtpSettings {
+  const smtpHost = process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com";
+  const imapHost = process.env.POSTAL_IMAP_HOST ?? smtpHost;
   return {
-    host:      process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com",
+    host:      smtpHost,
     port:      587,
-    imap_host: null,
-    imap_port: null,
+    imap_host: imapHost,
+    imap_port: 993,
   };
 }
