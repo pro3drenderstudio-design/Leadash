@@ -300,10 +300,19 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   async function handleTestSend() {
     if (testStepIdx === null || !testInboxId || !testToEmail) { setTestResult("Error: Inbox and recipient required"); return; }
     const s = editSteps[testStepIdx];
+    const sampleLead = testSampleIdx >= 0 ? testSampleLeads[testSampleIdx]?.lead : null;
     setTestSending(true); setTestResult(null);
-    const res = await sendTestEmail({ inbox_id: testInboxId, to_email: testToEmail, subject_template: s.subject_template, body_template: s.body_template, lead_id: testLeadId || undefined });
+    const res = await sendTestEmail({ inbox_id: testInboxId, to_email: testToEmail, subject_template: s.subject_template, body_template: s.body_template, lead_id: sampleLead?.id || undefined });
     setTestSending(false);
     setTestResult(res.message ?? (res.error ? `Error: ${res.error}` : "Sent"));
+  }
+
+  async function handleCheckDns() {
+    if (!testInboxId) return;
+    setTestDnsLoading(true); setTestDns(null);
+    const result = await checkInboxDns(testInboxId).catch(e => ({ error: e.message } as never));
+    setTestDns(result);
+    setTestDnsLoading(false);
   }
 
   if (loading) return (
