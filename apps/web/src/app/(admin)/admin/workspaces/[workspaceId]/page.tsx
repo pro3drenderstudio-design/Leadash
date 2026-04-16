@@ -47,6 +47,10 @@ export default function WorkspaceDetailPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
+  const [campaignPage, setCampaignPage] = useState(0);
+  const [txPage, setTxPage]             = useState(0);
+  const PAGE_SIZE = 10;
+
   // Plan change state
   const [planForm, setPlanForm]   = useState({ plan_id: "", plan_status: "active" });
   const [planLoading, setPlanLoading] = useState(false);
