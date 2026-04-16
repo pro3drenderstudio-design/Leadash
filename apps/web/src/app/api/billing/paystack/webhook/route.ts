@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
     const subCode = data.subscription_code;
     if (subCode) {
       const freePlan = await getPlanById("free");
-      await db
+      const { data: updatedWs } = await db
         .from("workspaces")
         .update({
           plan_id:           "free",
@@ -382,7 +382,24 @@ export async function POST(req: NextRequest) {
           max_seats:         freePlan.max_seats,
           updated_at:        new Date().toISOString(),
         })
-        .eq("paystack_sub_code", subCode);
+        .eq("paystack_sub_code", subCode)
+        .select("id")
+        .maybeSingle();
+
+      // Log pool overage — free plan has 0 pool quota so ANY existing leads are over-limit.
+      // We do NOT delete them: they stay accessible but the workspace can't add more.
+      if (updatedWs?.id) {
+        const { count } = await db
+          .from("outreach_leads")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", updatedWs.id);
+        if ((count ?? 0) > 0) {
+          console.warn(
+            `[billing] Subscription disabled: workspace=${updatedWs.id} has ${count} outreach leads ` +
+            `over free-plan quota (0). Leads preserved but additions blocked until resubscription.`,
+          );
+        }
+      }
     }
     return NextResponse.json({ received: true });
   }
