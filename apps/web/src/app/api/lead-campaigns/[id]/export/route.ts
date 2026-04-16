@@ -99,7 +99,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .in("email", emails);
 
   const existingEmails = new Set((existing ?? []).map((l: { email: string }) => l.email));
-  const toInsert = typedLeads.filter(l => !existingEmails.has(l.email));
+  let toInsert = typedLeads.filter(l => !existingEmails.has(l.email));
+
+  // Enforce pool capacity — cap to remaining slots
+  if (toInsert.length > poolRemaining) {
+    toInsert = toInsert.slice(0, poolRemaining);
+  }
 
   let exported = 0;
   const BATCH = 100;
