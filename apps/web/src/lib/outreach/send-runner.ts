@@ -228,6 +228,11 @@ export async function runSendBatch(
           await db.from("outreach_sends").update({ status: "bounced", bounced_at: new Date().toISOString() }).eq("id", sendRecord.id);
           await db.from("outreach_enrollments").update({ status: "bounced" }).eq("id", enrollment.id);
           await db.from("outreach_leads").update({ status: "bounced" }).eq("id", lead.id);
+          // Add to global suppression — prevents all future workspaces from sending to this address
+          await db.from("email_suppressions").upsert(
+            { email: lead.email.toLowerCase(), reason: "hard_bounce", source_workspace_id: workspaceId },
+            { onConflict: "email", ignoreDuplicates: true },
+          );
         } else {
           await db.from("outreach_sends").update({ status: "failed" }).eq("id", sendRecord.id);
           const inboxPatch: Record<string, unknown> = { last_error: errMsg.slice(0, 500), updated_at: new Date().toISOString() };
