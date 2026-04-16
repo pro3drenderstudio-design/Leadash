@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail } from "@/lib/outreach/api";
+import { getInboxes, getLists, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail, checkInboxDns } from "@/lib/outreach/api";
+import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
