@@ -19,6 +19,55 @@ export async function POST(req: NextRequest) {
   const { list_id, rows } = await req.json() as { list_id: string; rows: CsvRow[] };
   if (!list_id || !rows?.length) return NextResponse.json({ error: "list_id and rows required" }, { status: 400 });
 
+  // ── Outreach leads pool limit ────────────────────────────────────────────
+  {
+    const { data: ws } = await db
+      .from("workspaces")
+      .select("plan_id, max_inboxes")
+      .eq("id", workspaceId)
+      .single();
+
+    const planId = ws?.plan_id ?? "free";
+    const { getPlan } = await import("@/lib/billing/plans");
+    const { data: planConfig } = await db
+      .from("plan_configs")
+      .select("max_leads_pool")
+      .eq("plan_id", planId)
+      .maybeSingle();
+
+    const plan = getPlan(planId);
+    const maxPool: number = planConfig?.max_leads_pool ?? plan.maxLeadsPool;
+
+    if (maxPool === 0) {
+      return NextResponse.json(
+        { error: "Outreach leads require a paid plan. Upgrade to start adding leads to sequences." },
+        { status: 403 },
+      );
+    }
+
+    if (maxPool > 0) {
+      const { count: current } = await db
+        .from("outreach_leads")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId);
+
+      const used = current ?? 0;
+      const remaining = maxPool - used;
+
+      if (remaining <= 0) {
+        return NextResponse.json(
+          { error: `Outreach leads pool full (${maxPool.toLocaleString()} leads). Delete unused leads or upgrade your plan.` },
+          { status: 403 },
+        );
+      }
+
+      if (rows.length > remaining) {
+        // Truncate to remaining capacity and continue — caller will see fewer imported than sent
+        rows.splice(remaining);
+      }
+    }
+  }
+
   // Get unsubscribe + blacklist
   const [unsubRes, blacklistRes] = await Promise.all([
     db.from("outreach_unsubscribes").select("email").eq("workspace_id", workspaceId),
