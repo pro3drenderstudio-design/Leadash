@@ -310,3 +310,107 @@ export async function sendUserReplyNotification(opts: {
     `,
   });
 }
+
+// ─── Inbox billing ────────────────────────────────────────────────────────────
+
+export async function sendInboxPaymentSuccess(opts: {
+  userEmail: string;
+  domain: string;
+  amountNgn: number;
+  nextBillingDate: string;
+}): Promise<void> {
+  const { userEmail, domain, amountNgn, nextBillingDate } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amountNgn);
+  const nextDate  = new Date(nextBillingDate).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+
+  await sendEmail({
+    to: userEmail,
+    subject: `Payment confirmed — ${domain} renewed`,
+    text: [
+      `Hi,`,
+      ``,
+      `Your monthly renewal for ${domain} was successful.`,
+      ``,
+      `Amount charged: ${formatted}`,
+      `Next billing date: ${nextDate}`,
+      ``,
+      `Manage your inboxes at: ${APP_URL}/inboxes`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">✅ Payment confirmed</p>
+          <p style="color:#6b7280;margin-bottom:24px">Your inbox domain <strong style="color:#111">${domain}</strong> has been renewed successfully.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Domain</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${domain}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Amount charged</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${formatted}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#9ca3af">Next billing date</td>
+              <td style="padding:10px 0;color:#111;text-align:right">${nextDate}</td>
+            </tr>
+          </table>
+          <p><a href="${APP_URL}/inboxes" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Manage Inboxes →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendInboxPaymentFailed(opts: {
+  userEmail: string;
+  domain: string;
+  amountNgn: number;
+  errorMessage: string;
+}): Promise<void> {
+  const { userEmail, domain, amountNgn, errorMessage } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amountNgn);
+
+  await sendEmail({
+    to: userEmail,
+    subject: `Action required — renewal failed for ${domain}`,
+    text: [
+      `Hi,`,
+      ``,
+      `We were unable to charge your card for the renewal of ${domain}.`,
+      ``,
+      `Amount: ${formatted}`,
+      `Reason: ${errorMessage}`,
+      ``,
+      `Please update your payment method to avoid service interruption.`,
+      ``,
+      `${APP_URL}/inboxes`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">⚠️ Payment failed</p>
+          <p style="color:#6b7280;margin-bottom:24px">We couldn't renew <strong style="color:#111">${domain}</strong>. Please update your payment details to avoid interruption.</p>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:14px">
+            <p style="margin:0 0 6px;color:#9ca3af">Amount due</p>
+            <p style="margin:0;font-size:18px;font-weight:700;color:#111">${formatted}</p>
+            ${errorMessage ? `<p style="margin:12px 0 0;color:#ef4444;font-size:13px">${errorMessage}</p>` : ""}
+          </div>
+          <p><a href="${APP_URL}/inboxes" style="display:inline-block;background:#ef4444;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Update Payment →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
