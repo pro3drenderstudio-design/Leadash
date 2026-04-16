@@ -96,12 +96,20 @@ export default function CreditsClient() {
         <span className="text-white/70">Credits</span>
       </div>
 
+      {/* Verifying banner */}
+      {verifying && (
+        <div className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6 text-sm" style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)" }}>
+          <span className="w-4 h-4 rounded-full border-2 border-orange-400/30 border-t-orange-400 animate-spin flex-shrink-0" />
+          <span className="text-orange-300/80">Confirming your payment and adding credits…</span>
+        </div>
+      )}
+
       {/* Balance card */}
       <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl p-6 mb-8">
         <p className="text-white/50 text-sm font-medium mb-2">Current Balance</p>
         <div className="flex items-end gap-3">
           <span className="text-5xl font-bold text-white">
-            {loading ? "—" : balance.toLocaleString()}
+            {loading || verifying ? "—" : balance.toLocaleString()}
           </span>
           <span className="text-amber-400 text-lg font-medium mb-1">credits</span>
         </div>
