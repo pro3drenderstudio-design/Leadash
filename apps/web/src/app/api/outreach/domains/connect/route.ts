@@ -183,6 +183,15 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Set up Postal inbound HTTP route so replies are forwarded to the webhook
+  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/outreach/inbound`.replace(
+    "http://localhost:3001",
+    process.env.POSTAL_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "",
+  );
+  await createInboundRoute(domainRecord.domain, webhookUrl).catch(() => {
+    // Non-fatal — inbound forwarding won't work until route is created, but outbound is fine
+  });
+
   await db
     .from("outreach_domains")
     .update({ status: "active", warmup_ends_at: warmupEndsAt, updated_at: new Date().toISOString() })
