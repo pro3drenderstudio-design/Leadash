@@ -259,6 +259,10 @@ export default function VerifyEmailPage() {
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+    if (balance !== null && balance < 0.5) {
+      setCreditsModal({ needed: 0.5, have: balance });
+      return;
+    }
     setLoading(true); setSingleErr(null); setSingleResult(null);
     try {
       const res = await wsPost<VerifyResult>("/api/lead-campaigns/verify-single", { email: email.trim() });
