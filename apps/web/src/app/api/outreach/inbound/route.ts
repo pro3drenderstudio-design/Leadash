@@ -31,8 +31,61 @@ const AUTO_REPLY_PATTERNS = [
   /^absence/i,
 ];
 
+// DSN (Delivery Status Notification) bounce detection
+const DSN_FROM_PATTERNS = [
+  /^mailer-daemon@/i,
+  /^postmaster@/i,
+  /^mail-daemon@/i,
+  /^noreply@/i,
+];
+const DSN_SUBJECT_PATTERNS = [
+  /delivery.status.notification/i,
+  /mail delivery failed/i,
+  /undeliverable/i,
+  /delivery failure/i,
+  /failed delivery/i,
+  /delivery.*failed/i,
+  /returned mail/i,
+  /message not delivered/i,
+  /could not be delivered/i,
+];
+
 function isAutoReply(subject: string): boolean {
   return AUTO_REPLY_PATTERNS.some(p => p.test(subject));
+}
+
+function isDsnBounce(from: string, subject: string): boolean {
+  return (
+    DSN_FROM_PATTERNS.some(p => p.test(from)) ||
+    DSN_SUBJECT_PATTERNS.some(p => p.test(subject))
+  );
+}
+
+/**
+ * Extract the bounced recipient email address from a DSN notification body.
+ * Handles the most common DSN body formats used by major MTAs.
+ */
+function extractBouncedEmail(text: string): string | null {
+  const patterns = [
+    // RFC 3464 machine-readable DSN: "Final-Recipient: rfc822; user@domain.com"
+    /Final-Recipient:\s*rfc822;\s*([^\s<>]+@[^\s<>]+)/i,
+    // Common human-readable formats
+    /The following address(?:es)? failed:\s*\n?\s*([^\s<>]+@[^\s<>]+)/i,
+    /could not be delivered to:\s*([^\s<>]+@[^\s<>]+)/i,
+    /message.*?could not.*?delivered.*?([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i,
+    /Original-Recipient:\s*rfc822;\s*([^\s<>]+@[^\s<>]+)/i,
+    // Angle-bracket wrapped: <user@domain.com>
+    /delivery.*?<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const email = match[1].trim().toLowerCase().replace(/[<>]/g, "");
+      if (email.includes("@")) return email;
+    }
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
