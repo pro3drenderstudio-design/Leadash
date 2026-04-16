@@ -33,12 +33,159 @@ function Avatar({ email, name }: { email: string; name?: string | null }) {
   );
 }
 
+// ── Send Message Modal ────────────────────────────────────────────────────────
+
+interface MessageTarget { id: string; email: string; name: string | null }
+
+function SendMessageModal({ target, onClose }: { target: MessageTarget; onClose: () => void }) {
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent]       = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { subjectRef.current?.focus(); }, []);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  async function handleSend() {
+    if (!subject.trim() || !message.trim()) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${target.id}/message`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ subject: subject.trim(), message: message.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to send."); return; }
+      setSent(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-white/10">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Send Message</h2>
+            <p className="text-xs text-slate-400 dark:text-white/40 mt-0.5">
+              To: <span className="text-slate-600 dark:text-white/60">{target.name ? `${target.name} <${target.email}>` : target.email}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+            </svg>
+          </button>
+        </div>
+
+        {sent ? (
+          <div className="px-6 py-10 text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-emerald-600 dark:text-emerald-400">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-slate-800 dark:text-white">Message sent!</p>
+            <p className="text-xs text-slate-400 dark:text-white/40 mt-1">Email delivered to {target.email}</p>
+            <button onClick={onClose} className="mt-5 px-4 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white/70 text-sm rounded-lg transition-colors">
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            {/* Subject */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Subject</label>
+              <input
+                ref={subjectRef}
+                type="text"
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                placeholder="e.g. Important update about your account"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+            </div>
+
+            {/* Message */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Message</label>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Write your message here…"
+                rows={7}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-500 dark:text-red-400">{error}</p>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-slate-600 dark:text-white/50 hover:text-slate-800 dark:hover:text-white/80 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !subject.trim() || !message.trim()}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                {sending ? (
+                  <>
+                    <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    </svg>
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
+                    </svg>
+                    Send
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Users Page ────────────────────────────────────────────────────────────────
+
 function UsersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [users, setUsers]   = useState<User[]>([]);
   const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
+  const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(null);
 
   const page   = parseInt(searchParams.get("page")   ?? "1");
   const search = searchParams.get("search") ?? "";
