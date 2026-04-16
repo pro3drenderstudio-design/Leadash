@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       .from("workspaces")
       .select("owner_id")
       .not("owner_id", "is", null);
-    const activeIds = new Set((wsRows ?? []).map(r => r.owner_id));
+    const activeIds = new Set((wsRows ?? []).map((r: { owner_id: string }) => r.owner_id));
     recipients = recipients.filter(r => activeIds.has(r.id));
   }
 
