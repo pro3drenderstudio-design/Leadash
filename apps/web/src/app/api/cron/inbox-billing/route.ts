@@ -53,10 +53,28 @@ export async function GET(req: NextRequest) {
         .update({ inbox_next_billing_date: nextBillingDate })
         .eq("id", domain.id);
 
+      // Notify user of successful charge
+      const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
+      sendInboxPaymentSuccess({
+        userEmail: domain.paystack_billing_email as string,
+        domain: domain.domain,
+        amountNgn,
+        nextBillingDate,
+      }).catch(e => console.error("[inbox-billing] success email failed:", e));
+
       results.push({ domain: domain.domain, status, reference });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[inbox-billing] charge failed for ${domain.domain}:`, msg);
+
+      // Notify user of failed charge
+      const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
+      sendInboxPaymentFailed({
+        userEmail: domain.paystack_billing_email as string,
+        domain: domain.domain,
+        amountNgn,
+        errorMessage: msg,
+      }).catch(e => console.error("[inbox-billing] failure email failed:", e));
 
       // If the charge fails (card declined etc.), mark inboxes as suspended
       // after 3 days of non-payment (give a grace period).
