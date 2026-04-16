@@ -252,8 +252,38 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     load();
   }
 
+  const isOverPool   = poolMax > 0 && poolUsed > poolMax;
+  const isAtPool     = poolMax > 0 && !isOverPool && poolUsed >= poolMax;
+  const poolPct      = poolMax > 0 ? Math.min(100, Math.round((poolUsed / poolMax) * 100)) : 0;
+  const poolBarColor = isOverPool ? "bg-red-500" : poolPct >= 90 ? "bg-amber-500" : "bg-orange-500";
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+
+      {/* Pool overage banner — shown when plan was downgraded below current usage */}
+      {isOverPool && (
+        <div className="mb-6 bg-red-500/8 border border-red-500/25 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-red-300 text-sm font-semibold">
+              Leads pool over plan limit ({poolUsed.toLocaleString()} / {poolMax.toLocaleString()})
+            </p>
+            <p className="text-white/40 text-xs mt-0.5">
+              Your plan was likely downgraded. Your existing leads are safe and still usable in sequences —
+              but you cannot add new leads until you are under the {poolMax.toLocaleString()} lead limit.
+              Delete unused lists/leads or upgrade your plan.
+            </p>
+          </div>
+          <Link
+            href="/settings?tab=billing"
+            className="flex-shrink-0 px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+          >
+            Upgrade →
+          </Link>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
@@ -267,6 +297,19 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
               </span>
             )}
           </p>
+          {/* Pool usage bar */}
+          {poolMax > 0 && (
+            <div className="mt-2.5 flex items-center gap-2.5">
+              <div className="w-32 h-1.5 bg-white/8 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${poolBarColor}`} style={{ width: `${poolPct}%` }} />
+              </div>
+              <span className={`text-xs font-medium ${isOverPool ? "text-red-400" : isAtPool ? "text-amber-400" : "text-white/35"}`}>
+                {poolUsed.toLocaleString()} / {poolMax.toLocaleString()} leads
+                {isOverPool && " · over limit"}
+                {isAtPool && " · at limit"}
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={() => setShowCreate(!showCreate)}
