@@ -228,34 +228,6 @@ export default async function DashboardPage() {
             <DashboardChart data={stats.chartData} />
           </div>
 
-          {/* Monthly quota */}
-          <div className="rounded-xl p-5" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-sm font-semibold text-white">Monthly Send Quota</h2>
-                <p className="text-white/35 text-xs mt-0.5">Resets on the 1st of each month</p>
-              </div>
-              <div className="text-right">
-                <span className="text-sm font-bold text-white">{workspace.sends_this_month.toLocaleString()}</span>
-                <span className="text-white/25 text-sm"> / {workspace.max_monthly_sends.toLocaleString()}</span>
-              </div>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--card-icon-bg)" }}>
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${Math.max(sendUsagePct, 1)}%`,
-                  background: sendUsagePct > 85
-                    ? "linear-gradient(90deg, #ef4444, #f87171)"
-                    : "linear-gradient(90deg, #3b82f6, #8b5cf6)",
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-white/25">{sendUsagePct}% used</p>
-              <p className="text-xs text-white/25">{(workspace.max_monthly_sends - workspace.sends_this_month).toLocaleString()} remaining</p>
-            </div>
-          </div>
         </div>
 
         {/* Right: Recent Activity */}
