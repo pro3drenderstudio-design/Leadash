@@ -151,6 +151,20 @@ export const sendTestEmail = (opts: {
   body_template: string; lead_id?: string;
 }) => post<{ ok: boolean; message?: string; error?: string }>(`${base}/inboxes/${opts.inbox_id}/test`, opts);
 
+export const checkInboxDns = (inboxId: string) =>
+  get<{
+    domain: string;
+    checks: {
+      spf:   { pass: boolean; record?: string; detail: string };
+      dmarc: { pass: boolean; record?: string; detail: string };
+      dkim:  { pass: boolean; selector?: string; detail: string };
+      mx:    { pass: boolean; records?: string[]; detail: string };
+    };
+    score: number;
+    max_score: number;
+    error?: string;
+  }>(`${base}/inboxes/${inboxId}/dns-check`);
+
 export const generateSequence = (opts: {
   product_name: string; target_audience: string; value_prop: string;
   tone?: string; num_emails?: number; wait_days_between?: number;
