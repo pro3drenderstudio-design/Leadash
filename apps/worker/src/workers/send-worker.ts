@@ -14,17 +14,18 @@ export interface SendJobData {
 export async function processSend(job: Job<SendJobData>) {
   const { workspace_id, batch_limit } = job.data;
 
-  // Dynamic import to share code with web app (monorepo path alias)
-  const { runSendBatch } = await import("../../web/src/lib/outreach/send-runner");
+  const { runSendBatch } = await import("../../../web/src/lib/outreach/send-runner");
   const result = await runSendBatch(workspace_id, batch_limit, 2_000, 8_000);
 
   console.log(`[send] ws=${workspace_id} processed=${result.processed} sent=${result.sent} errors=${result.errors}`);
 
   if (result.sent > 0) {
-    const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-    await db.from("workspaces")
-      .update({ sends_this_month: db.rpc("increment_sends", { ws_id: workspace_id, amount: result.sent }) })
-      .eq("id", workspace_id);
+    const db = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    // Increment monthly send counter atomically
+    await db.rpc("increment_sends_this_month", { ws_id: workspace_id, amount: result.sent });
   }
 
   return result;
