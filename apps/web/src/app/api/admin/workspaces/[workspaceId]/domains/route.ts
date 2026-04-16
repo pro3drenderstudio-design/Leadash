@@ -48,7 +48,7 @@ export async function GET(
   }
 
   return NextResponse.json({
-    domains: (domains ?? []).map(d => ({
+    domains: (domains ?? []).map((d: { id: string }) => ({
       ...d,
       inboxes: inboxMap.get(d.id) ?? [],
     })),
