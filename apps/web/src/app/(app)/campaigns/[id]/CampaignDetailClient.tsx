@@ -171,12 +171,17 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [triggerResult, setTriggerResult] = useState<string | null>(null);
 
   // Test email
-  const [testStepIdx, setTestStepIdx] = useState<number | null>(null);
-  const [testInboxId, setTestInboxId] = useState("");
-  const [testToEmail, setTestToEmail] = useState("");
-  const [testLeadId, setTestLeadId]   = useState("");
-  const [testSending, setTestSending] = useState(false);
-  const [testResult, setTestResult]   = useState<string | null>(null);
+  const [testStepIdx, setTestStepIdx]         = useState<number | null>(null);
+  const [testInboxId, setTestInboxId]         = useState("");
+  const [testInboxOpen, setTestInboxOpen]     = useState(false);
+  const [testToEmail, setTestToEmail]         = useState("");
+  const [testSending, setTestSending]         = useState(false);
+  const [testResult, setTestResult]           = useState<string | null>(null);
+  const [testSampleLeads, setTestSampleLeads] = useState<CampaignEnrollmentRow[]>([]);
+  const [testSampleIdx, setTestSampleIdx]     = useState<number>(-1); // -1 = use fallback sample
+  const [testPreviewTab, setTestPreviewTab]   = useState<"preview" | "plain">("preview");
+  const [testDns, setTestDns]                 = useState<Awaited<ReturnType<typeof checkInboxDns>> | null>(null);
+  const [testDnsLoading, setTestDnsLoading]   = useState(false);
 
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); }
