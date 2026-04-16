@@ -172,7 +172,7 @@ export default function BetaPage() {
                 )}
 
                 <button
-                  type="submit" disabled={loading || !name}
+                  type="submit" disabled={loading || !name || !email}
                   className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
                 >
                   {loading ? (
