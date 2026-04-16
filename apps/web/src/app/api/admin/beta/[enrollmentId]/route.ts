@@ -91,5 +91,15 @@ export async function PATCH(
     }
   }
 
+  // Fire-and-forget decision email
+  if (enrollment.email) {
+    sendBetaDecisionEmail({
+      userEmail:  enrollment.email,
+      userName:   (enrollment as { name?: string | null }).name ?? null,
+      approved:   action === "approve",
+      reviewNote: review_note ?? null,
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ ok: true });
 }
