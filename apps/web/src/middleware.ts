@@ -53,6 +53,14 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // ── Auth code on root — redirect to proper callback ──────────────────────────
+  // Happens when Supabase Site URL is set without the /api/auth/callback path
+  if (pathname === "/" && request.nextUrl.searchParams.has("code")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/api/auth/callback";
+    return NextResponse.redirect(url);
+  }
+
   // ── Admin route guard ────────────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
     if (!user) {
