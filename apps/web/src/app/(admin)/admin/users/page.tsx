@@ -177,6 +177,134 @@ function SendMessageModal({ target, onClose }: { target: MessageTarget; onClose:
   );
 }
 
+// ── Create Ticket Modal ───────────────────────────────────────────────────────
+
+const TICKET_CATEGORIES = [
+  { value: "billing",         label: "Billing" },
+  { value: "technical",       label: "Technical" },
+  { value: "feature_request", label: "Feature Request" },
+  { value: "bug",             label: "Bug Report" },
+  { value: "general",         label: "General" },
+];
+const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+function CreateTicketModal({ target, onClose }: { target: MessageTarget; onClose: () => void }) {
+  const [subject,  setSubject]  = useState("");
+  const [message,  setMessage]  = useState("");
+  const [category, setCategory] = useState("general");
+  const [priority, setPriority] = useState<"low"|"medium"|"high"|"urgent">("medium");
+  const [saving, setSaving]     = useState(false);
+  const [done,   setDone]       = useState(false);
+  const [error,  setError]      = useState<string | null>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { subjectRef.current?.focus(); }, []);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  async function handleCreate() {
+    if (!subject.trim() || !message.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/support", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ user_id: target.id, subject: subject.trim(), message: message.trim(), category, priority }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to create ticket."); return; }
+      setDone(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-white/10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Create Ticket</h2>
+            <p className="text-xs text-slate-400 dark:text-white/40 mt-0.5">
+              For: <span className="text-slate-600 dark:text-white/60">{target.name ? `${target.name} <${target.email}>` : target.email}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+            </svg>
+          </button>
+        </div>
+
+        {done ? (
+          <div className="px-6 py-10 text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-emerald-600 dark:text-emerald-400">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-slate-800 dark:text-white">Ticket created!</p>
+            <p className="text-xs text-slate-400 dark:text-white/40 mt-1">User and admins have been notified by email.</p>
+            <button onClick={onClose} className="mt-5 px-4 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white/70 text-sm rounded-lg transition-colors">
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Category</label>
+                <select value={category} onChange={e => setCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+                  {TICKET_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Priority</label>
+                <select value={priority} onChange={e => setPriority(e.target.value as typeof priority)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+                  {TICKET_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Subject</label>
+              <input ref={subjectRef} type="text" value={subject} onChange={e => setSubject(e.target.value)}
+                placeholder="Brief description of the issue"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Message</label>
+              <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6}
+                placeholder="Describe the issue or reason for opening this ticket…"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none" />
+            </div>
+            {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-white/50 hover:text-slate-800 dark:hover:text-white/80 transition-colors">Cancel</button>
+              <button onClick={handleCreate} disabled={saving || !subject.trim() || !message.trim()}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+                {saving ? (
+                  <><svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Creating…</>
+                ) : (
+                  <><svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-1.5 0a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0zM10 6.5a.75.75 0 01.75.75v2.25h2.25a.75.75 0 010 1.5h-2.25v2.25a.75.75 0 01-1.5 0v-2.25H7a.75.75 0 010-1.5h2.25V7.25A.75.75 0 0110 6.5z" clipRule="evenodd"/></svg>Create Ticket</>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Users Page ────────────────────────────────────────────────────────────────
 
 function UsersPageInner() {
@@ -186,6 +314,7 @@ function UsersPageInner() {
   const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(null);
+  const [ticketTarget, setTicketTarget]   = useState<MessageTarget | null>(null);
 
   const page   = parseInt(searchParams.get("page")   ?? "1");
   const search = searchParams.get("search") ?? "";
