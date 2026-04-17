@@ -603,7 +603,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
       </div> {/* end left column */}
 
       {/* ── Right column ── */}
-      <div className="xl:w-[380px] shrink-0 space-y-6">
+      <div className="lg:w-[360px] shrink-0 space-y-6">
 
       {/* Payment History */}
       <Section title="Payment History" description="Plans, credits, domains & renewals.">
