@@ -123,6 +123,8 @@ export const updateCrmStatus  = (enrollmentId: string, crm_status: string) =>
   patch(`${base}/crm/${enrollmentId}`, { crm_status });
 export const getCrmUnmatched  = () =>
   get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/unmatched`);
+export const getCrmWarmup     = () =>
+  get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/warmup`);
 export const getCrmFilters    = ()                                         => get<OutreachCrmFilter[]>(`${base}/crm/filters`);
 export const createCrmFilter  = (d: Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">) => post<OutreachCrmFilter>(`${base}/crm/filters`, d);
 export const deleteCrmFilter  = (id: string)                              => del(`${base}/crm/filters`, { id });
