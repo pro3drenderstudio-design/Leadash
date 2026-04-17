@@ -33,10 +33,12 @@ export async function GET(req: NextRequest) {
 
   // Enrich with user data
   const { data: { users: allUsers } } = await db.auth.admin.listUsers({ perPage: 1000 });
-  const userMap = new Map(allUsers.map((u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) => [
-    u.id,
-    { email: u.email ?? "", name: (u.user_metadata?.full_name as string | undefined) ?? null },
-  ]));
+  const userMap = new Map<string, { email: string; name: string | null }>(
+    allUsers.map((u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) => [
+      u.id,
+      { email: u.email ?? "", name: (u.user_metadata?.full_name as string | undefined) ?? null },
+    ])
+  );
 
   const enriched = (admins ?? []).map((a: { user_id: string; role: string; added_at: string }) => ({
     ...a,
