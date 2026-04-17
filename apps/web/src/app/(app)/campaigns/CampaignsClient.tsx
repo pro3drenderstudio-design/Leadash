@@ -18,6 +18,8 @@ export default function CampaignsClient() {
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all");
+  const [cloning, setCloning]     = useState<string | null>(null);
+  const [cloneError, setCloneError] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
