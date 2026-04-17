@@ -323,7 +323,7 @@ type Transaction = { id: string; type: string; amount: number; description: stri
 
 const TX_PAGE_SIZE = 10;
 
-function BillingTab({ paymentSuccess, paidPlanId }: { paymentSuccess?: boolean; paidPlanId?: string }) {
+function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string }) {
   const [planId, setPlanId]         = useState("free");
   const [plans, setPlans]           = useState<PlanConfig[]>([]);
   const [balance, setBalance]       = useState(0);
