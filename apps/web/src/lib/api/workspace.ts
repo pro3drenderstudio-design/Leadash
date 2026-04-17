@@ -10,7 +10,10 @@ export async function requireWorkspace(req: Request): Promise<
   | { ok: false; res: NextResponse }
 > {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // getSession() reads the JWT locally — no Supabase auth server round-trip.
+  // Workspace membership is still verified against the DB below.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
   if (!user) return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
   // Workspace id from header (set by middleware / client)
