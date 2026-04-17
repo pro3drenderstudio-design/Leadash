@@ -447,6 +447,16 @@ function UsersPageInner() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-3">
                       <button
+                        onClick={() => setTicketTarget({ id: u.id, email: u.email, name: u.name })}
+                        title="Create support ticket for this user"
+                        className="text-xs text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
+                      >
+                        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                          <path d="M5.5 3.5A1.5 1.5 0 0 1 7 2h2a1.5 1.5 0 0 1 1.5 1.5V4h.5A1.5 1.5 0 0 1 12.5 5.5v7A1.5 1.5 0 0 1 11 14H5a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 5 4h.5v-.5Zm1.5 0V4H9v-.5a.5.5 0 0 0-.5-.5H7.5a.5.5 0 0 0-.5.5ZM8 7.5a.5.5 0 0 0-1 0v1.5H5.5a.5.5 0 0 0 0 1H7v1.5a.5.5 0 0 0 1 0V10h1.5a.5.5 0 0 0 0-1H8V7.5Z"/>
+                        </svg>
+                        Ticket
+                      </button>
+                      <button
                         onClick={() => setMessageTarget({ id: u.id, email: u.email, name: u.name })}
                         title="Send email message"
                         className="text-xs text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
