@@ -15,10 +15,15 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ userI
   if (error || !target?.email) return NextResponse.json({ error: "User not found" }, { status: 404 });
   if (target.id === adminUser.id) return NextResponse.json({ error: "Cannot impersonate yourself" }, { status: 400 });
 
-  // Generate a magic link for the target user
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
+
+  // Generate a magic link for the target user, redirecting to their dashboard
   const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
     type: "magiclink",
     email: target.email,
+    options: {
+      redirectTo: `${APP_URL}/dashboard`,
+    },
   });
   if (linkErr || !linkData?.properties?.action_link) {
     return NextResponse.json({ error: linkErr?.message ?? "Failed to generate link" }, { status: 500 });
