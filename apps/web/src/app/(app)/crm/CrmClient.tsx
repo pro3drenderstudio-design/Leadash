@@ -326,6 +326,10 @@ export default function CrmClient() {
       setUnmatchedLoading(true);
       getCrmUnmatched().then((d) => { setUnmatched(d); setUnmatchedLoading(false); });
     }
+    if (mainTab === "warmup" && warmup.length === 0) {
+      setWarmupLoading(true);
+      getCrmWarmup().then((d) => { setWarmup(d); setWarmupLoading(false); });
+    }
   }, [mainTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load filters ──────────────────────────────────────────────────────────
