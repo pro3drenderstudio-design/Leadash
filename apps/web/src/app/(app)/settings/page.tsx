@@ -500,6 +500,29 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
           </div>
         </div>
       )}
+      {creditVerifying && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-amber-400 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <div>
+            <p className="text-amber-300 font-semibold text-sm">Payment received!</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">Adding your credits — just a moment…</p>
+          </div>
+        </div>
+      )}
+      {creditActivated && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <div>
+            <p className="text-emerald-300 font-semibold text-sm">{grantedCredits > 0 ? `${grantedCredits.toLocaleString()} credits added!` : "Credits confirmed!"}</p>
+            <p className="text-emerald-400/70 text-xs mt-0.5">Your new balance is {balance.toLocaleString()} credits.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Plan selection — full width ── */}
       <Section title="Plans">
