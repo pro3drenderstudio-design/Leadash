@@ -74,6 +74,14 @@ export default function CampaignsClient() {
         </Link>
       </div>
 
+      {/* Clone error */}
+      {cloneError && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+          <span>{cloneError}</span>
+          <button onClick={() => setCloneError(null)} className="text-red-400/60 hover:text-red-400 transition-colors">✕</button>
+        </div>
+      )}
+
       {/* Search + Status Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <input
