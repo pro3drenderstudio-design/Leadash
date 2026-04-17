@@ -1094,6 +1094,72 @@ export default function CrmClient() {
         </div>
       )}
 
+      {/* ── WARMUP TAB ───────────────────────────────────────────────────────── */}
+      {mainTab === "warmup" && (
+        <div className="flex flex-1 overflow-hidden">
+          {/* List */}
+          <div className="w-80 flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/8 flex-shrink-0">
+              <p className="text-white/70 text-sm font-semibold">Warmup Emails</p>
+              <p className="text-white/35 text-xs mt-0.5">Inbox-warming traffic between paired inboxes</p>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+              {warmupLoading ? (
+                [1,2,3].map((i) => <div key={i} className="h-16 bg-white/4 m-3 rounded-xl animate-pulse" />)
+              ) : warmup.length === 0 ? (
+                <div className="text-center py-16 text-white/30 px-6">
+                  <div className="text-3xl mb-3">🔥</div>
+                  <p className="text-sm">No warmup emails</p>
+                  <p className="text-xs mt-1 text-white/20">Warmup traffic will appear here once inboxes are active</p>
+                </div>
+              ) : warmup.map((w) => (
+                <button
+                  key={w.id}
+                  onClick={() => setSelectedWarmup(w)}
+                  className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selectedWarmup?.id === w.id ? "bg-blue-500/8 border-r-2 border-blue-500" : ""}`}
+                >
+                  <p className="text-white text-sm font-medium truncate">{w.from_name || w.from_email}</p>
+                  <p className="text-white/40 text-xs truncate">{w.from_email}</p>
+                  <p className="text-white/30 text-xs truncate mt-0.5">{w.subject ?? "(no subject)"}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-white/20 text-[10px]">{w.inbox?.label || w.inbox?.email_address || "unknown inbox"}</p>
+                    <p className="text-white/20 text-[10px]">{timeAgo(w.received_at)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Detail pane */}
+          {selectedWarmup ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-shrink-0 px-6 py-4 border-b border-white/8 bg-white/2">
+                <p className="text-white font-semibold">{selectedWarmup.from_name || selectedWarmup.from_email}</p>
+                <p className="text-white/40 text-xs">{selectedWarmup.from_email}</p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <p className="text-white/50 text-xs mb-1 font-medium">{selectedWarmup.subject ?? "(no subject)"}</p>
+                <p className="text-white/25 text-xs mb-4">
+                  {new Date(selectedWarmup.received_at).toLocaleString()} · via {selectedWarmup.inbox?.email_address ?? "unknown"}
+                </p>
+                <div className="bg-white/4 border border-white/8 rounded-xl p-5">
+                  <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                    {selectedWarmup.body_text || "(No body captured)"}
+                  </pre>
+                </div>
+                <div className="mt-4 px-3 py-2.5 bg-blue-500/8 border border-blue-500/20 rounded-xl text-xs text-blue-300/70">
+                  This is a warmup email — it helps build inbox reputation and is not a real lead reply.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-white/20">
+              <div className="text-center"><div className="text-4xl mb-3">←</div><p className="text-sm">Select a warmup email</p></div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── FILTERS TAB ──────────────────────────────────────────────────────── */}
       {mainTab === "filters" && (
         <div className="flex-1 overflow-y-auto p-6 max-w-2xl">
