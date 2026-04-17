@@ -120,7 +120,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
             ticketId:     ticketId,
           });
         }
-      } catch { /* non-fatal */ }
+      } catch (e) { console.error("[admin/support reply notify]", e); }
     })();
   }
 
