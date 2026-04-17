@@ -1,10 +1,12 @@
 /**
  * Transactional notification emails for support tickets and beta programme.
- * Uses Resend — requires RESEND_API_KEY and RESEND_FROM_EMAIL env vars.
+ * Primary: Postal/SMTP VPS (POSTAL_HOST env var).
+ * Fallback: Resend API (RESEND_API_KEY env var).
  */
+import nodemailer from "nodemailer";
 
-const FROM = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.io";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.io";
+const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 async function sendEmail(opts: {
   to: string;
@@ -13,8 +15,35 @@ async function sendEmail(opts: {
   html: string;
   text: string;
 }): Promise<void> {
+  const postalHost = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
+
+  if (postalHost) {
+    // ── Send via Postal / generic SMTP ────────────────────────────────────────
+    const transporter = nodemailer.createTransport({
+      host: postalHost,
+      port: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10),
+      secure: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10) === 465,
+      auth: {
+        user: process.env.POSTAL_USER ?? process.env.SMTP_USER ?? "",
+        pass: process.env.POSTAL_PASS ?? process.env.SMTP_PASS ?? "",
+      },
+      tls: { rejectUnauthorized: false },
+    });
+
+    await transporter.sendMail({
+      from:     `Leadash <${FROM}>`,
+      to:       opts.to,
+      replyTo:  opts.replyTo,
+      subject:  opts.subject,
+      html:     opts.html,
+      text:     opts.text,
+    });
+    return;
+  }
+
+  // ── Fallback: Resend API ───────────────────────────────────────────────────
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+  if (!apiKey) throw new Error("No email transport configured: set POSTAL_HOST or RESEND_API_KEY");
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -23,12 +52,12 @@ async function sendEmail(opts: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `Leadash Support <${FROM}>`,
-      to: [opts.to],
+      from:     `Leadash <${FROM}>`,
+      to:       [opts.to],
       reply_to: opts.replyTo,
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
+      subject:  opts.subject,
+      html:     opts.html,
+      text:     opts.text,
     }),
   });
 
