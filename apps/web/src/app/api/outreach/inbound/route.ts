@@ -226,6 +226,36 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Warmup detection ──────────────────────────────────────────────────────────
+  // Tag as warmup if:
+  //  a) The sender is one of our own registered inboxes (cross-workspace warmup pair), OR
+  //  b) The in_reply_to/references chain matches a warmup send message_id
+  let isWarmup = false;
+
+  if (!enrollmentId) {
+    // (a) sender is a Leadash inbox
+    const { data: senderInbox } = await db
+      .from("outreach_inboxes")
+      .select("id")
+      .eq("email_address", from)
+      .limit(1)
+      .maybeSingle();
+
+    if (senderInbox) {
+      isWarmup = true;
+    } else if (referencedIds.length > 0) {
+      // (b) reply thread matches a warmup send
+      const { data: warmupSend } = await db
+        .from("outreach_warmup_sends")
+        .select("id")
+        .in("message_id", referencedIds)
+        .limit(1)
+        .maybeSingle();
+
+      if (warmupSend) isWarmup = true;
+    }
+  }
+
   // ── Store reply ───────────────────────────────────────────────────────────────
   // Return 500 on insert failure so Postal retries delivery — avoids silently
   // dropping a reply while leaving the enrollment in a stale state.
@@ -240,6 +270,7 @@ export async function POST(req: NextRequest) {
     message_id:    messageId,
     received_at:   receivedAt,
     is_filtered:   isFiltered,
+    is_warmup:     isWarmup,
     ai_category:   null,
     ai_confidence: null,
   });
