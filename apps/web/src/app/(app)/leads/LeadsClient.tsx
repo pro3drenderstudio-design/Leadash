@@ -547,6 +547,38 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
           ))}
         </div>
       )}
+
+      {/* Upgrade modal — shown when import is blocked by plan limits */}
+      {upgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setUpgradeModal(null)}>
+          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h2 className="text-white font-bold text-lg mb-2">{upgradeModal.title}</h2>
+            <p className="text-white/50 text-sm leading-relaxed mb-6">{upgradeModal.message}</p>
+            <div className="flex gap-3">
+              <Link
+                href="/settings?tab=billing"
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl text-center transition-colors"
+                onClick={() => setUpgradeModal(null)}
+              >
+                Upgrade plan →
+              </Link>
+              <button
+                onClick={() => setUpgradeModal(null)}
+                className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
