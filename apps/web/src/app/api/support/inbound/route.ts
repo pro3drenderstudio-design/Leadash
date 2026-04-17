@@ -57,11 +57,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Extract fields — handles both Resend and generic webhook formats
-  const to   = (payload.to   ?? payload.ToFull ?? payload.recipients ?? "") as string | string[];
-  const from = (payload.from ?? payload.From   ?? payload.sender     ?? "") as string;
+  // Extract fields — handles Postal (rcpt_to/mail_from/plain_body) and Resend formats
+  const to   = (payload.rcpt_to ?? payload.to ?? payload.ToFull ?? payload.recipients ?? "") as string | string[];
+  const from = (payload.mail_from ?? payload.from ?? payload.From ?? payload.sender ?? "") as string;
   const subject = (payload.subject ?? payload.Subject ?? "") as string;
-  const textBody = (payload.text  ?? payload.TextBody ?? payload.body_text ?? "") as string;
+  const textBody = (payload.plain_body ?? payload.text ?? payload.TextBody ?? payload.body_text ?? "") as string;
 
   const ticketId = extractTicketId(to);
   if (!ticketId) {
