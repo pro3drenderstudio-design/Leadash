@@ -7,6 +7,7 @@ import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings
 import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/pool-quota";
+import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
 
 const WARMUP_DAYS = 21;
 
