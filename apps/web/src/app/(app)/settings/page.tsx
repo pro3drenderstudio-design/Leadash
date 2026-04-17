@@ -343,11 +343,13 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
       wsGet<{ plan_id: string }>("/api/settings/profile"),
       wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits"),
       fetch("/api/billing/plans").then(r => r.json()) as Promise<{ plans: PlanConfig[] }>,
-    ]).then(([profile, credits, plansData]) => {
+      wsGet<Invoice[]>("/api/billing/invoices").catch(() => [] as Invoice[]),
+    ]).then(([profile, credits, plansData, invData]) => {
       setPlanId(profile.plan_id ?? "free");
       setBalance(credits.balance ?? 0);
       setTx(credits.transactions ?? []);
       setPlans(plansData.plans ?? []);
+      setInvoices(invData ?? []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
