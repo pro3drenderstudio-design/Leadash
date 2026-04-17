@@ -459,6 +459,22 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     }
   }
 
+  const [canceling, setCanceling] = useState(false);
+
+  async function handleCancelSubscription() {
+    if (!confirm("Cancel your subscription? Your plan stays active until the end of the billing period, then downgrades to Free.")) return;
+    setCanceling(true);
+    try {
+      await wsPost("/api/billing/cancel", {});
+      setPlanStatus("canceled");
+      alert("Subscription canceled. Your plan remains active until the end of the billing period.");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Cancellation failed. Please contact support.");
+    } finally {
+      setCanceling(false);
+    }
+  }
+
   const currentPlan    = plans.find(p => p.plan_id === planId) ?? plans.find(p => p.plan_id === "free");
   const [invPage, setInvPage]         = useState(0);
   const INV_PAGE_SIZE                  = 8;
