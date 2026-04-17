@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Silently claim any approved beta enrollment linked to this email (no account at apply-time)
   claimBetaIfApproved(user.id, user.email ?? "", ctx.workspaceId).catch(() => {});
 
-  const workspace = ctx.workspace as { name: string; plan_id: string; trial_ends_at: string | null };
+  const workspace = ctx.workspace as { name: string; plan_id: string; plan_status: string; trial_ends_at: string | null; grace_ends_at: string | null };
   const userName  = (user.user_metadata?.full_name as string | null) ?? null;
 
   return (
