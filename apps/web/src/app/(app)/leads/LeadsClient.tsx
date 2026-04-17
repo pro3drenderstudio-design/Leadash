@@ -131,6 +131,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [validOnly, setValidOnly]     = useState(true);
   const [campImporting, setCampImporting] = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
 
   useEffect(() => { load(); }, []);
 
