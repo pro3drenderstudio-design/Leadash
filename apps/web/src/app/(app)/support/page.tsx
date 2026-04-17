@@ -304,6 +304,7 @@ export default function SupportPage() {
         wsId={wsId()}
         onBack={() => { setView("list"); setSelectedTicket(null); }}
         onTicketUpdate={updated => setSelectedTicket(updated)}
+        onNewTicket={() => { setSelectedTicket(null); setView("new"); }}
       />
     );
   }
