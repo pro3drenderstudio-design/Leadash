@@ -405,7 +405,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
     try {
-      const data = await wsPost<{ url?: string }>("/api/lead-campaigns/credits/purchase", { pack_id: packId });
+      const callbackUrl = `${window.location.origin}/settings?tab=billing&credit_purchase=success`;
+      const data = await wsPost<{ url?: string }>("/api/lead-campaigns/credits/purchase", { pack_id: packId, callback_url: callbackUrl });
       if (data.url) window.location.href = data.url;
       else { alert("Purchase failed"); setPurchasing(null); }
     } catch (e) {
