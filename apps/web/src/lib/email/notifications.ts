@@ -15,29 +15,31 @@ async function sendEmail(opts: {
 }): Promise<void> {
   const postalHost = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
 
-  if (postalHost) {
-    // ── Send via Postal / generic SMTP ────────────────────────────────────────
-    const nodemailerMod = await import("nodemailer");
-    const nodemailer = nodemailerMod.default ?? nodemailerMod;
-    const transporter = (nodemailer as typeof import("nodemailer")).createTransport({
-      host: postalHost,
-      port: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10),
-      secure: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10) === 465,
-      auth: {
-        user: process.env.POSTAL_USER ?? process.env.SMTP_USER ?? "",
-        pass: process.env.POSTAL_PASS ?? process.env.SMTP_PASS ?? "",
+  const postalApiKey = process.env.POSTAL_API_KEY;
+  if (postalHost && postalApiKey) {
+    // ── Send via Postal HTTP API (SMTP is blocked by Vercel) ─────────────────
+    const payload: Record<string, unknown> = {
+      from:       `Leadash <${FROM}>`,
+      to:         [opts.to],
+      subject:    opts.subject,
+      html_body:  opts.html,
+      plain_body: opts.text,
+    };
+    if (opts.replyTo) payload.reply_to = opts.replyTo;
+
+    const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
+      method:  "POST",
+      headers: {
+        "X-Server-API-Key": postalApiKey,
+        "Content-Type":     "application/json",
       },
-      tls: { rejectUnauthorized: false },
+      body: JSON.stringify(payload),
     });
 
-    await transporter.sendMail({
-      from:     `Leadash <${FROM}>`,
-      to:       opts.to,
-      replyTo:  opts.replyTo,
-      subject:  opts.subject,
-      html:     opts.html,
-      text:     opts.text,
-    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Postal API error ${res.status}: ${body}`);
+    }
     return;
   }
 
