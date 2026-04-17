@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       email:       workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
       amountKobo:  plan.price_ngn * 100,
       planCode:    planCode,
-      callbackUrl: `${origin}/settings?billing=success&plan=${plan.plan_id}`,
+      callbackUrl: `${origin}/settings?tab=billing&billing=success&plan=${plan.plan_id}`,
       metadata: {
         workspace_id: workspaceId,
         plan_id:      plan.plan_id,
