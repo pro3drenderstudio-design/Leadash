@@ -36,6 +36,16 @@ export async function GET(req: NextRequest) {
 
   const { data: { session }, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
 
+  // Audit log exit — non-fatal
+  if (adminId && session?.user?.id) {
+    const adminDb = createAdminClient();
+    adminDb.from("admin_impersonation_logs").insert({
+      admin_id:  adminId,
+      target_id: session.user.id,
+      action:    "exit",
+    }).then(() => null).catch(() => null);
+  }
+
   const res = NextResponse.redirect(new URL("/admin", req.url));
   clearCookies(res);
 
