@@ -376,40 +376,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // ── Subscription disabled — downgrade to free ─────────────────────────────────
-  if (event.event === "subscription.disable" || event.event === "invoice.payment_failed") {
-    const data = event.data as {
-      subscription_code?: string;
-    };
+  // ── Payment failed — enter 3-day grace period ────────────────────────────────
+  if (event.event === "invoice.payment_failed") {
+    const data = event.data as { subscription_code?: string };
     const subCode = data.subscription_code;
     if (subCode) {
-      const freePlan = await getPlanById("free");
-      const { data: updatedWs } = await db
+      const graceEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: ws } = await db
         .from("workspaces")
         .update({
-          plan_id:           "free",
-          plan_status:       "canceled",
-          paystack_sub_code: null,
-          max_inboxes:       freePlan.max_inboxes,
-          max_monthly_sends: freePlan.max_monthly_sends,
-          max_seats:         freePlan.max_seats,
-          updated_at:        new Date().toISOString(),
+          plan_status:  "past_due",
+          grace_ends_at: graceEndsAt,
+          updated_at:   new Date().toISOString(),
         })
         .eq("paystack_sub_code", subCode)
         .select("id")
         .maybeSingle();
 
-      // Free plan has pool quota 0 — any existing leads are over-limit.
-      // Pause all active campaigns. Leads are preserved but additions blocked until resubscription.
-      if (updatedWs?.id) {
-        const quota = await getPoolQuotaStatus(db, updatedWs.id);
-        if (quota.used > 0) {
-          const paused = await pauseCampaignsForPoolOverage(db, updatedWs.id);
-          console.warn(
-            `[billing] Subscription disabled: workspace=${updatedWs.id} has ${quota.used} outreach leads ` +
-            `over free-plan quota (0). Campaigns paused: ${paused}. Leads preserved until resubscription.`,
-          );
-        }
+      // Pause active campaigns immediately — restored if payment comes through
+      if (ws?.id) {
+        const paused = await pauseCampaignsForPoolOverage(db, ws.id);
+        console.warn(`[billing] Payment failed: workspace=${ws.id} grace_ends_at=${graceEndsAt} campaigns_paused=${paused}`);
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
+
+  // ── Subscription fully disabled — immediate downgrade (Paystack exhausted retries) ──
+  if (event.event === "subscription.disable") {
+    const data = event.data as { subscription_code?: string };
+    const subCode = data.subscription_code;
+    if (subCode) {
+      const { data: ws } = await db
+        .from("workspaces")
+        .select("id")
+        .eq("paystack_sub_code", subCode)
+        .maybeSingle();
+
+      if (ws?.id) {
+        const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "subscription_disabled");
+        console.warn(`[billing] Subscription disabled: workspace=${ws.id} campaigns_paused=${paused} credits_expired=${creditsExpired}`);
       }
     }
     return NextResponse.json({ received: true });
