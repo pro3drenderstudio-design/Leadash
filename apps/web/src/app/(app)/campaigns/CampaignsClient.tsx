@@ -41,8 +41,16 @@ export default function CampaignsClient() {
   }
 
   async function handleClone(c: OutreachCampaign) {
-    await cloneCampaign(c.id);
-    load();
+    setCloning(c.id);
+    setCloneError(null);
+    try {
+      await cloneCampaign(c.id);
+      await load();
+    } catch {
+      setCloneError(`Failed to clone "${c.name}". Please try again.`);
+    } finally {
+      setCloning(null);
+    }
   }
 
   const filtered = campaigns.filter(c => {
