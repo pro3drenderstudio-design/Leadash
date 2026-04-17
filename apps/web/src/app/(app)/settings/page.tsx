@@ -566,6 +566,49 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
         </div>
       </div>
 
+      {/* Payment invoices */}
+      <Section title="Payment History" description="All charges for plans, credits, domains, and inbox renewals.">
+        {invoices.length === 0 ? (
+          <p className="text-white/25 text-sm text-center py-4">No payments yet.</p>
+        ) : (
+          <div className="divide-y divide-white/6">
+            {invoices.map(inv => {
+              const amountNgn = inv.amount_kobo / 100;
+              const fmtAmt    = isNgn
+                ? `₦${amountNgn.toLocaleString("en-NG")}`
+                : `$${(amountNgn / 1600).toFixed(2)}`;
+              return (
+                <div key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <div className="w-8 h-8 rounded-lg bg-white/6 flex items-center justify-center text-sm flex-shrink-0">
+                    {INVOICE_TYPE_ICONS[inv.type] ?? "💰"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white/80 text-sm font-medium truncate">{inv.description}</p>
+                    <p className="text-white/35 text-xs mt-0.5">
+                      {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
+                      {" · "}
+                      {new Date(inv.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {inv.amount_kobo > 0 && (
+                      <p className="text-white font-semibold text-sm">{fmtAmt}</p>
+                    )}
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      inv.status === "paid"    ? "bg-emerald-500/15 text-emerald-400" :
+                      inv.status === "failed"  ? "bg-red-500/15 text-red-400" :
+                      "bg-white/8 text-white/40"
+                    }`}>
+                      {inv.status === "paid" ? "Paid" : inv.status === "failed" ? "Failed" : "Pending"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
       {/* Transaction history */}
       {transactions.length > 0 && (
         <Section title="Credit History">
