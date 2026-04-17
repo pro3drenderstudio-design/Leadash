@@ -844,9 +844,18 @@ function OutreachTab() {
 // ── Root settings page ─────────────────────────────────────────────────────────
 
 function SettingsInner() {
-  const searchParams = useSearchParams();
-  const router       = useRouter();
-  const active       = (searchParams.get("tab") ?? "profile") as Tab;
+  const searchParams   = useSearchParams();
+  const router         = useRouter();
+  const billingSuccess = searchParams.get("billing") === "success";
+  const paidPlanId     = searchParams.get("plan") ?? undefined;
+  const active         = (searchParams.get("tab") ?? "profile") as Tab;
+
+  // Clean up payment params from URL after mounting (keep tab=billing)
+  useEffect(() => {
+    if (billingSuccess) {
+      router.replace("/settings?tab=billing");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function navigate(tab: Tab) {
     router.replace(`/settings?tab=${tab}`);
@@ -875,7 +884,7 @@ function SettingsInner() {
         {active === "profile"  && <ProfileTab />}
         {active === "security" && <SecurityTab />}
         {active === "team"     && <TeamTab />}
-        {active === "billing"  && <BillingTab />}
+        {active === "billing"  && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} />}
         {active === "outreach" && <OutreachTab />}
       </div>
     </div>
