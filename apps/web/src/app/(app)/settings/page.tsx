@@ -576,25 +576,30 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
         </div>
       </div>
 
-      {/* Payment invoices */}
-      <Section title="Payment History" description="All charges for plans, credits, domains, and inbox renewals.">
+      </div> {/* end left column */}
+
+      {/* ── Right column ── */}
+      <div className="xl:w-[380px] shrink-0 space-y-6">
+
+      {/* Payment History */}
+      <Section title="Payment History" description="Plans, credits, domains & renewals.">
         {invoices.length === 0 ? (
           <p className="text-white/25 text-sm text-center py-4">No payments yet.</p>
-        ) : (
+        ) : (<>
           <div className="divide-y divide-white/6">
-            {invoices.map(inv => {
+            {invSlice.map(inv => {
               const amountNgn = inv.amount_kobo / 100;
               const fmtAmt    = isNgn
                 ? `₦${amountNgn.toLocaleString("en-NG")}`
                 : `$${(amountNgn / 1600).toFixed(2)}`;
               return (
                 <div key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <div className="w-8 h-8 rounded-lg bg-white/6 flex items-center justify-center text-sm flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-white/6 flex items-center justify-center text-xs flex-shrink-0">
                     {INVOICE_TYPE_ICONS[inv.type] ?? "💰"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white/80 text-sm font-medium truncate">{inv.description}</p>
-                    <p className="text-white/35 text-xs mt-0.5">
+                    <p className="text-white/80 text-xs font-medium truncate">{inv.description}</p>
+                    <p className="text-white/35 text-[10px] mt-0.5">
                       {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
                       {" · "}
                       {new Date(inv.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
@@ -602,7 +607,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
                   </div>
                   <div className="text-right flex-shrink-0">
                     {inv.amount_kobo > 0 && (
-                      <p className="text-white font-semibold text-sm">{fmtAmt}</p>
+                      <p className="text-white font-semibold text-xs">{fmtAmt}</p>
                     )}
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                       inv.status === "paid"    ? "bg-emerald-500/15 text-emerald-400" :
@@ -616,10 +621,27 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
               );
             })}
           </div>
-        )}
+          {invPageCount > 1 && (
+            <div className="flex items-center justify-between pt-3 border-t border-white/6 mt-2">
+              <p className="text-white/30 text-xs">
+                {invPage * INV_PAGE_SIZE + 1}–{Math.min((invPage + 1) * INV_PAGE_SIZE, invoices.length)} of {invoices.length}
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setInvPage(p => p - 1)} disabled={invPage === 0}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  Previous
+                </button>
+                <button onClick={() => setInvPage(p => p + 1)} disabled={invPage >= invPageCount - 1}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>)}
       </Section>
 
-      {/* Transaction history */}
+      {/* Credit History */}
       {transactions.length > 0 && (
         <Section title="Credit History">
           <div className="divide-y divide-white/6">
@@ -644,18 +666,12 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
                 {txPage * TX_PAGE_SIZE + 1}–{Math.min((txPage + 1) * TX_PAGE_SIZE, transactions.length)} of {transactions.length}
               </p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setTxPage(p => p - 1)}
-                  disabled={txPage === 0}
-                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
+                <button onClick={() => setTxPage(p => p - 1)} disabled={txPage === 0}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   Previous
                 </button>
-                <button
-                  onClick={() => setTxPage(p => p + 1)}
-                  disabled={txPage >= txPageCount - 1}
-                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
+                <button onClick={() => setTxPage(p => p + 1)} disabled={txPage >= txPageCount - 1}
+                  className="px-3 py-1 rounded-lg text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   Next
                 </button>
               </div>
@@ -663,6 +679,9 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
           )}
         </Section>
       )}
+
+      </div> {/* end right column */}
+      </div> {/* end two-column flex */}
     </div>
   );
 }
