@@ -37,10 +37,14 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const body = await req.json();
+  const body = await req.json() as Record<string, unknown>;
+  const name = (body.name as string | undefined)?.trim();
+  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (name.length > 200) return NextResponse.json({ error: "name must be 200 characters or fewer" }, { status: 400 });
+
   const { data, error } = await db.from("outreach_campaigns").insert({
     workspace_id:       workspaceId,
-    name:               body.name,
+    name,
     inbox_ids:          body.inbox_ids ?? [],
     list_ids:           body.list_ids ?? [],
     timezone:           body.timezone ?? "America/New_York",
