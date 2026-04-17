@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
     if (type === "credit_purchase" && workspaceId) {
       const packId  = meta.pack_id  as string | undefined;
       const credits = meta.credits  as string | undefined;
+      const amountKobo = meta.amount_kobo as number | undefined;
       if (packId && credits) {
         const { paid } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const creditsNum = parseInt(credits, 10);
-          // Insert transaction with reference for idempotency (unique constraint prevents double-grant)
           const { error: txErr } = await db.from("lead_credit_transactions").insert({
             workspace_id:       workspaceId,
             type:               "purchase",
@@ -58,7 +58,6 @@ export async function POST(req: NextRequest) {
             paystack_reference: data.reference,
           });
           if (!txErr) {
-            // Only update balance if transaction insert succeeded (wasn't a duplicate)
             const { data: ws } = await db.from("workspaces")
               .select("lead_credits_balance").eq("id", workspaceId).single();
             if (ws) {
@@ -66,6 +65,15 @@ export async function POST(req: NextRequest) {
                 .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + creditsNum })
                 .eq("id", workspaceId);
             }
+            // Record invoice
+            await db.from("billing_invoices").insert({
+              workspace_id:       workspaceId,
+              type:               "credit_purchase",
+              description:        `${creditsNum.toLocaleString()} lead credits`,
+              amount_kobo:        amountKobo ?? 0,
+              paystack_reference: data.reference,
+              status:             "paid",
+            });
           }
         }
       }
