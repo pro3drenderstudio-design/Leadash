@@ -22,18 +22,18 @@ export async function POST(req: NextRequest) {
   if (leads.length > MAX_LEADS)
     return NextResponse.json({ error: `Maximum ${MAX_LEADS.toLocaleString()} leads per batch` }, { status: 400 });
 
-  const cost = leads.length * COST_PER_LEAD;
+  const cost = Math.ceil(leads.length * COST_PER_LEAD);
 
-  const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
-  if (!ws || (ws.lead_credits_balance as number) < cost)
-    return NextResponse.json({ error: `Insufficient credits. Need ${cost}, have ${ws?.lead_credits_balance ?? 0}.` }, { status: 402 });
+  // Atomic check-and-deduct via DB function — prevents race conditions where
+  // two concurrent requests both pass the balance check before either deducts.
+  const { data: deductRows, error: deductErr } = await db
+    .rpc("deduct_lead_credits", { p_workspace_id: workspaceId, p_amount: cost });
+  const deduct = Array.isArray(deductRows) ? deductRows[0] : null;
 
-  await db.from("workspaces")
-    .update({
-      lead_credits_balance:         (ws.lead_credits_balance as number) - cost,
-      subscription_credits_balance: Math.max(0, (ws.subscription_credits_balance ?? 0) - cost),
-    })
-    .eq("id", workspaceId);
+  if (deductErr || !deduct?.success) {
+    const have = deduct?.new_balance ?? 0;
+    return NextResponse.json({ error: `Insufficient credits. Need ${cost}, have ${have}.` }, { status: 402 });
+  }
 
   await db.from("lead_credit_transactions").insert({
     workspace_id: workspaceId,
