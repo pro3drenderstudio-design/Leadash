@@ -974,13 +974,14 @@ function SettingsInner() {
 
   // Capture payment params in state at mount — router.replace clears the URL
   // but we need the values to persist for the upgrade/success flow
-  const [billingSuccess]    = useState(() => searchParams.get("billing") === "success");
-  const [paidPlanId]        = useState(() => searchParams.get("plan") ?? undefined);
-  const [paystackReference] = useState(() => searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined);
+  const [billingSuccess]       = useState(() => searchParams.get("billing") === "success");
+  const [paidPlanId]           = useState(() => searchParams.get("plan") ?? undefined);
+  const [paystackReference]    = useState(() => searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined);
+  const [creditPurchaseSuccess] = useState(() => searchParams.get("credit_purchase") === "success");
 
   // Clean up payment params from URL after mounting (keep tab=billing)
   useEffect(() => {
-    if (billingSuccess) {
+    if (billingSuccess || creditPurchaseSuccess) {
       router.replace("/settings?tab=billing");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
