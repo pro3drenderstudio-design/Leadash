@@ -472,59 +472,83 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
         </div>
       )}
 
-      {/* Two-column layout */}
-      <div className="flex flex-col xl:flex-row gap-6">
-      {/* ── Left column ── */}
-      <div className="flex-1 min-w-0 space-y-6">
-
-      {/* Current plan */}
-      <Section title="Current Plan">
-        <div className="flex items-center justify-between p-4 bg-white/3 border border-white/8 rounded-xl">
-          <div>
-            <p className="text-white font-semibold text-lg">{currentPlan?.name ?? "Free"}</p>
-            <p className="text-white/40 text-xs mt-0.5">
-              {(currentPlan?.included_credits ?? 0) > 0 ? `${currentPlan!.included_credits.toLocaleString()} credits/mo` : "No credits"}
-              {(currentPlan?.max_leads_pool ?? 0) > 0 ? ` · ${currentPlan!.max_leads_pool.toLocaleString()} leads pool` : ""}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-white font-bold text-xl">
-              {currentPlan ? fmtPrice(currentPlan) : "Free"}
-              {(currentPlan?.price_ngn ?? 0) > 0 && <span className="text-white/30 text-sm font-normal">/mo</span>}
-            </p>
-          </div>
-        </div>
-
-        {/* Plan comparison */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
+      {/* ── Plan selection — full width ── */}
+      <Section title="Plans">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {plans.map(plan => {
-            const isCurrent  = plan.plan_id === planId;
-            const isUpgrade  = plan.price_ngn > currentPrice;
+            const isCurrent = plan.plan_id === planId;
+            const isUpgrade = plan.price_ngn > currentPrice;
+            const fmtPool   = plan.max_leads_pool === 0 ? "—" : plan.max_leads_pool.toLocaleString();
+            const fmtSeats  = plan.max_seats >= 999999 ? "Unlimited" : String(plan.max_seats);
+            const fmtSends  = plan.max_monthly_sends === -1 ? "Unlimited" : plan.max_monthly_sends.toLocaleString();
+            const fmtInbox  = plan.max_inboxes === -1 ? "Unlimited" : String(plan.max_inboxes);
             return (
               <div
                 key={plan.plan_id}
-                className={`rounded-xl p-3 border flex flex-col gap-2 transition-colors ${isCurrent ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}
+                className={`rounded-xl p-4 border flex flex-col gap-3 transition-colors ${
+                  isCurrent ? "border-orange-500/50 bg-orange-500/8" : "border-white/8 bg-white/3 hover:bg-white/5"
+                }`}
               >
-                <div className="text-center">
-                  <p className="text-white text-xs font-semibold">{plan.name}</p>
-                  <p className="text-white/40 text-[10px] mt-0.5">{fmtPrice(plan)}{plan.price_ngn > 0 ? "/mo" : ""}</p>
+                {/* Header */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-white text-sm font-bold">{plan.name}</p>
+                    {isCurrent && <span className="text-[9px] font-bold uppercase tracking-wide text-orange-400 bg-orange-500/15 px-1.5 py-0.5 rounded-full">Active</span>}
+                  </div>
+                  <p className="text-white font-bold text-lg leading-none">
+                    {fmtPrice(plan)}
+                    {plan.price_ngn > 0 && <span className="text-white/30 text-xs font-normal ml-1">/mo</span>}
+                  </p>
                 </div>
-                {isCurrent ? (
-                  <span className="text-[10px] font-semibold text-orange-400 text-center">Current</span>
-                ) : isUpgrade ? (
+
+                {/* Feature rows */}
+                <div className="space-y-1.5 text-[11px] border-t border-white/6 pt-3">
+                  <div className="flex justify-between gap-1">
+                    <span className="text-white/40">Credits/mo</span>
+                    <span className="text-white/80 font-medium text-right">
+                      {plan.included_credits === 0 ? "—" : plan.included_credits.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-white/40">Leads pool</span>
+                    <span className="text-white/80 font-medium text-right">{fmtPool}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-white/40">Emails/mo</span>
+                    <span className="text-white/80 font-medium text-right">{fmtSends}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-white/40">Inboxes</span>
+                    <span className="text-white/80 font-medium text-right">{fmtInbox}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-white/40">Seats</span>
+                    <span className="text-white/80 font-medium text-right">{fmtSeats}</span>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                {isCurrent ? null : isUpgrade ? (
                   <button
                     onClick={() => handleUpgrade(plan.plan_id)}
                     disabled={!!upgrading}
-                    className="text-[10px] font-semibold py-1 rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
+                    className="mt-auto w-full py-1.5 rounded-lg text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
                   >
                     {upgrading === plan.plan_id ? "…" : "Upgrade"}
                   </button>
-                ) : null}
+                ) : (
+                  <p className="mt-auto text-[10px] text-white/25 text-center">Lower tier</p>
+                )}
               </div>
             );
           })}
         </div>
       </Section>
+
+      {/* ── Two-column layout: credits (left) + history (right) ── */}
+      <div className="flex flex-col lg:flex-row gap-6">
+      {/* ── Left column ── */}
+      <div className="flex-1 min-w-0 space-y-6">
 
       {/* Lead credits */}
       <Section title="Lead Credits" description="Used for scraping, verifying, and personalizing leads.">
