@@ -113,6 +113,18 @@ export async function POST(req: NextRequest) {
   ).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Send invite email (non-fatal)
+  try {
+    const adminDb = createAdminClient();
+    const { data: ws } = await adminDb.from("workspaces").select("name").eq("id", workspaceId).single();
+    const workspaceName = (ws as { name: string } | null)?.name ?? "your team";
+    const acceptUrl = `${APP_URL}/invite/${data.token}`;
+    await sendInviteEmail({ to: data.email, workspaceName, role: data.role, acceptUrl });
+  } catch {
+    // Non-fatal — invite row is created; user can resend from settings
+  }
+
   return NextResponse.json(data, { status: 201 });
 }
 
