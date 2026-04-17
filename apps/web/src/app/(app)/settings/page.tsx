@@ -383,7 +383,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
       } catch { setActivating(false); }
     }
     verify();
-  }, [paymentSuccess, paidPlanId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paymentSuccess, paidPlanId, paystackReference]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
