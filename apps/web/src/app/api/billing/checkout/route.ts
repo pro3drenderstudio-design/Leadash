@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Allow env var override of plan codes for local dev with test Paystack keys
+  const planCodeEnvKey = `PAYSTACK_PLAN_CODE_${plan.plan_id.toUpperCase().replace(/-/g, "_")}`;
+  const planCode = process.env[planCodeEnvKey] ?? plan.paystack_plan_code;
+
   const { data: workspace } = await db
     .from("workspaces")
     .select("billing_email, name")
