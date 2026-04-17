@@ -9,6 +9,7 @@ import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
+import { cookies } from "next/headers";
 
 async function claimBetaIfApproved(userId: string, email: string, workspaceId: string) {
   const db = createAdminClient();
