@@ -86,9 +86,16 @@ export default function Sidebar({ workspaceName, plan }: Props) {
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
         {NAV.map(group => (
           <div key={group.label}>
-            <p className="px-2 mb-1.5 text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-[0.15em]">
-              {group.label}
-            </p>
+            <div className="px-2 mb-1.5 flex items-center gap-2">
+              <p className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-[0.15em]">
+                {group.label}
+              </p>
+              {group.label === "Outreach" && (
+                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 leading-none">
+                  New
+                </span>
+              )}
+            </div>
             <div className="space-y-0.5">
               {group.items.map(item => {
                 const allHrefs = NAV.flatMap(g => g.items.map(i => i.href));
