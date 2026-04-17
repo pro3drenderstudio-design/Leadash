@@ -858,9 +858,10 @@ function OutreachTab() {
 function SettingsInner() {
   const searchParams   = useSearchParams();
   const router         = useRouter();
-  const billingSuccess = searchParams.get("billing") === "success";
-  const paidPlanId     = searchParams.get("plan") ?? undefined;
-  const active         = (searchParams.get("tab") ?? "profile") as Tab;
+  const billingSuccess    = searchParams.get("billing") === "success";
+  const paidPlanId        = searchParams.get("plan") ?? undefined;
+  const paystackReference = searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined;
+  const active            = (searchParams.get("tab") ?? "profile") as Tab;
 
   // Clean up payment params from URL after mounting (keep tab=billing)
   useEffect(() => {
