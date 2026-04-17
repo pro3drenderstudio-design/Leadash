@@ -1007,7 +1007,7 @@ function SettingsInner() {
       </nav>
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto p-4 md:p-8 ${active === "billing" ? "max-w-4xl" : "max-w-2xl"}`}>
+      <div className={`flex-1 overflow-y-auto p-4 md:p-8 ${active !== "billing" ? "max-w-2xl" : ""}`}>
         {active === "profile"  && <ProfileTab />}
         {active === "security" && <SecurityTab />}
         {active === "team"     && <TeamTab />}
