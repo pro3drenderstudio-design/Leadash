@@ -102,11 +102,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const to          = (body.to         as string | undefined)?.trim().toLowerCase();
-  const from        = (body.from        as string | undefined)?.trim().toLowerCase();
+  // Support both agent-forwarded format and Postal's native HTTP route format
+  const toRaw       = (body.to ?? body.rcpt_to) as string | undefined;
+  const fromRaw     = (body.from ?? body.mail_from) as string | undefined;
+  const to          = toRaw?.trim().toLowerCase();
+  const from        = fromRaw?.trim().toLowerCase();
   const fromName    = (body.from_name   as string | undefined)?.trim() ?? null;
   const subject     = (body.subject     as string | undefined)?.trim() ?? "";
-  const text        = (body.text        as string | undefined)?.trim() ?? "";
+  const text        = ((body.text ?? body.plain_body) as string | undefined)?.trim() ?? "";
   const messageId   = (body.message_id  as string | undefined)?.trim() ?? null;
   const inReplyTo   = (body.in_reply_to as string | undefined)?.trim() ?? null;
   const references  = (body.references  as string | undefined)?.trim() ?? null;
