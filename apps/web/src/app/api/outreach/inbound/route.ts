@@ -227,7 +227,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Store reply ───────────────────────────────────────────────────────────────
-  await db.from("outreach_replies").insert({
+  // Return 500 on insert failure so Postal retries delivery — avoids silently
+  // dropping a reply while leaving the enrollment in a stale state.
+  const { error: replyErr } = await db.from("outreach_replies").insert({
     workspace_id:  workspaceId,
     inbox_id:      inbox.id,
     enrollment_id: enrollmentId,
@@ -241,6 +243,15 @@ export async function POST(req: NextRequest) {
     ai_category:   null,
     ai_confidence: null,
   });
+
+  if (replyErr) {
+    // Ignore duplicate message_id (idempotent re-delivery by Postal)
+    if (replyErr.code === "23505") {
+      return NextResponse.json({ ok: true, type: "duplicate" });
+    }
+    console.error("[inbound] reply insert failed:", replyErr.message);
+    return NextResponse.json({ error: "Failed to store reply" }, { status: 500 });
+  }
 
   // ── Update enrollment + send if matched ──────────────────────────────────────
   if (enrollmentId && !isFiltered) {
