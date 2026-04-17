@@ -89,32 +89,40 @@ export default function TicketDetailPage() {
     e.preventDefault();
     setSaving(true);
     setSaveMsg(null);
-    const res = await fetch(`/api/admin/support/${ticketId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ admin_reply: reply, status: replyStatus }),
-    });
-    const data = await res.json();
-    setSaving(false);
-    if (data.ok) {
-      setSaveMsg("Reply sent · User notified by email.");
-      setReply("");
-      fetchTicket();
-    } else {
-      setSaveMsg(`Error: ${data.error}`);
+    try {
+      const res = await fetch(`/api/admin/support/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_reply: reply, status: replyStatus }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSaveMsg("Reply sent · User notified by email.");
+        setReply("");
+        fetchTicket();
+      } else {
+        setSaveMsg(`Error: ${data.error ?? "Unknown error"}`);
+      }
+    } catch {
+      setSaveMsg("Error: Failed to send reply. Please try again.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function updateMeta() {
     setMetaSaving(true);
-    const res = await fetch(`/api/admin/support/${ticketId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: statusVal, priority: priorityVal }),
-    });
-    const data = await res.json();
-    setMetaSaving(false);
-    if (data.ok) fetchTicket();
+    try {
+      const res = await fetch(`/api/admin/support/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: statusVal, priority: priorityVal }),
+      });
+      const data = await res.json();
+      if (data.ok) fetchTicket();
+    } catch { /* silent */ } finally {
+      setMetaSaving(false);
+    }
   }
 
   if (loading) {
