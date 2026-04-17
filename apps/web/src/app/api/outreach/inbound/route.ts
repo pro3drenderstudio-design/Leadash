@@ -300,5 +300,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, type: enrollmentId ? "campaign" : "unmatched" });
+  return NextResponse.json({ ok: true, type: enrollmentId ? "campaign" : isWarmup ? "warmup" : "unmatched" });
 }
