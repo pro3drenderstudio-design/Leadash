@@ -351,29 +351,41 @@ function BillingTab({ paymentSuccess, paidPlanId }: { paymentSuccess?: boolean; 
     }).catch(() => setLoading(false));
   }, []);
 
-  // Poll for plan activation after payment — webhook is async so may take a few seconds
+  // Verify payment + upgrade plan immediately on redirect, then reload credits
   useEffect(() => {
     if (!paymentSuccess || !paidPlanId) return;
-    let tries = 0;
-    const interval = setInterval(async () => {
-      tries++;
+    const ref = new URLSearchParams(window.location.search).get("reference")
+      ?? new URLSearchParams(window.location.search).get("trxref");
+
+    async function verify() {
       try {
-        const profile = await wsGet<{ plan_id: string }>("/api/settings/profile");
-        if (profile.plan_id === paidPlanId) {
-          setPlanId(profile.plan_id);
-          setActivating(false);
-          setActivated(true);
-          clearInterval(interval);
-          // Reload credits too
-          wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits")
-            .then(c => { setBalance(c.balance ?? 0); setTx(c.transactions ?? []); })
-            .catch(() => {});
+        if (ref) {
+          // Eager verify — upgrades plan on the spot without waiting for webhook
+          await wsPost("/api/billing/verify", { reference: ref, plan_id: paidPlanId });
         }
-      } catch { /* ignore */ }
-      if (tries >= 10) { setActivating(false); clearInterval(interval); }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [paymentSuccess, paidPlanId]);
+        // Poll until plan_id matches (covers webhook path if ref not available)
+        let tries = 0;
+        const interval = setInterval(async () => {
+          tries++;
+          try {
+            const profile = await wsGet<{ plan_id: string }>("/api/settings/profile");
+            if (profile.plan_id === paidPlanId) {
+              setPlanId(profile.plan_id);
+              setActivating(false);
+              setActivated(true);
+              clearInterval(interval);
+              wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits")
+                .then(c => { setBalance(c.balance ?? 0); setTx(c.transactions ?? []); })
+                .catch(() => {});
+            }
+          } catch { /* ignore */ }
+          if (tries >= 8) { setActivating(false); clearInterval(interval); }
+        }, 1500);
+        return () => clearInterval(interval);
+      } catch { setActivating(false); }
+    }
+    verify();
+  }, [paymentSuccess, paidPlanId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
