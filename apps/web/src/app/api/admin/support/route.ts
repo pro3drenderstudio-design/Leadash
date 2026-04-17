@@ -55,3 +55,116 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ tickets: enriched, total: count ?? 0, page, perPage });
 }
+
+// POST /api/admin/support — create a ticket on behalf of a user
+export async function POST(req: NextRequest) {
+  const ctx = await requireAdmin();
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const body = await req.json() as {
+    user_id:    string;
+    subject?:   string;
+    message?:   string;
+    category?:  string;
+    priority?:  string;
+  };
+
+  const { user_id, subject, message, category, priority } = body;
+  if (!user_id || !subject?.trim() || !message?.trim()) {
+    return NextResponse.json({ error: "user_id, subject, and message are required" }, { status: 400 });
+  }
+
+  // Fetch the target user's workspace membership to get a workspace_id
+  const { data: membership } = await ctx.adminClient
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", user_id)
+    .limit(1)
+    .single();
+
+  if (!membership) {
+    return NextResponse.json({ error: "User has no workspace" }, { status: 400 });
+  }
+
+  const cat = category ?? "general";
+  const pri = priority ?? "medium";
+
+  const { data: ticket, error } = await ctx.adminClient
+    .from("support_tickets")
+    .insert({
+      workspace_id: membership.workspace_id,
+      user_id,
+      subject:  subject.trim(),
+      message:  message.trim(),
+      category: cat,
+      priority: pri,
+    })
+    .select("id, ticket_number, subject, message, category, priority, status, created_at")
+    .single();
+
+  if (error || !ticket) {
+    return NextResponse.json({ error: error?.message ?? "Failed to create ticket" }, { status: 500 });
+  }
+
+  // Insert opening message in thread
+  await ctx.adminClient.from("ticket_messages").insert({
+    ticket_id:   ticket.id,
+    sender_type: "admin",
+    user_id:     ctx.user.id,
+    message:     message.trim(),
+  });
+
+  // Emails (fire-and-forget)
+  (async () => {
+    try {
+      const [
+        { data: { user: targetUser } },
+        { data: supportSetting },
+      ] = await Promise.all([
+        ctx.adminClient.auth.admin.getUserById(user_id),
+        ctx.adminClient.from("admin_settings").select("value").eq("key", "support_email").single(),
+      ]);
+      const supportEmail = (supportSetting?.value as string | undefined) ?? "support@leadash.com";
+
+      // Email to the user
+      if (targetUser?.email) {
+        await sendAdminCreatedTicketNotification({
+          userEmail:    targetUser.email,
+          ticketNumber: ticket.ticket_number,
+          subject:      ticket.subject,
+          message:      message.trim(),
+          supportEmail,
+          ticketId:     ticket.id,
+        });
+      }
+
+      // Notify all admins
+      const { data: admins } = await ctx.adminClient
+        .from("admins")
+        .select("user_id");
+      if (admins?.length) {
+        const adminIds = admins.map((a: { user_id: string }) => a.user_id);
+        const { data: { users: adminUsers } } = await ctx.adminClient.auth.admin.listUsers({ perPage: 1000 });
+        const adminEmails = adminUsers
+          .filter((u: { id: string }) => adminIds.includes(u.id))
+          .map((u: { email?: string }) => u.email)
+          .filter(Boolean) as string[];
+
+        for (const adminEmail of adminEmails) {
+          await sendAdminNewTicketNotification({
+            adminEmail,
+            ticketNumber: ticket.ticket_number,
+            subject:      ticket.subject,
+            message:      message.trim(),
+            userEmail:    targetUser?.email ?? "unknown",
+            category:     cat,
+            priority:     pri,
+            ticketId:     ticket.id,
+          }).catch(() => null);
+        }
+      }
+    } catch { /* non-fatal */ }
+  })();
+
+  return NextResponse.json({ ok: true, ticket });
+}
