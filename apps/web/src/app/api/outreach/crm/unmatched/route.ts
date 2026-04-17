@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .is("enrollment_id", null)
     .eq("is_filtered", false)
+    .eq("is_warmup", false)
     .order("received_at", { ascending: false })
     .limit(50);
 
