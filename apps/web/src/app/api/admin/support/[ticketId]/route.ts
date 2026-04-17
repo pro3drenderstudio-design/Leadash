@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
           ctx.adminClient.from("admin_settings").select("value").eq("key", "support_email").single(),
         ]);
         const userEmail    = ticketUser?.email ?? "";
-        const supportEmail = (supportSetting?.value as string) ?? "support@leadash.io";
+        const supportEmail = (supportSetting?.value as string) ?? "support@leadash.com";
         if (userEmail) {
           await sendUserReplyNotification({
             userEmail,
