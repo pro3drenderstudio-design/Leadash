@@ -32,6 +32,13 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ userI
   // Get admin's current session to store for restoration
   const { data: { session: adminSession } } = await supabase.auth.getSession();
 
+  // Audit log — non-fatal
+  adminClient.from("admin_impersonation_logs").insert({
+    admin_id:  adminUser.id,
+    target_id: target.id,
+    action:    "start",
+  }).then(() => null).catch(() => null);
+
   const res = NextResponse.json({ url: linkData.properties.action_link });
 
   const cookieOpts = {
