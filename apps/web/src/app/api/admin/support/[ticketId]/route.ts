@@ -51,6 +51,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ ticket
 
 // PATCH /api/admin/support/[ticketId]
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ticketId: string }> }) {
+  try {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { ticketId } = await params;
