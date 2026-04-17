@@ -174,10 +174,14 @@ export default function CampaignsClient() {
                   {/* Duplicate */}
                   <button
                     onClick={() => handleClone(c)}
+                    disabled={cloning === c.id}
                     title="Duplicate"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    {cloning === c.id
+                      ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    }
                   </button>
                   {/* Delete */}
                   <button
