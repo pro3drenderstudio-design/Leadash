@@ -69,9 +69,60 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
-  const { workspaceId, db } = auth;
+  const { workspaceId, userId, db } = auth;
 
-  const { member_id } = await req.json();
+  const { member_id, invite_id } = await req.json() as { member_id?: string; invite_id?: string };
+
+  // Delete a pending invite
+  if (invite_id) {
+    await db.from("workspace_invites")
+      .delete()
+      .eq("id", invite_id)
+      .eq("workspace_id", workspaceId);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!member_id) return NextResponse.json({ error: "member_id required" }, { status: 400 });
+
+  // Fetch target member
+  const { data: target } = await db
+    .from("workspace_members")
+    .select("user_id, role")
+    .eq("id", member_id)
+    .eq("workspace_id", workspaceId)
+    .single();
+
+  if (!target) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+  // Block removing the last owner — workspace would become ownerless
+  if (target.role === "owner") {
+    const { count } = await db
+      .from("workspace_members")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("role", "owner");
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json(
+        { error: "Cannot remove the only owner. Transfer ownership first." },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Block non-owners from removing others (only admins/owners can remove members)
+  const { data: actor } = await db
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .single();
+
+  const actorRole = actor?.role ?? "member";
+  const canRemove = actorRole === "owner" || actorRole === "admin" || target.user_id === userId;
+  if (!canRemove) {
+    return NextResponse.json({ error: "Not authorized to remove this member." }, { status: 403 });
+  }
+
   await db.from("workspace_members")
     .delete()
     .eq("id", member_id)
