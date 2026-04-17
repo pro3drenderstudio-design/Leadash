@@ -437,7 +437,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
       wsGet<Invoice[]>("/api/billing/invoices").catch(() => [] as Invoice[]),
     ]).then(([profile, credits, plansData, invData]) => {
       setPlanId(profile.plan_id ?? "free");
-      setPlanStatus((profile as Record<string,string>).plan_status ?? "active");
+      setPlanStatus(((profile as Record<string,string>).plan_status ?? "active") as "active" | "past_due" | "canceled" | "trialing");
       setGraceEndsAt((profile as Record<string,string|null>).grace_ends_at ?? null);
       setBalance(credits.balance ?? 0);
       setTx(credits.transactions ?? []);
