@@ -271,6 +271,19 @@ export async function sendBetaDecisionEmail(opts: {
 
 // ─── Admin-created ticket notification (sent to the user) ─────────────────────
 
+// If a dedicated inbound subdomain is configured (e.g. reply.leadash.com),
+// reply-to addresses use that domain so Resend can receive the email.
+// Falls back to the main support email domain if not set.
+function buildReplyTo(supportEmail: string, ticketId: string): string {
+  const inboundDomain = process.env.SUPPORT_INBOUND_DOMAIN;
+  const base = inboundDomain && supportEmail.includes("@")
+    ? supportEmail.replace(/@[^@]+$/, `@${inboundDomain}`)
+    : supportEmail;
+  return base.includes("@")
+    ? base.replace(/^([^@]+)@/, `$1+ticket-${ticketId}@`)
+    : base;
+}
+
 export async function sendAdminCreatedTicketNotification(opts: {
   userEmail: string;
   ticketNumber: number;
@@ -279,10 +292,7 @@ export async function sendAdminCreatedTicketNotification(opts: {
   supportEmail: string;
   ticketId: string;
 }): Promise<void> {
-  // Reply-to encodes ticket ID so inbound emails can be threaded back
-  const replyTo = opts.supportEmail.includes("@")
-    ? opts.supportEmail.replace(/^([^@]+)@/, `$1+ticket-${opts.ticketId}@`)
-    : opts.supportEmail;
+  const replyTo = buildReplyTo(opts.supportEmail, opts.ticketId);
 
   await sendEmail({
     to: opts.userEmail,
