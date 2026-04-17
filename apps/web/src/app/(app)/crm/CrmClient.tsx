@@ -1001,7 +1001,7 @@ export default function CrmClient() {
                 <p className="text-white/25 text-xs mb-4">{new Date(selectedUnmatched.received_at).toLocaleString()} · via {selectedUnmatched.inbox?.email_address ?? "unknown"}</p>
                 <div className="bg-white/4 border border-white/8 rounded-xl p-5">
                   <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                    {selectedUnmatched.body_text ?? "(No body captured — body will appear after next poll if transfer encoding is base64)"}
+                    {selectedUnmatched.body_text || "(No body captured — body will appear after next poll if transfer encoding is base64)"}
                   </pre>
                 </div>
               </div>
