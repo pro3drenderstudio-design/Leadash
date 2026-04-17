@@ -711,17 +711,15 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
             <div>
               <p className="text-white/50 text-xs">Cancel subscription</p>
               <p className="text-white/25 text-[11px] mt-0.5">
-                {planStatus === "canceled"
-                  ? "Your subscription is already canceled."
-                  : "Your plan stays active until the end of the billing period."}
+                Your plan stays active until the end of the billing period.
               </p>
             </div>
             <button
               onClick={handleCancelSubscription}
-              disabled={canceling || planStatus === "canceled"}
+              disabled={canceling}
               className="px-4 py-1.5 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {canceling ? "Canceling…" : planStatus === "canceled" ? "Canceled" : "Cancel plan"}
+              {canceling ? "Canceling…" : "Cancel plan"}
             </button>
           </div>
         )}
