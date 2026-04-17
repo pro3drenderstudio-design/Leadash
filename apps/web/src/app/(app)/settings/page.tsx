@@ -411,7 +411,7 @@ const INVOICE_TYPE_ICONS: Record<string, string> = {
 
 function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurchaseSuccess }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string; creditPurchaseSuccess?: boolean }) {
   const [planId, setPlanId]         = useState("free");
-  const [planStatus, setPlanStatus] = useState("active");
+  const [planStatus, setPlanStatus] = useState<"active" | "past_due" | "canceled" | "trialing">("active");
   const [graceEndsAt, setGraceEndsAt] = useState<string | null>(null);
   const [plans, setPlans]           = useState<PlanConfig[]>([]);
   const [balance, setBalance]       = useState(0);
