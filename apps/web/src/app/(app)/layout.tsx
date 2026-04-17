@@ -8,6 +8,7 @@ import { CurrencyProvider } from "@/lib/currency";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
+import PastDueBanner from "@/components/PastDueBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
 
 async function claimBetaIfApproved(userId: string, email: string, workspaceId: string) {
