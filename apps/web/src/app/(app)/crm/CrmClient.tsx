@@ -507,6 +507,7 @@ export default function CrmClient() {
     setUnmatchedCompose("");
     setUnmatched((prev) => prev.filter((u) => u.id !== selectedUnmatched.id));
     setSelectedUnmatched(null);
+    setUnmatchedSending(false);
     await loadThreads();
     setMainTab("inbox");
   }
