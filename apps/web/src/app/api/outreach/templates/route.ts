@@ -21,10 +21,15 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const { name, subject, body } = await req.json();
+  const { name, subject, body } = await req.json() as { name?: string; subject?: string; body?: string };
+  if (!name?.trim()) return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (name.length > 200)    return NextResponse.json({ error: "name must be 200 characters or fewer" }, { status: 400 });
+  if (subject && subject.length > 500)    return NextResponse.json({ error: "subject must be 500 characters or fewer" }, { status: 400 });
+  if (body    && body.length    > 50_000) return NextResponse.json({ error: "body must be 50,000 characters or fewer" }, { status: 400 });
+
   const { data, error } = await db
     .from("outreach_templates")
-    .insert({ workspace_id: workspaceId, name, subject, body })
+    .insert({ workspace_id: workspaceId, name: name.trim(), subject: subject?.trim() ?? "", body: body ?? "" })
     .select()
     .single();
 
