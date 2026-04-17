@@ -116,6 +116,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
             subject:      data.subject,
             adminReply:   body.admin_reply,
             supportEmail,
+            ticketId:     ticketId,
           });
         }
       } catch { /* non-fatal */ }
