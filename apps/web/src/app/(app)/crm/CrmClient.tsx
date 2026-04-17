@@ -260,6 +260,12 @@ export default function CrmClient() {
   const [unmatchedSendErr, setUnmatchedSendErr] = useState<string | null>(null);
   const [unmatchedSendOk, setUnmatchedSendOk]   = useState(false);
 
+  // ── Warmup state ──────────────────────────────────────────────────────────
+  type WarmupReply = OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null };
+  const [warmup, setWarmup]               = useState<WarmupReply[]>([]);
+  const [warmupLoading, setWarmupLoading] = useState(false);
+  const [selectedWarmup, setSelectedWarmup] = useState<WarmupReply | null>(null);
+
   // ── Filters state ──────────────────────────────────────────────────────────
   const [filters, setFilters]       = useState<OutreachCrmFilter[]>([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
