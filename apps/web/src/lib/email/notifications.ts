@@ -338,9 +338,8 @@ export async function sendUserReplyNotification(opts: {
   supportEmail: string;
   ticketId?: string;
 }): Promise<void> {
-  // Reply-to encodes ticket ID so inbound emails thread back into the ticket
-  const replyTo = opts.ticketId && opts.supportEmail.includes("@")
-    ? opts.supportEmail.replace(/^([^@]+)@/, `$1+ticket-${opts.ticketId}@`)
+  const replyTo = opts.ticketId
+    ? buildReplyTo(opts.supportEmail, opts.ticketId)
     : opts.supportEmail;
 
   await sendEmail({
