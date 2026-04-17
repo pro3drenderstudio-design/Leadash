@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
     }).select("id, sender_type, message, created_at").single();
     const firstMessage = insertMsg.data ?? null;
 
-    // Notify admin (fire-and-forget — don't block the response)
-    (async () => {
+    // Notify admin after response is sent (after() keeps the function alive)
+    after(async () => {
       try {
         const adminDb = createAdminClient();
         const [
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (e) { console.error("[support/tickets notify]", e); }
-    })();
+    });
 
     return NextResponse.json(
       { ...data, messages: firstMessage ? [firstMessage] : [] },
