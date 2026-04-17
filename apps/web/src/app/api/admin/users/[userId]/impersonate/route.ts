@@ -22,7 +22,7 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ userI
     type: "magiclink",
     email: target.email,
     options: {
-      redirectTo: `${APP_URL}/dashboard`,
+      redirectTo: `${APP_URL}/api/auth/callback?next=/dashboard`,
     },
   });
   if (linkErr || !linkData?.properties?.action_link) {
