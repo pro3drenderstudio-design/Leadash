@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
     // Plan subscription payment
     if (type === "plan_subscription" && workspaceId) {
       const planId = meta.plan_id as string | undefined;
+      const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
       if (planId) {
         const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
         if (paid) {
@@ -100,6 +101,15 @@ export async function POST(req: NextRequest) {
               updated_at:           new Date().toISOString(),
             })
             .eq("id", workspaceId);
+          // Record invoice
+          await db.from("billing_invoices").insert({
+            workspace_id:       workspaceId,
+            type:               "plan_subscription",
+            description:        `${plan.name} plan subscription`,
+            amount_kobo:        amountKobo ?? (plan.price_ngn * 100),
+            paystack_reference: data.reference,
+            status:             "paid",
+          });
 
           // Check for pool overage after plan change — pause active campaigns if over limit
           void (async () => {
