@@ -17,9 +17,9 @@ async function sendEmail(opts: {
 
   if (postalHost) {
     // ── Send via Postal / generic SMTP ────────────────────────────────────────
-    // Dynamic import avoids bundling issues in Vercel serverless environment
-    const nodemailer = (await import("nodemailer")).default;
-    const transporter = nodemailer.createTransport({
+    const nodemailerMod = await import("nodemailer");
+    const nodemailer = nodemailerMod.default ?? nodemailerMod;
+    const transporter = (nodemailer as typeof import("nodemailer")).createTransport({
       host: postalHost,
       port: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10),
       secure: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10) === 465,
