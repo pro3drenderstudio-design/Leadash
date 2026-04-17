@@ -354,14 +354,12 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
   // Verify payment + upgrade plan immediately on redirect, then reload credits
   useEffect(() => {
     if (!paymentSuccess || !paidPlanId) return;
-    const ref = new URLSearchParams(window.location.search).get("reference")
-      ?? new URLSearchParams(window.location.search).get("trxref");
 
     async function verify() {
       try {
-        if (ref) {
+        if (paystackReference) {
           // Eager verify — upgrades plan on the spot without waiting for webhook
-          await wsPost("/api/billing/verify", { reference: ref, plan_id: paidPlanId });
+          await wsPost("/api/billing/verify", { reference: paystackReference, plan_id: paidPlanId });
         }
         // Poll until plan_id matches (covers webhook path if ref not available)
         let tries = 0;
