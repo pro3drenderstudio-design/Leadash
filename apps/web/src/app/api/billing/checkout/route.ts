@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const result = await createPaystackCheckout({
       email:       workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
       amountKobo:  plan.price_ngn * 100,
-      planCode:    plan.paystack_plan_code,
+      planCode:    planCode,
       callbackUrl: `${origin}/settings?billing=success&plan=${plan.plan_id}`,
       metadata: {
         workspace_id: workspaceId,
