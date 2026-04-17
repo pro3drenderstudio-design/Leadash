@@ -121,7 +121,7 @@ export default function WarmupClient() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-white font-medium text-sm">{inbox.label}</p>
-                    <p className="text-white/35 text-xs">{inbox.email_address} · {inbox.provider.toUpperCase()}</p>
+                    <p className="text-white/35 text-xs">{inbox.email_address} · {inbox.provider === "gmail" ? "Gmail" : inbox.provider === "outlook" ? "Outlook" : "Leadash Mail"}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <button
