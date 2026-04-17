@@ -5,7 +5,8 @@ import { cookies } from "next/headers";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
-  const refreshToken = cookieStore.get("admin_impersonate_rt")?.value;
+  const refreshToken   = cookieStore.get("admin_impersonate_rt")?.value;
+  const adminId        = cookieStore.get("admin_impersonate_uid")?.value;
 
   const clearCookies = (res: NextResponse) => {
     res.cookies.set("admin_impersonate_rt",  "", { maxAge: 0, path: "/" });
