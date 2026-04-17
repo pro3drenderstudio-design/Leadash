@@ -472,6 +472,11 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
         </div>
       )}
 
+      {/* Two-column layout */}
+      <div className="flex flex-col xl:flex-row gap-6">
+      {/* ── Left column ── */}
+      <div className="flex-1 min-w-0 space-y-6">
+
       {/* Current plan */}
       <Section title="Current Plan">
         <div className="flex items-center justify-between p-4 bg-white/3 border border-white/8 rounded-xl">
