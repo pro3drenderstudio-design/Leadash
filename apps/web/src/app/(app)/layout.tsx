@@ -43,13 +43,15 @@ async function claimBetaIfApproved(userId: string, email: string, workspaceId: s
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  // Check auth first
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
+  // getWorkspaceContext() handles auth — no need for a separate getUser() call
   const ctx = await getWorkspaceContext();
-  if (!ctx) redirect("/onboarding"); // authed but no workspace yet
+  if (!ctx) redirect("/login");
+
+  // Get the authenticated user for email/name (already fetched inside getWorkspaceContext)
+  const supabase = await createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) redirect("/login");
 
   // Silently claim any approved beta enrollment linked to this email (no account at apply-time)
   claimBetaIfApproved(user.id, user.email ?? "", ctx.workspaceId).catch(() => {});
