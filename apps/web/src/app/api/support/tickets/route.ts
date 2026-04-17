@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
             ticketId:     data.id,
           });
         }
-      } catch { /* non-fatal */ }
+      } catch (e) { console.error("[support/tickets notify]", e); }
     })();
 
     return NextResponse.json(
