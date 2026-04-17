@@ -897,7 +897,7 @@ function SettingsInner() {
         {active === "profile"  && <ProfileTab />}
         {active === "security" && <SecurityTab />}
         {active === "team"     && <TeamTab />}
-        {active === "billing"  && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} />}
+        {active === "billing"  && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} />}
         {active === "outreach" && <OutreachTab />}
       </div>
     </div>
