@@ -51,28 +51,30 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session
-  const { data: { user } } = await supabase.auth.getUser();
+  // getSession() reads the JWT from cookies — no network round-trip to Supabase.
+  // getUser() (which hits the Supabase auth server) is used only for the admin
+  // guard below where server-verified identity is security-critical.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const { pathname } = request.nextUrl;
 
   // ── Auth code on root — redirect to proper callback ──────────────────────────
-  // Happens when Supabase Site URL is set without the /api/auth/callback path
   if (pathname === "/" && request.nextUrl.searchParams.has("code")) {
     const url = request.nextUrl.clone();
     url.pathname = "/api/auth/callback";
     return NextResponse.redirect(url);
   }
 
-  // ── Admin route guard ────────────────────────────────────────────────────────
+  // ── Admin route guard (uses verified identity) ───────────────────────────────
   if (pathname.startsWith("/admin")) {
-    if (!user) {
+    const { data: { user: verifiedUser } } = await supabase.auth.getUser();
+    if (!verifiedUser) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("redirectTo", pathname);
       return NextResponse.redirect(url);
     }
-    // Check admins table using service role (bypasses RLS)
     const adminClient = createSupabaseAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -80,7 +82,7 @@ export async function middleware(request: NextRequest) {
     const { data: admin } = await adminClient
       .from("admins")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", verifiedUser.id)
       .maybeSingle();
 
     if (!admin) {
