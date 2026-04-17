@@ -411,8 +411,35 @@ function BillingTab({ paymentSuccess, paidPlanId }: { paymentSuccess?: boolean; 
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-2xl animate-pulse" />)}</div>;
 
+  const paidPlanName = plans.find(p => p.plan_id === paidPlanId)?.name ?? paidPlanId;
+
   return (
     <div className="space-y-6">
+      {/* Payment success / activating banner */}
+      {activating && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-emerald-400 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <div>
+            <p className="text-emerald-300 font-semibold text-sm">Payment received!</p>
+            <p className="text-emerald-400/70 text-xs mt-0.5">Activating your {paidPlanName} plan — this takes just a moment…</p>
+          </div>
+        </div>
+      )}
+      {activated && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <div>
+            <p className="text-emerald-300 font-semibold text-sm">Your {paidPlanName} plan is now active!</p>
+            <p className="text-emerald-400/70 text-xs mt-0.5">Welcome to {paidPlanName}. Your credits and limits have been updated.</p>
+          </div>
+        </div>
+      )}
+
       {/* Current plan */}
       <Section title="Current Plan">
         <div className="flex items-center justify-between p-4 bg-white/3 border border-white/8 rounded-xl">
