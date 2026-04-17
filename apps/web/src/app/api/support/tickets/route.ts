@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     .from("support_tickets")
     .select("id, ticket_number, subject, category, priority, status, admin_reply, admin_replied_at, created_at, updated_at")
     .eq("workspace_id", workspaceId)
+    .eq("user_id", auth.userId)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
