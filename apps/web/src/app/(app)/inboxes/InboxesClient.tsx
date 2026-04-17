@@ -97,9 +97,12 @@ function parseCsvRows(text: string): Record<string, string>[] {
 
 const CSV_TEMPLATE_HEADERS = "email,smtp_host,smtp_user,smtp_pass,label,smtp_port,imap_host,imap_port,daily_limit,timezone,send_window_start,send_window_end,warmup_target";
 const CSV_TEMPLATE_ROWS = [
-  "you@gmail.com,smtp.gmail.com,you@gmail.com,your-app-password,My Gmail,587,,993,50,America/New_York,09:00,17:00,50",
-  "you@outlook.com,smtp-mail.outlook.com,you@outlook.com,your-app-password,My Outlook,587,,993,50,America/New_York,09:00,17:00,50",
-  "you@yourdomain.com,mail.yourdomain.com,you@yourdomain.com,your-password,Custom SMTP,587,,993,80,America/New_York,08:00,18:00,80",
+  // Gmail — use an App Password (myaccount.google.com/apppasswords) with 2FA enabled
+  "you@gmail.com,smtp.gmail.com,you@gmail.com,your-app-password,My Gmail,587,imap.gmail.com,993,50,America/New_York,09:00,17:00,50",
+  // Outlook / Microsoft 365 — use an App Password or OAuth; SMTP AUTH must be enabled
+  "you@outlook.com,smtp-mail.outlook.com,you@outlook.com,your-app-password,My Outlook,587,outlook.office365.com,993,50,America/New_York,09:00,17:00,50",
+  // Custom domain SMTP — fill in your mail server details
+  "you@yourdomain.com,mail.yourdomain.com,you@yourdomain.com,your-password,Custom SMTP,587,mail.yourdomain.com,993,80,America/New_York,08:00,18:00,80",
 ].join("\n");
 
 function downloadTemplate() {
