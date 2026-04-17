@@ -332,8 +332,9 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [upgrading, setUpgrading]   = useState<string | null>(null);
   const [txPage, setTxPage]         = useState(0);
-  const [activating, setActivating] = useState(paymentSuccess ?? false);
-  const [activated, setActivated]   = useState(false);
+  const [activating, setActivating]   = useState(paymentSuccess ?? false);
+  const [activated, setActivated]     = useState(false);
+  const [invoices, setInvoices]       = useState<Invoice[]>([]);
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
 
