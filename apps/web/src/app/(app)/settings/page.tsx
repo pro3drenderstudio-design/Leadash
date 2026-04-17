@@ -405,6 +405,31 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     verify();
   }, [paymentSuccess, paidPlanId, paystackReference]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Verify credit purchase on return from Paystack
+  useEffect(() => {
+    if (!creditPurchaseSuccess) return;
+    const ref = new URLSearchParams(window.location.search).get("reference")
+      ?? new URLSearchParams(window.location.search).get("trxref");
+    async function verifyCreditPurchase() {
+      try {
+        const result = await wsPost<{ granted?: number; balance?: number; already_processed?: boolean }>("/api/lead-campaigns/credits/verify", { reference: ref ?? "" });
+        const newBalance = result.balance ?? 0;
+        setBalance(newBalance);
+        setGrantedCredits(result.granted ?? 0);
+        setCreditVerifying(false);
+        setCreditActivated(true);
+        // Refresh transactions and invoices
+        wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits")
+          .then(c => { setBalance(c.balance ?? 0); setTx(c.transactions ?? []); })
+          .catch(() => {});
+        wsGet<Invoice[]>("/api/billing/invoices").then(setInvoices).catch(() => {});
+      } catch {
+        setCreditVerifying(false);
+      }
+    }
+    verifyCreditPurchase();
+  }, [creditPurchaseSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
     try {
