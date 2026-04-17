@@ -3,8 +3,6 @@
  * Primary: Postal/SMTP VPS (POSTAL_HOST env var).
  * Fallback: Resend API (RESEND_API_KEY env var).
  */
-import nodemailer from "nodemailer";
-
 const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
@@ -19,6 +17,8 @@ async function sendEmail(opts: {
 
   if (postalHost) {
     // ── Send via Postal / generic SMTP ────────────────────────────────────────
+    // Dynamic import avoids bundling issues in Vercel serverless environment
+    const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport({
       host: postalHost,
       port: parseInt(process.env.POSTAL_PORT ?? process.env.SMTP_PORT ?? "587", 10),
