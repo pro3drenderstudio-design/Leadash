@@ -337,7 +337,7 @@ const INVOICE_TYPE_ICONS: Record<string, string> = {
   inbox_renewal:     "📬",
 };
 
-function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string }) {
+function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurchaseSuccess }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string; creditPurchaseSuccess?: boolean }) {
   const [planId, setPlanId]         = useState("free");
   const [plans, setPlans]           = useState<PlanConfig[]>([]);
   const [balance, setBalance]       = useState(0);
@@ -346,9 +346,12 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [upgrading, setUpgrading]   = useState<string | null>(null);
   const [txPage, setTxPage]         = useState(0);
-  const [activating, setActivating]   = useState(paymentSuccess ?? false);
-  const [activated, setActivated]     = useState(false);
-  const [invoices, setInvoices]       = useState<Invoice[]>([]);
+  const [activating, setActivating]           = useState(paymentSuccess ?? false);
+  const [activated, setActivated]             = useState(false);
+  const [creditVerifying, setCreditVerifying] = useState(creditPurchaseSuccess ?? false);
+  const [creditActivated, setCreditActivated] = useState(false);
+  const [grantedCredits, setGrantedCredits]   = useState(0);
+  const [invoices, setInvoices]               = useState<Invoice[]>([]);
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
 
