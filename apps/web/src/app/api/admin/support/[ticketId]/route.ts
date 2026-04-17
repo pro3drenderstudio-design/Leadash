@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
       sender_type: "admin",
       user_id:     ctx.user.id,
       message:     body.admin_reply,
-    }).catch(() => null);
+    });
 
     // Fire-and-forget email to user
     (async () => {
