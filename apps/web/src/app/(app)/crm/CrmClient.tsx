@@ -572,7 +572,7 @@ export default function CrmClient() {
       {/* Top nav: tabs + actions */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/8 bg-white/2">
         <div className="flex gap-1">
-          {(["inbox", "unmatched", "filters"] as MainTab[]).map((t) => (
+          {(["inbox", "unmatched", "warmup", "filters"] as MainTab[]).map((t) => (
             <button
               key={t}
               onClick={() => setMainTab(t)}
@@ -581,6 +581,9 @@ export default function CrmClient() {
               {t}
               {t === "unmatched" && unmatched.length > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 text-[9px] rounded-full">{unmatched.length}</span>
+              )}
+              {t === "warmup" && warmup.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[9px] rounded-full">{warmup.length}</span>
               )}
             </button>
           ))}
