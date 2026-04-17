@@ -98,8 +98,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
       message:     body.admin_reply,
     });
 
-    // Fire-and-forget email to user
-    (async () => {
+    // Email user after response is sent (after() keeps the function alive)
+    after(async () => {
       try {
         const [
           { data: { user: ticketUser } },
@@ -121,7 +121,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
           });
         }
       } catch (e) { console.error("[admin/support reply notify]", e); }
-    })();
+    });
   }
 
   return NextResponse.json({ ok: true, ticket: data });
