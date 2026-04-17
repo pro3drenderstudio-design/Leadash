@@ -70,6 +70,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex-shrink-0 z-30 relative">
             <ImpersonationBanner />
             <BetaBanner />
+            {workspace.plan_status === "past_due" && workspace.grace_ends_at && (
+              <PastDueBanner graceEndsAt={workspace.grace_ends_at} />
+            )}
             {workspace.plan_id === "free" && workspace.trial_ends_at && (
               <TrialBanner trialEndsAt={workspace.trial_ends_at} />
             )}
