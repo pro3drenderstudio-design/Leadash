@@ -125,4 +125,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ti
   }
 
   return NextResponse.json({ ok: true, ticket: data });
+  } catch (err) {
+    console.error("[PATCH /api/admin/support]", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
