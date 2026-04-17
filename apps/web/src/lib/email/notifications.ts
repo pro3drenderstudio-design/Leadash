@@ -269,16 +269,73 @@ export async function sendBetaDecisionEmail(opts: {
   }
 }
 
+// ─── Admin-created ticket notification (sent to the user) ─────────────────────
+
+export async function sendAdminCreatedTicketNotification(opts: {
+  userEmail: string;
+  ticketNumber: number;
+  subject: string;
+  message: string;
+  supportEmail: string;
+  ticketId: string;
+}): Promise<void> {
+  // Reply-to encodes ticket ID so inbound emails can be threaded back
+  const replyTo = opts.supportEmail.includes("@")
+    ? opts.supportEmail.replace(/^([^@]+)@/, `$1+ticket-${opts.ticketId}@`)
+    : opts.supportEmail;
+
+  await sendEmail({
+    to: opts.userEmail,
+    replyTo,
+    subject: `[Ticket #${opts.ticketNumber}] ${opts.subject}`,
+    text: [
+      `Hi,`,
+      ``,
+      `Our support team has opened a ticket on your behalf.`,
+      ``,
+      `Subject: ${opts.subject}`,
+      ``,
+      opts.message,
+      ``,
+      `You can reply to this email to respond, or view the full conversation at:`,
+      `${APP_URL}/support`,
+      ``,
+      `— Leadash Support`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+        <p style="color:#374151;font-size:15px">Hi,</p>
+        <p style="color:#374151;font-size:15px">Our support team has opened a ticket on your behalf.</p>
+        <p style="color:#9ca3af;font-size:13px;margin-top:-8px">Ticket #${opts.ticketNumber} — ${opts.subject}</p>
+        <div style="background:#f3f4f6;border-left:3px solid #f97316;padding:14px 18px;margin:20px 0;border-radius:0 8px 8px 0;font-size:14px;color:#374151;line-height:1.6">
+          ${opts.message.replace(/\n/g, "<br>")}
+        </div>
+        <p style="color:#6b7280;font-size:14px">You can <strong>reply to this email</strong> to respond, or view the full conversation online:</p>
+        <p><a href="${APP_URL}/support" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View Ticket →</a></p>
+        <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">
+          — Leadash Support Team · <a href="mailto:${opts.supportEmail}" style="color:#9ca3af">${opts.supportEmail}</a>
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendUserReplyNotification(opts: {
   userEmail: string;
   ticketNumber: number;
   subject: string;
   adminReply: string;
   supportEmail: string;
+  ticketId?: string;
 }): Promise<void> {
+  // Reply-to encodes ticket ID so inbound emails thread back into the ticket
+  const replyTo = opts.ticketId && opts.supportEmail.includes("@")
+    ? opts.supportEmail.replace(/^([^@]+)@/, `$1+ticket-${opts.ticketId}@`)
+    : opts.supportEmail;
+
   await sendEmail({
     to: opts.userEmail,
-    replyTo: opts.supportEmail,
+    replyTo,
     subject: `Re: [Ticket #${opts.ticketNumber}] ${opts.subject}`,
     text: [
       `Hi,`,
