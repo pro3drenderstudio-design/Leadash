@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { sendAdminCreatedTicketNotification, sendAdminNewTicketNotification } from "@/lib/email/notifications";
 
 async function requireAdmin() {
   const supabase = await createClient();
