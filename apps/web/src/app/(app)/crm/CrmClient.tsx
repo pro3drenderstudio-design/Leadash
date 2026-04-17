@@ -36,7 +36,7 @@ const QUICK_FILTERS: Array<Omit<OutreachCrmFilter, "id" | "created_at" | "worksp
   { name: "Vacation",      type: "phrase",         value: "on vacation",    action: "auto_status",  auto_status: "ooo" },
 ];
 
-type MainTab = "inbox" | "unmatched" | "filters";
+type MainTab = "inbox" | "unmatched" | "warmup" | "filters";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
