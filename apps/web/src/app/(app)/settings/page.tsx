@@ -196,7 +196,7 @@ function SecurityTab() {
 // ── Team Tab ───────────────────────────────────────────────────────────────────
 
 type Member = { id: string; user_id: string; role: string; joined_at: string; email: string; full_name: string };
-type Invite  = { id: string; email: string; role: string; created_at: string };
+type Invite  = { id: string; email: string; role: string; created_at: string; expires_at: string };
 
 function TeamTab() {
   const [members, setMembers]   = useState<Member[]>([]);
@@ -204,7 +204,14 @@ function TeamTab() {
   const [loading, setLoading]   = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [msg, setMsg]           = useState<string | null>(null);
+  const [resending, setResending] = useState<string | null>(null);
+  const [removing, setRemoving]   = useState<string | null>(null);
+  const [msg, setMsg]           = useState<{ text: string; ok: boolean } | null>(null);
+
+  function flash(text: string, ok = true) {
+    setMsg({ text, ok });
+    setTimeout(() => setMsg(null), 4000);
+  }
 
   function load() {
     setLoading(true);
@@ -222,18 +229,49 @@ function TeamTab() {
     setInviting(true);
     try {
       await wsPost("/api/settings/team", { email: inviteEmail });
-      setInviting(false);
-      setInviteEmail(""); load(); setMsg("Invite sent");
+      setInviteEmail("");
+      load();
+      flash("Invite sent — link expires in 7 days.");
     } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to invite", false);
+    } finally {
       setInviting(false);
-      setMsg(e instanceof Error ? e.message : "Failed to invite");
     }
-    setTimeout(() => setMsg(null), 3000);
+  }
+
+  async function resendInvite(inviteId: string) {
+    setResending(inviteId);
+    try {
+      await wsPost("/api/settings/team/resend", { invite_id: inviteId });
+      load();
+      flash("Invite resent — new link expires in 7 days.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to resend", false);
+    } finally {
+      setResending(null);
+    }
+  }
+
+  async function revokeInvite(inviteId: string) {
+    setRemoving(inviteId);
+    try {
+      await wsDelete("/api/settings/team", { invite_id: inviteId });
+      load();
+    } catch { /* ignore */ } finally {
+      setRemoving(null);
+    }
   }
 
   async function removeMember(memberId: string) {
-    await wsDelete("/api/settings/team", { member_id: memberId });
-    load();
+    setRemoving(memberId);
+    try {
+      await wsDelete("/api/settings/team", { member_id: memberId });
+      load();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Could not remove member", false);
+    } finally {
+      setRemoving(null);
+    }
   }
 
   const ROLE_BADGE: Record<string, string> = {
@@ -241,6 +279,15 @@ function TeamTab() {
     admin:  "bg-orange-500/15 text-orange-400",
     member: "bg-white/8 text-white/50",
   };
+
+  function expiryLabel(expiresAt: string) {
+    const ms     = new Date(expiresAt).getTime() - Date.now();
+    const days   = Math.ceil(ms / 86_400_000);
+    if (days <= 0)  return { label: "Expired",         cls: "text-red-400" };
+    if (days === 1) return { label: "Expires tomorrow", cls: "text-orange-400" };
+    if (days <= 3)  return { label: `Expires in ${days}d`, cls: "text-amber-400" };
+    return { label: `Expires in ${days}d`, cls: "text-white/30" };
+  }
 
   return (
     <div className="space-y-6">
@@ -265,8 +312,12 @@ function TeamTab() {
                     {m.role}
                   </span>
                   {m.role !== "owner" && (
-                    <button onClick={() => removeMember(m.id)} className="text-white/25 hover:text-red-400 transition-colors text-xs">
-                      Remove
+                    <button
+                      onClick={() => removeMember(m.id)}
+                      disabled={removing === m.id}
+                      className="text-white/25 hover:text-red-400 disabled:opacity-40 transition-colors text-xs"
+                    >
+                      {removing === m.id ? "…" : "Remove"}
                     </button>
                   )}
                 </div>
@@ -276,7 +327,7 @@ function TeamTab() {
         )}
       </Section>
 
-      <Section title="Invite Member" description="Send an invite link to a teammate.">
+      <Section title="Invite Member" description="Send an invite link to a teammate. Links expire after 7 days.">
         <div className="flex gap-2">
           <input
             type="email"
@@ -294,18 +345,39 @@ function TeamTab() {
             {inviting ? "Sending…" : "Send Invite"}
           </button>
         </div>
-        {msg && <p className="text-sm text-emerald-400">{msg}</p>}
+        {msg && <p className={`text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</p>}
 
         {invites.length > 0 && (
-          <div>
+          <div className="mt-2">
             <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Pending Invites</p>
-            <div className="space-y-1">
-              {invites.map(inv => (
-                <div key={inv.id} className="flex items-center justify-between px-3 py-2 bg-white/3 rounded-lg">
-                  <p className="text-white/60 text-sm">{inv.email}</p>
-                  <span className="text-xs text-amber-400/70">Pending</span>
-                </div>
-              ))}
+            <div className="space-y-1.5">
+              {invites.map(inv => {
+                const { label, cls } = expiryLabel(inv.expires_at);
+                return (
+                  <div key={inv.id} className="flex items-center justify-between px-3 py-2 bg-white/3 rounded-lg">
+                    <div>
+                      <p className="text-white/70 text-sm">{inv.email}</p>
+                      <p className={`text-[11px] mt-0.5 ${cls}`}>{label}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => resendInvite(inv.id)}
+                        disabled={resending === inv.id}
+                        className="text-xs text-orange-400 hover:text-orange-300 disabled:opacity-40 transition-colors"
+                      >
+                        {resending === inv.id ? "…" : "Resend"}
+                      </button>
+                      <button
+                        onClick={() => revokeInvite(inv.id)}
+                        disabled={removing === inv.id}
+                        className="text-xs text-white/25 hover:text-red-400 disabled:opacity-40 transition-colors"
+                      >
+                        {removing === inv.id ? "…" : "Revoke"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
