@@ -228,7 +228,7 @@ function DetailView({ ticket, wsId, onBack, onTicketUpdate, onNewTicket }: {
       ) : (
         <div className="mt-6 p-4 bg-white/2 border border-white/6 rounded-xl text-center">
           <p className="text-white/30 text-sm">
-            This ticket is {ticket.status}. <button onClick={() => {}} className="text-orange-400 hover:underline">Open a new ticket</button> if you need more help.
+            This ticket is {ticket.status}. <button onClick={onNewTicket} className="text-orange-400 hover:underline">Open a new ticket</button> if you need more help.
           </p>
         </div>
       )}
