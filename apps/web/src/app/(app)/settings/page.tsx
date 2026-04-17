@@ -427,9 +427,14 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
   }
 
   const currentPlan    = plans.find(p => p.plan_id === planId) ?? plans.find(p => p.plan_id === "free");
+  const [invPage, setInvPage]         = useState(0);
+  const INV_PAGE_SIZE                  = 8;
+
   const currentPrice   = currentPlan?.price_ngn ?? 0;
   const txPageCount    = Math.ceil(transactions.length / TX_PAGE_SIZE);
   const txSlice        = transactions.slice(txPage * TX_PAGE_SIZE, (txPage + 1) * TX_PAGE_SIZE);
+  const invPageCount   = Math.ceil(invoices.length / INV_PAGE_SIZE);
+  const invSlice       = invoices.slice(invPage * INV_PAGE_SIZE, (invPage + 1) * INV_PAGE_SIZE);
 
   function fmtPrice(plan: PlanConfig) {
     if (plan.price_ngn === 0) return "Free";
@@ -438,7 +443,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { payment
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-2xl animate-pulse" />)}</div>;
 
-  const paidPlanName = plans.find(p => p.plan_id === paidPlanId)?.name ?? paidPlanId;
+  const paidPlanName = plans.find(p => p.plan_id === paidPlanId)?.name ?? paidPlanId ?? "";
 
   return (
     <div className="space-y-6">
