@@ -88,11 +88,16 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   }
 
   for (const sender of localPool) {
-    const campaignUsed  = campaignSentToday.get(sender.id) ?? 0;
-    const remaining     = Math.max(0, (sender.daily_send_limit ?? 30) - campaignUsed);
-    const perRun        = Math.max(1, Math.floor(sender.warmup_current_daily / 6));
-    const alreadySent   = sentToday.get(sender.id) ?? 0;
-    const toSend        = Math.min(perRun, Math.max(0, sender.warmup_current_daily - alreadySent), remaining);
+    const campaignUsed = campaignSentToday.get(sender.id) ?? 0;
+    const remaining    = Math.max(0, (sender.daily_send_limit ?? 30) - campaignUsed);
+    // Bootstrap: if current_daily is still 0 (newly enabled inbox), use ramp_per_week
+    // as the starting value so warmup begins immediately without waiting for Monday's ramp.
+    const effectiveCurrent = sender.warmup_current_daily > 0
+      ? sender.warmup_current_daily
+      : (sender.warmup_ramp_per_week ?? 5);
+    const perRun      = Math.max(1, Math.floor(effectiveCurrent / 6));
+    const alreadySent = sentToday.get(sender.id) ?? 0;
+    const toSend      = Math.min(perRun, Math.max(0, effectiveCurrent - alreadySent), remaining);
     if (toSend === 0) continue;
 
     const recipients = globalPool.filter((r: OutreachInbox) => r.id !== sender.id);
