@@ -342,9 +342,12 @@ function UsersPageInner() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
 
-      {/* Send Message Modal */}
+      {/* Modals */}
       {messageTarget && (
         <SendMessageModal target={messageTarget} onClose={() => setMessageTarget(null)} />
+      )}
+      {ticketTarget && (
+        <CreateTicketModal target={ticketTarget} onClose={() => setTicketTarget(null)} />
       )}
 
       {/* Header */}
