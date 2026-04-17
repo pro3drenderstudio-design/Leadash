@@ -320,8 +320,22 @@ const TX_LABELS: Record<string, string> = { grant: "Monthly Grant", purchase: "P
 const TX_COLORS: Record<string, string> = { grant: "text-emerald-400", purchase: "text-emerald-400", refund: "text-emerald-400", reserve: "text-amber-400", consume: "text-red-400" };
 
 type Transaction = { id: string; type: string; amount: number; description: string | null; created_at: string };
+type Invoice     = { id: string; type: string; description: string; amount_kobo: number; paystack_reference: string | null; status: string; created_at: string };
 
 const TX_PAGE_SIZE = 10;
+
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  plan_subscription: "Plan Subscription",
+  credit_purchase:   "Lead Credits",
+  domain_purchase:   "Domain Purchase",
+  inbox_renewal:     "Inbox Renewal",
+};
+const INVOICE_TYPE_ICONS: Record<string, string> = {
+  plan_subscription: "⭐",
+  credit_purchase:   "💳",
+  domain_purchase:   "🌐",
+  inbox_renewal:     "📬",
+};
 
 function BillingTab({ paymentSuccess, paidPlanId, paystackReference }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string }) {
   const [planId, setPlanId]         = useState("free");
