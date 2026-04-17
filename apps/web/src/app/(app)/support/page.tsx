@@ -76,11 +76,12 @@ function timeAgo(iso: string) {
 
 // ─── Detail / Thread View ─────────────────────────────────────────────────────
 
-function DetailView({ ticket, wsId, onBack, onTicketUpdate }: {
+function DetailView({ ticket, wsId, onBack, onTicketUpdate, onNewTicket }: {
   ticket: Ticket;
   wsId: string;
   onBack: () => void;
   onTicketUpdate: (t: Ticket) => void;
+  onNewTicket: () => void;
 }) {
   const [messages, setMessages] = useState<TicketMessage[]>(ticket.messages ?? []);
   const [replyText, setReplyText] = useState("");
