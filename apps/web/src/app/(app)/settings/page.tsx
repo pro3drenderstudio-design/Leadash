@@ -323,7 +323,7 @@ type Transaction = { id: string; type: string; amount: number; description: stri
 
 const TX_PAGE_SIZE = 10;
 
-function BillingTab() {
+function BillingTab({ paymentSuccess, paidPlanId }: { paymentSuccess?: boolean; paidPlanId?: string }) {
   const [planId, setPlanId]         = useState("free");
   const [plans, setPlans]           = useState<PlanConfig[]>([]);
   const [balance, setBalance]       = useState(0);
@@ -332,6 +332,8 @@ function BillingTab() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [upgrading, setUpgrading]   = useState<string | null>(null);
   const [txPage, setTxPage]         = useState(0);
+  const [activating, setActivating] = useState(paymentSuccess ?? false);
+  const [activated, setActivated]   = useState(false);
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
 
@@ -348,6 +350,30 @@ function BillingTab() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  // Poll for plan activation after payment — webhook is async so may take a few seconds
+  useEffect(() => {
+    if (!paymentSuccess || !paidPlanId) return;
+    let tries = 0;
+    const interval = setInterval(async () => {
+      tries++;
+      try {
+        const profile = await wsGet<{ plan_id: string }>("/api/settings/profile");
+        if (profile.plan_id === paidPlanId) {
+          setPlanId(profile.plan_id);
+          setActivating(false);
+          setActivated(true);
+          clearInterval(interval);
+          // Reload credits too
+          wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits")
+            .then(c => { setBalance(c.balance ?? 0); setTx(c.transactions ?? []); })
+            .catch(() => {});
+        }
+      } catch { /* ignore */ }
+      if (tries >= 10) { setActivating(false); clearInterval(interval); }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [paymentSuccess, paidPlanId]);
 
   async function handlePurchase(packId: string) {
     setPurchasing(packId);
