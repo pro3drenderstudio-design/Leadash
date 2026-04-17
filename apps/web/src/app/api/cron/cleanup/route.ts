@@ -19,10 +19,7 @@ export const maxDuration = 60;
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  const header = req.headers.get("authorization");
-  if (header === `Bearer ${secret}`) return true;
-  const param = new URL(req.url).searchParams.get("secret");
-  return param === secret;
+  return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
 const RETENTION_DAYS = 60;
