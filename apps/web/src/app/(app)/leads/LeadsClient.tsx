@@ -243,14 +243,27 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       const cells = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
       return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""]));
     });
-    const result = await importLeads(rows, listId, fieldMapping);
-    const parts = [`Imported ${result.imported} leads.`];
-    if (result.skipped_unsubscribed) parts.push(`${result.skipped_unsubscribed} unsubscribed skipped.`);
-    if (result.skipped_duplicate)    parts.push(`${result.skipped_duplicate} duplicates skipped.`);
-    setImportResult({ ok: true, msg: parts.join(" ") });
-    setCsvFile(null); setCsvHeaders([]); setMapping({}); setCustomNames({}); setImporting(null);
-    if (fileRef.current) fileRef.current.value = "";
-    load();
+    try {
+      const result = await importLeads(rows, listId, fieldMapping);
+      const parts = [`Imported ${result.imported} leads.`];
+      if (result.skipped_unsubscribed) parts.push(`${result.skipped_unsubscribed} unsubscribed skipped.`);
+      if (result.skipped_duplicate)    parts.push(`${result.skipped_duplicate} duplicates skipped.`);
+      setImportResult({ ok: true, msg: parts.join(" ") });
+      setCsvFile(null); setCsvHeaders([]); setMapping({}); setCustomNames({}); setImporting(null);
+      if (fileRef.current) fileRef.current.value = "";
+      load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Import failed";
+      // Detect paid-plan errors — show upgrade modal instead of inline error
+      if (msg.toLowerCase().includes("paid plan") || msg.toLowerCase().includes("pool full") || msg.toLowerCase().includes("upgrade")) {
+        setUpgradeModal({
+          title: msg.includes("pool full") ? "Leads pool full" : "Paid plan required",
+          message: msg,
+        });
+      } else {
+        setImportResult({ ok: false, msg });
+      }
+    }
   }
 
   const isOverPool   = poolMax > 0 && poolUsed > poolMax;
