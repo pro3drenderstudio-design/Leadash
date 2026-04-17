@@ -31,17 +31,24 @@ export async function POST(req: NextRequest) {
 
   const origin = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL;
 
-  const { authorizationUrl } = await createPaystackCheckout({
-    email:       workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
-    amountKobo:  plan.price_ngn * 100,
-    planCode:    plan.paystack_plan_code,
-    callbackUrl: `${origin}/settings?billing=success&plan=${plan.plan_id}`,
-    metadata: {
-      workspace_id: workspaceId,
-      plan_id:      plan.plan_id,
-      type:         "plan_subscription",
-    },
-  });
+  let authorizationUrl: string;
+  try {
+    const result = await createPaystackCheckout({
+      email:       workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
+      amountKobo:  plan.price_ngn * 100,
+      planCode:    plan.paystack_plan_code,
+      callbackUrl: `${origin}/settings?billing=success&plan=${plan.plan_id}`,
+      metadata: {
+        workspace_id: workspaceId,
+        plan_id:      plan.plan_id,
+        type:         "plan_subscription",
+      },
+    });
+    authorizationUrl = result.authorizationUrl;
+  } catch (err) {
+    console.error("[billing/checkout]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Payment initialization failed" }, { status: 502 });
+  }
 
   return NextResponse.json({ url: authorizationUrl });
 }
