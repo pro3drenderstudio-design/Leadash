@@ -9,6 +9,7 @@ import type { OutreachInbox, OutreachLead } from "@/types/outreach";
 const SAMPLE_LEAD: OutreachLead = {
   id: "sample",
   workspace_id: "",
+  list_id: "",
   email: "sample@example.com",
   first_name: "Jane",
   last_name: "Smith",
