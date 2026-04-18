@@ -15,7 +15,17 @@ interface DnsRecord {
   priority?: number;
 }
 
-const WARMUP_DAYS = 21;
+const WARMUP_DAYS          = 21;
+const WARMUP_SENDS_PER_INBOX = 15;
+const FULL_SENDS_PER_INBOX   = 30;
+
+function domainCapacity(inboxes: number) {
+  return {
+    warmupDay: inboxes * WARMUP_SENDS_PER_INBOX,
+    fullDay:   inboxes * FULL_SENDS_PER_INBOX,
+    fullMonth: inboxes * FULL_SENDS_PER_INBOX * 30,
+  };
+}
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).catch(() => {});
