@@ -285,7 +285,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     if (!aiProduct || !aiAudience || !aiValueProp) { setAiError("All fields required"); return; }
     setAiGenerating(true); setAiError(null);
     try {
-      const result = await generateSequence({ product_name: aiProduct, target_audience: aiAudience, value_prop: aiValueProp, tone: aiTone, num_emails: aiNumEmails, wait_days_between: aiWaitDays });
+      const result = await generateSequence({ product_name: aiProduct, target_audience: aiAudience, value_prop: aiValueProp, tone: aiTone, num_emails: aiNumEmails, wait_days_between: aiWaitDays, message_length: aiMessageLength });
       if (result.error) { setAiError(result.error); return; }
       if (result.steps) {
         setEditSteps(result.steps.map((s: { type: string; subject?: string; body?: string; wait_days?: number }) => ({ type: s.type as "email" | "wait", wait_days: s.wait_days ?? aiWaitDays, subject_template: s.subject ?? "", subject_template_b: "", body_template: s.body ?? "" })));
