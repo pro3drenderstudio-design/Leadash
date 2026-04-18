@@ -8,30 +8,40 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "AI not configured (set OPENAI_API_KEY)" }, { status: 503 });
 
-  const { product_name, target_audience, value_prop, tone = "professional", num_emails = 3, wait_days_between = 3 } = await req.json();
+  const { product_name, target_audience, value_prop, tone = "professional", num_emails = 3, wait_days_between = 3, message_length = "standard" } = await req.json();
   if (!product_name || !target_audience) {
     return NextResponse.json({ error: "product_name and target_audience are required" }, { status: 400 });
   }
 
-  const prompt = `You are an expert cold email copywriter. Generate a ${num_emails}-email outreach sequence.
+  const lengthGuide: Record<string, string> = {
+    concise:       "2–3 sentences per email — ultra-short, every word earns its place",
+    standard:      "4–5 sentences per email — clear and scannable",
+    detailed:      "6–8 sentences per email — room for context and a compelling story",
+    comprehensive: "9–12 sentences per email — thorough, covers objections and proof points",
+  };
+  const bodyGuide = lengthGuide[message_length] ?? lengthGuide.standard;
+
+  const prompt = `You are an expert cold email copywriter. Generate EXACTLY ${num_emails} emails for an outreach sequence. No more, no less — the "steps" array MUST contain exactly ${num_emails} objects.
 
 Product/Service: ${product_name}
 Target audience: ${target_audience}
 Value proposition: ${value_prop || "not specified"}
 Tone: ${tone}
+Message length: ${bodyGuide}
 Days between emails: ${wait_days_between}
 
 Rules:
-- Each email should be short, focused, and build on the previous one
-- Email 1: Cold intro — hook + value prop, end with a soft CTA
-- Email 2: Follow-up — new angle or social proof, brief
-- Email 3+: Final nudge — shorter, different perspective or case study
-- Subject lines should be punchy and under 8 words
-- Bodies: conversational, no fluff, 3-5 sentences max
+- Each email builds on the previous one with a fresh angle
+- Email 1: Cold intro — hook + value prop, soft CTA
+- Email 2: Follow-up — new angle or social proof
+- Email 3: Different perspective or case study
+- Email 4+: Shorter nudge, create urgency or try a completely different hook
+- Subject lines: punchy, under 8 words
+- Respect the message length guideline strictly
 - Use {{first_name}}, {{company}}, {{title}} as personalization variables where natural
 - No generic openers like "I hope this finds you well"
 
-Respond with JSON only in this exact format:
+Respond with JSON only in this exact format (the steps array must have exactly ${num_emails} items):
 {
   "steps": [
     {
@@ -43,7 +53,7 @@ Respond with JSON only in this exact format:
   ]
 }
 
-The first step should have wait_days: 0. Subsequent steps should have wait_days: ${wait_days_between}.`;
+The first step must have wait_days: 0. All subsequent steps must have wait_days: ${wait_days_between}.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
