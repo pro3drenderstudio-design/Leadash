@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CurrencyProvider>
     <SidebarProvider>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} />
+        <Sidebar workspaceName={workspace.name} plan={workspace.plan_id} credits={(workspace.lead_credits_balance ?? 0) + (workspace.subscription_credits_balance ?? 0)} />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Banners + header as a single sticky-top block */}
           <div className="flex-shrink-0 z-30 relative">
