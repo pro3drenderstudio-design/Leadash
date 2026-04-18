@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     .eq("id", workspaceId)
     .single();
   const workspacePlan = await getPlanById(workspace_plan_row?.plan_id ?? "free");
+  const ngnPerUsd     = await getUsdToNgn();
 
   // ── Insert one pending record per domain ─────────────────────────────────────
   const insertedIds: string[] = [];
