@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  revalidateTag("usd_ngn_rate");
+  revalidateTag("usd_ngn_rate", {});
 
   return NextResponse.json(data);
 }
