@@ -88,6 +88,18 @@ export default function ConnectDomainPage() {
   const { currency: globalCurrency } = useCurrency();
   const searchParams = useSearchParams();
 
+  const [inboxPriceNgn, setInboxPriceNgn] = useState(2500);
+
+  useEffect(() => {
+    const wsId = getWorkspaceId() ?? "";
+    fetch("/api/outreach/pricing", { headers: { "x-workspace-id": wsId } })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { inbox_monthly_price_ngn: number; ngn_per_usd: number } | null) => {
+        if (data) setInboxPriceNgn(data.inbox_monthly_price_ngn);
+      })
+      .catch(() => {});
+  }, []);
+
   // ── NS auto-detection ────────────────────────────────────────────────────────
   function triggerNsDetect(val: string) {
     if (detectTimer.current) clearTimeout(detectTimer.current);
