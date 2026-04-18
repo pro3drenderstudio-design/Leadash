@@ -12,6 +12,15 @@ export async function POST(req: NextRequest) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const db   = createAdminClient();
 
+  // Guard: prevent creating a second workspace if user already has one
+  const { data: existing } = await db
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (existing) return NextResponse.json({ id: existing.workspace_id }, { status: 200 });
+
   // Create workspace — free plan gets 3 inboxes and a 14-day warmup trial
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data: workspace, error } = await db
