@@ -469,12 +469,8 @@ export default function ConnectDomainPage() {
             <div className="border-t border-white/8 pt-3 flex justify-between items-center">
               <span className="text-white/60 text-sm">Monthly total</span>
               <div className="text-right">
-                <span className="text-white font-bold">
-                  {globalCurrency === "NGN"
-                    ? `₦${monthlyNgn.toLocaleString()}/mo`
-                    : `$${monthlyUsd}/mo`}
-                </span>
-                <p className="text-white/30 text-xs">${INBOX_PRICE_USD}/inbox × {activePrefixes.length} inbox{activePrefixes.length > 1 ? "es" : ""}</p>
+                <span className="text-white font-bold">₦{monthlyNgn.toLocaleString()}/mo</span>
+                <p className="text-white/30 text-xs">₦{inboxPriceNgn.toLocaleString()}/inbox × {activePrefixes.length} inbox{activePrefixes.length > 1 ? "es" : ""}</p>
               </div>
             </div>
           </div>
