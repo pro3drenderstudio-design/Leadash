@@ -268,6 +268,104 @@ function PlanCard({
   );
 }
 
+function GlobalConfigCard() {
+  const [rate, setRate]         = useState<number | null>(null);
+  const [editRate, setEditRate] = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/platform-config")
+      .then(r => r.json())
+      .then(d => {
+        setRate(d.usd_to_ngn ?? 1700);
+        setEditRate(String(d.usd_to_ngn ?? 1700));
+      })
+      .catch(() => {});
+  }, []);
+
+  const isDirty = rate !== null && Number(editRate) !== rate && editRate !== "";
+
+  async function handleSave() {
+    const val = Number(editRate);
+    if (!val || val < 100) return;
+    setSaving(true);
+    const res = await fetch("/api/admin/platform-config", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usd_to_ngn: val }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setRate(val);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } else {
+      const d = await res.json();
+      alert(d.error ?? "Save failed");
+    }
+  }
+
+  return (
+    <div className={`bg-white dark:bg-white/5 border rounded-2xl overflow-hidden transition-all ${
+      isDirty ? "border-orange-400 dark:border-orange-500/60 ring-1 ring-orange-400/30" : "border-slate-200 dark:border-white/10"
+    }`}>
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10">
+        <p className="text-base font-bold text-slate-800 dark:text-white">Global Config</p>
+        <p className="text-[11px] text-slate-400 dark:text-white/30 mt-0.5">Applies sitewide — not per plan</p>
+      </div>
+      <div className="p-5 space-y-5">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-3">Currency</p>
+          <div>
+            <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">
+              USD → NGN rate <span className="text-slate-400 dark:text-white/30 font-normal">(₦100 buffer added automatically)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-400 dark:text-white/40">₦</span>
+              <input
+                type="number"
+                value={editRate}
+                min={100}
+                onChange={e => setEditRate(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white text-right focus:outline-none focus:ring-2 focus:ring-orange-500/30 tabular-nums"
+              />
+              <span className="text-sm text-slate-400 dark:text-white/40 whitespace-nowrap">per $1</span>
+            </div>
+            {editRate && Number(editRate) >= 100 && (
+              <p className="text-xs text-slate-400 dark:text-white/30 mt-1.5">
+                Effective rate charged: ₦{(Number(editRate) + 100).toLocaleString()} per $1
+              </p>
+            )}
+          </div>
+        </div>
+
+        {isDirty && (
+          <div className="flex items-center justify-between pt-1">
+            <button
+              onClick={() => setEditRate(String(rate))}
+              className="text-sm text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white transition-colors"
+            >
+              Discard
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !editRate || Number(editRate) < 100}
+              className="px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-400 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+
+        {saved && !isDirty && (
+          <p className="text-xs text-green-600 dark:text-green-400 text-right">✓ Saved — live immediately</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PlansPage() {
   const [plans, setPlans]   = useState<PlanConfig[]>([]);
   const [loading, setLoading] = useState(true);
