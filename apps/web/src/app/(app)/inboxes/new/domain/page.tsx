@@ -136,6 +136,22 @@ export default function BuyDomainPage() {
   const [paying, setPaying]               = useState(false);
   const [payError, setPayError]           = useState<string | null>(null);
 
+  // ── Pricing (from plan + live exchange rate) ─────────────────────────────────
+  const [inboxPriceNgn, setInboxPriceNgn] = useState(2500);
+  const [ngnPerUsd, setNgnPerUsd]         = useState(1700);
+
+  useEffect(() => {
+    const wsId = getWorkspaceId() ?? "";
+    fetch("/api/outreach/pricing", { headers: { "x-workspace-id": wsId } })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { inbox_monthly_price_ngn: number; ngn_per_usd: number } | null) => {
+        if (!data) return;
+        setInboxPriceNgn(data.inbox_monthly_price_ngn);
+        setNgnPerUsd(data.ngn_per_usd);
+      })
+      .catch(() => {});
+  }, []);
+
   // ── Step 4: Provisioning ────────────────────────────────────────────────────
   // Track per-domain provision status: { [id]: status }
   const [domainIds, setDomainIds]             = useState<string[]>(returnedIdList);
