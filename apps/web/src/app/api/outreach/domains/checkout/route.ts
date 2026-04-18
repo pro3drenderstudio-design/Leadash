@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
   // ── Paystack ─────────────────────────────────────────────────────────────────
   try {
     // Domain cost in NGN (converted from USD) + inbox monthly cost (already in NGN from plan)
-    const totalNgn = Math.round(totalOneTimeUsd * NGN_PER_USD * 100) + inboxMonthlyNgn * 100;
+    const totalNgn = Math.round(totalOneTimeUsd * ngnPerUsd * 100) + inboxMonthlyNgn * 100;
 
     const { data: workspace } = await db
       .from("workspaces")
