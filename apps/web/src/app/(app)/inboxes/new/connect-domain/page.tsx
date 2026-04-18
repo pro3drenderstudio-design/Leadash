@@ -488,7 +488,7 @@ export default function ConnectDomainPage() {
               disabled={loading}
               className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
             >
-              {loading ? "Redirecting…" : `Pay ${globalCurrency === "NGN" ? `₦${monthlyNgn.toLocaleString()}` : `$${monthlyUsd}`}/mo →`}
+              {loading ? "Redirecting…" : `Pay ₦${monthlyNgn.toLocaleString()}/mo →`}
             </button>
             <button onClick={() => setStep("configure")} className="text-white/40 hover:text-white/70 text-sm transition-colors">Back</button>
           </div>
