@@ -4,11 +4,10 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { checkDomains } from "@/lib/outreach/porkbun";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
+import { getUsdToNgn } from "@/lib/billing/exchangeRate";
 
 // $1 service fee on top of the at-cost domain price
 const DOMAIN_SERVICE_FEE_USD = 1;
-// Approximate NGN/USD exchange rate for domain cost conversion only
-const NGN_PER_USD = 1600;
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
