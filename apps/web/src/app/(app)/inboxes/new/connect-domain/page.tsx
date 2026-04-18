@@ -510,6 +510,21 @@ export default function ConnectDomainPage() {
                 <p className="text-white/30 text-xs">₦{inboxPriceNgn.toLocaleString()}/inbox × {activePrefixes.length} inbox{activePrefixes.length > 1 ? "es" : ""}</p>
               </div>
             </div>
+            {(() => {
+              const cap = domainCapacity(activePrefixes.length);
+              return (
+                <div className="border-t border-white/8 pt-3 grid grid-cols-4 gap-2 text-center">
+                  {[
+                    ["Inboxes",    activePrefixes.length.toString()],
+                    ["Warmup/day", cap.warmupDay.toLocaleString()],
+                    ["Full/day",   cap.fullDay.toLocaleString()],
+                    ["Full/month", cap.fullMonth.toLocaleString()],
+                  ].map(([l, v]) => (
+                    <div key={l}><p className="text-white font-semibold text-sm">{v}</p><p className="text-white/30 text-xs">{l}</p></div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex gap-3 p-4 rounded-xl bg-orange-500/8 border border-orange-500/20">
