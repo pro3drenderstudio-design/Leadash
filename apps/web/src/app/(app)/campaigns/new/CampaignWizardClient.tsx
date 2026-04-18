@@ -124,6 +124,7 @@ export default function CampaignWizardClient() {
         tone: aiTone,
         num_emails: aiNumEmails,
         wait_days_between: aiWaitDays,
+        message_length: aiMessageLength,
       });
       if (result.error) { setAiError(result.error); return; }
       if (result.steps) {
