@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         {
           price_data: {
             currency:    "usd",
-            unit_amount: Math.round((inboxMonthlyNgn / NGN_PER_USD) * 100),
+            unit_amount: Math.round((inboxMonthlyNgn / ngnPerUsd) * 100),
             recurring:   { interval: "month" },
             product_data: {
               name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
