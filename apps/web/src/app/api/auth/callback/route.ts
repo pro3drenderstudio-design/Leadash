@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     if (existingMemberships?.length) {
       // Link this new Google identity to the existing user's workspaces
       await db.from("workspace_members").insert(
-        existingMemberships.map(m => ({
+        existingMemberships.map((m: { workspace_id: string; role: string }) => ({
           workspace_id: m.workspace_id,
           user_id:      user.id,
           role:         m.role,
