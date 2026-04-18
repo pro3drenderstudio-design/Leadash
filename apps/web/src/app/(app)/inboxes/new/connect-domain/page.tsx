@@ -212,8 +212,7 @@ export default function ConnectDomainPage() {
     }
   }
 
-  const monthlyUsd = activePrefixes.length * INBOX_PRICE_USD;
-  const monthlyNgn = monthlyUsd * NGN_PER_USD;
+  const monthlyNgn = inboxPriceNgn * activePrefixes.length;
 
   async function handleVerify() {
     setStep("verifying");
