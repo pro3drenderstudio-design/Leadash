@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   // This happens when someone signed up with email/password then tries Google with the same email.
   const { data: { users: sameEmailUsers } } = await db.auth.admin.listUsers({ perPage: 1000 });
   const duplicate = sameEmailUsers?.find(
-    u => u.email === user.email && u.id !== user.id
+    (u: { id: string; email?: string }) => u.email === user.email && u.id !== user.id
   );
 
   if (duplicate) {
