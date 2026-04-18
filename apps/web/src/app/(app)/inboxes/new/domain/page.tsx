@@ -667,7 +667,7 @@ export default function BuyDomainPage() {
               </p>
               {currency === "stripe" ? (
                 <p className="text-white/60 text-sm font-mono mt-0.5">
-                  ${oneTimeUsd.toFixed(2)} domain + ${recurringUsd}/mo
+                  ${oneTimeUsd.toFixed(2)} domain + ₦{recurringNgn.toLocaleString()}/mo
                 </p>
               ) : (
                 <>
