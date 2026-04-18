@@ -163,6 +163,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [aiTone, setAiTone]             = useState("professional");
   const [aiNumEmails, setAiNumEmails]   = useState(3);
   const [aiWaitDays, setAiWaitDays]     = useState(3);
+  const [aiMessageLength, setAiMessageLength] = useState("standard");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError]           = useState<string | null>(null);
 
