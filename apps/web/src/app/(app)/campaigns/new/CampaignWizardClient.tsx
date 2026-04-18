@@ -508,7 +508,7 @@ export default function CampaignWizardClient() {
                 <label className="block text-xs text-white/40 mb-1">Value Proposition</label>
                 <input value={aiValueProp} onChange={(e) => setAiValueProp(e.target.value)} placeholder="Cuts project planning time by 60% using AI" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-white/40 mb-1">Tone</label>
                   <select value={aiTone} onChange={(e) => setAiTone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
@@ -516,6 +516,15 @@ export default function CampaignWizardClient() {
                     <option value="friendly">Friendly</option>
                     <option value="direct">Direct</option>
                     <option value="casual">Casual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-white/40 mb-1">Message Length</label>
+                  <select value={aiMessageLength} onChange={(e) => setAiMessageLength(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
+                    <option value="concise">Concise</option>
+                    <option value="standard">Standard</option>
+                    <option value="detailed">Detailed</option>
+                    <option value="comprehensive">Comprehensive</option>
                   </select>
                 </div>
                 <div>
