@@ -38,9 +38,10 @@ const NAV = [
 interface Props {
   workspaceName: string;
   plan: string;
+  credits: number;
 }
 
-export default function Sidebar({ workspaceName, plan }: Props) {
+export default function Sidebar({ workspaceName, plan, credits }: Props) {
   const pathname = usePathname();
   const { isOpen, close } = useSidebar();
 
