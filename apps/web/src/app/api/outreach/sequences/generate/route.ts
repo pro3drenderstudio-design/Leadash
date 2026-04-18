@@ -65,7 +65,7 @@ The first step must have wait_days: 0. All subsequent steps must have wait_days:
           { role: "system", content: "You are a cold email copywriting expert. Respond with JSON only." },
           { role: "user", content: prompt },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
         temperature: 0.8,
         response_format: { type: "json_object" },
       }),
