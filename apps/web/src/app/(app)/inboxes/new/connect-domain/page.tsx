@@ -429,6 +429,33 @@ export default function ConnectDomainPage() {
             )}
           </div>
 
+          {/* Sending capacity stats */}
+          {activePrefixes.length > 0 && (() => {
+            const cap = domainCapacity(activePrefixes.length);
+            return (
+              <div className="rounded-xl border border-white/8 bg-white/3 overflow-hidden">
+                <div className="grid grid-cols-3 divide-x divide-white/8">
+                  {[
+                    { label: "Total inboxes",    value: String(activePrefixes.length), sub: `on ${domain || "your domain"}` },
+                    { label: "Warmup sends/day", value: cap.warmupDay.toLocaleString(), sub: "first 21 days" },
+                    { label: "Full sends/day",   value: cap.fullDay.toLocaleString(),   sub: "after warmup" },
+                  ].map(({ label, value, sub }) => (
+                    <div key={label} className="p-3 text-center">
+                      <p className="text-white font-bold text-xl">{value}</p>
+                      <p className="text-white/40 text-xs mt-0.5">{label}</p>
+                      <p className="text-white/25 text-[11px]">{sub}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-white/8 px-4 py-2 text-center">
+                  <p className="text-white/40 text-xs">
+                    <span className="text-white/70 font-medium">{cap.fullMonth.toLocaleString()}</span> sends/month at full capacity
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Warmup notice */}
           <div className="flex gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
             <span className="text-amber-400 flex-shrink-0 mt-0.5">⚠</span>
