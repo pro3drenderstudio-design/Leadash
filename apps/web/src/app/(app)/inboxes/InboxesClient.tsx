@@ -332,7 +332,8 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     const sessionId      = params.get("session_id");
     const paystackRef    = params.get("reference") || params.get("trxref");
     if (addDomainId && prefixesB64) {
-      const prefixes = Buffer.from(prefixesB64, "base64url").toString("utf-8").split(",").filter(Boolean);
+      // base64url decode (browser-safe)
+      const prefixes = atob(prefixesB64.replace(/-/g, "+").replace(/_/g, "/")).split(",").filter(Boolean);
       setActiveTab("domains");
       void (async () => {
         showToast("Payment received — provisioning new inboxes…");
