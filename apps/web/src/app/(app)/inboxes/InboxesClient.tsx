@@ -226,6 +226,19 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     warmup_target_daily: "", warmup_ramp_per_week: "",
   });
 
+  // ── Domain settings modal ─────────────────────────────────────────────────
+  const [settingsDomain, setSettingsDomain]   = useState<OutreachDomain | null>(null);
+  const [settingsRedirect, setSettingsRedirect] = useState("");
+  const [settingsForward, setSettingsForward]   = useState("");
+  const [settingsSaving, setSettingsSaving]     = useState(false);
+  const [settingsMsg, setSettingsMsg]           = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // ── Add inboxes modal ─────────────────────────────────────────────────────
+  const [addInboxesDomain, setAddInboxesDomain] = useState<OutreachDomain | null>(null);
+  const [addPrefixes, setAddPrefixes]           = useState("");
+  const [addWorking, setAddWorking]             = useState(false);
+  const [addMsg, setAddMsg]                     = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   // ── Inbox drawer ──────────────────────────────────────────────────────────
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
   const [drawerEdits, setDrawerEdits]   = useState<Partial<OutreachInboxSafe>>({});
