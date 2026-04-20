@@ -212,6 +212,29 @@ export default function WorkspaceDetailPage() {
     fetchDomains();
   }
 
+  async function handleAdminAddInboxes(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addInboxesDomainId) return;
+    const prefixes = addInboxesPrefixes.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (!prefixes.length) return;
+    setAddInboxesLoading(true);
+    setAddInboxesMsg(null);
+    const res = await fetch(`/api/outreach/domains/${addInboxesDomainId}/add-inboxes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "provision", new_prefixes: prefixes }),
+    });
+    const data = await res.json() as { ok?: boolean; count?: number; error?: string };
+    setAddInboxesLoading(false);
+    if (data.ok) {
+      setAddInboxesMsg({ type: "success", text: `${data.count} inbox${(data.count ?? 0) !== 1 ? "es" : ""} created.` });
+      setAddInboxesPrefixes("");
+      fetchDomains();
+    } else {
+      setAddInboxesMsg({ type: "error", text: data.error ?? "Failed" });
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8 max-w-5xl mx-auto space-y-6 animate-pulse">
