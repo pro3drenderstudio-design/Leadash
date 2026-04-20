@@ -544,6 +544,14 @@ export default function WorkspaceDetailPage() {
                         {verifyingId === domain.id ? "Checking…" : "Verify DNS"}
                       </button>
                     )}
+                    {domain.status === "active" && domain.inboxes.length < 5 && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setAddInboxesDomainId(domain.id); setAddInboxesPrefixes(""); setAddInboxesMsg(null); setExpandedDomainId(domain.id); }}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 dark:text-orange-400 transition-colors"
+                      >
+                        + Inbox
+                      </button>
+                    )}
                     <button
                       onClick={e => { e.stopPropagation(); handleDeleteDomain(domain.id, domain.domain); }}
                       disabled={deletingDomainId === domain.id}
