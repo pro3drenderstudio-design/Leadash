@@ -1499,6 +1499,127 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
           </div>
         </div>
       )}
+
+      {/* ── DOMAIN SETTINGS MODAL ──────────────────────────────────────────────── */}
+      {settingsDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSettingsDomain(null)}>
+          <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/8">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Domain Settings</h2>
+                <p className="text-white/35 text-xs mt-0.5">{settingsDomain.domain}</p>
+              </div>
+              <button onClick={() => setSettingsDomain(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs text-white/50 mb-1.5 font-medium">Web redirect URL <span className="text-white/25 font-normal">(optional)</span></label>
+                <input
+                  type="url"
+                  value={settingsRedirect}
+                  onChange={e => setSettingsRedirect(e.target.value)}
+                  placeholder="https://yourcompany.com"
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                />
+                <p className="text-white/25 text-[11px] mt-1.5">Visitors to {settingsDomain.domain} will be redirected here (301). Cloudflare proxied A record required.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-white/50 mb-1.5 font-medium">Forward all replies to <span className="text-white/25 font-normal">(optional)</span></label>
+                <input
+                  type="email"
+                  value={settingsForward}
+                  onChange={e => setSettingsForward(e.target.value)}
+                  placeholder="you@company.com"
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                />
+                <p className="text-white/25 text-[11px] mt-1.5">All email received on this domain will be forwarded here. Cloudflare Email Routing sends a one-time verification email to confirm.</p>
+                {settingsDomain.reply_forward_to && !settingsDomain.forward_verified && (
+                  <p className="text-amber-400/70 text-[11px] mt-1">⚠ Pending verification — check your inbox for the Cloudflare confirmation email.</p>
+                )}
+              </div>
+
+              {settingsMsg && (
+                <div className={`px-3 py-2 rounded-lg text-xs ${settingsMsg.type === "success" ? "bg-green-500/15 text-green-400 border border-green-500/25" : "bg-red-500/15 text-red-400 border border-red-500/25"}`}>
+                  {settingsMsg.text}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setSettingsDomain(null)} className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-semibold rounded-xl transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleSaveSettings} disabled={settingsSaving} className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                  {settingsSaving ? "Saving…" : "Save settings"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD INBOXES MODAL ──────────────────────────────────────────────────── */}
+      {addInboxesDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAddInboxesDomain(null)}>
+          <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/8">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Add Inboxes</h2>
+                <p className="text-white/35 text-xs mt-0.5">{addInboxesDomain.domain} · {5 - (addInboxesDomain.inbox_count ?? addInboxesDomain.mailbox_count)} slot{5 - (addInboxesDomain.inbox_count ?? addInboxesDomain.mailbox_count) !== 1 ? "s" : ""} available</p>
+              </div>
+              <button onClick={() => setAddInboxesDomain(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs text-white/50 mb-1.5 font-medium">New inbox prefixes</label>
+                <input
+                  type="text"
+                  value={addPrefixes}
+                  onChange={e => setAddPrefixes(e.target.value)}
+                  placeholder="e.g. sarah, mike"
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                />
+                <p className="text-white/25 text-[11px] mt-1.5">
+                  Comma-separated local-parts for new inboxes.
+                  {" "}e.g. &quot;sarah, mike&quot; creates sarah@{addInboxesDomain.domain} and mike@{addInboxesDomain.domain}.
+                </p>
+              </div>
+
+              {addMsg && (
+                <div className={`px-3 py-2 rounded-lg text-xs ${addMsg.type === "success" ? "bg-green-500/15 text-green-400 border border-green-500/25" : "bg-red-500/15 text-red-400 border border-red-500/25"}`}>
+                  {addMsg.text}
+                </div>
+              )}
+
+              <div className="bg-white/4 border border-white/8 rounded-xl p-4 text-xs text-white/40 space-y-1">
+                <p className="font-semibold text-white/50 text-[11px] uppercase tracking-wider mb-2">What happens next</p>
+                <p>→ You&apos;ll be taken to a secure checkout for the monthly inbox fee</p>
+                <p>→ After payment, inboxes are automatically provisioned with SMTP credentials</p>
+                <p>→ Warmup starts immediately (21-day period)</p>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setAddInboxesDomain(null)} className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-semibold rounded-xl transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddInboxes}
+                  disabled={addWorking || !addPrefixes.trim()}
+                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                >
+                  {addWorking ? "Redirecting to checkout…" : "Add inboxes →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
