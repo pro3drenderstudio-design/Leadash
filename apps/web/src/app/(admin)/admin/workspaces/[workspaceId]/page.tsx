@@ -92,6 +92,12 @@ export default function WorkspaceDetailPage() {
   const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
   const [deletingDomainId, setDeletingDomainId] = useState<string | null>(null);
 
+  // Add inboxes to existing domain
+  const [addInboxesDomainId, setAddInboxesDomainId] = useState<string | null>(null);
+  const [addInboxesPrefixes, setAddInboxesPrefixes] = useState("");
+  const [addInboxesLoading, setAddInboxesLoading]   = useState(false);
+  const [addInboxesMsg, setAddInboxesMsg]           = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const fetchWorkspace = useCallback(() => {
     setLoading(true);
     fetch(`/api/admin/workspaces/${workspaceId}`)
