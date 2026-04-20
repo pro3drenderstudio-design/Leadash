@@ -598,6 +598,41 @@ export default function WorkspaceDetailPage() {
                         </div>
                       </div>
                     )}
+                    {/* Admin: Add inboxes form */}
+                    {addInboxesDomainId === domain.id && (
+                      <form onSubmit={handleAdminAddInboxes} className="mt-2 space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-500 dark:text-orange-400">Add Inboxes</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={addInboxesPrefixes}
+                            onChange={e => setAddInboxesPrefixes(e.target.value)}
+                            placeholder="e.g. sarah, mike"
+                            className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                          />
+                          <button
+                            type="submit"
+                            disabled={addInboxesLoading || !addInboxesPrefixes.trim()}
+                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
+                          >
+                            {addInboxesLoading ? "Creating…" : "Create"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setAddInboxesDomainId(null); setAddInboxesMsg(null); }}
+                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-white/30">Comma-separated prefixes. Creates SMTP credentials immediately — no payment required.</p>
+                        {addInboxesMsg && (
+                          <p className={`text-xs font-medium ${addInboxesMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                            {addInboxesMsg.text}
+                          </p>
+                        )}
+                      </form>
+                    )}
                     <div className="text-xs text-slate-400 dark:text-white/30">
                       Added {new Date(domain.created_at).toLocaleDateString()}
                       {domain.warmup_ends_at && ` · Warmup ends ${new Date(domain.warmup_ends_at).toLocaleDateString()}`}
