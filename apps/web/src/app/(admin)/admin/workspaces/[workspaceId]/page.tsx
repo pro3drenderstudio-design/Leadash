@@ -98,6 +98,9 @@ export default function WorkspaceDetailPage() {
   const [addInboxesLoading, setAddInboxesLoading]   = useState(false);
   const [addInboxesMsg, setAddInboxesMsg]           = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Retry provision for failed domains
+  const [retryingDomainId, setRetryingDomainId] = useState<string | null>(null);
+
   const fetchWorkspace = useCallback(() => {
     setLoading(true);
     fetch(`/api/admin/workspaces/${workspaceId}`)
