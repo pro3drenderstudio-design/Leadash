@@ -9,10 +9,8 @@ const REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI!;
 const PUBSUB_TOPIC  = process.env.GOOGLE_PUBSUB_TOPIC!;
 
 function supabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  return createClient(url!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 // ─── OAuth2 client ────────────────────────────────────────────────────────────
