@@ -506,6 +506,70 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     }
   }
 
+  function openSettings(d: OutreachDomain) {
+    setSettingsDomain(d);
+    setSettingsRedirect(d.redirect_url ?? "");
+    setSettingsForward(d.reply_forward_to ?? "");
+    setSettingsMsg(null);
+  }
+
+  async function handleSaveSettings() {
+    if (!settingsDomain) return;
+    setSettingsSaving(true);
+    setSettingsMsg(null);
+    try {
+      const body: Record<string, string | null> = {};
+      const newRedirect = settingsRedirect.trim() || null;
+      const newForward  = settingsForward.trim()  || null;
+      if (newRedirect !== settingsDomain.redirect_url)     body.redirect_url     = newRedirect;
+      if (newForward  !== settingsDomain.reply_forward_to) body.reply_forward_to = newForward;
+      if (!Object.keys(body).length) { setSettingsDomain(null); return; }
+
+      const res  = await wsFetch(`/api/outreach/domains/${settingsDomain.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setSettingsMsg({ type: "success", text: "Settings saved" });
+      loadDomains();
+      setTimeout(() => setSettingsDomain(null), 1200);
+    } catch (e) {
+      setSettingsMsg({ type: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  async function handleAddInboxes() {
+    if (!addInboxesDomain) return;
+    const prefixes = addPrefixes.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (!prefixes.length) return;
+    setAddWorking(true);
+    setAddMsg(null);
+    try {
+      const res  = await wsFetch(`/api/outreach/domains/${addInboxesDomain.id}/add-inboxes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "checkout",
+          new_prefixes: prefixes,
+          payment_provider: "stripe",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      // Redirect to Stripe/Paystack checkout
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      }
+    } catch (e) {
+      setAddMsg({ type: "error", text: e instanceof Error ? e.message : String(e) });
+      setAddWorking(false);
+    }
+  }
+
   async function handleDelete(id: string, label: string) {
     if (!confirm(`Remove inbox "${label}"? This will stop all campaigns using it.`)) return;
     await deleteInbox(id);
