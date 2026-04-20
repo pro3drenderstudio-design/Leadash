@@ -33,32 +33,43 @@ const QUEUE_LABELS: Record<string, string> = {
   "leadash:enrich-bulk":   "Enrich Bulk",
 };
 
+function makeRedis() {
+  return new IORedis(process.env.UPSTASH_REDIS_URL!, {
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+    connectTimeout: 3000,
+    tls: process.env.UPSTASH_REDIS_URL?.startsWith("rediss://") ? {} : undefined,
+  });
+}
+
+// GET /api/admin/system
+// Optional query params: ?page=0&limit=25&queue=leadash:send
 export async function GET(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { searchParams } = new URL(req.url);
+  const page  = Math.max(0, parseInt(searchParams.get("page")  ?? "0"));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "25")));
+  const filterQueue = searchParams.get("queue") ?? null;
 
   let redis: IORedis | null = null;
   let redisConnected = false;
 
   try {
-    redis = new IORedis(process.env.UPSTASH_REDIS_URL!, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: false,
-      connectTimeout: 3000,
-      tls: process.env.UPSTASH_REDIS_URL?.startsWith("rediss://") ? {} : undefined,
-    });
+    redis = makeRedis();
     await redis.ping();
     redisConnected = true;
   } catch {
-    // Redis unavailable — return degraded response
     return NextResponse.json({
       redis: { connected: false },
       queues: [],
-      failedJobs: [],
+      failedJobs: [], failedTotal: 0,
       supabase: { connected: true },
       uptime: process.uptime(),
       nodeVersion: process.version,
       memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      workerHeartbeat: null,
     });
   }
 
@@ -66,9 +77,7 @@ export async function GET(req: NextRequest) {
   const queueStats = await Promise.all(
     QUEUE_NAMES.map(async (name) => {
       try {
-        const q = new Queue(name, {
-          connection: redis!,
-        });
+        const q = new Queue(name, { connection: redis! });
         const [waiting, active, completed, failed, delayed] = await Promise.all([
           q.getWaitingCount(),
           q.getActiveCount(),
@@ -84,15 +93,23 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  // Recent failed jobs (sample from each queue)
-  const failedJobs: { queue: string; name: string; failedReason: string; timestamp: number }[] = [];
-  for (const name of QUEUE_NAMES) {
+  // Failed jobs — paginated, optionally filtered by queue
+  const queuesToScan = filterQueue
+    ? QUEUE_NAMES.filter(n => n === filterQueue)
+    : [...QUEUE_NAMES];
+
+  // Collect all failed jobs across requested queues for pagination
+  const allFailed: { queue: string; queueName: string; name: string; failedReason: string; timestamp: number }[] = [];
+  for (const name of queuesToScan) {
     try {
       const q = new Queue(name, { connection: redis! });
-      const jobs = await q.getFailed(0, 4);
+      const total = await q.getFailedCount();
+      // Fetch enough to support pagination across queues (max 500 per queue for performance)
+      const jobs = await q.getFailed(0, Math.min(total, 500));
       for (const job of jobs) {
-        failedJobs.push({
+        allFailed.push({
           queue:        QUEUE_LABELS[name] ?? name,
+          queueName:    name,
           name:         job.name,
           failedReason: job.failedReason ?? "Unknown error",
           timestamp:    job.timestamp,
@@ -102,8 +119,16 @@ export async function GET(req: NextRequest) {
     } catch { /* skip */ }
   }
 
-  // Sort failed jobs by recency
-  failedJobs.sort((a, b) => b.timestamp - a.timestamp);
+  allFailed.sort((a, b) => b.timestamp - a.timestamp);
+  const failedTotal = allFailed.length;
+  const failedJobs  = allFailed.slice(page * limit, (page + 1) * limit);
+
+  // Worker heartbeat from Redis (worker writes "leadash:worker:heartbeat" key every 30s)
+  let workerHeartbeat: { ts: number; pid?: number; hostname?: string } | null = null;
+  try {
+    const raw = await redis.get("leadash:worker:heartbeat");
+    if (raw) workerHeartbeat = JSON.parse(raw) as { ts: number; pid?: number; hostname?: string };
+  } catch { /* non-fatal */ }
 
   if (redis) {
     try { await redis.quit(); } catch { /* ignore */ }
@@ -117,12 +142,58 @@ export async function GET(req: NextRequest) {
   } catch { supabaseConnected = false; }
 
   return NextResponse.json({
-    redis:       { connected: redisConnected },
-    queues:      queueStats,
-    failedJobs:  failedJobs.slice(0, 20),
-    supabase:    { connected: supabaseConnected },
-    uptime:      process.uptime(),
-    nodeVersion: process.version,
-    memoryMb:    Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    redis:          { connected: redisConnected },
+    queues:         queueStats,
+    failedJobs,
+    failedTotal,
+    supabase:       { connected: supabaseConnected },
+    uptime:         process.uptime(),
+    nodeVersion:    process.version,
+    memoryMb:       Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    workerHeartbeat,
   });
+}
+
+// POST /api/admin/system
+// Body: { action: "clear_failed" | "retry_failed", queue: "leadash:send" | "all" }
+export async function POST(req: NextRequest) {
+  const ctx = await requireAdmin();
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { action, queue } = await req.json() as { action: string; queue: string };
+  if (!action || !queue) return NextResponse.json({ error: "action and queue required" }, { status: 400 });
+
+  let redis: IORedis | null = null;
+  try {
+    redis = makeRedis();
+    await redis.ping();
+  } catch {
+    return NextResponse.json({ error: "Redis unavailable" }, { status: 503 });
+  }
+
+  const targets = queue === "all" ? [...QUEUE_NAMES] : [queue as typeof QUEUE_NAMES[number]];
+  let affected = 0;
+
+  for (const name of targets) {
+    if (!QUEUE_NAMES.includes(name as typeof QUEUE_NAMES[number])) continue;
+    try {
+      const q = new Queue(name, { connection: redis! });
+      if (action === "clear_failed") {
+        const count = await q.getFailedCount();
+        await q.clean(0, count + 1, "failed");
+        affected += count;
+      } else if (action === "retry_failed") {
+        const jobs = await q.getFailed(0, 1000);
+        for (const job of jobs) {
+          await job.retry().catch(() => {});
+        }
+        affected += jobs.length;
+      }
+      await q.close();
+    } catch { /* skip */ }
+  }
+
+  if (redis) { try { await redis.quit(); } catch { /* ignore */ } }
+
+  return NextResponse.json({ ok: true, affected });
 }
