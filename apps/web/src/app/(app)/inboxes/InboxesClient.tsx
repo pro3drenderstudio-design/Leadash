@@ -12,9 +12,14 @@ interface OutreachDomain {
   domain: string;
   status: string;
   mailbox_count: number;
+  inbox_count: number;
+  mailbox_prefixes: string[] | null;
   warmup_ends_at: string | null;
   error_message: string | null;
   created_at: string;
+  redirect_url: string | null;
+  reply_forward_to: string | null;
+  forward_verified: boolean;
 }
 
 // ─── CSV column mapping ────────────────────────────────────────────────────────
