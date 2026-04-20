@@ -15,10 +15,12 @@ const AUTH_ERROR_PATTERN = /invalid_grant|token.*expired|token.*revoked|access.*
 
 // Module-level singleton — shared across all concurrent runSendBatch calls within
 // the same Vercel function invocation, avoiding redundant client construction.
+// Falls back to SUPABASE_URL so the worker process doesn't need NEXT_PUBLIC_ vars.
+const _supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 let _db: SupabaseClient | null = null;
 function supabase(): SupabaseClient {
   if (!_db) {
-    _db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    _db = createClient(_supabaseUrl!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   }
   return _db;
 }
