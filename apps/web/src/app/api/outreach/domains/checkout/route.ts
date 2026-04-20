@@ -176,7 +176,15 @@ export async function POST(req: NextRequest) {
   // ── Paystack ─────────────────────────────────────────────────────────────────
   try {
     // Domain cost in NGN (converted from USD) + inbox monthly cost (already in NGN from plan)
-    const totalNgn = Math.round(totalOneTimeUsd * ngnPerUsd * 100) + inboxMonthlyNgn * 100;
+    const totalNgn = Math.round(totalOneTimeUsd * ngnPerUsd * 100) + Math.round(inboxMonthlyNgn * 100);
+
+    // Paystack rejects 0-amount transactions
+    if (totalNgn <= 0) {
+      // Mark records as paid (free provisioning) and redirect directly to provision
+      await db.from("outreach_domains").update({ paystack_reference: "free" }).in("id", insertedIds);
+      const successUrl = `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}${connect_only ? "&connect=1" : ""}${cfSuffix}`;
+      return NextResponse.json({ domain_record_ids: insertedIds, checkout_url: successUrl, free: true });
+    }
 
     const { data: workspace } = await db
       .from("workspaces")
