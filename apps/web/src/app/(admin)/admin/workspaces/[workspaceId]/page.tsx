@@ -238,6 +238,26 @@ export default function WorkspaceDetailPage() {
     }
   }
 
+  async function handleRetryProvision(domainId: string, domainName: string) {
+    if (!confirm(`Retry full provision for "${domainName}"? This will re-purchase the domain and re-create inboxes.`)) return;
+    setRetryingDomainId(domainId);
+    setDomainMsg(null);
+    const res = await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain_record_id: domainId, action: "retry_provision" }),
+    });
+    const data = await res.json() as { ok?: boolean; status?: string; error?: string };
+    setRetryingDomainId(null);
+    if (data.ok) {
+      setDomainMsg({ type: "success", text: `Domain "${domainName}" provisioned successfully.` });
+      fetchDomains();
+    } else {
+      setDomainMsg({ type: "error", text: data.error ?? "Retry failed" });
+      fetchDomains();
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8 max-w-5xl mx-auto space-y-6 animate-pulse">
