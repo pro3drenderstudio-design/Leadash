@@ -11,10 +11,8 @@ const MS_REDIRECT_URI  = process.env.MICROSOFT_REDIRECT_URI!;
 const APP_URL          = process.env.NEXT_PUBLIC_APP_URL ?? "https://proplanstudio.com";
 
 function supabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  return createClient(url!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 // ─── MSAL config ──────────────────────────────────────────────────────────────
