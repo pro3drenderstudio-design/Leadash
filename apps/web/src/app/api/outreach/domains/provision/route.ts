@@ -81,8 +81,11 @@ export async function POST(req: NextRequest) {
       } else {
         const ref = paystack_reference ?? domainRecord.paystack_reference;
         if (!ref) throw new Error("No Paystack reference available");
-        const { paid } = await verifyPaystackPayment(ref);
-        if (!paid) throw new Error("Payment not completed");
+        // "free" is a sentinel value for 0-amount checkouts (skipped payment)
+        if (ref !== "free") {
+          const { paid } = await verifyPaystackPayment(ref);
+          if (!paid) throw new Error("Payment not completed");
+        }
       }
 
       // ── Step 2: Purchase domain via Porkbun ──────────────────────────────────
