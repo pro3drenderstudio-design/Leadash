@@ -58,6 +58,15 @@ export async function addZone(domain: string): Promise<{ zoneId: string; nameser
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   if (!accountId) throw new Error("CLOUDFLARE_ACCOUNT_ID is not configured");
 
+  // Always try to look up existing zone first to avoid duplicate zone errors
+  const existingZones = await cfFetch<{ id: string; name_servers: string[] }[]>(
+    "GET", `/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`,
+  ).catch(() => null);
+
+  if (existingZones?.length) {
+    return { zoneId: existingZones[0].id, nameservers: existingZones[0].name_servers };
+  }
+
   try {
     const result = await cfFetch<{ id: string; name_servers: string[] }>("POST", "/zones", {
       name:       domain,
@@ -67,15 +76,18 @@ export async function addZone(domain: string): Promise<{ zoneId: string; nameser
     });
     return { zoneId: result.id, nameservers: result.name_servers };
   } catch (err) {
-    // Zone already exists — fetch the existing one instead of failing
+    // Zone already exists under this or another account — fetch existing
     const msg = err instanceof Error ? err.message : "";
-    if (!msg.includes("already exists") && !msg.includes("1061")) throw err;
-
-    const zones = await cfFetch<{ id: string; name_servers: string[] }[]>(
-      "GET", `/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`,
-    );
-    if (!zones?.length) throw new Error(`Zone already exists for ${domain} but could not be retrieved`);
-    return { zoneId: zones[0].id, nameservers: zones[0].name_servers };
+    if (msg.includes("already exists") || msg.includes("1061") || msg.includes("already been taken")) {
+      // Try without account filter in case zone is registered under a different account
+      const zones = await cfFetch<{ id: string; name_servers: string[] }[]>(
+        "GET", `/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`,
+      ).catch(() => [] as { id: string; name_servers: string[] }[]);
+      if (zones?.length) {
+        return { zoneId: zones[0].id, nameservers: zones[0].name_servers };
+      }
+    }
+    throw err;
   }
 }
 
