@@ -7,7 +7,8 @@ import { markEnrollmentReplied } from "@/lib/outreach/scheduler";
 import type { OutreachCrmFilter } from "@/types/outreach";
 
 function supabase() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  return createClient(url!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 // ─── OOO patterns ─────────────────────────────────────────────────────────────
