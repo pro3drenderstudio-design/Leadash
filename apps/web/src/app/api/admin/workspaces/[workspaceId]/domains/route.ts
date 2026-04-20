@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
-import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
+import { addZone, publishDnsRecords, buildPostalMailDnsRecords, setWebRedirect, setEmailForwarding } from "@/lib/outreach/cloudflare";
+import { purchaseDomain, updateNameservers } from "@/lib/outreach/porkbun";
+import { verifyPaystackPayment } from "@/lib/billing/paystack";
 import { encrypt } from "@/lib/outreach/crypto";
+import Stripe from "stripe";
+
+function getStripe() { return new Stripe(process.env.STRIPE_SECRET_KEY!); }
 
 const WARMUP_DAYS = 21;
 
