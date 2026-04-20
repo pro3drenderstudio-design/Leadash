@@ -325,7 +325,50 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (success === "microsoft")     showToast("Microsoft inbox connected successfully");
     if (success === "admin_consent") showToast("Admin consent granted — you can now connect individual inboxes");
     if (error)                       showToast(`Error: ${decodeURIComponent(error)}`, true);
-  }, [params]);
+
+    // Post-payment: provision new inboxes added to an existing domain
+    const addDomainId    = params.get("add_inboxes_domain");
+    const prefixesB64    = params.get("prefixes");
+    const sessionId      = params.get("session_id");
+    const paystackRef    = params.get("reference") || params.get("trxref");
+    if (addDomainId && prefixesB64) {
+      const prefixes = Buffer.from(prefixesB64, "base64url").toString("utf-8").split(",").filter(Boolean);
+      setActiveTab("domains");
+      void (async () => {
+        showToast("Payment received — provisioning new inboxes…");
+        try {
+          const res = await wsFetch(`/api/outreach/domains/${addDomainId}/add-inboxes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "provision",
+              new_prefixes: prefixes,
+              ...(sessionId      ? { stripe_session_id: sessionId } : {}),
+              ...(paystackRef    ? { paystack_reference: paystackRef } : {}),
+            }),
+          });
+          const d = await res.json();
+          if (d.ok) {
+            showToast(`${d.count} new inbox${d.count !== 1 ? "es" : ""} created`);
+            loadDomains();
+            load();
+          } else {
+            showToast(`Error: ${d.error ?? "Provisioning failed"}`);
+          }
+        } catch {
+          showToast("Error: provisioning request failed");
+        }
+        // Clean up URL params
+        const url = new URL(window.location.href);
+        url.searchParams.delete("add_inboxes_domain");
+        url.searchParams.delete("prefixes");
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("reference");
+        url.searchParams.delete("trxref");
+        window.history.replaceState({}, "", url.toString());
+      })();
+    }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, []);
 
