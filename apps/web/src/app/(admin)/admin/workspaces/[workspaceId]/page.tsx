@@ -567,6 +567,15 @@ export default function WorkspaceDetailPage() {
                         {verifyingId === domain.id ? "Checking…" : "Verify DNS"}
                       </button>
                     )}
+                    {domain.status === "failed" && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleRetryProvision(domain.id, domain.domain); }}
+                        disabled={retryingDomainId === domain.id}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 transition-colors disabled:opacity-50"
+                      >
+                        {retryingDomainId === domain.id ? "Retrying…" : "Retry Provision"}
+                      </button>
+                    )}
                     {domain.status === "active" && domain.inboxes.length < 5 && (
                       <button
                         onClick={e => { e.stopPropagation(); setAddInboxesDomainId(domain.id); setAddInboxesPrefixes(""); setAddInboxesMsg(null); setExpandedDomainId(domain.id); }}
