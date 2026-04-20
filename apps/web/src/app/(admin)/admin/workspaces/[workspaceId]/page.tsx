@@ -567,7 +567,7 @@ export default function WorkspaceDetailPage() {
                         {verifyingId === domain.id ? "Checking…" : "Verify DNS"}
                       </button>
                     )}
-                    {domain.status === "failed" && (
+                    {(domain.status === "failed" || (domain.status === "dns_pending" && domain.inboxes.length === 0)) && (
                       <button
                         onClick={e => { e.stopPropagation(); handleRetryProvision(domain.id, domain.domain); }}
                         disabled={retryingDomainId === domain.id}
