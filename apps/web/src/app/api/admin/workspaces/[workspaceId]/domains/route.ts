@@ -208,7 +208,7 @@ export async function PATCH(
       }
 
       // Step 2: Purchase domain (idempotent)
-      await purchaseDomain(domainRecord.domain);
+      await purchaseDomain(domainRecord.domain, undefined, domainRecord.domain_price_usd ?? undefined);
 
       // Step 3: Register with Postal
       await setStatus("dns_pending");
