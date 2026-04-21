@@ -176,8 +176,12 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
       return;
     } catch (err) {
       const msg = err instanceof Error ? err.message.toLowerCase() : "";
-      // Idempotency: domain already registered
-      if (msg.includes("already") || msg.includes("registered") || msg.includes("taken") || msg.includes("unable to register") || msg.includes("not available")) return;
+      // Idempotency: domain already in our account
+      if (msg.includes("already") || msg.includes("registered") || msg.includes("taken") || msg.includes("unable to register")) return;
+      // Domain unavailable (taken by someone else or not orderable)
+      if (msg.includes("not available") || msg.includes("domain not available") || msg.includes("unable to process order") || msg.includes("002")) {
+        throw new Error(`The domain ${domain} is no longer available for registration. Please contact support for a refund.`);
+      }
       // Rate limit: wait 12s and retry
       if (msg.includes("create attempts") || msg.includes("rate limit") || msg.includes("too many")) {
         if (attempt < 3) { await new Promise(r => setTimeout(r, 12_000)); continue; }
