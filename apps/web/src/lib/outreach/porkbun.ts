@@ -136,7 +136,19 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
  * Fetches the live price from Porkbun and passes it as `cost` (in pennies) — required by the API.
  * Requirements: account email/phone verified, sufficient credit, at least one prior registration.
  */
+async function isDomainInAccount(domain: string): Promise<boolean> {
+  try {
+    const data = await call<{ domains?: { domain: string }[] }>("/domain/listAll", { includeLabels: "yes" });
+    return (data.domains ?? []).some(d => d.domain === domain);
+  } catch {
+    return false;
+  }
+}
+
 export async function purchaseDomain(domain: string, _registrant?: RegistrantContact): Promise<void> {
+  // Idempotent — skip purchase if domain is already in the Porkbun account
+  if (await isDomainInAccount(domain)) return;
+
   const pricing = await getLivePricing();
   const tld     = domain.split(".").slice(1).join(".");
   const tldData = pricing[tld];
@@ -154,7 +166,7 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
       agreeToTerms: "yes",
     });
   } catch (err) {
-    // Idempotent — if already registered (retry scenario), continue
+    // Secondary idempotency check — catch any "already registered" phrasing from Porkbun
     const msg = err instanceof Error ? err.message.toLowerCase() : "";
     if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("taken") && !msg.includes("unable to register") && !msg.includes("not available")) throw err;
   }
