@@ -361,7 +361,7 @@ export async function PATCH(
       send_window_start?: string; send_window_end?: string; timezone?: string;
     };
     if (!inbox_id) return NextResponse.json({ error: "inbox_id required" }, { status: 400 });
-    const allowed = ["label","first_name","last_name","daily_send_limit","warmup_enabled","warmup_target_daily","warmup_ramp_per_week","send_window_start","send_window_end","timezone"];
+    const allowed = ["label","first_name","last_name","daily_send_limit","warmup_enabled","warmup_target_daily","warmup_ramp_per_week","send_window_start","send_window_end"];
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const key of allowed) {
       if (key in fields) update[key] = (fields as Record<string, unknown>)[key] ?? null;
