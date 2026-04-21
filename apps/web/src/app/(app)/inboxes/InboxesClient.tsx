@@ -3,7 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getInboxes, deleteInbox, updateInbox, importInboxes } from "@/lib/outreach/api";
-import { wsFetch } from "@/lib/workspace/client";
+import { wsFetch, getWorkspaceId } from "@/lib/workspace/client";
+import { useCurrency } from "@/lib/currency";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
