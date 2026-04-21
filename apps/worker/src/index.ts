@@ -1,4 +1,5 @@
 import "dotenv/config";
+import os from "os";
 import { Worker, QueueEvents } from "bullmq";
 import { connection } from "./lib/redis";
 import { processSend } from "./workers/send-worker";
@@ -11,6 +12,15 @@ import { processEnrichBulk } from "./workers/enrich-bulk-worker";
 import { startSchedulers } from "./schedulers";
 
 console.log("[Leadash Worker] Starting...");
+
+function startHeartbeat() {
+  const payload = JSON.stringify({ ts: Date.now(), pid: process.pid, hostname: os.hostname() });
+  connection.set("leadash:worker:heartbeat", payload, "EX", 120).catch(() => {});
+  setInterval(() => {
+    const p = JSON.stringify({ ts: Date.now(), pid: process.pid, hostname: os.hostname() });
+    connection.set("leadash:worker:heartbeat", p, "EX", 120).catch(() => {});
+  }, 30_000);
+}
 
 // ── Workers ────────────────────────────────────────────────────────────────────
 
