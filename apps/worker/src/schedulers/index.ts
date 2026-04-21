@@ -80,6 +80,19 @@ export function startSchedulers() {
     }
   });
 
+  // ── Warmup ramp: daily at 00:00 UTC ─────────────────────────────────────
+  // Increments warmup_current_daily by warmup_ramp_per_week for each active inbox
+  // that hasn't yet reached its warmup_target_daily.
+  cron.schedule("0 0 * * *", async () => {
+    const { runWarmupRamp } = await import("../../../web/src/lib/outreach/warmup-runner");
+    const workspaceIds = await getActiveWorkspaceIds();
+    let ramped = 0;
+    for (const workspace_id of workspaceIds) {
+      try { await runWarmupRamp(workspace_id); ramped++; } catch { /* non-fatal */ }
+    }
+    console.log(`[scheduler:warmup-ramp] ramped ${ramped} workspaces`);
+  });
+
   // ── Monthly send counter reset: 1st of each month at 00:05 UTC ───────────
   cron.schedule("5 0 1 * *", async () => {
     const db = adminClient();
