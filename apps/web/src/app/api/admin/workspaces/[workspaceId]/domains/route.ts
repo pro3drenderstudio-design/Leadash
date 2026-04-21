@@ -55,7 +55,7 @@ export async function GET(
   // Attach inboxes
   const domainIds = rows.map(d => d.id);
   const { data: inboxData } = domainIds.length
-    ? await ctx.db.from("outreach_inboxes").select("id, domain_id, email_address, status").in("domain_id", domainIds)
+    ? await ctx.db.from("outreach_inboxes").select("id, domain_id, email_address, status, label, first_name, last_name, daily_send_limit, warmup_enabled, warmup_target_daily, warmup_ramp_per_week, warmup_ends_at, send_window_start, send_window_end, timezone, smtp_host, smtp_port, smtp_user").in("domain_id", domainIds)
     : { data: [] as InboxRow[] };
 
   const inboxMap = new Map<string, InboxRow[]>();
