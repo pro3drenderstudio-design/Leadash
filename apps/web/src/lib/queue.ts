@@ -58,7 +58,7 @@ export async function enqueueProvision(domainRecordId: string, workspaceId: stri
   const queue = makeQueue("leadash:provision");
   if (!queue) throw new Error("Redis not configured — cannot enqueue provision job");
   await queue.add("provision", { domain_record_id: domainRecordId, workspace_id: workspaceId }, {
-    jobId:    `provision:${domainRecordId}`,
+    jobId:    `provision:${domainRecordId}:${Date.now()}`,
     attempts: 2,
     backoff:  { type: "fixed", delay: 30_000 },
   });
