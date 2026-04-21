@@ -76,16 +76,21 @@ export async function addZone(domain: string): Promise<{ zoneId: string; nameser
     });
     return { zoneId: result.id, nameservers: result.name_servers };
   } catch (err) {
-    // Zone already exists under this or another account — fetch existing
+    // Zone already exists OR token lacks zone.create permission — look up existing zone
     const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("already exists") || msg.includes("1061") || msg.includes("already been taken")) {
-      // Try without account filter in case zone is registered under a different account
+    const isAlreadyExists = msg.includes("already exists") || msg.includes("1061") || msg.includes("already been taken");
+    const isPermissionError = msg.includes("zone.create") || msg.includes("permission");
+    if (isAlreadyExists || isPermissionError) {
+      // Try with account filter first, then without (zone may be in a sub-account)
       const zones = await cfFetch<{ id: string; name_servers: string[] }[]>(
         "GET", `/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`,
       ).catch(() => [] as { id: string; name_servers: string[] }[]);
-      if (zones?.length) {
-        return { zoneId: zones[0].id, nameservers: zones[0].name_servers };
-      }
+      if (zones?.length) return { zoneId: zones[0].id, nameservers: zones[0].name_servers };
+
+      const zonesNoFilter = await cfFetch<{ id: string; name_servers: string[] }[]>(
+        "GET", `/zones?name=${encodeURIComponent(domain)}`,
+      ).catch(() => [] as { id: string; name_servers: string[] }[]);
+      if (zonesNoFilter?.length) return { zoneId: zonesNoFilter[0].id, nameservers: zonesNoFilter[0].name_servers };
     }
     throw err;
   }
