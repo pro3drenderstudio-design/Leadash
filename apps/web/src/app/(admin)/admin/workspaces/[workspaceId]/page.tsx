@@ -222,10 +222,10 @@ export default function WorkspaceDetailPage() {
     if (!prefixes.length) return;
     setAddInboxesLoading(true);
     setAddInboxesMsg(null);
-    const res = await fetch(`/api/outreach/domains/${addInboxesDomainId}/add-inboxes`, {
-      method: "POST",
+    const res = await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "provision", new_prefixes: prefixes }),
+      body: JSON.stringify({ action: "add_inboxes", domain_record_id: addInboxesDomainId, new_prefixes: prefixes }),
     });
     const data = await res.json() as { ok?: boolean; count?: number; error?: string };
     setAddInboxesLoading(false);
