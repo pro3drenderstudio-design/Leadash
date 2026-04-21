@@ -562,23 +562,36 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
 
   async function handleAddInboxes() {
     if (!addInboxesDomain) return;
-    const prefixes = addPrefixes.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    const prefixes = addPrefixMode === "custom"
+      ? addCustomPrefix.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+      : addSelectedPrefixes;
     if (!prefixes.length) return;
+
+    // Client-side duplicate check
+    const existing = (addInboxesDomain.mailbox_prefixes ?? []).map(p => p.toLowerCase());
+    const conflict = prefixes.find(p => existing.includes(p));
+    if (conflict) {
+      setAddMsg({ type: "error", text: `Prefix "${conflict}" is already in use on this domain` });
+      return;
+    }
+
+    const paymentProvider: "stripe" | "paystack" = globalCurrency === "NGN" ? "paystack" : "stripe";
     setAddWorking(true);
     setAddMsg(null);
     try {
-      const res  = await wsFetch(`/api/outreach/domains/${addInboxesDomain.id}/add-inboxes`, {
+      const res = await wsFetch(`/api/outreach/domains/${addInboxesDomain.id}/add-inboxes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "checkout",
           new_prefixes: prefixes,
-          payment_provider: "stripe",
+          payment_provider: paymentProvider,
+          first_name: addFirstName.trim() || undefined,
+          last_name: addLastName.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      // Redirect to Stripe/Paystack checkout
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       }
