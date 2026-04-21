@@ -35,6 +35,9 @@ new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concur
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
 
+// ── Heartbeat (admin system page checks this every 30s) ───────────────────────
+startHeartbeat();
+
 console.log("[Leadash Worker] All workers registered. Waiting for jobs...");
 
 // Graceful shutdown
