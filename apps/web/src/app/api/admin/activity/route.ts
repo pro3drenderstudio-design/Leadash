@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/api/admin";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+
+async function requireAdmin() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const admin = createAdminClient();
+  const { data } = await admin.from("admins").select("role").eq("user_id", user.id).maybeSingle();
+  return data ? user : null;
+}
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (!auth.ok) return auth.res;
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const type        = searchParams.get("type") ?? "";
-  const workspace   = searchParams.get("workspace") ?? "";
-  const cursor      = searchParams.get("cursor") ?? "";
-  const limit       = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+  const type      = searchParams.get("type") ?? "";
+  const workspace = searchParams.get("workspace") ?? "";
+  const cursor    = searchParams.get("cursor") ?? "";
+  const limit     = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
 
   const db = createAdminClient();
 
@@ -27,8 +35,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const items    = (data ?? []).slice(0, limit);
-  const hasMore  = (data ?? []).length > limit;
+  const items     = (data ?? []).slice(0, limit);
+  const hasMore   = (data ?? []).length > limit;
   const nextCursor = hasMore ? items[items.length - 1].created_at : null;
 
   return NextResponse.json({ items, nextCursor });
