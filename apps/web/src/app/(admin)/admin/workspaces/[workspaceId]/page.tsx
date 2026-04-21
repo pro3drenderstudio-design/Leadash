@@ -19,6 +19,12 @@ interface Campaign {
 }
 interface DomainInbox {
   id: string; email_address: string; status: string;
+  label: string | null; first_name: string | null; last_name: string | null;
+  daily_send_limit: number | null; warmup_enabled: boolean | null;
+  warmup_target_daily: number | null; warmup_ramp_per_week: number | null;
+  warmup_ends_at: string | null; send_window_start: string | null;
+  send_window_end: string | null; timezone: string | null;
+  smtp_host: string | null; smtp_port: number | null; smtp_user: string | null;
 }
 interface Domain {
   id: string; domain: string; status: string; mailbox_count: number;
@@ -26,6 +32,8 @@ interface Domain {
   dns_records: Record<string, string>[] | null;
   mailbox_prefixes: string[] | null;
   first_name: string | null; last_name: string | null;
+  redirect_url: string | null; reply_forward_to: string | null;
+  forward_verified: boolean;
   inboxes: DomainInbox[];
 }
 
