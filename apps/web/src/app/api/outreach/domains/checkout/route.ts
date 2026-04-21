@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   const workspacePlan = await getPlanById(workspace_plan_row?.plan_id ?? "free");
   const ngnPerUsd     = await getUsdToNgn();
 
-  // ── Insert one pending record per domain ─────────────────────────────────────
+  // ── Upsert one record per domain (reuse failed/pending to avoid duplicates) ──
   const insertedIds: string[] = [];
   let totalOneTimeUsd = 0;
 
@@ -68,30 +68,61 @@ export async function POST(req: NextRequest) {
     const oneTimePriceUsd = domainPrice + DOMAIN_SERVICE_FEE_USD;
     totalOneTimeUsd += oneTimePriceUsd;
 
-    const { data: rec, error } = await db
+    // Reuse existing failed or pending record for same domain to avoid duplicates
+    const { data: existing } = await db
       .from("outreach_domains")
-      .insert({
-        workspace_id:      workspaceId,
-        domain,
-        status:            "pending",
-        mailbox_count:     mailboxCount,
-        mailbox_prefix:    mailbox_prefixes[0], // fallback
-        mailbox_prefixes:  mailbox_prefixes,
-        first_name:        first_name ?? null,
-        last_name:         last_name  ?? null,
-        daily_send_limit:  15,
-        payment_provider,
-        domain_price_usd:  domainPrice,
-        redirect_url:      redirect_url ?? null,
-        reply_forward_to:  reply_forward_to ?? null,
-      })
       .select("id")
-      .single();
+      .eq("workspace_id", workspaceId)
+      .eq("domain", domain)
+      .in("status", ["pending", "failed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (error || !rec) {
-      return NextResponse.json({ error: error?.message ?? "Failed to create domain record" }, { status: 500 });
+    let recId: string;
+    if (existing) {
+      await db.from("outreach_domains").update({
+        status:           "pending",
+        mailbox_count:    mailboxCount,
+        mailbox_prefix:   mailbox_prefixes[0],
+        mailbox_prefixes: mailbox_prefixes,
+        first_name:       first_name ?? null,
+        last_name:        last_name  ?? null,
+        payment_provider,
+        domain_price_usd: domainPrice,
+        redirect_url:     redirect_url ?? null,
+        reply_forward_to: reply_forward_to ?? null,
+        error_message:    null,
+        updated_at:       new Date().toISOString(),
+      }).eq("id", existing.id);
+      recId = existing.id;
+    } else {
+      const { data: rec, error } = await db
+        .from("outreach_domains")
+        .insert({
+          workspace_id:      workspaceId,
+          domain,
+          status:            "pending",
+          mailbox_count:     mailboxCount,
+          mailbox_prefix:    mailbox_prefixes[0],
+          mailbox_prefixes:  mailbox_prefixes,
+          first_name:        first_name ?? null,
+          last_name:         last_name  ?? null,
+          daily_send_limit:  15,
+          payment_provider,
+          domain_price_usd:  domainPrice,
+          redirect_url:      redirect_url ?? null,
+          reply_forward_to:  reply_forward_to ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (error || !rec) {
+        return NextResponse.json({ error: error?.message ?? "Failed to create domain record" }, { status: 500 });
+      }
+      recId = rec.id;
     }
-    insertedIds.push(rec.id);
+    insertedIds.push(recId);
   }
 
   // inbox_monthly_price_ngn from plan config (already in NGN, per mailbox)
