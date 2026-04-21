@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
       // ── Step 2: Purchase domain via Porkbun ──────────────────────────────────
       await setStatus("purchasing");
-      await purchaseDomain(domainRecord.domain);
+      await purchaseDomain(domainRecord.domain, undefined, domainRecord.domain_price_usd ?? undefined);
 
       // ── Step 3: Register domain with Postal + get DKIM public key ───────────
       await setStatus("dns_pending");
