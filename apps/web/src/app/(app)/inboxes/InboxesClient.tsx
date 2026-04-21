@@ -190,8 +190,18 @@ interface InboxesClientProps {
   maxInboxes?: number;
 }
 
+function generateCombos(first: string, last: string): string[] {
+  const f = first.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const l = last.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!f && !l) return [];
+  if (f && !l) return [f, `${f}1`, `${f}2`, `${f}3`, `${f}4`].slice(0, 5);
+  if (!f && l) return [l, `${l}1`, `${l}2`, `${l}3`, `${l}4`].slice(0, 5);
+  return [f, `${f}.${l}`, `${f[0]}.${l}`, `${f[0]}${l}`, `${f}${l}`];
+}
+
 export default function InboxesClient({ trialExpired = false, planId = "free", maxInboxes = 5 }: InboxesClientProps) {
   const params = useSearchParams();
+  const { currency: globalCurrency } = useCurrency();
   const [activeTab, setActiveTab]       = useState<"inboxes" | "domains">("inboxes");
   const [inboxes, setInboxes]           = useState<OutreachInboxSafe[]>([]);
   const [loading, setLoading]           = useState(true);
