@@ -1607,64 +1607,199 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
       )}
 
       {/* ── ADD INBOXES MODAL ──────────────────────────────────────────────────── */}
-      {addInboxesDomain && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAddInboxesDomain(null)}>
-          <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/8">
-              <div>
-                <h2 className="text-sm font-semibold text-white">Add Inboxes</h2>
-                <p className="text-white/35 text-xs mt-0.5">{addInboxesDomain.domain} · {5 - (addInboxesDomain.inbox_count ?? addInboxesDomain.mailbox_count)} slot{5 - (addInboxesDomain.inbox_count ?? addInboxesDomain.mailbox_count) !== 1 ? "s" : ""} available</p>
-              </div>
-              <button onClick={() => setAddInboxesDomain(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-              </button>
-            </div>
+      {addInboxesDomain && (() => {
+        const slotsLeft = 5 - (addInboxesDomain.inbox_count ?? addInboxesDomain.mailbox_count);
+        const existingPrefixes = (addInboxesDomain.mailbox_prefixes ?? []).map(p => p.toLowerCase());
+        const combos = generateCombos(addFirstName, addLastName).filter(p => !existingPrefixes.includes(p));
+        const activePrefixes = addPrefixMode === "custom"
+          ? addCustomPrefix.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+          : addSelectedPrefixes;
+        const uniqueValid = activePrefixes.filter((p, i, arr) => arr.indexOf(p) === i && !existingPrefixes.includes(p));
+        const conflict = activePrefixes.find(p => existingPrefixes.includes(p));
+        const overCap = uniqueValid.length > slotsLeft;
+        const canProceed = uniqueValid.length > 0 && !conflict && !overCap && !addWorking;
 
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs text-white/50 mb-1.5 font-medium">New inbox prefixes</label>
-                <input
-                  type="text"
-                  value={addPrefixes}
-                  onChange={e => setAddPrefixes(e.target.value)}
-                  placeholder="e.g. sarah, mike"
-                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
-                />
-                <p className="text-white/25 text-[11px] mt-1.5">
-                  Comma-separated local-parts for new inboxes.
-                  {" "}e.g. &quot;sarah, mike&quot; creates sarah@{addInboxesDomain.domain} and mike@{addInboxesDomain.domain}.
-                </p>
-              </div>
+        const pricePerInboxUsd = addNgnPerUsd > 0 ? addInboxPriceNgn / addNgnPerUsd : 0;
+        const totalMonthlyUsd = pricePerInboxUsd * uniqueValid.length;
+        const totalMonthlyNgn = addInboxPriceNgn * uniqueValid.length;
+        const isNgn = globalCurrency === "NGN";
 
-              {addMsg && (
-                <div className={`px-3 py-2 rounded-lg text-xs ${addMsg.type === "success" ? "bg-green-500/15 text-green-400 border border-green-500/25" : "bg-red-500/15 text-red-400 border border-red-500/25"}`}>
-                  {addMsg.text}
+        const warmupDaily = 30;
+        const fullDaily = 50;
+        const monthlyCapacity = uniqueValid.length * fullDaily * 30;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAddInboxesDomain(null)}>
+            <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/8">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Add Inboxes</h2>
+                  <p className="text-white/35 text-xs mt-0.5">{addInboxesDomain.domain} · {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} available</p>
                 </div>
-              )}
-
-              <div className="bg-white/4 border border-white/8 rounded-xl p-4 text-xs text-white/40 space-y-1">
-                <p className="font-semibold text-white/50 text-[11px] uppercase tracking-wider mb-2">What happens next</p>
-                <p>→ You&apos;ll be taken to a secure checkout for the monthly inbox fee</p>
-                <p>→ After payment, inboxes are automatically provisioned with SMTP credentials</p>
-                <p>→ Warmup starts immediately (21-day period)</p>
+                <button onClick={() => setAddInboxesDomain(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
               </div>
 
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setAddInboxesDomain(null)} className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-semibold rounded-xl transition-colors">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddInboxes}
-                  disabled={addWorking || !addPrefixes.trim()}
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
-                >
-                  {addWorking ? "Redirecting to checkout…" : "Add inboxes →"}
-                </button>
+              <div className="p-5 space-y-5">
+                {/* Name inputs */}
+                <div>
+                  <label className="block text-xs text-white/50 mb-2 font-medium">Sender name <span className="text-white/25 font-normal">(for prefix suggestions)</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={addFirstName}
+                      onChange={e => { setAddFirstName(e.target.value); setAddSelectedPrefixes([]); }}
+                      placeholder="First name"
+                      className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                    />
+                    <input
+                      type="text"
+                      value={addLastName}
+                      onChange={e => { setAddLastName(e.target.value); setAddSelectedPrefixes([]); }}
+                      placeholder="Last name"
+                      className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                </div>
+
+                {/* Prefix mode tabs */}
+                <div>
+                  <div className="flex gap-1 mb-3">
+                    <button
+                      onClick={() => setAddPrefixMode("generated")}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${addPrefixMode === "generated" ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "text-white/40 hover:text-white/60"}`}
+                    >
+                      From name
+                    </button>
+                    <button
+                      onClick={() => setAddPrefixMode("custom")}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${addPrefixMode === "custom" ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "text-white/40 hover:text-white/60"}`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+
+                  {addPrefixMode === "generated" ? (
+                    combos.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {combos.map(prefix => {
+                          const sel = addSelectedPrefixes.includes(prefix);
+                          const atCap = !sel && addSelectedPrefixes.length >= slotsLeft;
+                          return (
+                            <button
+                              key={prefix}
+                              disabled={atCap}
+                              onClick={() => setAddSelectedPrefixes(prev =>
+                                prev.includes(prefix) ? prev.filter(p => p !== prefix) : [...prev, prefix]
+                              )}
+                              className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition-colors ${sel ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : atCap ? "border-white/8 text-white/20 cursor-not-allowed" : "border-white/12 text-white/50 hover:border-white/25 hover:text-white/80"}`}
+                            >
+                              {prefix}@yourdomain.com
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-white/25 text-xs">Enter a name above to see suggestions.</p>
+                    )
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={addCustomPrefix}
+                        onChange={e => setAddCustomPrefix(e.target.value)}
+                        placeholder="e.g. hello, support, team"
+                        className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                      />
+                      <p className="text-white/25 text-[11px] mt-1.5">Comma-separated. e.g. &quot;hello, support&quot; creates hello@yourdomain.com and support@yourdomain.com.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview */}
+                {uniqueValid.length > 0 && (
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3">
+                    <p className="text-[11px] text-white/40 font-medium uppercase tracking-wider mb-2">Inboxes to create</p>
+                    <div className="space-y-1">
+                      {uniqueValid.map(p => (
+                        <p key={p} className="text-xs font-mono text-white/60">{p}@{addInboxesDomain.domain}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Capacity stats */}
+                {uniqueValid.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                      <p className="text-lg font-semibold text-white">{warmupDaily * uniqueValid.length}</p>
+                      <p className="text-[10px] text-white/35 mt-0.5">warmup sends/day</p>
+                    </div>
+                    <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                      <p className="text-lg font-semibold text-white">{fullDaily * uniqueValid.length}</p>
+                      <p className="text-[10px] text-white/35 mt-0.5">full sends/day</p>
+                    </div>
+                    <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                      <p className="text-lg font-semibold text-white">{monthlyCapacity.toLocaleString()}</p>
+                      <p className="text-[10px] text-white/35 mt-0.5">sends/month</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pricing */}
+                {uniqueValid.length > 0 && (
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-white/50">{uniqueValid.length} inbox{uniqueValid.length !== 1 ? "es" : ""} × {isNgn ? `₦${addInboxPriceNgn.toLocaleString()}` : `$${pricePerInboxUsd.toFixed(2)}`}/mo</p>
+                        <p className="text-white text-base font-semibold mt-0.5">
+                          {isNgn ? `₦${totalMonthlyNgn.toLocaleString()}` : `$${totalMonthlyUsd.toFixed(2)}`}
+                          <span className="text-white/35 text-xs font-normal">/month</span>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider">Billed monthly</p>
+                        <p className="text-[10px] text-white/25 mt-0.5">Cancel anytime</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Errors */}
+                {conflict && (
+                  <div className="px-3 py-2 rounded-lg text-xs bg-red-500/15 text-red-400 border border-red-500/25">
+                    Prefix &quot;{conflict}&quot; is already in use on this domain.
+                  </div>
+                )}
+                {overCap && !conflict && (
+                  <div className="px-3 py-2 rounded-lg text-xs bg-red-500/15 text-red-400 border border-red-500/25">
+                    Too many prefixes — only {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} remaining.
+                  </div>
+                )}
+                {addMsg && (
+                  <div className={`px-3 py-2 rounded-lg text-xs ${addMsg.type === "success" ? "bg-green-500/15 text-green-400 border border-green-500/25" : "bg-red-500/15 text-red-400 border border-red-500/25"}`}>
+                    {addMsg.text}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => setAddInboxesDomain(null)} className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-semibold rounded-xl transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddInboxes}
+                    disabled={!canProceed}
+                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    {addWorking ? "Redirecting to checkout…" : `Continue to checkout →`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
