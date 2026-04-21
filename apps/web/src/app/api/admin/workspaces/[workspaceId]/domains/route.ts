@@ -40,7 +40,15 @@ export async function GET(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   type DomainRow = NonNullable<typeof domains>[number];
-  type InboxRow  = { id: string; domain_id: string; email_address: string; status: string };
+  type InboxRow  = {
+    id: string; domain_id: string; email_address: string; status: string;
+    label: string | null; first_name: string | null; last_name: string | null;
+    daily_send_limit: number | null; warmup_enabled: boolean | null;
+    warmup_target_daily: number | null; warmup_ramp_per_week: number | null;
+    warmup_ends_at: string | null; send_window_start: string | null;
+    send_window_end: string | null; timezone: string | null;
+    smtp_host: string | null; smtp_port: number | null; smtp_user: string | null;
+  };
 
   const rows = (domains ?? []) as DomainRow[];
 
