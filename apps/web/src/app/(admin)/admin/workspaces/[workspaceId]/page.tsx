@@ -883,11 +883,6 @@ export default function WorkspaceDetailPage() {
                                       <input type="time" value={inboxEditForm.send_window_end} onChange={e => setInboxEditForm(f => ({ ...f, send_window_end: e.target.value }))}
                                         className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
                                     </div>
-                                    <div>
-                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Timezone</label>
-                                      <input type="text" value={inboxEditForm.timezone} onChange={e => setInboxEditForm(f => ({ ...f, timezone: e.target.value }))} placeholder="UTC"
-                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
-                                    </div>
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-white/50 cursor-pointer">
