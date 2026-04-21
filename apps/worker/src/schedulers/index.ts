@@ -116,6 +116,11 @@ export function startSchedulers() {
         method: "POST",
         headers: { Authorization: `Bearer ${CRON_SECRET}` },
       });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[scheduler:inbox-billing] HTTP ${res.status}: ${text.slice(0, 200)}`);
+        return;
+      }
       const data = await res.json() as { charged?: number };
       console.log(`[scheduler:inbox-billing] charged=${data?.charged ?? 0}`);
     } catch (e) {
@@ -132,9 +137,7 @@ export function startSchedulers() {
 
     const tables: Array<{ table: string; extra?: Record<string, string[]> }> = [
       { table: "lead_campaign_leads" },
-      { table: "lead_campaigns",  extra: { status: ["done", "failed", "cancelled"] } },
-      { table: "enrich_jobs",     extra: { status: ["done", "failed"] } },
-      { table: "verify_jobs",     extra: { status: ["done", "failed"] } },
+      { table: "lead_campaigns", extra: { status: ["done", "failed", "cancelled"] } },
     ];
 
     for (const { table, extra } of tables) {

@@ -59,7 +59,7 @@ export default function ActivityPage() {
   const [typeFilter, setTypeFilter]   = useState("");
   const [search, setSearch]           = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchActivity = useCallback(async (cursor?: string, append = false) => {
     if (!append) setLoading(true); else setLoadingMore(true);
