@@ -1,6 +1,6 @@
 import type { Job } from "bullmq";
 import { adminClient } from "../lib/supabase";
-import { purchaseDomain, updateNameservers } from "../lib/porkbun";
+import { updateNameservers } from "../lib/porkbun";
 import {
   registerDomain,
   isDomainVerified,
@@ -53,11 +53,8 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       .eq("id", domain_record_id);
   }
 
-  // ── Step 1: Purchase domain via Porkbun ─────────────────────────────────────
-  await setStatus("purchasing");
-  await purchaseDomain(domainRecord.domain, undefined, domainRecord.domain_price_usd ?? undefined);
-
-  // ── Step 2: Register domain with Postal + get DKIM public key ───────────────
+  // ── Step 1: Register domain with Postal + get DKIM public key ──────────────
+  // (purchaseDomain is handled by the Vercel provision route — Porkbun blocks VPS IPs)
   await setStatus("dns_pending");
   const postalDomain = await registerDomain(domainRecord.domain)
     .catch(e => { throw new Error(`Postal registerDomain: ${e.message}`); });
