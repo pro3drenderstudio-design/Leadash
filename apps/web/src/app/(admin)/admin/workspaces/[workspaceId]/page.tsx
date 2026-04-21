@@ -742,25 +742,212 @@ export default function WorkspaceDetailPage() {
                   </div>
                 </div>
 
-                {/* Expanded: DNS records + inboxes */}
+                {/* Expanded panel */}
                 {expandedDomainId === domain.id && (
-                  <div className="px-5 pb-4 bg-slate-50 dark:bg-white/3 border-t border-slate-100 dark:border-white/5 space-y-3">
-                    {/* Inboxes */}
+                  <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/3 divide-y divide-slate-100 dark:divide-white/5">
+
+                    {/* ── Domain Settings ───────────────────────────────────── */}
+                    {domainSettingsId === domain.id && (
+                      <div className="px-5 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/40 mb-3">Domain Settings</p>
+                        <form onSubmit={saveDomainSettings} className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] text-slate-400 dark:text-white/40 block mb-1">Web redirect URL</label>
+                              <input type="url" value={domainSettingsForm.redirect_url} onChange={e => setDomainSettingsForm(f => ({ ...f, redirect_url: e.target.value }))} placeholder="https://yoursite.com"
+                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-slate-400 dark:text-white/40 block mb-1">Forward all replies to</label>
+                              <input type="email" value={domainSettingsForm.reply_forward_to} onChange={e => setDomainSettingsForm(f => ({ ...f, reply_forward_to: e.target.value }))} placeholder="you@company.com"
+                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                              {domain.reply_forward_to && !domain.forward_verified && (
+                                <p className="text-[10px] text-amber-500 mt-0.5">⚠ Pending Cloudflare verification</p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-slate-400 dark:text-white/40 block mb-1">Sender first name</label>
+                              <input type="text" value={domainSettingsForm.first_name} onChange={e => setDomainSettingsForm(f => ({ ...f, first_name: e.target.value }))} placeholder="Alex"
+                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-slate-400 dark:text-white/40 block mb-1">Sender last name</label>
+                              <input type="text" value={domainSettingsForm.last_name} onChange={e => setDomainSettingsForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Johnson"
+                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                            </div>
+                          </div>
+                          {domainSettingsMsg && (
+                            <p className={`text-xs font-medium ${domainSettingsMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{domainSettingsMsg.text}</p>
+                          )}
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={domainSettingsSaving} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50">
+                              {domainSettingsSaving ? "Saving…" : "Save"}
+                            </button>
+                            <button type="button" onClick={() => setDomainSettingsId(null)} className="px-3 py-1.5 text-xs text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 transition-colors">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                    {/* ── Inboxes ───────────────────────────────────────────── */}
                     {domain.inboxes.length > 0 && (
-                      <div className="pt-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2">Inboxes</p>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="px-5 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/30 mb-3">Inboxes</p>
+                        <div className="space-y-2">
                           {domain.inboxes.map(inbox => (
-                            <span key={inbox.id} className="text-xs px-2.5 py-1 rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60">
-                              {inbox.email_address}
-                            </span>
+                            <div key={inbox.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+                              {/* Inbox header row */}
+                              <div className="flex items-center gap-3 px-3 py-2.5">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-mono text-slate-700 dark:text-white/70 truncate">{inbox.email_address}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${inbox.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40"}`}>
+                                      {inbox.status}
+                                    </span>
+                                    {inbox.warmup_ends_at && new Date(inbox.warmup_ends_at) > new Date() && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">Warmup</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                    {(inbox.first_name || inbox.last_name) && (
+                                      <span className="text-[10px] text-slate-400 dark:text-white/30">{[inbox.first_name, inbox.last_name].filter(Boolean).join(" ")}</span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400 dark:text-white/30">{inbox.daily_send_limit ?? 30}/day</span>
+                                    {inbox.send_window_start && <span className="text-[10px] text-slate-400 dark:text-white/30">{inbox.send_window_start}–{inbox.send_window_end} {inbox.timezone ?? "UTC"}</span>}
+                                    {inbox.smtp_user && <span className="text-[10px] font-mono text-slate-300 dark:text-white/20 truncate max-w-[120px]">{inbox.smtp_user}</span>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <button
+                                    onClick={() => editingInboxId === inbox.id ? setEditingInboxId(null) : openInboxEdit(inbox, domain.id)}
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-slate-100 dark:bg-white/8 hover:bg-slate-200 dark:hover:bg-white/12 text-slate-500 dark:text-white/50 transition-colors"
+                                  >
+                                    {editingInboxId === inbox.id ? "Close" : "Edit"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleInbox(domain.id, inbox.id)}
+                                    disabled={togglingInboxId === inbox.id}
+                                    className={`px-2 py-1 text-[10px] font-semibold rounded-lg transition-colors disabled:opacity-50 ${inbox.status === "active" ? "bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/25" : "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/25"}`}
+                                  >
+                                    {togglingInboxId === inbox.id ? "…" : inbox.status === "active" ? "Pause" : "Activate"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteInbox(domain.id, inbox.id, inbox.email_address)}
+                                    disabled={deletingInboxId === inbox.id}
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20 text-red-500 transition-colors disabled:opacity-50"
+                                  >
+                                    {deletingInboxId === inbox.id ? "…" : "Delete"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Inline edit form */}
+                              {editingInboxId === inbox.id && (
+                                <form onSubmit={saveInboxEdit} className="border-t border-slate-100 dark:border-white/8 px-3 py-3 bg-slate-50 dark:bg-white/3 space-y-3">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    <div className="col-span-2 sm:col-span-3">
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Label</label>
+                                      <input type="text" value={inboxEditForm.label} onChange={e => setInboxEditForm(f => ({ ...f, label: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">First name</label>
+                                      <input type="text" value={inboxEditForm.first_name} onChange={e => setInboxEditForm(f => ({ ...f, first_name: e.target.value }))} placeholder="Alex"
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Last name</label>
+                                      <input type="text" value={inboxEditForm.last_name} onChange={e => setInboxEditForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Johnson"
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Daily limit</label>
+                                      <input type="number" min={1} max={500} value={inboxEditForm.daily_send_limit} onChange={e => setInboxEditForm(f => ({ ...f, daily_send_limit: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Warmup target/day</label>
+                                      <input type="number" min={1} value={inboxEditForm.warmup_target_daily} onChange={e => setInboxEditForm(f => ({ ...f, warmup_target_daily: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Warmup ramp/week</label>
+                                      <input type="number" min={1} value={inboxEditForm.warmup_ramp_per_week} onChange={e => setInboxEditForm(f => ({ ...f, warmup_ramp_per_week: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Send window start</label>
+                                      <input type="time" value={inboxEditForm.send_window_start} onChange={e => setInboxEditForm(f => ({ ...f, send_window_start: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Send window end</label>
+                                      <input type="time" value={inboxEditForm.send_window_end} onChange={e => setInboxEditForm(f => ({ ...f, send_window_end: e.target.value }))}
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Timezone</label>
+                                      <input type="text" value={inboxEditForm.timezone} onChange={e => setInboxEditForm(f => ({ ...f, timezone: e.target.value }))} placeholder="UTC"
+                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-white/50 cursor-pointer">
+                                      <input type="checkbox" checked={inboxEditForm.warmup_enabled} onChange={e => setInboxEditForm(f => ({ ...f, warmup_enabled: e.target.checked }))}
+                                        className="rounded border-slate-300 dark:border-white/20 text-orange-500 focus:ring-orange-500/30" />
+                                      Warmup enabled
+                                    </label>
+                                  </div>
+                                  {inboxEditMsg && (
+                                    <p className={`text-xs font-medium ${inboxEditMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{inboxEditMsg.text}</p>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button type="submit" disabled={inboxEditSaving} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50">
+                                      {inboxEditSaving ? "Saving…" : "Save changes"}
+                                    </button>
+                                    <button type="button" onClick={() => { setEditingInboxId(null); setInboxEditMsg(null); }} className="px-3 py-1.5 text-xs text-slate-500 dark:text-white/40 hover:text-slate-700 transition-colors">Cancel</button>
+                                  </div>
+                                </form>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </div>
                     )}
-                    {/* DNS records */}
+
+                    {/* ── Add Inboxes form ──────────────────────────────────── */}
+                    {addInboxesDomainId === domain.id && (
+                      <div className="px-5 py-4">
+                        <form onSubmit={handleAdminAddInboxes} className="space-y-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-500 dark:text-orange-400 mb-2">Add Inboxes</p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={addInboxesPrefixes}
+                              onChange={e => setAddInboxesPrefixes(e.target.value)}
+                              placeholder="e.g. sarah, mike"
+                              className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                            />
+                            <button type="submit" disabled={addInboxesLoading || !addInboxesPrefixes.trim()}
+                              className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50">
+                              {addInboxesLoading ? "Creating…" : "Create"}
+                            </button>
+                            <button type="button" onClick={() => { setAddInboxesDomainId(null); setAddInboxesMsg(null); }}
+                              className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 transition-colors">
+                              Cancel
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 dark:text-white/30">Comma-separated prefixes. No payment required.</p>
+                          {addInboxesMsg && (
+                            <p className={`text-xs font-medium ${addInboxesMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{addInboxesMsg.text}</p>
+                          )}
+                        </form>
+                      </div>
+                    )}
+
+                    {/* ── DNS Records ───────────────────────────────────────── */}
                     {domain.dns_records && domain.dns_records.length > 0 && (
-                      <div>
+                      <div className="px-5 py-4">
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2">DNS Records</p>
                         <div className="space-y-1.5">
                           {domain.dns_records.map((rec, i) => (
@@ -775,44 +962,13 @@ export default function WorkspaceDetailPage() {
                         </div>
                       </div>
                     )}
-                    {/* Admin: Add inboxes form */}
-                    {addInboxesDomainId === domain.id && (
-                      <form onSubmit={handleAdminAddInboxes} className="mt-2 space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-500 dark:text-orange-400">Add Inboxes</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={addInboxesPrefixes}
-                            onChange={e => setAddInboxesPrefixes(e.target.value)}
-                            placeholder="e.g. sarah, mike"
-                            className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                          />
-                          <button
-                            type="submit"
-                            disabled={addInboxesLoading || !addInboxesPrefixes.trim()}
-                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors disabled:opacity-50"
-                          >
-                            {addInboxesLoading ? "Creating…" : "Create"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setAddInboxesDomainId(null); setAddInboxesMsg(null); }}
-                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-white/30">Comma-separated prefixes. Creates SMTP credentials immediately — no payment required.</p>
-                        {addInboxesMsg && (
-                          <p className={`text-xs font-medium ${addInboxesMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
-                            {addInboxesMsg.text}
-                          </p>
-                        )}
-                      </form>
-                    )}
-                    <div className="text-xs text-slate-400 dark:text-white/30">
+
+                    {/* ── Meta ──────────────────────────────────────────────── */}
+                    <div className="px-5 py-3 text-xs text-slate-400 dark:text-white/25">
                       Added {new Date(domain.created_at).toLocaleDateString()}
                       {domain.warmup_ends_at && ` · Warmup ends ${new Date(domain.warmup_ends_at).toLocaleDateString()}`}
+                      {domain.redirect_url && ` · Redirects → ${domain.redirect_url}`}
+                      {domain.reply_forward_to && ` · Forwards to ${domain.reply_forward_to}`}
                     </div>
                   </div>
                 )}
