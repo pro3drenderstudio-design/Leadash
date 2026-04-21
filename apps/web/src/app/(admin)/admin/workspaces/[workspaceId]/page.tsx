@@ -285,6 +285,116 @@ export default function WorkspaceDetailPage() {
     }
   }
 
+  function openDomainSettings(domain: Domain) {
+    setDomainSettingsId(domain.id);
+    setDomainSettingsForm({
+      redirect_url:     domain.redirect_url ?? "",
+      reply_forward_to: domain.reply_forward_to ?? "",
+      first_name:       domain.first_name ?? "",
+      last_name:        domain.last_name  ?? "",
+    });
+    setDomainSettingsMsg(null);
+    setExpandedDomainId(domain.id);
+  }
+
+  async function saveDomainSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!domainSettingsId) return;
+    setDomainSettingsSaving(true);
+    setDomainSettingsMsg(null);
+    const res = await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain_record_id: domainSettingsId,
+        action: "update_domain_settings",
+        redirect_url:     domainSettingsForm.redirect_url     || undefined,
+        reply_forward_to: domainSettingsForm.reply_forward_to || undefined,
+        first_name:       domainSettingsForm.first_name       || undefined,
+        last_name:        domainSettingsForm.last_name        || undefined,
+      }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setDomainSettingsSaving(false);
+    if (data.ok) { setDomainSettingsMsg({ type: "success", text: "Settings saved." }); fetchDomains(); }
+    else setDomainSettingsMsg({ type: "error", text: data.error ?? "Failed" });
+  }
+
+  function openInboxEdit(inbox: DomainInbox, domainId: string) {
+    setEditingInboxId(inbox.id);
+    setEditingDomainId(domainId);
+    setInboxEditForm({
+      label:                inbox.label          ?? inbox.email_address,
+      first_name:           inbox.first_name     ?? "",
+      last_name:            inbox.last_name      ?? "",
+      daily_send_limit:     String(inbox.daily_send_limit     ?? 30),
+      warmup_enabled:       inbox.warmup_enabled ?? true,
+      warmup_target_daily:  String(inbox.warmup_target_daily  ?? 30),
+      warmup_ramp_per_week: String(inbox.warmup_ramp_per_week ?? 3),
+      send_window_start:    inbox.send_window_start ?? "08:00",
+      send_window_end:      inbox.send_window_end   ?? "18:00",
+      timezone:             inbox.timezone          ?? "UTC",
+    });
+    setInboxEditMsg(null);
+  }
+
+  async function saveInboxEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingInboxId || !editingDomainId) return;
+    setInboxEditSaving(true);
+    setInboxEditMsg(null);
+    const res = await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain_record_id:     editingDomainId,
+        action:               "update_inbox",
+        inbox_id:             editingInboxId,
+        label:                inboxEditForm.label           || undefined,
+        first_name:           inboxEditForm.first_name      || undefined,
+        last_name:            inboxEditForm.last_name       || undefined,
+        daily_send_limit:     parseInt(inboxEditForm.daily_send_limit)     || 30,
+        warmup_enabled:       inboxEditForm.warmup_enabled,
+        warmup_target_daily:  parseInt(inboxEditForm.warmup_target_daily)  || 30,
+        warmup_ramp_per_week: parseInt(inboxEditForm.warmup_ramp_per_week) || 3,
+        send_window_start:    inboxEditForm.send_window_start || undefined,
+        send_window_end:      inboxEditForm.send_window_end   || undefined,
+        timezone:             inboxEditForm.timezone          || undefined,
+      }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setInboxEditSaving(false);
+    if (data.ok) {
+      setInboxEditMsg({ type: "success", text: "Inbox updated." });
+      fetchDomains();
+    } else {
+      setInboxEditMsg({ type: "error", text: data.error ?? "Failed" });
+    }
+  }
+
+  async function handleToggleInbox(domainId: string, inboxId: string) {
+    setTogglingInboxId(inboxId);
+    await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain_record_id: domainId, action: "toggle_inbox", inbox_id: inboxId }),
+    });
+    setTogglingInboxId(null);
+    fetchDomains();
+  }
+
+  async function handleDeleteInbox(domainId: string, inboxId: string, email: string) {
+    if (!confirm(`Delete inbox "${email}"? This will stop all campaigns using it.`)) return;
+    setDeletingInboxId(inboxId);
+    await fetch(`/api/admin/workspaces/${workspaceId}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain_record_id: domainId, action: "delete_inbox", inbox_id: inboxId }),
+    });
+    setDeletingInboxId(null);
+    fetchDomains();
+  }
+
   if (loading) {
     return (
       <div className="p-8 max-w-5xl mx-auto space-y-6 animate-pulse">
