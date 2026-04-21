@@ -807,7 +807,21 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                     <div className="flex items-center gap-1.5">
                       {canAddMore && (
                         <button
-                          onClick={() => { setAddInboxesDomain(d); setAddPrefixes(""); setAddMsg(null); }}
+                          onClick={() => {
+                            setAddInboxesDomain(d);
+                            setAddFirstName(""); setAddLastName("");
+                            setAddSelectedPrefixes([]); setAddCustomPrefix("");
+                            setAddPrefixMode("generated"); setAddMsg(null);
+                            const wsId = getWorkspaceId() ?? "";
+                            fetch("/api/outreach/pricing", { headers: { "x-workspace-id": wsId } })
+                              .then(r => r.ok ? r.json() : null)
+                              .then((data: { inbox_monthly_price_ngn: number; ngn_per_usd: number } | null) => {
+                                if (!data) return;
+                                setAddInboxPriceNgn(data.inbox_monthly_price_ngn);
+                                setAddNgnPerUsd(data.ngn_per_usd);
+                              })
+                              .catch(() => {});
+                          }}
                           className="px-3 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 hover:text-orange-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
                           title={`Add more inboxes (${5 - liveCount} slot${5 - liveCount !== 1 ? "s" : ""} left)`}
                         >
