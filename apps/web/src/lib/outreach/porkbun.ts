@@ -157,18 +157,28 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
   const priceUsd  = parseFloat(tldData.registration);
   const costPennies = Math.round(priceUsd * 100);
 
-  try {
-    await call(`/domain/create/${domain}`, {
-      years:        1,
-      autorenew:    0,
-      privacy:      1,
-      cost:         costPennies,
-      agreeToTerms: "yes",
-    });
-  } catch (err) {
-    // Secondary idempotency check — catch any "already registered" phrasing from Porkbun
-    const msg = err instanceof Error ? err.message.toLowerCase() : "";
-    if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("taken") && !msg.includes("unable to register") && !msg.includes("not available")) throw err;
+  const createArgs = {
+    years:        1,
+    autorenew:    0,
+    privacy:      1,
+    cost:         costPennies,
+    agreeToTerms: "yes",
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await call(`/domain/create/${domain}`, createArgs);
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : "";
+      // Idempotency: domain already registered
+      if (msg.includes("already") || msg.includes("registered") || msg.includes("taken") || msg.includes("unable to register") || msg.includes("not available")) return;
+      // Rate limit: wait 12s and retry
+      if (msg.includes("create attempts") || msg.includes("rate limit") || msg.includes("too many")) {
+        if (attempt < 3) { await new Promise(r => setTimeout(r, 12_000)); continue; }
+      }
+      throw err;
+    }
   }
 }
 
