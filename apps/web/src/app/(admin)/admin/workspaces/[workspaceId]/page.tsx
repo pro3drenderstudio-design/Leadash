@@ -121,8 +121,8 @@ export default function WorkspaceDetailPage() {
   const [inboxEditForm, setInboxEditForm]     = useState<{
     label: string; first_name: string; last_name: string; daily_send_limit: string;
     warmup_enabled: boolean; warmup_target_daily: string; warmup_ramp_per_week: string;
-    send_window_start: string; send_window_end: string; timezone: string;
-  }>({ label: "", first_name: "", last_name: "", daily_send_limit: "30", warmup_enabled: true, warmup_target_daily: "30", warmup_ramp_per_week: "3", send_window_start: "08:00", send_window_end: "18:00", timezone: "UTC" });
+    send_window_start: string; send_window_end: string;
+  }>({ label: "", first_name: "", last_name: "", daily_send_limit: "30", warmup_enabled: true, warmup_target_daily: "30", warmup_ramp_per_week: "3", send_window_start: "08:00", send_window_end: "18:00" });
   const [inboxEditSaving, setInboxEditSaving] = useState(false);
   const [inboxEditMsg, setInboxEditMsg]       = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [togglingInboxId, setTogglingInboxId] = useState<string | null>(null);
