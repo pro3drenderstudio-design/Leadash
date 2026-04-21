@@ -1695,7 +1695,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                               )}
                               className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition-colors ${sel ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : atCap ? "border-white/8 text-white/20 cursor-not-allowed" : "border-white/12 text-white/50 hover:border-white/25 hover:text-white/80"}`}
                             >
-                              {prefix}@yourdomain.com
+                              {prefix}@{addInboxesDomain.domain}
                             </button>
                           );
                         })}
