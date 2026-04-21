@@ -713,6 +713,14 @@ export default function WorkspaceDetailPage() {
                         {retryingDomainId === domain.id ? "Retrying…" : "Retry Provision"}
                       </button>
                     )}
+                    {domain.status === "active" && (
+                      <button
+                        onClick={e => { e.stopPropagation(); openDomainSettings(domain); }}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-white/8 hover:bg-slate-200 dark:hover:bg-white/12 text-slate-500 dark:text-white/50 transition-colors"
+                      >
+                        Settings
+                      </button>
+                    )}
                     {domain.status === "active" && domain.inboxes.length < 5 && (
                       <button
                         onClick={e => { e.stopPropagation(); setAddInboxesDomainId(domain.id); setAddInboxesPrefixes(""); setAddInboxesMsg(null); setExpandedDomainId(domain.id); }}
