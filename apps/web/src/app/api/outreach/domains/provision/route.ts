@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       .from("outreach_domains")
       .update({
         status,
-        ...(errorMessage ? { error_message: errorMessage } : {}),
+        error_message: errorMessage ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", domain_record_id);
