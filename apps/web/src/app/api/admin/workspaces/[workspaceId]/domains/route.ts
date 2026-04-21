@@ -286,6 +286,40 @@ export async function PATCH(
     }
   }
 
+  // ── Admin: add inboxes to active domain (no payment required) ───────────────
+  if (action === "add_inboxes") {
+    const { new_prefixes } = body as { domain_record_id: string; action: string; new_prefixes: string[] };
+    if (!new_prefixes?.length) return NextResponse.json({ error: "new_prefixes required" }, { status: 400 });
+
+    const smtpSettings = getSmtpSettings();
+    const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: existing } = await ctx.db.from("outreach_inboxes").select("email_address").eq("domain_id", domain_record_id);
+    const existingEmails = new Set((existing ?? []).map((i: { email_address: string }) => i.email_address));
+    const created: string[] = [];
+
+    for (const prefix of new_prefixes) {
+      const email = `${prefix}@${domainRecord.domain}`;
+      if (existingEmails.has(email)) continue;
+      const cred = await createSmtpCredential(domainRecord.domain, email).catch(e => { throw new Error(`createSmtpCredential(${email}): ${e.message}`); });
+      await ctx.db.from("outreach_inboxes").insert({
+        workspace_id: workspaceId, domain_id: domain_record_id,
+        label: email, email_address: email,
+        provider: "smtp", status: "active",
+        smtp_host: smtpSettings.host, smtp_port: smtpSettings.port,
+        smtp_user: cred.username, smtp_pass_encrypted: encrypt(cred.password),
+        daily_send_limit: 30, warmup_enabled: true,
+        warmup_target_daily: 30, warmup_ramp_per_week: 3,
+        warmup_ends_at: warmupEndsAt,
+        first_name: domainRecord.first_name ?? null, last_name: domainRecord.last_name ?? null,
+      });
+      created.push(email);
+    }
+
+    const allPrefixes = [...(Array.isArray(domainRecord.mailbox_prefixes) ? domainRecord.mailbox_prefixes as string[] : []), ...new_prefixes];
+    await ctx.db.from("outreach_domains").update({ mailbox_count: allPrefixes.length, mailbox_prefixes: allPrefixes }).eq("id", domain_record_id);
+    return NextResponse.json({ ok: true, count: created.length, created });
+  }
+
   if (domainRecord.status === "active") {
     const { count } = await ctx.db
       .from("outreach_inboxes")
