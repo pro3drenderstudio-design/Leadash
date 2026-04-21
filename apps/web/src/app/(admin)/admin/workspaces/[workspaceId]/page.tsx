@@ -358,7 +358,6 @@ export default function WorkspaceDetailPage() {
         warmup_ramp_per_week: parseInt(inboxEditForm.warmup_ramp_per_week) || 3,
         send_window_start:    inboxEditForm.send_window_start || undefined,
         send_window_end:      inboxEditForm.send_window_end   || undefined,
-        timezone:             inboxEditForm.timezone          || undefined,
       }),
     });
     const data = await res.json() as { ok?: boolean; error?: string };
