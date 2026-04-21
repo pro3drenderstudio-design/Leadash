@@ -328,6 +328,71 @@ export async function PATCH(
     return NextResponse.json({ ok: true, count: created.length, created });
   }
 
+  // ── Update domain settings ───────────────────────────────────────────────────
+  if (action === "update_domain_settings") {
+    const { redirect_url, reply_forward_to, first_name, last_name } = body as {
+      domain_record_id: string; action: string;
+      redirect_url?: string; reply_forward_to?: string;
+      first_name?: string; last_name?: string;
+    };
+    await ctx.db.from("outreach_domains").update({
+      redirect_url:     redirect_url     ?? null,
+      reply_forward_to: reply_forward_to ?? null,
+      first_name:       first_name       ?? null,
+      last_name:        last_name        ?? null,
+      updated_at:       new Date().toISOString(),
+    }).eq("id", domain_record_id);
+    if (redirect_url) {
+      await setWebRedirect(domainRecord.domain, redirect_url).catch(() => {});
+    }
+    if (reply_forward_to) {
+      await setEmailForwarding(domainRecord.domain, reply_forward_to).catch(() => {});
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Update individual inbox ──────────────────────────────────────────────────
+  if (action === "update_inbox") {
+    const { inbox_id, ...fields } = body as {
+      domain_record_id: string; action: string; inbox_id: string;
+      label?: string; first_name?: string; last_name?: string;
+      daily_send_limit?: number; warmup_enabled?: boolean;
+      warmup_target_daily?: number; warmup_ramp_per_week?: number;
+      send_window_start?: string; send_window_end?: string; timezone?: string;
+    };
+    if (!inbox_id) return NextResponse.json({ error: "inbox_id required" }, { status: 400 });
+    const allowed = ["label","first_name","last_name","daily_send_limit","warmup_enabled","warmup_target_daily","warmup_ramp_per_week","send_window_start","send_window_end","timezone"];
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    for (const key of allowed) {
+      if (key in fields) update[key] = (fields as Record<string, unknown>)[key] ?? null;
+    }
+    const { error: inboxErr } = await ctx.db.from("outreach_inboxes")
+      .update(update)
+      .eq("id", inbox_id)
+      .eq("workspace_id", workspaceId);
+    if (inboxErr) return NextResponse.json({ error: inboxErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Toggle inbox status (active ↔ paused) ───────────────────────────────────
+  if (action === "toggle_inbox") {
+    const { inbox_id } = body as { domain_record_id: string; action: string; inbox_id: string };
+    if (!inbox_id) return NextResponse.json({ error: "inbox_id required" }, { status: 400 });
+    const { data: inbox } = await ctx.db.from("outreach_inboxes").select("status").eq("id", inbox_id).eq("workspace_id", workspaceId).single();
+    if (!inbox) return NextResponse.json({ error: "Inbox not found" }, { status: 404 });
+    const newStatus = inbox.status === "active" ? "paused" : "active";
+    await ctx.db.from("outreach_inboxes").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", inbox_id);
+    return NextResponse.json({ ok: true, status: newStatus });
+  }
+
+  // ── Delete individual inbox ──────────────────────────────────────────────────
+  if (action === "delete_inbox") {
+    const { inbox_id } = body as { domain_record_id: string; action: string; inbox_id: string };
+    if (!inbox_id) return NextResponse.json({ error: "inbox_id required" }, { status: 400 });
+    await ctx.db.from("outreach_inboxes").delete().eq("id", inbox_id).eq("workspace_id", workspaceId);
+    return NextResponse.json({ ok: true });
+  }
+
   if (domainRecord.status === "active") {
     const { count } = await ctx.db
       .from("outreach_inboxes")
