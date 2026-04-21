@@ -23,7 +23,7 @@ interface DomainInbox {
   daily_send_limit: number | null; warmup_enabled: boolean | null;
   warmup_target_daily: number | null; warmup_ramp_per_week: number | null;
   warmup_ends_at: string | null; send_window_start: string | null;
-  send_window_end: string | null; timezone: string | null;
+  send_window_end: string | null;
   smtp_host: string | null; smtp_port: number | null; smtp_user: string | null;
 }
 interface Domain {
