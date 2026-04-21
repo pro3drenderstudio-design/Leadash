@@ -811,7 +811,7 @@ export default function WorkspaceDetailPage() {
                                       <span className="text-[10px] text-slate-400 dark:text-white/30">{[inbox.first_name, inbox.last_name].filter(Boolean).join(" ")}</span>
                                     )}
                                     <span className="text-[10px] text-slate-400 dark:text-white/30">{inbox.daily_send_limit ?? 30}/day</span>
-                                    {inbox.send_window_start && <span className="text-[10px] text-slate-400 dark:text-white/30">{inbox.send_window_start}–{inbox.send_window_end} {inbox.timezone ?? "UTC"}</span>}
+                                    {inbox.send_window_start && <span className="text-[10px] text-slate-400 dark:text-white/30">{inbox.send_window_start}–{inbox.send_window_end}</span>}
                                     {inbox.smtp_user && <span className="text-[10px] font-mono text-slate-300 dark:text-white/20 truncate max-w-[120px]">{inbox.smtp_user}</span>}
                                   </div>
                                 </div>
