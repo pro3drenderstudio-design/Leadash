@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPaystackSignature, verifyPaystackPayment } from "@/lib/billing/paystack";
+import { logActivity } from "@/lib/activity";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { purchaseDomain, type RegistrantContact } from "@/lib/outreach/porkbun";
 import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
@@ -110,6 +111,17 @@ export async function POST(req: NextRequest) {
             amount_kobo:        amountKobo ?? (plan.price_ngn * 100),
             paystack_reference: data.reference,
             status:             "paid",
+          });
+
+          // Log subscription activity
+          const { data: wsName } = await db.from("workspaces").select("name").eq("id", workspaceId).single();
+          await logActivity({
+            workspace_id:   workspaceId,
+            workspace_name: wsName?.name,
+            type:           "subscription_started",
+            title:          `Subscribed to ${plan.name}`,
+            description:    `${wsName?.name ?? workspaceId} — ${plan.name} via Paystack`,
+            metadata:       { plan_id: planId, reference: data.reference },
           });
 
           // Check for pool overage after plan change — pause active campaigns if over limit
@@ -416,6 +428,15 @@ export async function POST(req: NextRequest) {
       if (ws?.id) {
         const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "subscription_disabled");
         console.warn(`[billing] Subscription disabled: workspace=${ws.id} campaigns_paused=${paused} credits_expired=${creditsExpired}`);
+        const { data: wsName } = await db.from("workspaces").select("name").eq("id", ws.id).single();
+        await logActivity({
+          workspace_id:   ws.id,
+          workspace_name: wsName?.name,
+          type:           "subscription_cancelled",
+          title:          "Subscription cancelled",
+          description:    `${wsName?.name ?? ws.id} — downgraded to Free (Paystack)`,
+          metadata:       { subscription_code: subCode },
+        });
       }
     }
     return NextResponse.json({ received: true });

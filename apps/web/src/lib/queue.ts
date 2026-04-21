@@ -53,3 +53,13 @@ export async function enqueueEnrichBulk(jobId: string, workspaceId: string): Pro
     backoff:  { type: "fixed", delay: 10_000 },
   });
 }
+
+export async function enqueueProvision(domainRecordId: string, workspaceId: string): Promise<void> {
+  const queue = makeQueue("leadash:provision");
+  if (!queue) throw new Error("Redis not configured — cannot enqueue provision job");
+  await queue.add("provision", { domain_record_id: domainRecordId, workspace_id: workspaceId }, {
+    jobId:    `provision:${domainRecordId}`,
+    attempts: 2,
+    backoff:  { type: "fixed", delay: 30_000 },
+  });
+}

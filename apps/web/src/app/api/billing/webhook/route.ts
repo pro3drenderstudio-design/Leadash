@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/billing/plans";
 import { getPlanById } from "@/lib/billing/getActivePlans";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(req: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -28,6 +29,12 @@ export async function POST(req: NextRequest) {
       const plan = Object.values(PLANS).find(p => p.stripePriceId === priceId);
       if (!plan) break;
 
+      const { data: wsForLog } = await db
+        .from("workspaces")
+        .select("id, name, plan_id")
+        .eq("stripe_customer_id", sub.customer as string)
+        .maybeSingle();
+
       await db
         .from("workspaces")
         .update({
@@ -40,6 +47,19 @@ export async function POST(req: NextRequest) {
           updated_at:        new Date().toISOString(),
         })
         .eq("stripe_customer_id", sub.customer as string);
+
+      if (wsForLog) {
+        const isUpgrade = wsForLog.plan_id && wsForLog.plan_id !== "free" && wsForLog.plan_id !== plan.id;
+        const isNew     = !wsForLog.plan_id || wsForLog.plan_id === "free";
+        await logActivity({
+          workspace_id:   wsForLog.id,
+          workspace_name: wsForLog.name,
+          type:           isNew ? "subscription_started" : isUpgrade ? "subscription_upgraded" : "subscription_started",
+          title:          `${isNew ? "Subscribed to" : "Plan changed to"} ${plan.name}`,
+          description:    `${wsForLog.name} — ${plan.name} via Stripe`,
+          metadata:       { plan_id: plan.id, stripe_sub_id: sub.id },
+        });
+      }
       break;
     }
 
@@ -87,6 +107,12 @@ export async function POST(req: NextRequest) {
     }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
+      const { data: wsCancel } = await db
+        .from("workspaces")
+        .select("id, name, plan_id")
+        .eq("stripe_customer_id", sub.customer as string)
+        .maybeSingle();
+
       await db
         .from("workspaces")
         .update({
@@ -98,6 +124,17 @@ export async function POST(req: NextRequest) {
           max_seats:         PLANS.free.maxSeats,
         })
         .eq("stripe_customer_id", sub.customer as string);
+
+      if (wsCancel) {
+        await logActivity({
+          workspace_id:   wsCancel.id,
+          workspace_name: wsCancel.name,
+          type:           "subscription_cancelled",
+          title:          "Subscription cancelled",
+          description:    `${wsCancel.name} cancelled — downgraded to Free`,
+          metadata:       { stripe_sub_id: sub.id },
+        });
+      }
       break;
     }
   }

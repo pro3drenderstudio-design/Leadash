@@ -9,6 +9,7 @@ import { processWebhook } from "./workers/webhook-worker";
 import { processLeadCampaign } from "./workers/lead-campaign-worker";
 import { processVerifyBulk } from "./workers/verify-bulk-worker";
 import { processEnrichBulk } from "./workers/enrich-bulk-worker";
+import { processProvision } from "./workers/provision-worker";
 import { startSchedulers } from "./schedulers";
 
 console.log("[Leadash Worker] Starting...");
@@ -31,6 +32,7 @@ new Worker("leadash:webhook",        processWebhook,        { connection, concur
 new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 2 });
 new Worker("leadash:verify-bulk",    processVerifyBulk,     { connection, concurrency: 3 });
 new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concurrency: 3 });
+new Worker("leadash:provision",      processProvision,      { connection, concurrency: 3 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
