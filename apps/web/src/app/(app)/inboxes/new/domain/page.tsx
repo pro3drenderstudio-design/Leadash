@@ -158,6 +158,7 @@ export default function BuyDomainPage() {
   const [provisionStatuses, setProvisionStatuses] = useState<Record<string, string>>({});
   const [provisionErrors, setProvisionErrors]     = useState<Record<string, string>>({});
   const [provisioning, setProvisioning]           = useState(false);
+  const provisioningRef = useRef(false);
 
   // Derived: overall status = active when ALL domains active, failed if any failed
   const allActive  = domainIds.length > 0 && domainIds.every(id => provisionStatuses[id] === "active");
@@ -224,7 +225,8 @@ export default function BuyDomainPage() {
 
   // ── Provision (called after payment redirect) ─────────────────────────────
   const startProvision = useCallback(async (ids: string[], sessionId?: string | null, ref?: string | null) => {
-    if (provisioning || !ids.length) return;
+    if (provisioningRef.current || !ids.length) return;
+    provisioningRef.current = true;
     setProvisioning(true);
     const wsId = getWorkspaceId() ?? "";
     // Fire provision for each domain in parallel (fire-and-forget)
@@ -239,7 +241,7 @@ export default function BuyDomainPage() {
         }),
       }).catch(() => {}),
     ));
-  }, [provisioning]);
+  }, []);
 
   // Kick off provision on mount when returning from payment
   useEffect(() => {
@@ -764,6 +766,7 @@ export default function BuyDomainPage() {
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={() => {
+                  provisioningRef.current = false;
                   setProvisioning(false);
                   setProvisionStatuses({});
                   setProvisionErrors({});
