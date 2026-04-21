@@ -190,7 +190,7 @@ export async function POST(
       return NextResponse.json({ error: "new_prefixes is required" }, { status: 400 });
     }
 
-    // Verify payment
+    // Verify payment — always required on user-facing route regardless of domain payment_provider
     if (stripe_session_id) {
       const stripe = getStripe();
       const session = await stripe.checkout.sessions.retrieve(stripe_session_id, { expand: ["subscription"] });
@@ -205,10 +205,7 @@ export async function POST(
     } else if (paystack_reference) {
       const { paid } = await verifyPaystackPayment(paystack_reference);
       if (!paid) return NextResponse.json({ error: "Payment not completed" }, { status: 402 });
-    }
-    // If no payment ref provided — allow free provisioning only if domain is admin-provisioned
-    // (payment_provider = "none") — this covers admin-granted domains
-    else if (domainRecord.payment_provider !== "none") {
+    } else {
       return NextResponse.json({ error: "stripe_session_id or paystack_reference required" }, { status: 400 });
     }
 
