@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
+import { purchaseDomain } from "@/lib/outreach/porkbun";
 import { enqueueProvision } from "@/lib/queue";
 
 function getStripe() {
@@ -62,7 +63,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Hand off to background worker (no timeout constraint) ────────────────────
+  // ── Purchase domain from Vercel (Porkbun blocks VPS IPs, not Vercel IPs) ────
+  await db
+    .from("outreach_domains")
+    .update({ status: "purchasing", error_message: null, updated_at: new Date().toISOString() })
+    .eq("id", domain_record_id);
+
+  try {
+    await purchaseDomain(
+      domainRecord.domain,
+      undefined,
+      (domainRecord as Record<string, unknown>).domain_price_usd as number ?? undefined,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await db
+      .from("outreach_domains")
+      .update({ status: "failed", error_message: msg, updated_at: new Date().toISOString() })
+      .eq("id", domain_record_id);
+    return NextResponse.json({ error: msg }, { status: 422 });
+  }
+
+  // ── Hand off the rest to the background worker ────────────────────────────────
   await enqueueProvision(domain_record_id, workspaceId);
 
   return NextResponse.json({ ok: true });
