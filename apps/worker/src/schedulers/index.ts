@@ -93,6 +93,17 @@ export function startSchedulers() {
     console.log(`[scheduler:warmup-ramp] ramped ${ramped} workspaces`);
   });
 
+  // ── Deliverability checks: daily at 06:00 UTC ───────────────────────────
+  cron.schedule("0 6 * * *", async () => {
+    const { runDeliverabilityChecks } = await import("../../../web/src/lib/outreach/deliverability");
+    try {
+      const result = await runDeliverabilityChecks();
+      console.log("[scheduler:deliverability]", result);
+    } catch (e) {
+      console.error("[scheduler:deliverability] failed:", e);
+    }
+  });
+
   // ── Monthly send counter reset: 1st of each month at 00:05 UTC ───────────
   cron.schedule("5 0 1 * *", async () => {
     const db = adminClient();
