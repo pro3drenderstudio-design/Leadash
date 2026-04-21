@@ -246,7 +246,13 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
 
   // ── Add inboxes modal ─────────────────────────────────────────────────────
   const [addInboxesDomain, setAddInboxesDomain] = useState<OutreachDomain | null>(null);
-  const [addPrefixes, setAddPrefixes]           = useState("");
+  const [addFirstName, setAddFirstName]         = useState("");
+  const [addLastName, setAddLastName]           = useState("");
+  const [addSelectedPrefixes, setAddSelectedPrefixes] = useState<string[]>([]);
+  const [addCustomPrefix, setAddCustomPrefix]   = useState("");
+  const [addPrefixMode, setAddPrefixMode]       = useState<"generated" | "custom">("generated");
+  const [addInboxPriceNgn, setAddInboxPriceNgn] = useState(2500);
+  const [addNgnPerUsd, setAddNgnPerUsd]         = useState(1700);
   const [addWorking, setAddWorking]             = useState(false);
   const [addMsg, setAddMsg]                     = useState<{ type: "success" | "error"; text: string } | null>(null);
 
