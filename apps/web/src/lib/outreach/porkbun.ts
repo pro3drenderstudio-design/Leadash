@@ -145,16 +145,21 @@ async function isDomainInAccount(domain: string): Promise<boolean> {
   }
 }
 
-export async function purchaseDomain(domain: string, _registrant?: RegistrantContact): Promise<void> {
+export async function purchaseDomain(domain: string, _registrant?: RegistrantContact, priceUsdOverride?: number): Promise<void> {
   // Idempotent — skip purchase if domain is already in the Porkbun account
   if (await isDomainInAccount(domain)) return;
 
-  const pricing = await getLivePricing();
-  const tld     = domain.split(".").slice(1).join(".");
-  const tldData = pricing[tld];
-  if (!tldData) throw new Error(`TLD ".${tld}" is not supported by Porkbun`);
+  let priceUsd: number;
+  if (priceUsdOverride !== undefined && priceUsdOverride > 0) {
+    priceUsd = priceUsdOverride;
+  } else {
+    const pricing = await getLivePricing();
+    const tld     = domain.split(".").slice(1).join(".");
+    const tldData = pricing[tld];
+    if (!tldData) throw new Error(`TLD ".${tld}" is not supported by Porkbun`);
+    priceUsd = parseFloat(tldData.registration);
+  }
 
-  const priceUsd  = parseFloat(tldData.registration);
   const costPennies = Math.round(priceUsd * 100);
 
   const createArgs = {
