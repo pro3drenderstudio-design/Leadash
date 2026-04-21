@@ -333,7 +333,6 @@ export default function WorkspaceDetailPage() {
       warmup_ramp_per_week: String(inbox.warmup_ramp_per_week ?? 3),
       send_window_start:    inbox.send_window_start ?? "08:00",
       send_window_end:      inbox.send_window_end   ?? "18:00",
-      timezone:             inbox.timezone          ?? "UTC",
     });
     setInboxEditMsg(null);
   }
