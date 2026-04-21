@@ -5,12 +5,15 @@ function Logo() {
     <Link href="/" className="flex items-center gap-2.5 group">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
-      <span
-        className="text-[17px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors select-none"
-        style={{ letterSpacing: "-0.02em" }}
-      >
-        Leadash
-      </span>
+      <div className="flex flex-col leading-none select-none">
+        <span
+          className="text-[15px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors"
+          style={{ letterSpacing: "-0.02em" }}
+        >
+          Leadash
+        </span>
+        <span className="text-[9px] text-white/30 mt-0.5">by Mizark</span>
+      </div>
     </Link>
   );
 }

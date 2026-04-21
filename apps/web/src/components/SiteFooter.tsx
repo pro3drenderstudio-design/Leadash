@@ -5,12 +5,15 @@ function Logo() {
     <Link href="/" className="flex items-center gap-2.5 group">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
-      <span
-        className="text-[17px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors select-none"
-        style={{ letterSpacing: "-0.02em" }}
-      >
-        Leadash
-      </span>
+      <div className="flex flex-col leading-none select-none">
+        <span
+          className="text-[15px] font-bold tracking-tight text-white/90 group-hover:text-white transition-colors"
+          style={{ letterSpacing: "-0.02em" }}
+        >
+          Leadash
+        </span>
+        <span className="text-[9px] text-white/30 mt-0.5">by Mizark</span>
+      </div>
     </Link>
   );
 }
@@ -71,7 +74,7 @@ export default function SiteFooter() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-white/6 gap-4">
-          <p className="text-white/20 text-sm">© {new Date().getFullYear()} Leadash. All rights reserved.</p>
+          <p className="text-white/20 text-sm">© {new Date().getFullYear()} Leadash by Mizark. All rights reserved.</p>
           <div className="flex items-center gap-6">
             {[["Privacy Policy", "/privacy"], ["Terms of Service", "/terms"], ["GDPR", "/privacy#gdpr"]].map(([l, href]) => (
               <a key={l} href={href} className="text-white/20 text-sm hover:text-white/50 transition-colors">{l}</a>

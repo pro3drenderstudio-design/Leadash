@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   let totalOneTimeUsd = 0;
 
   for (const { domain, price: domainPrice } of domains) {
-    const oneTimePriceUsd = domainPrice + DOMAIN_SERVICE_FEE_USD;
+    const oneTimePriceUsd = domainPrice > 0 ? domainPrice + DOMAIN_SERVICE_FEE_USD : 0;
     totalOneTimeUsd += oneTimePriceUsd;
 
     // Reuse existing failed or pending record for same domain to avoid duplicates

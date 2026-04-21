@@ -28,15 +28,12 @@ async function handler(req: NextRequest) {
   const uniqueIds: string[] = Array.from(new Set((workspaces ?? []).map((r: { workspace_id: string }) => r.workspace_id)));
   if (!uniqueIds.length) return NextResponse.json({ workspaces: 0 });
 
-  // Run ramp on Mondays
-  const isMonday = new Date().getDay() === 1;
-
   const results = await Promise.all(
     uniqueIds.map(async id => {
-      if (isMonday) await runWarmupRamp(id).catch(() => {});
+      await runWarmupRamp(id).catch(() => {});
       return runWarmupPool(id).catch(e => ({ workspace_id: id, error: String(e) }));
     })
   );
 
-  return NextResponse.json({ workspaces: uniqueIds.length, ramped: isMonday, results });
+  return NextResponse.json({ workspaces: uniqueIds.length, results });
 }

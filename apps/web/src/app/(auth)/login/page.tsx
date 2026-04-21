@@ -59,6 +59,7 @@ export default function LoginPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.svg" alt="Leadash" className="h-9 w-auto" />
           </Link>
+          <p className="text-white/25 text-[10px] mt-1 ml-0.5">by Mizark</p>
         </div>
 
         {/* Hero */}
@@ -104,9 +105,10 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-14 xl:px-20 py-12">
 
         {/* Mobile logo */}
-        <div className="flex justify-center mb-10 lg:hidden">
+        <div className="flex flex-col items-center mb-10 lg:hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="Leadash" className="h-9 w-auto" />
+          <p className="text-white/25 text-[10px] mt-1">by Mizark</p>
         </div>
 
         <div className="w-full max-w-sm mx-auto">

@@ -88,8 +88,10 @@ export default function BuyDomainPage() {
   }, [step]);
 
   // ── Step 1: Search ──────────────────────────────────────────────────────────
+  const [searchMode, setSearchMode]       = useState<"search" | "bulk">("search");
   const [sld, setSld]                     = useState("");
   const [selectedTlds, setSelectedTlds]   = useState<string[]>([".com"]);
+  const [bulkInput, setBulkInput]         = useState("");
   const [checking, setChecking]           = useState(false);
   const [results, setResults]             = useState<DomainResult[]>([]);
   const [searchError, setSearchError]     = useState<string | null>(null);
@@ -101,6 +103,31 @@ export default function BuyDomainPage() {
         ? prev.filter(d => d.domain !== r.domain)
         : [...prev, r],
     );
+  }
+
+  async function handleBulkCheck() {
+    const names = bulkInput
+      .split(/[\n,]+/)
+      .map(s => s.trim().toLowerCase().replace(/[^a-z0-9.-]/g, ""))
+      .filter(s => s.includes(".") && s.length > 3);
+    if (!names.length) return;
+    setChecking(true);
+    setSearchError(null);
+    setResults([]);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res = await fetch(
+        `/api/outreach/domains/check?domains=${names.join(",")}`,
+        { headers: { "x-workspace-id": wsId } },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to check domains");
+      setResults(data);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Domain check failed");
+    } finally {
+      setChecking(false);
+    }
   }
 
   // ── Step 2: Configure ───────────────────────────────────────────────────────
@@ -279,7 +306,7 @@ export default function BuyDomainPage() {
   const totalInboxes   = selectedDomains.length * mailboxCount;
   const cap            = domainCapacity(selectedDomains.length, mailboxCount);
 
-  const oneTimeUsd    = selectedDomains.reduce((s, d) => s + d.price + DOMAIN_SERVICE_FEE_USD, 0);
+  const oneTimeUsd    = selectedDomains.reduce((s, d) => s + (d.price > 0 ? d.price + DOMAIN_SERVICE_FEE_USD : 0), 0);
   const recurringNgn  = inboxPriceNgn * totalInboxes;
   const domainOnlyNgn = Math.round(oneTimeUsd * ngnPerUsd);
   const totalNgn      = domainOnlyNgn + recurringNgn;
@@ -340,49 +367,89 @@ export default function BuyDomainPage() {
           <h1 className="text-xl font-bold text-white mb-1">Find a sending domain</h1>
           <p className="text-white/40 text-sm mb-6">Choose a domain dedicated to cold outreach — never use your main company domain.</p>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-white/50 text-xs font-medium mb-1.5">Domain name</label>
-              <div className="flex gap-3">
-                <input
-                  value={sld}
-                  onChange={e => setSld(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())}
-                  onKeyDown={e => e.key === "Enter" && handleSearch()}
-                  placeholder="yourcompany-outreach"
-                  className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
-                />
-                <button
-                  onClick={handleSearch}
-                  disabled={checking || !sld.trim() || !selectedTlds.length}
-                  className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 min-w-[90px] justify-center"
-                >
-                  {checking
-                    ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Checking</>
-                    : "Search"}
-                </button>
-              </div>
-            </div>
+          {/* Mode tabs */}
+          <div className="flex gap-1 bg-white/6 rounded-lg p-0.5 mb-5 w-fit">
+            {(["search", "bulk"] as const).map(m => (
+              <button key={m} onClick={() => { setSearchMode(m); setResults([]); setSearchError(null); }}
+                className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${searchMode === m ? "bg-white/12 text-white" : "text-white/35 hover:text-white/60"}`}>
+                {m === "search" ? "Search" : "Bulk paste"}
+              </button>
+            ))}
+          </div>
 
-            <div>
-              <label className="block text-white/50 text-xs font-medium mb-2">Extensions</label>
-              <div className="flex gap-2 flex-wrap">
-                {TLDS.map(tld => (
+          <div className="space-y-4">
+            {searchMode === "search" ? (
+              <>
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">Domain name</label>
+                  <div className="flex gap-3">
+                    <input
+                      value={sld}
+                      onChange={e => setSld(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())}
+                      onKeyDown={e => e.key === "Enter" && handleSearch()}
+                      placeholder="yourcompany-outreach"
+                      className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
+                    />
+                    <button
+                      onClick={handleSearch}
+                      disabled={checking || !sld.trim() || !selectedTlds.length}
+                      className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 min-w-[90px] justify-center"
+                    >
+                      {checking
+                        ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Checking</>
+                        : "Search"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-2">Extensions</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {TLDS.map(tld => (
+                      <button
+                        key={tld}
+                        onClick={() => setSelectedTlds(prev =>
+                          prev.includes(tld) ? prev.filter(t => t !== tld) : [...prev, tld]
+                        )}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          selectedTlds.includes(tld)
+                            ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
+                            : "bg-white/4 border-white/10 text-white/40 hover:border-white/20"
+                        }`}
+                      >
+                        {tld}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">
+                    Paste domain names <span className="text-white/25">(one per line or comma-separated)</span>
+                  </label>
+                  <textarea
+                    value={bulkInput}
+                    onChange={e => setBulkInput(e.target.value)}
+                    placeholder={"outreach-company1.com\noutreach-company2.io\noutreach-company3.co"}
+                    rows={6}
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors font-mono resize-none"
+                  />
+                </div>
+                <div className="flex justify-end">
                   <button
-                    key={tld}
-                    onClick={() => setSelectedTlds(prev =>
-                      prev.includes(tld) ? prev.filter(t => t !== tld) : [...prev, tld]
-                    )}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                      selectedTlds.includes(tld)
-                        ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
-                        : "bg-white/4 border-white/10 text-white/40 hover:border-white/20"
-                    }`}
+                    onClick={handleBulkCheck}
+                    disabled={checking || !bulkInput.trim()}
+                    className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
                   >
-                    {tld}
+                    {checking
+                      ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Checking…</>
+                      : "Check availability"}
                   </button>
-                ))}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {searchError && <p className="text-red-400 text-sm">{searchError}</p>}
 
@@ -391,10 +458,10 @@ export default function BuyDomainPage() {
                 <div className="px-4 py-2.5 bg-white/3 border-b border-white/8">
                   <div className="flex items-center gap-2 text-white/40 text-xs">
                     <svg className="w-3 h-3 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                    Checking {selectedTlds.length} extension{selectedTlds.length !== 1 ? "s" : ""} — this takes a few seconds…
+                    {searchMode === "bulk" ? "Checking domains…" : `Checking ${selectedTlds.length} extension${selectedTlds.length !== 1 ? "s" : ""} — this takes a few seconds…`}
                   </div>
                 </div>
-                {selectedTlds.map(tld => (
+                {searchMode === "search" && selectedTlds.map(tld => (
                   <div key={tld} className="flex items-center justify-between px-4 py-3 border-b border-white/6 last:border-0">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded border border-white/10 bg-white/5 animate-pulse" />
@@ -440,7 +507,6 @@ export default function BuyDomainPage() {
                 </div>
                 {selectedDomains.length > 0 && (
                   <div className="mt-4 space-y-4">
-                    {/* Selected domains pills */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {selectedDomains.map(d => (
                         <span key={d.domain} className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/15 border border-orange-500/30 rounded-full text-orange-300 text-xs font-mono">
@@ -450,7 +516,6 @@ export default function BuyDomainPage() {
                       ))}
                     </div>
 
-                    {/* Capacity preview card */}
                     <CapacityCard domainCount={selectedDomains.length} />
 
                     <div className="flex justify-end">

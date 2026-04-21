@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getInboxes, getLists, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail, checkInboxDns } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
+import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
+import { getWorkspaceId } from "@/lib/workspace/client";
 
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 type Step = {
@@ -72,6 +74,55 @@ export default function CampaignWizardClient() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
+
+  // ── Spam scoring ─────────────────────────────────────────────────────────────
+  const stepScores = useMemo<SpamResult[]>(() =>
+    seqSteps.map(s =>
+      s.type === "email" ? scoreMessage(s.subject_template, s.body_template) : scoreMessage("", ""),
+    ),
+  [seqSteps]);
+
+  // AI rewrite modal
+  const [rewriteIdx, setRewriteIdx]         = useState<number | null>(null);
+  const [rewriting, setRewriting]           = useState(false);
+  const [rewriteResult, setRewriteResult]   = useState<{ subject: string; body: string } | null>(null);
+  const [rewriteError, setRewriteError]     = useState<string | null>(null);
+
+  async function handleRewrite(idx: number) {
+    const s = seqSteps[idx];
+    if (s.type !== "email") return;
+    setRewriteIdx(idx);
+    setRewriteResult(null);
+    setRewriteError(null);
+    setRewriting(true);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res  = await fetch("/api/outreach/rewrite", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body:    JSON.stringify({
+          subject: s.subject_template,
+          body:    s.body_template,
+          issues:  stepScores[idx]?.issues.map(i => i.label) ?? [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Rewrite failed");
+      setRewriteResult(data);
+    } catch (err) {
+      setRewriteError(err instanceof Error ? err.message : "Rewrite failed");
+    } finally {
+      setRewriting(false);
+    }
+  }
+
+  function applyRewrite(idx: number) {
+    if (!rewriteResult) return;
+    updateStep(idx, "subject_template", rewriteResult.subject);
+    updateStep(idx, "body_template",    rewriteResult.body);
+    setRewriteIdx(null);
+    setRewriteResult(null);
+  }
 
   useEffect(() => {
     Promise.all([getInboxes(), getLists(), getTemplates()]).then(([i, l, t]) => {
@@ -376,8 +427,35 @@ export default function CampaignWizardClient() {
           {seqSteps.map((s, i) => (
             <div key={i} className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">Step {i + 1} · {s.type === "wait" ? `Wait ${s.wait_days} day${s.wait_days !== 1 ? "s" : ""}` : "Email"}</span>
-                <button onClick={() => removeStep(i)} className="text-red-400/60 hover:text-red-400 text-xs">Remove</button>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">
+                    Step {i + 1} · {s.type === "wait" ? `Wait ${s.wait_days} day${s.wait_days !== 1 ? "s" : ""}` : "Email"}
+                  </span>
+                  {s.type === "email" && (() => {
+                    const sc = stepScores[i];
+                    if (!sc) return null;
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${gradeBg(sc.grade)}`}>
+                        <span className={gradeColor(sc.grade)}>{sc.grade}</span>
+                        <span className="text-white/40">{sc.score.toFixed(1)}</span>
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-center gap-3">
+                  {s.type === "email" && stepScores[i] && !stepScores[i].passed && (
+                    <button
+                      onClick={() => handleRewrite(i)}
+                      className="text-violet-400/80 hover:text-violet-300 text-xs transition-colors flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      </svg>
+                      Fix with AI
+                    </button>
+                  )}
+                  <button onClick={() => removeStep(i)} className="text-red-400/60 hover:text-red-400 text-xs">Remove</button>
+                </div>
               </div>
               {s.type === "wait" ? (
                 <div className="flex items-center gap-3">
@@ -448,36 +526,203 @@ export default function CampaignWizardClient() {
       )}
 
       {/* Step 3: Review */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <div className="bg-white/4 border border-white/8 rounded-xl p-5 space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-white/40">Campaign name</span><span className="text-white font-medium">{name}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Inboxes</span><span className="text-white">{selectedInboxes.length} selected</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Lead lists</span><span className="text-white">{lists.filter((l) => selectedLists.includes(l.id)).map((l) => l.name).join(", ")}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Total leads</span><span className="text-white">{lists.filter((l) => selectedLists.includes(l.id)).reduce((s, l) => s + (l.lead_count ?? 0), 0).toLocaleString()}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Sequence steps</span><span className="text-white">{seqSteps.length} ({seqSteps.filter((s) => s.type === "email").length} emails)</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">A/B tests</span><span className="text-white">{seqSteps.filter((s) => s.type === "email" && s.subject_template_b).length} step{seqSteps.filter((s) => s.type === "email" && s.subject_template_b).length !== 1 ? "s" : ""}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Send window</span><span className="text-white">{startTime}–{endTime} · {sendDays.join(", ")}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Daily cap</span><span className="text-white">{dailyCap} emails</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Throttle</span><span className="text-white">{minDelay}–{maxDelay}s between sends</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Stop on reply</span><span className={stopOnReply ? "text-green-400" : "text-white/40"}>{stopOnReply ? "Yes" : "No"}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-white/40">Pause after open</span><span className={pauseAfterOpen ? "text-amber-400" : "text-white/40"}>{pauseAfterOpen ? "Yes" : "No"}</span></div>
+      {step === 3 && (() => {
+        const emailSteps      = seqSteps.map((s, i) => ({ s, i })).filter(({ s }) => s.type === "email");
+        const failedSteps     = emailSteps.filter(({ i }) => !stepScores[i]?.passed);
+        const worstGrade      = emailSteps.reduce((worst, { i }) => {
+          const g = stepScores[i]?.grade ?? "A";
+          const order = ["A","B","C","D","F"];
+          return order.indexOf(g) > order.indexOf(worst) ? g : worst;
+        }, "A" as SpamResult["grade"]);
+        const spamBlocking    = failedSteps.some(({ i }) => (stepScores[i]?.score ?? 0) >= 7);
+        const hasInboxes      = selectedInboxes.length > 0;
+        const hasLeads        = selectedLists.length > 0;
+        const canLaunch       = !spamBlocking && hasInboxes && hasLeads;
+
+        const checks: Array<{ label: string; ok: boolean; warn?: boolean; detail?: string }> = [
+          { label: "At least one inbox selected",     ok: hasInboxes },
+          { label: "At least one lead list selected", ok: hasLeads },
+          { label: "Stop on reply enabled",           ok: stopOnReply,  warn: true },
+          {
+            label:  emailSteps.length === 0
+              ? "No email steps"
+              : failedSteps.length === 0
+              ? `All ${emailSteps.length} email step${emailSteps.length !== 1 ? "s" : ""} pass spam check`
+              : `${failedSteps.length} email step${failedSteps.length !== 1 ? "s" : ""} flagged by spam check`,
+            ok:     failedSteps.length === 0,
+            warn:   failedSteps.length > 0 && !spamBlocking,
+            detail: spamBlocking ? "Fix red-graded steps before launching" : undefined,
+          },
+        ];
+
+        return (
+          <div className="space-y-4">
+            {/* Pre-launch checklist */}
+            <div className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-2">
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">Pre-launch Checklist</p>
+              {checks.map((c, ci) => (
+                <div key={ci} className="flex items-start gap-2.5">
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${c.ok ? "bg-emerald-500/20" : c.warn ? "bg-amber-500/20" : "bg-red-500/20"}`}>
+                    {c.ok
+                      ? <svg className="w-2.5 h-2.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      : c.warn
+                      ? <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01"/></svg>
+                      : <svg className="w-2.5 h-2.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    }
+                  </div>
+                  <div>
+                    <p className={`text-sm ${c.ok ? "text-white/70" : c.warn ? "text-amber-300" : "text-red-300"}`}>{c.label}</p>
+                    {c.detail && <p className="text-xs text-white/35 mt-0.5">{c.detail}</p>}
+                  </div>
+                </div>
+              ))}
+              {emailSteps.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-white/8 flex items-center gap-3 flex-wrap">
+                  {emailSteps.map(({ s: _s, i }) => {
+                    const sc = stepScores[i];
+                    if (!sc) return null;
+                    return (
+                      <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs ${gradeBg(sc.grade)}`}>
+                        <span className="text-white/40">Step {i + 1}</span>
+                        <span className={`font-bold ${gradeColor(sc.grade)}`}>{sc.grade}</span>
+                        <span className="text-white/30">{sc.score.toFixed(1)}</span>
+                      </span>
+                    );
+                  })}
+                  {failedSteps.length > 0 && (
+                    <button
+                      onClick={() => setStep(2)}
+                      className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                    >
+                      ← Fix in Sequence
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Campaign summary */}
+            <div className="bg-white/4 border border-white/8 rounded-xl p-5 space-y-2">
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">Campaign Summary</p>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Name</span><span className="text-white font-medium">{name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Inboxes</span><span className="text-white">{selectedInboxes.length} selected</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Lead lists</span><span className="text-white">{lists.filter((l) => selectedLists.includes(l.id)).map((l) => l.name).join(", ")}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Total leads</span><span className="text-white">{lists.filter((l) => selectedLists.includes(l.id)).reduce((s, l) => s + (l.lead_count ?? 0), 0).toLocaleString()}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Sequence steps</span><span className="text-white">{seqSteps.length} ({emailSteps.length} emails)</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Send window</span><span className="text-white">{startTime}–{endTime} · {sendDays.join(", ")}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Daily cap</span><span className="text-white">{dailyCap} emails</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Stop on reply</span><span className={stopOnReply ? "text-green-400" : "text-white/40"}>{stopOnReply ? "Yes" : "No"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Spam health</span><span className={gradeColor(worstGrade)}>Grade {worstGrade}</span></div>
+            </div>
+
+            {spamBlocking && (
+              <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-500/8 border border-red-500/25">
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                <p className="text-red-300 text-sm">One or more email steps have a failing spam score (Grade D or F). Go back to the Sequence step and use <strong>Fix with AI</strong> to improve them before launching.</p>
+              </div>
+            )}
+            <p className="text-white/30 text-xs">Leads will be enrolled and the campaign will start sending during the next scheduled window.</p>
           </div>
-          <p className="text-white/30 text-xs">Leads will be enrolled and the campaign will start sending during the next scheduled window.</p>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Nav buttons */}
       <div className="flex justify-between mt-8">
         <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} className="px-5 py-2.5 bg-white/6 hover:bg-white/10 disabled:opacity-30 text-white/70 text-sm rounded-xl transition-colors">Back</button>
         {step < 3 ? (
           <button onClick={() => { setError(null); setStep((s) => s + 1); }} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">Continue</button>
-        ) : (
-          <button onClick={handleFinish} disabled={saving} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
-            {saving ? "Creating & Enrolling…" : "Launch Campaign"}
-          </button>
-        )}
+        ) : (() => {
+          const spamBlocking = seqSteps.some((s, i) => s.type === "email" && (stepScores[i]?.score ?? 0) >= 7);
+          return (
+            <button
+              onClick={handleFinish}
+              disabled={saving || spamBlocking}
+              title={spamBlocking ? "Fix failing spam scores before launching" : undefined}
+              className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              {saving ? "Creating & Enrolling…" : "Launch Campaign"}
+            </button>
+          );
+        })()}
       </div>
+
+      {/* AI Rewrite modal */}
+      {rewriteIdx !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                <h2 className="text-white font-semibold text-sm">AI Anti-Spam Rewriter</h2>
+                {stepScores[rewriteIdx] && (
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${gradeBg(stepScores[rewriteIdx].grade)}`}>
+                    <span className={gradeColor(stepScores[rewriteIdx].grade)}>Grade {stepScores[rewriteIdx].grade}</span>
+                    <span className="text-white/30 ml-1">{stepScores[rewriteIdx].score.toFixed(1)}/10</span>
+                  </span>
+                )}
+              </div>
+              <button onClick={() => { setRewriteIdx(null); setRewriteResult(null); }} className="text-white/40 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Issues list */}
+              {stepScores[rewriteIdx]?.issues.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-white/40 text-xs font-medium uppercase tracking-wider">Issues detected</p>
+                  {stepScores[rewriteIdx].issues.map((issue, ii) => (
+                    <div key={ii} className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${issue.severity === "high" ? "bg-red-400" : issue.severity === "medium" ? "bg-amber-400" : "bg-white/30"}`} />
+                      <span className="text-white/60 text-xs">{issue.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {rewriteError && <div className="px-3 py-2 bg-red-500/15 border border-red-500/30 rounded-lg text-red-400 text-xs">{rewriteError}</div>}
+              {rewriteResult ? (
+                <div className="space-y-3">
+                  <p className="text-emerald-400 text-xs font-medium">✓ Rewrite ready — review and apply</p>
+                  <div>
+                    <p className="text-white/40 text-xs mb-1">New subject</p>
+                    <p className="text-white text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/8">{rewriteResult.subject}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-xs mb-1">New body</p>
+                    <pre className="text-white text-xs bg-white/5 rounded-lg px-3 py-2 border border-white/8 whitespace-pre-wrap font-sans max-h-48 overflow-y-auto">{rewriteResult.body}</pre>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => applyRewrite(rewriteIdx)}
+                      className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                      Apply rewrite
+                    </button>
+                    <button
+                      onClick={() => handleRewrite(rewriteIdx)}
+                      disabled={rewriting}
+                      className="px-4 py-2 bg-white/8 hover:bg-white/12 text-white/70 text-sm rounded-lg transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleRewrite(rewriteIdx)}
+                  disabled={rewriting}
+                  className="w-full px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {rewriting
+                    ? <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Rewriting…</>
+                    : "Rewrite with AI"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Sequence Generator modal */}
       {showAiGen && (

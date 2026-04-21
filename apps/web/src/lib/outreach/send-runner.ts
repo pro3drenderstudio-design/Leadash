@@ -46,13 +46,17 @@ async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: Outreac
 
   const slots: InboxSlot[] = [];
   for (const row of rows ?? []) {
-    // Block inboxes that are still in the 21-day warmup period
+    // Block inboxes still in the 21-day warmup period
     const domainWarmupEndsAt = (row as Record<string, unknown>).outreach_domains
       ? ((row as Record<string, unknown>).outreach_domains as Record<string, unknown>).warmup_ends_at as string | null
       : null;
     const inboxWarmupEndsAt = (row as Record<string, unknown>).warmup_ends_at as string | null;
     const effectiveWarmupEnd = domainWarmupEndsAt ?? inboxWarmupEndsAt;
     if (effectiveWarmupEnd && new Date(effectiveWarmupEnd) > new Date()) continue;
+
+    // Block inboxes in bounce rehabilitation
+    const rehabEndsAt = (row as Record<string, unknown>).bounce_rehab_ends_at as string | null;
+    if (rehabEndsAt && new Date(rehabEndsAt) > new Date()) continue;
 
     // Enforce hard cap for Leadash-provisioned inboxes
     const sendLimit = row.domain_id ? Math.min(row.daily_send_limit, DOMAIN_MAX_DAILY) : row.daily_send_limit;
@@ -266,9 +270,9 @@ export async function runSendBatch(
     }
   }
 
-  // ── Bounce rate enforcement: pause any campaign over 2% ─────────────────────
-  // Only evaluate after a minimum sample size (20 sends) to avoid false positives
-  // on brand-new campaigns with 1 bounce out of 2 sends.
+  // ── Inline bounce safety net: pause any campaign over 5% ────────────────────
+  // The daily deliverability cron handles 3%/5% with full 7-day window analysis.
+  // This inline check catches acute spikes mid-batch with all-time totals.
   for (const [campaignId] of byCampaign.entries()) {
     const [{ count: sentCount }, { count: bouncedCount }] = await Promise.all([
       db.from("outreach_sends")
@@ -284,17 +288,20 @@ export async function runSendBatch(
     const sent    = sentCount    ?? 0;
     const bounced = bouncedCount ?? 0;
     const total   = sent + bounced;
+    const rate    = total > 0 ? bounced / total : 0;
+    const ratePct = (rate * 100).toFixed(1);
 
-    if (total >= 20 && bounced / total > 0.02) {
+    if (total >= 20 && rate > 0.05) {
       await db
         .from("outreach_campaigns")
-        .update({ status: "paused", updated_at: new Date().toISOString() })
+        .update({
+          status:       "paused",
+          pause_reason: `Auto-paused: ${ratePct}% bounce rate (${bounced}/${total} total sends)`,
+          updated_at:   new Date().toISOString(),
+        })
         .eq("id", campaignId)
-        .eq("status", "active"); // only pause if still active
-      console.warn(
-        `[send-runner] Campaign ${campaignId} auto-paused: bounce rate ` +
-        `${(bounced / total * 100).toFixed(1)}% (${bounced}/${total} sends)`,
-      );
+        .eq("status", "active");
+      console.warn(`[send-runner] Campaign ${campaignId} auto-paused — ${ratePct}% bounce rate`);
     }
   }
 

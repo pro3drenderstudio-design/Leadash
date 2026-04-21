@@ -44,15 +44,18 @@ async function getStats(workspaceId: string) {
     db.from("outreach_campaigns").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).eq("status", "active"),
     db.from("outreach_inboxes").select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId).eq("status", "active"),
+      .eq("workspace_id", workspaceId).eq("status", "active")
+      .or(`warmup_enabled.eq.false,warmup_ends_at.is.null,warmup_ends_at.lte.${now.toISOString()}`),
     db.from("outreach_sends").select("status")
       .eq("workspace_id", workspaceId).gte("created_at", startOfMonth),
     db.from("outreach_replies").select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId).gte("received_at", startOfMonth),
+      .eq("workspace_id", workspaceId).gte("received_at", startOfMonth)
+      .not("enrollment_id", "is", null),
     db.from("outreach_sends").select("status, created_at")
       .eq("workspace_id", workspaceId).gte("created_at", thirtyDaysAgo),
     db.from("outreach_replies").select("received_at")
-      .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo),
+      .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo)
+      .not("enrollment_id", "is", null),
     // Recent replies joined to enrollment → lead + campaign in one query
     db.from("outreach_replies")
       .select(`

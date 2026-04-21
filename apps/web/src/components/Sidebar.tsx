@@ -61,12 +61,15 @@ export default function Sidebar({ workspaceName, plan, credits }: Props) {
         <Link href="/dashboard" className="flex items-center gap-2 group" onClick={close}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo_Icon_Colored.svg" className="w-6 h-6 flex-shrink-0" alt="" />
-          <span
-            className="text-[17px] font-bold tracking-tight text-slate-800 dark:text-white/90 group-hover:text-slate-900 dark:group-hover:text-white transition-colors select-none"
-            style={{ letterSpacing: "-0.02em" }}
-          >
-            Leadash
-          </span>
+          <div className="flex flex-col leading-none select-none">
+            <span
+              className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-white/90 group-hover:text-slate-900 dark:group-hover:text-white transition-colors"
+              style={{ letterSpacing: "-0.02em" }}
+            >
+              Leadash
+            </span>
+            <span className="text-[9px] text-slate-400 dark:text-white/30 mt-0.5">by Mizark</span>
+          </div>
           <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/25 select-none">
             Beta
           </span>

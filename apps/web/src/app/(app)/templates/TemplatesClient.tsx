@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getTemplates, createTemplate, deleteTemplate } from "@/lib/outreach/api";
 import type { OutreachTemplate } from "@/types/outreach";
+import { scoreMessage, gradeColor, gradeBg } from "@/lib/outreach/spam-scorer";
 
 const TONES = ["professional", "friendly", "direct", "casual"] as const;
 
@@ -11,6 +12,12 @@ export default function TemplatesClient() {
   const [showNew, setShowNew]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [form, setForm]           = useState({ name: "", subject: "", body: "" });
+
+  // Live spam score for the form
+  const spamScore = useMemo(
+    () => (form.subject || form.body) ? scoreMessage(form.subject, form.body) : null,
+    [form.subject, form.body],
+  );
 
   // AI generation state
   const [aiPrompt, setAiPrompt]   = useState("");
@@ -209,6 +216,28 @@ export default function TemplatesClient() {
               </div>
 
               {/* Manual fields */}
+              {spamScore && (
+                <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${gradeBg(spamScore.grade)} border-white/8`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold ${gradeColor(spamScore.grade)}`}>Grade {spamScore.grade}</span>
+                    <span className="text-white/30 text-xs">·</span>
+                    <span className="text-white/50 text-xs">Spam score: {spamScore.score}/10</span>
+                  </div>
+                  {spamScore.issues.length > 0 && (
+                    <span className="text-white/30 text-xs">{spamScore.issues.length} issue{spamScore.issues.length !== 1 ? "s" : ""}</span>
+                  )}
+                </div>
+              )}
+              {spamScore && spamScore.issues.length > 0 && (
+                <div className="space-y-1">
+                  {spamScore.issues.map((issue, i) => (
+                    <p key={i} className="text-amber-400/70 text-xs flex items-start gap-1.5">
+                      <span className="mt-0.5 flex-shrink-0">⚠</span>
+                      <span>{issue.label}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Template Name</label>
                 <input

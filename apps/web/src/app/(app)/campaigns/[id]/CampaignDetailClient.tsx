@@ -725,6 +725,33 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         </div>
       </div>
 
+      {/* Bounce auto-pause banner */}
+      {campaign.pause_reason && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm">
+          <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-red-300 font-semibold">Campaign paused automatically</p>
+            <p className="text-red-400/70 text-xs mt-0.5">{campaign.pause_reason}</p>
+          </div>
+          {campaign.status === "paused" && (
+            <button
+              onClick={async () => {
+                setSaving(true);
+                const updated = await updateCampaign(campaign.id, { status: "active", pause_reason: null });
+                setCampaign(updated);
+                setSaving(false);
+              }}
+              disabled={saving}
+              className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-40 text-red-300 text-xs font-semibold rounded-lg transition-colors flex-shrink-0"
+            >
+              Re-activate
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/8 pb-0">
         {(["overview", "analytics", "activity", "queue", "leads"] as Tab[]).map(t => (

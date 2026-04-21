@@ -105,6 +105,7 @@ export interface OutreachCampaign {
   total_bounced?: number;
   total_unsubscribed?: number;
   total_clicked?: number;
+  pause_reason?: string | null;
   sequence_steps?: OutreachSequenceStep[];
 }
 
