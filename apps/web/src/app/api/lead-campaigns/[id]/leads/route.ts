@@ -49,7 +49,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Fall back to raw_data for leads where mapped columns are null
   type RawData = Record<string, unknown>;
-  const leads = (data ?? []).map((row) => {
+  type LeadRow = NonNullable<typeof data>[number];
+  const leads = (data ?? []).map((row: LeadRow) => {
     const raw = (row.raw_data ?? {}) as RawData;
     const loc =
       row.location ??
