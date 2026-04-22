@@ -47,20 +47,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fall back to raw_data for leads where mapped columns are null
+  // Fall back to raw_data for leads where mapped columns are null (actor uses different field names)
   type RawData = Record<string, unknown>;
   type LeadRow = NonNullable<typeof data>[number];
   const leads = (data ?? []).map((row: LeadRow) => {
     const raw = (row.raw_data ?? {}) as RawData;
-    const loc =
-      row.location ??
-      [[raw.city, raw.country].filter(Boolean).join(", ")].filter(s => (s as string).length > 0)[0] ??
-      null;
+    const rawIndustry = Array.isArray(raw.companyIndustry)
+      ? (raw.companyIndustry as string[])[0] ?? null
+      : (raw.companyIndustry as string | null | undefined) ?? null;
+    const locParts = [raw.personCity, raw.personCountry].filter(Boolean);
+    const loc = row.location ?? (locParts.length ? locParts.join(", ") : null);
     return {
       ...row,
-      company:  row.company  ?? (raw.orgName as string | null)    ?? null,
-      title:    row.title    ?? (raw.position as string | null)   ?? null,
-      industry: row.industry ?? (raw.orgIndustry as string | null) ?? null,
+      company:  row.company  || (raw.companyName  as string | null) || null,
+      title:    (row.title && row.title !== "") ? row.title : ((raw.title || raw.position) as string | null) || null,
+      industry: row.industry || rawIndustry,
       location: loc,
     };
   });

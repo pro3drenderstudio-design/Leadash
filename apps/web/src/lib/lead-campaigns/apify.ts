@@ -13,28 +13,32 @@ export interface ApifyRunStatus {
 // Exact field definitions from actor output schema
 export interface ApifyLeadRecord {
   // Person
-  firstName?:     string;   // Prospect's First Name
-  lastName?:      string;   // Prospect's Last Name
-  fullName?:      string;   // Prospect's Full Name
-  position?:      string;   // Job Title
-  seniority?:     string;   // Seniority Level
-  functional?:    string;   // Department
-  linkedinUrl?:   string;   // Prospect's LinkedIn
-  email?:         string;   // Prospect's Work Email
-  phone?:         string;   // Phone Number
-  city?:          string;   // Prospect's City
-  country?:       string;   // Prospect's Country
-  // Company (org)
-  orgName?:       string;   // Company Name
-  orgIndustry?:   string;   // Company Industry
-  orgWebsite?:    string;   // Company Website
-  orgLinkedinUrl?: string;  // Company LinkedIn
-  orgCity?:       string;   // Company City
-  orgState?:      string;   // Company State
-  orgCountry?:    string;   // Company Country
-  orgSize?:       string;   // Company Size (employee count)
-  orgDescription?: string;  // Company Description
-  orgFoundedYear?: string;  // Company Founded Year
+  firstName?:          string;
+  lastName?:           string;
+  fullName?:           string;
+  title?:              string;   // Job title (actor field name)
+  position?:           string;   // Alternate job title field
+  seniority?:          string;
+  functions?:          string[];  // Department / functional area (array)
+  functional?:         string;   // Legacy functional field
+  linkedinUrl?:        string;
+  email?:              string;
+  phone?:              string;
+  personCity?:         string;
+  personState?:        string;
+  personCountry?:      string;
+  // Company
+  companyName?:        string;
+  companyIndustry?:    string | string[];
+  companyDomain?:      string;
+  companyLinkedinUrl?: string;
+  companyCity?:        string;
+  companyState?:       string;
+  companyCountry?:     string;
+  companySize?:        number | string;
+  companySizeRange?:   string;
+  companyDescription?: string;
+  foundedYear?:        number | string;
   [key: string]: unknown;
 }
 
@@ -110,7 +114,16 @@ export function mapApifyRecord(
   campaignId:    string,
   verifyEnabled: boolean,
 ): Record<string, unknown> {
-  const location = [r.city, r.country].filter(Boolean).join(", ") || null;
+  const location = [r.personCity, r.personCountry].filter(Boolean).join(", ") || null;
+  const industry = Array.isArray(r.companyIndustry)
+    ? (r.companyIndustry[0] ?? null)
+    : (r.companyIndustry as string | null | undefined) ?? null;
+  const department = Array.isArray(r.functions)
+    ? (r.functions[0] ?? null)
+    : (r.functional ?? null);
+  const website = r.companyDomain
+    ? (r.companyDomain.startsWith("http") ? r.companyDomain : `https://${r.companyDomain}`)
+    : null;
 
   return {
     workspace_id:        workspaceId,
@@ -118,23 +131,22 @@ export function mapApifyRecord(
     email:               String(r.email ?? "").toLowerCase().trim(),
     first_name:          r.firstName ?? r.fullName?.split(" ")[0] ?? null,
     last_name:           r.lastName  ?? (r.fullName?.split(" ").slice(1).join(" ") || null),
-    company:             r.orgName   ?? null,
-    title:               r.position  ?? null,
-    website:             r.orgWebsite ?? null,
+    company:             r.companyName ?? null,
+    title:               r.title || r.position || null,
+    website,
     linkedin_url:        r.linkedinUrl ?? null,
-    phone:               r.phone     ?? null,
+    phone:               r.phone || null,
     location,
-    industry:            r.orgIndustry ?? null,
-    // New fields
-    department:          r.functional  ?? null,
+    industry,
+    department,
     seniority:           r.seniority   ?? null,
-    org_city:            r.orgCity     ?? null,
-    org_state:           r.orgState    ?? null,
-    org_country:         r.orgCountry  ?? null,
-    org_size:            r.orgSize     ?? null,
-    org_linkedin_url:    r.orgLinkedinUrl ?? null,
-    org_description:     r.orgDescription ?? null,
-    org_founded_year:    r.orgFoundedYear ?? null,
+    org_city:            r.companyCity    ?? null,
+    org_state:           r.companyState   ?? null,
+    org_country:         r.companyCountry ?? null,
+    org_size:            r.companySize != null ? String(r.companySize) : null,
+    org_linkedin_url:    r.companyLinkedinUrl ?? null,
+    org_description:     r.companyDescription ?? null,
+    org_founded_year:    r.foundedYear != null ? String(r.foundedYear) : null,
     raw_data:            r,
     verification_status: verifyEnabled ? "pending" : null,
   };
