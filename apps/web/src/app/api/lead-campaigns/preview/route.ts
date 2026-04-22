@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
   const apifyKey = process.env.APIFY_API_KEY;
   if (!apifyKey) {
-    return NextResponse.json({ error: "Apify not configured" }, { status: 503 });
+    return NextResponse.json({ error: "Lead preview is not configured" }, { status: 503 });
   }
 
   const input: ApifyLeadScraperInput = await req.json();
@@ -18,8 +18,9 @@ export async function POST(req: NextRequest) {
     const leads = await previewLeads(apifyKey, input);
     return NextResponse.json({ leads });
   } catch (err) {
+    console.error("[preview] lead preview error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Preview failed" },
+      { error: "Preview failed — please check your filters and try again" },
       { status: 500 },
     );
   }

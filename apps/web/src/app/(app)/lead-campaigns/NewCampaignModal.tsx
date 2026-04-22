@@ -319,7 +319,7 @@ interface PreviewLead {
   title?: string; jobTitle?: string; headline?: string; currentPosition?: string;
   company?: string; companyName?: string; organizationName?: string;
   employer?: string; currentCompany?: string;
-  industry?: string; companyIndustry?: string; sector?: string;
+  industry?: string; companyIndustry?: string | string[]; sector?: string;
   personCity?: string; personCountry?: string;
   companyLinkedinUrl?: string; companyWebsite?: string; website?: string;
   [key: string]: unknown;
@@ -328,6 +328,7 @@ interface PreviewLead {
 function pick(lead: PreviewLead, ...keys: (keyof PreviewLead)[]): string {
   for (const k of keys) {
     const v = lead[k];
+    if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") return v[0];
     if (v && typeof v === "string") return v;
   }
   return "";

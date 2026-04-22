@@ -58,7 +58,7 @@ export async function startLeadScraperRun(
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`Apify run start failed: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`);
+    throw new Error(`Lead scraper run failed: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`);
   }
   const { data } = await res.json();
   return data.id as string;
@@ -69,7 +69,7 @@ export async function getApifyRunStatus(
   runId:  string,
 ): Promise<ApifyRunStatus> {
   const res = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${apiKey}`);
-  if (!res.ok) throw new Error(`Apify status check failed: ${res.statusText}`);
+  if (!res.ok) throw new Error(`Lead scraper status check failed: ${res.statusText}`);
   const { data } = await res.json();
   return {
     status:    data.status as ApifyRunStatus["status"],
@@ -86,7 +86,7 @@ export async function fetchApifyDataset(
   const res = await fetch(
     `${APIFY_BASE}/datasets/${datasetId}/items?token=${apiKey}&limit=${limit}&offset=${offset}&format=json`,
   );
-  if (!res.ok) throw new Error(`Apify dataset fetch failed: ${res.statusText}`);
+  if (!res.ok) throw new Error(`Lead dataset fetch failed: ${res.statusText}`);
   return res.json();
 }
 
@@ -104,7 +104,7 @@ export async function previewLeads(
       body:    JSON.stringify(previewInput),
     },
   );
-  if (!res.ok) throw new Error(`Apify preview failed: ${res.statusText}`);
+  if (!res.ok) throw new Error(`Lead preview failed: ${res.statusText}`);
   return res.json();
 }
 
