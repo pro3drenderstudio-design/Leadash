@@ -305,13 +305,23 @@ function StepBar({ step }: { step: Step }) {
 
 // Matches exact actor output field names
 interface PreviewLead {
+  // Standard actor fields
   firstName?: string; lastName?: string; fullName?: string;
   position?: string; seniority?: string; functional?: string;
-  linkedinUrl?: string; email?: string; phone?: string;
+  linkedinUrl?: string; linkedInUrl?: string; linkedin_url?: string;
+  email?: string; phone?: string;
   city?: string; country?: string;
+  location?: string; personLocation?: string; address?: string;
   orgName?: string; orgIndustry?: string; orgWebsite?: string;
   orgLinkedinUrl?: string; orgCity?: string; orgState?: string;
   orgCountry?: string; orgSize?: string;
+  // Common alternate field names returned by some actor data sources
+  title?: string; jobTitle?: string; headline?: string; currentPosition?: string;
+  company?: string; companyName?: string; organizationName?: string;
+  employer?: string; currentCompany?: string;
+  industry?: string; companyIndustry?: string; sector?: string;
+  personCity?: string; personCountry?: string;
+  companyLinkedinUrl?: string; companyWebsite?: string; website?: string;
   [key: string]: unknown;
 }
 
@@ -384,13 +394,16 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
             const lastName  = pick(l, "lastName")  || pick(l, "fullName").split(" ").slice(1).join(" ");
             const name      = [firstName, lastName].filter(Boolean).join(" ") || "—";
             const initials  = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-            const title     = pick(l, "position");
-            const company   = pick(l, "orgName");
-            const industry  = cleanVal(pick(l, "orgIndustry"));
-            const location  = [pick(l, "city"), pick(l, "country")].filter(Boolean).join(", ");
-            const personLi  = pick(l, "linkedinUrl");
-            const companyLi = pick(l, "orgLinkedinUrl");
-            const website   = pick(l, "orgWebsite");
+            const title     = pick(l, "position", "title", "jobTitle", "headline", "currentPosition");
+            const company   = pick(l, "orgName", "company", "companyName", "organizationName", "employer", "currentCompany");
+            const industry  = cleanVal(pick(l, "orgIndustry", "industry", "companyIndustry", "sector"));
+            const cityRaw   = pick(l, "city", "personCity");
+            const countryRaw = pick(l, "country", "personCountry");
+            const location  = [cityRaw, countryRaw].filter(Boolean).join(", ")
+              || pick(l, "location" as keyof PreviewLead, "personLocation", "address");
+            const personLi  = pick(l, "linkedinUrl", "linkedInUrl", "linkedin_url");
+            const companyLi = pick(l, "orgLinkedinUrl", "companyLinkedinUrl");
+            const website   = pick(l, "orgWebsite", "companyWebsite", "website");
 
             return (
               <tr key={i} className={`${i !== leads.length - 1 ? "border-b border-white/5" : ""}`}>
