@@ -46,5 +46,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .range(page * limit, (page + 1) * limit - 1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ leads: data ?? [], total: count ?? 0, page, limit });
+
+  // Fall back to raw_data for leads where mapped columns are null
+  type RawData = Record<string, unknown>;
+  const leads = (data ?? []).map((row) => {
+    const raw = (row.raw_data ?? {}) as RawData;
+    const loc =
+      row.location ??
+      [[raw.city, raw.country].filter(Boolean).join(", ")].filter(s => (s as string).length > 0)[0] ??
+      null;
+    return {
+      ...row,
+      company:  row.company  ?? (raw.orgName as string | null)    ?? null,
+      title:    row.title    ?? (raw.position as string | null)   ?? null,
+      industry: row.industry ?? (raw.orgIndustry as string | null) ?? null,
+      location: loc,
+    };
+  });
+
+  return NextResponse.json({ leads, total: count ?? 0, page, limit });
 }
