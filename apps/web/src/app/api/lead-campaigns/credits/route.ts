@@ -19,10 +19,14 @@ export async function GET(req: NextRequest) {
       .limit(50),
   ]);
 
-  const balance = (workspace?.lead_credits_balance ?? 0) + (workspace?.subscription_credits_balance ?? 0);
+  const totalBalance    = workspace?.lead_credits_balance ?? 0;
+  const monthlyCredits  = workspace?.subscription_credits_balance ?? 0;
+  const lifetimeCredits = Math.max(0, totalBalance - monthlyCredits);
 
   return NextResponse.json({
-    balance,
-    transactions: transactions ?? [],
+    balance:          totalBalance,
+    monthly_credits:  monthlyCredits,
+    lifetime_credits: lifetimeCredits,
+    transactions:     transactions ?? [],
   });
 }

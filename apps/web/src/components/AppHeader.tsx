@@ -33,7 +33,9 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
   const [search, setSearch]           = useState("");
   const [results, setResults]         = useState<SearchResult[]>([]);
   const [searchFocused, setFocused]   = useState(false);
-  const [credits, setCredits]         = useState<number | null>(null);
+  const [credits, setCredits]           = useState<number | null>(null);
+  const [monthlyCredits, setMonthly]    = useState<number>(0);
+  const [lifetimeCredits, setLifetime]  = useState<number>(0);
   const [notifCount, setNotifCount]   = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const { open: openSidebar } = useSidebar();
@@ -42,8 +44,12 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
   const initials    = displayName.split(/[\s.]+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 
   useEffect(() => {
-    wsGet<{ balance: number }>("/api/lead-campaigns/credits")
-      .then(d => setCredits(d.balance ?? 0))
+    wsGet<{ balance: number; monthly_credits: number; lifetime_credits: number }>("/api/lead-campaigns/credits")
+      .then(d => {
+        setCredits(d.balance ?? 0);
+        setMonthly(d.monthly_credits ?? 0);
+        setLifetime(d.lifetime_credits ?? 0);
+      })
       .catch(() => {});
 
     const fetchInterested = () =>
@@ -203,19 +209,39 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
 
         {/* Credits */}
         {credits !== null && (
-          <Link
-            href="/lead-campaigns/credits"
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.18)", color: "#f59e0b" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "rgba(245,158,11,0.1)")}
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {credits.toLocaleString()}
-            <span className="text-amber-400/50 font-normal">cr</span>
-          </Link>
+          <div className="relative group/credits hidden sm:block">
+            <Link
+              href="/lead-campaigns/credits"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.18)", color: "#f59e0b" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(245,158,11,0.1)")}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              {credits.toLocaleString()}
+              <span className="text-amber-400/50 font-normal">cr</span>
+            </Link>
+            {/* Breakdown tooltip */}
+            <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-gray-950 shadow-2xl p-3 text-xs opacity-0 pointer-events-none group-hover/credits:opacity-100 group-hover/credits:pointer-events-auto transition-opacity z-50">
+              <p className="text-white/40 font-medium mb-2 uppercase tracking-wider text-[10px]">Credits breakdown</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-white/50">Monthly (used first)</span>
+                  <span className="text-amber-400 font-semibold tabular-nums">{monthlyCredits.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white/50">Lifetime</span>
+                  <span className="text-white/70 font-semibold tabular-nums">{lifetimeCredits.toLocaleString()}</span>
+                </div>
+                <div className="border-t border-white/8 pt-1.5 flex items-center justify-between">
+                  <span className="text-white/70 font-medium">Total</span>
+                  <span className="text-white font-bold tabular-nums">{credits.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Notifications */}

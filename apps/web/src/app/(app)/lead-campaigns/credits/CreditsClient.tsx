@@ -40,6 +40,8 @@ function isDebitType(type: string): boolean {
 
 export default function CreditsClient() {
   const [balance, setBalance]           = useState(0);
+  const [monthly, setMonthly]           = useState(0);
+  const [lifetime, setLifetime]         = useState(0);
   const [transactions, setTransactions] = useState<LeadCreditTransaction[]>([]);
   const [loading, setLoading]           = useState(true);
   const [purchasing, setPurchasing]     = useState<string | null>(null);
@@ -49,6 +51,8 @@ export default function CreditsClient() {
   async function loadCredits() {
     const d = await fetch("/api/lead-campaigns/credits").then(r => r.json());
     setBalance(d.balance ?? 0);
+    setMonthly(d.monthly_credits ?? 0);
+    setLifetime(d.lifetime_credits ?? 0);
     setTransactions(d.transactions ?? []);
   }
 
@@ -107,13 +111,27 @@ export default function CreditsClient() {
       {/* Balance card */}
       <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl p-6 mb-8">
         <p className="text-white/50 text-sm font-medium mb-2">Current Balance</p>
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3 mb-4">
           <span className="text-5xl font-bold text-white">
             {loading || verifying ? "—" : balance.toLocaleString()}
           </span>
           <span className="text-amber-400 text-lg font-medium mb-1">credits</span>
         </div>
-        <p className="text-white/30 text-xs mt-2">
+        {!loading && !verifying && (
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-amber-500/8 border border-amber-500/15 rounded-xl px-4 py-3">
+              <p className="text-amber-400/70 text-xs font-medium mb-0.5">Monthly (used first)</p>
+              <p className="text-amber-400 text-xl font-bold tabular-nums">{monthly.toLocaleString()}</p>
+              <p className="text-white/25 text-[10px] mt-0.5">Resets each billing cycle</p>
+            </div>
+            <div className="bg-white/4 border border-white/8 rounded-xl px-4 py-3">
+              <p className="text-white/40 text-xs font-medium mb-0.5">Lifetime</p>
+              <p className="text-white/80 text-xl font-bold tabular-nums">{lifetime.toLocaleString()}</p>
+              <p className="text-white/25 text-[10px] mt-0.5">Never expires</p>
+            </div>
+          </div>
+        )}
+        <p className="text-white/30 text-xs">
           Credits are used for scraping (1/lead), verification (1/lead), and personalization (2/lead)
         </p>
       </div>
