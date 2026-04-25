@@ -22,6 +22,7 @@ async function getWorkspace(workspaceId: string) {
 export async function enforceInboxLimit(workspaceId: string) {
   const db = createAdminClient();
   const ws = await getWorkspace(workspaceId);
+  if (ws.max_inboxes === -1) return; // unlimited
   const { count } = await db
     .from("outreach_inboxes")
     .select("id", { count: "exact", head: true })

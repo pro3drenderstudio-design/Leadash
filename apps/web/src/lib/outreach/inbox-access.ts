@@ -45,18 +45,20 @@ export async function checkInboxAccess(
   }
 
   // ── 2. Inbox count limit ────────────────────────────────────────────────────
-  const { count } = await db
-    .from("outreach_inboxes")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
+  if (ws.max_inboxes !== -1) {
+    const { count } = await db
+      .from("outreach_inboxes")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId);
 
-  const currentCount = count ?? 0;
-  if (currentCount >= ws.max_inboxes) {
-    return {
-      ok: false,
-      code: "inbox_limit",
-      message: `You have reached the inbox limit (${ws.max_inboxes}) for your plan. Upgrade to add more.`,
-    };
+    const currentCount = count ?? 0;
+    if (currentCount >= ws.max_inboxes) {
+      return {
+        ok: false,
+        code: "inbox_limit",
+        message: `You have reached the inbox limit (${ws.max_inboxes}) for your plan. Upgrade to add more.`,
+      };
+    }
   }
 
   // ── 3. Cross-workspace uniqueness ──────────────────────────────────────────
