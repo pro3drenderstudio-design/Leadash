@@ -1,5 +1,5 @@
 /**
- * Postal Agent — runs on Hetzner VPS alongside Postal.
+ * Postal Agent — runs on Contabo VPS alongside Postal.
  *
  * Exposes an authenticated HTTP API that lets the Leadash web app:
  *   - Register a sending domain in Postal (generates DKIM keypair, writes to DB)
@@ -421,6 +421,219 @@ app.delete("/routes", async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  }
+});
+
+// ─── Dedicated IP pool management ────────────────────────────────────────────
+//
+// In Postal, IP pools are assigned at the *server* level, not per domain.
+// So each dedicated-IP customer gets their own Postal server within the same
+// organisation, with an IP pool containing just their IP address.
+//
+// Flow:
+//   1. POST /ip-pools         → creates ip_pool + ip_address + a new server
+//                                bound to that pool. Returns { pool_id, server_id }.
+//   2. POST /ip-pools/:id/domains  → registers a domain to the dedicated server
+//                                    (instead of the shared default server).
+//   3. DELETE /ip-pools/:id/domains → removes a domain from the dedicated server.
+//   4. GET /ip-pools           → lists all pools with their IP and server.
+//
+// The admin stores the returned server_id in dedicated_ip_subscriptions.postal_pool_id.
+// When POST /domains is called, it accepts an optional server_id override so new
+// domains for dedicated-IP customers land on their server, not the shared one.
+
+/**
+ * Helper — get the organisation ID from the shared/default server.
+ * Cached after first call since it never changes.
+ */
+let cachedOrgId: number | null = null;
+async function getOrgId(): Promise<number> {
+  if (cachedOrgId !== null) return cachedOrgId;
+  const conn = await pool.getConnection();
+  try {
+    const [rows] = await conn.execute<mysql.RowDataPacket[]>(
+      "SELECT organization_id FROM servers WHERE id = ? LIMIT 1",
+      [serverId()],
+    );
+    if (!rows.length) throw new Error("Could not determine organization_id from default server");
+    cachedOrgId = (rows[0] as { organization_id: number }).organization_id;
+    return cachedOrgId!;
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * POST /ip-pools
+ * Create an IP pool with a dedicated IP address and a new Postal server
+ * bound to that pool.
+ * Body: { name: string, ip_address: string }
+ * Returns: { pool_id, server_id, ip_address_id }
+ */
+app.post("/ip-pools", async (req: Request, res: Response) => {
+  const { name, ip_address } = req.body as { name: string; ip_address: string };
+  if (!name)       { res.status(400).json({ error: "name is required" });       return; }
+  if (!ip_address) { res.status(400).json({ error: "ip_address is required" }); return; }
+
+  const conn = await pool.getConnection();
+  try {
+    const now   = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const orgId = await getOrgId();
+
+    // 1. Create IP pool
+    const [poolResult] = await conn.execute<mysql.OkPacket>(
+      "INSERT INTO ip_pools (name, `default`, created_at, updated_at) VALUES (?, 0, ?, ?)",
+      [name, now, now],
+    );
+    const poolId = poolResult.insertId;
+
+    // 2. Assign the IP address to the pool
+    const [ipResult] = await conn.execute<mysql.OkPacket>(
+      "INSERT INTO ip_addresses (ip_pool_id, address, hostname, created_at, updated_at) VALUES (?, ?, '', ?, ?)",
+      [poolId, ip_address, now, now],
+    );
+    const ipAddressId = ipResult.insertId;
+
+    // 3. Create a new Postal server for this customer, bound to the pool.
+    //    The permalink must be unique — use a short random slug.
+    const slug      = randomBytes(4).toString("hex"); // e.g. "a1b2c3d4"
+    const permalink = `dedicated-${slug}`;
+    const [serverResult] = await conn.execute<mysql.OkPacket>(
+      `INSERT INTO servers
+         (organization_id, uuid, name, permalink, ip_pool_id, mode, suspended,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'live', 0, ?, ?)`,
+      [orgId, genUuid(), name, permalink, poolId, now, now],
+    );
+    const newServerId = serverResult.insertId;
+
+    res.json({ ok: true, pool_id: poolId, server_id: newServerId, ip_address_id: ipAddressId });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[POST /ip-pools]", msg);
+    res.status(500).json({ error: msg });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * GET /ip-pools
+ * Lists all IP pools with their associated IP addresses and server IDs.
+ */
+app.get("/ip-pools", async (_req: Request, res: Response) => {
+  const conn = await pool.getConnection();
+  try {
+    const [rows] = await conn.execute<mysql.RowDataPacket[]>(`
+      SELECT
+        p.id   AS pool_id,
+        p.name AS pool_name,
+        a.address,
+        s.id   AS server_id
+      FROM ip_pools p
+      LEFT JOIN ip_addresses a ON a.ip_pool_id = p.id
+      LEFT JOIN servers s      ON s.ip_pool_id = p.id
+      ORDER BY p.id DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * POST /ip-pools/:id/domains
+ * Register a domain to a dedicated server (routes all sending through the pool's IP).
+ * Body: { domain: string, server_id: number }
+ * Returns: { ok }
+ */
+app.post("/ip-pools/:id/domains", async (req: Request, res: Response) => {
+  const poolId   = parseInt(req.params.id, 10);
+  const { domain, server_id } = req.body as { domain: string; server_id: number };
+  if (!domain)    { res.status(400).json({ error: "domain is required" });    return; }
+  if (!server_id) { res.status(400).json({ error: "server_id is required" }); return; }
+  if (isNaN(poolId)) { res.status(400).json({ error: "invalid pool id" });    return; }
+
+  const conn = await pool.getConnection();
+  try {
+    // Verify the server belongs to the pool
+    const [serverRows] = await conn.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM servers WHERE id = ? AND ip_pool_id = ? LIMIT 1",
+      [server_id, poolId],
+    );
+    if (!serverRows.length) {
+      res.status(404).json({ error: "Server not found for this pool" });
+      return;
+    }
+
+    const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const { privateKey, publicKey } = getSigningKeyPair();
+
+    // Upsert domain on the dedicated server
+    const [existing] = await conn.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM domains WHERE server_id = ? AND name = ? LIMIT 1",
+      [server_id, domain],
+    );
+
+    if (!existing.length) {
+      await conn.execute(
+        `INSERT INTO domains
+           (server_id, uuid, name, dkim_private_key, dkim_identifier_string, dkim_status,
+            owner_type, owner_id, verified_at, outgoing, incoming, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '1', 'OK', 'Server', ?, ?, 1, 1, ?, ?)`,
+        [server_id, genUuid(), domain, privateKey, server_id, now, now, now],
+      );
+    }
+
+    res.json({ ok: true, dkim_selector: DKIM_SELECTOR, dkim_public_key: publicKey });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[POST /ip-pools/:id/domains]", msg);
+    res.status(500).json({ error: msg });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * DELETE /ip-pools/:id/domains
+ * Remove a domain from the dedicated server.
+ * Body: { domain: string, server_id: number }
+ */
+app.delete("/ip-pools/:id/domains", async (req: Request, res: Response) => {
+  const poolId   = parseInt(req.params.id, 10);
+  const { domain, server_id } = req.body as { domain: string; server_id: number };
+  if (!domain || !server_id) {
+    res.status(400).json({ error: "domain and server_id are required" });
+    return;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    // Verify server belongs to pool before deleting
+    const [serverRows] = await conn.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM servers WHERE id = ? AND ip_pool_id = ? LIMIT 1",
+      [server_id, poolId],
+    );
+    if (!serverRows.length) {
+      res.status(404).json({ error: "Server not found for this pool" });
+      return;
+    }
+
+    await conn.execute(
+      "DELETE FROM domains WHERE server_id = ? AND name = ?",
+      [server_id, domain],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[DELETE /ip-pools/:id/domains]", msg);
+    res.status(500).json({ error: msg });
+  } finally {
+    conn.release();
   }
 });
 
