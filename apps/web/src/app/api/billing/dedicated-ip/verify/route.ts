@@ -9,8 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
 import { createAdminClient } from "@/lib/supabase/server";
-
-const DEDICATED_IP_PRICE_NGN = 78_400;
+import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -40,6 +39,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, already_processed: true });
   }
 
+  const { priceNgn } = await getDedicatedIpPrice();
+
   // Create the subscription record in pending state
   const { data: sub } = await db
     .from("dedicated_ip_subscriptions")
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
       status:                 "pending",
       ...(authorizationCode ? { paystack_auth_code:     authorizationCode } : {}),
       ...(customerCode      ? { paystack_customer_code: customerCode }      : {}),
-      price_ngn:              DEDICATED_IP_PRICE_NGN,
+      price_ngn:              priceNgn,
     })
     .select("id")
     .single();
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     workspace_id:       workspaceId,
     type:               "dedicated_ip",
     description:        "Dedicated IP add-on",
-    amount_kobo:        DEDICATED_IP_PRICE_NGN * 100,
+    amount_kobo:        priceNgn * 100,
     paystack_reference: reference,
     status:             "paid",
   });

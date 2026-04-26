@@ -5,13 +5,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
-
-const DEDICATED_IP_PRICE_NGN = 78_400; // ~$49/month
+import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
+
+  const [{ priceNgn, priceUsd }] = await Promise.all([getDedicatedIpPrice()]);
 
   const { data: sub } = await db
     .from("dedicated_ip_subscriptions")
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .maybeSingle();
 
-  if (!sub) return NextResponse.json({ subscription: null });
+  if (!sub) return NextResponse.json({ subscription: null, priceNgn, priceUsd });
 
   // Latest blacklist check
   const { data: latestCheck } = await db
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest) {
     domainCount:   domainCount ?? 0,
     maxDomains:    sub.max_domains,
     maxInboxes:    sub.max_inboxes,
+    priceNgn,
+    priceUsd,
   });
 }
 
@@ -81,13 +84,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const { priceNgn } = await getDedicatedIpPrice();
   const origin = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL;
   const email  = workspace.billing_email ?? `ws-${workspaceId}@leadash.app`;
 
   try {
     const { authorizationUrl } = await createPaystackCheckout({
       email,
-      amountKobo:  DEDICATED_IP_PRICE_NGN * 100,
+      amountKobo:  priceNgn * 100,
       callbackUrl: `${origin}/settings?tab=infrastructure&billing=dedicated_ip_success`,
       metadata: {
         workspace_id: workspaceId,

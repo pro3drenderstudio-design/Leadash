@@ -19,6 +19,8 @@ const ALLOWED_KEYS = [
   "default_plan",
   "lead_credits_on_signup",
   "support_email",
+  "dedicated_ip_price_ngn",
+  "dedicated_ip_price_usd",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];

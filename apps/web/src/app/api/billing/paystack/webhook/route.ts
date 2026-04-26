@@ -6,6 +6,7 @@ import { getPlanById } from "@/lib/billing/getActivePlans";
 import { enqueueProvision } from "@/lib/queue";
 import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/pool-quota";
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
+import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
 
 export async function POST(req: NextRequest) {
   const rawBody   = await req.text();
@@ -47,10 +48,11 @@ export async function POST(req: NextRequest) {
 
         if (!existingInvoice) {
           const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+          const { priceNgn: ipPriceNgn } = await getDedicatedIpPrice();
           await db.from("dedicated_ip_subscriptions").insert({
             workspace_id:           workspaceId,
             status:                 "pending",
-            price_ngn:              78400,
+            price_ngn:              ipPriceNgn,
             ...(authorizationCode ? { paystack_auth_code:     authorizationCode } : {}),
             ...(customerCode      ? { paystack_customer_code: customerCode }      : {}),
           });
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
             workspace_id:       workspaceId,
             type:               "dedicated_ip",
             description:        "Dedicated IP add-on",
-            amount_kobo:        amountKobo ?? 7_840_000,
+            amount_kobo:        amountKobo ?? (ipPriceNgn * 100),
             paystack_reference: data.reference,
             status:             "paid",
           });

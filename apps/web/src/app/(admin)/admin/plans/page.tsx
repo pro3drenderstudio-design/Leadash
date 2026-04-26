@@ -268,6 +268,104 @@ function PlanCard({
   );
 }
 
+function DedicatedIpConfigCard() {
+  const [priceNgn, setPriceNgn] = useState<number | null>(null);
+  const [priceUsd, setPriceUsd] = useState<number | null>(null);
+  const [editNgn,  setEditNgn]  = useState("");
+  const [editUsd,  setEditUsd]  = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [saved,    setSaved]    = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then(r => r.json())
+      .then((d: { settings: Record<string, unknown> }) => {
+        const ngn = Number(d.settings?.dedicated_ip_price_ngn) || 78400;
+        const usd = Number(d.settings?.dedicated_ip_price_usd) || 49;
+        setPriceNgn(ngn); setEditNgn(String(ngn));
+        setPriceUsd(usd); setEditUsd(String(usd));
+      })
+      .catch(() => {});
+  }, []);
+
+  const isDirty = (priceNgn !== null && Number(editNgn) !== priceNgn)
+               || (priceUsd !== null && Number(editUsd) !== priceUsd);
+
+  async function handleSave() {
+    setSaving(true);
+    const res = await fetch("/api/admin/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dedicated_ip_price_ngn: Number(editNgn),
+        dedicated_ip_price_usd: Number(editUsd),
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setPriceNgn(Number(editNgn));
+      setPriceUsd(Number(editUsd));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } else {
+      const d = await res.json() as { error?: string };
+      alert(d.error ?? "Save failed");
+    }
+  }
+
+  return (
+    <div className={`bg-white dark:bg-white/5 border rounded-2xl overflow-hidden transition-all ${
+      isDirty ? "border-orange-400 dark:border-orange-500/60 ring-1 ring-orange-400/30" : "border-slate-200 dark:border-white/10"
+    }`}>
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10">
+        <p className="text-base font-bold text-slate-800 dark:text-white">Dedicated IP Add-on</p>
+        <p className="text-[11px] text-slate-400 dark:text-white/30 mt-0.5">Monthly price charged to subscribers</p>
+      </div>
+      <div className="p-5 space-y-5">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-3">Pricing</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Price (₦/month)</label>
+              <NumInput value={Number(editNgn)} onChange={v => setEditNgn(String(v))} min={0} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Price (USD display only)</label>
+              <NumInput value={Number(editUsd)} onChange={v => setEditUsd(String(v))} min={0} />
+            </div>
+          </div>
+          {editNgn && (
+            <p className="text-xs text-slate-400 dark:text-white/30 mt-2">
+              Charged: ₦{Number(editNgn).toLocaleString()}/mo · displayed as ${Number(editUsd)}/mo
+            </p>
+          )}
+        </div>
+
+        {isDirty && (
+          <div className="flex items-center justify-between pt-1">
+            <button
+              onClick={() => { setEditNgn(String(priceNgn)); setEditUsd(String(priceUsd)); }}
+              className="text-sm text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white transition-colors"
+            >
+              Discard
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-400 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+        {saved && !isDirty && (
+          <p className="text-xs text-green-600 dark:text-green-400 text-right">✓ Saved — live immediately</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GlobalConfigCard() {
   const [rate, setRate]         = useState<number | null>(null);
   const [editRate, setEditRate] = useState("");
@@ -428,6 +526,7 @@ export default function PlansPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
         <GlobalConfigCard />
+        <DedicatedIpConfigCard />
         {plans.map(plan => (
           <PlanCard key={plan.plan_id} plan={plan} onSave={handleSave} />
         ))}

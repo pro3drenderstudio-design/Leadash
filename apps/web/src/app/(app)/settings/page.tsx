@@ -1167,16 +1167,15 @@ interface BlacklistCheck {
 function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean }) {
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
-  const [sub,     setSub]     = useState<DedicatedIpSub | null | undefined>(undefined);
-  const [check,   setCheck]   = useState<BlacklistCheck | null>(null);
-  const [domains, setDomains] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [sub,      setSub]     = useState<DedicatedIpSub | null | undefined>(undefined);
+  const [check,    setCheck]   = useState<BlacklistCheck | null>(null);
+  const [domains,  setDomains] = useState(0);
+  const [priceNgn, setPriceNgn] = useState(78_400);
+  const [priceUsd, setPriceUsd] = useState(49);
+  const [loading,  setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [canceling,  setCanceling]  = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-
-  const PRICE_NGN = 78_400;
-  const PRICE_USD = 49;
 
   function flash(text: string, ok = true) {
     setMsg({ text, ok });
@@ -1188,11 +1187,15 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
       subscription: DedicatedIpSub | null;
       latestCheck:  BlacklistCheck | null;
       domainCount:  number;
+      priceNgn:     number;
+      priceUsd:     number;
     }>("/api/billing/dedicated-ip")
       .then(d => {
         setSub(d.subscription);
         setCheck(d.latestCheck);
         setDomains(d.domainCount ?? 0);
+        if (d.priceNgn) setPriceNgn(d.priceNgn);
+        if (d.priceUsd) setPriceUsd(d.priceUsd);
       })
       .catch(() => setSub(null))
       .finally(() => setLoading(false));
@@ -1294,7 +1297,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
             </div>
             <div className="flex-shrink-0 text-right">
               <p className="text-white font-bold text-2xl">
-                {isNgn ? `₦${PRICE_NGN.toLocaleString("en-NG")}` : `$${PRICE_USD}`}
+                {isNgn ? `₦${priceNgn.toLocaleString("en-NG")}` : `$${priceUsd}`}
               </p>
               <p className="text-white/30 text-xs">/month</p>
               <button
@@ -1345,7 +1348,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
                   <div className="bg-white/4 border border-white/8 rounded-xl p-3">
                     <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Price</p>
                     <p className="text-white font-bold text-sm leading-none">
-                      {isNgn ? `₦${sub.price_ngn.toLocaleString("en-NG")}` : `$${PRICE_USD}`}
+                      {isNgn ? `₦${sub.price_ngn.toLocaleString("en-NG")}` : `$${priceUsd}`}
                     </p>
                     <p className="text-white/30 text-xs mt-0.5">per month</p>
                   </div>
