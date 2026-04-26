@@ -8,14 +8,15 @@ import type { PlanConfig } from "@/lib/billing/getActivePlans";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tab = "profile" | "security" | "team" | "billing" | "outreach";
+type Tab = "profile" | "security" | "team" | "billing" | "outreach" | "infrastructure";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "profile",  label: "Profile"        },
-  { id: "security", label: "Security"       },
-  { id: "team",     label: "Team"           },
-  { id: "billing",  label: "Billing & Plans"},
-  { id: "outreach", label: "Outreach"       },
+  { id: "profile",        label: "Profile"        },
+  { id: "security",       label: "Security"       },
+  { id: "team",           label: "Team"           },
+  { id: "billing",        label: "Billing & Plans"},
+  { id: "outreach",       label: "Outreach"       },
+  { id: "infrastructure", label: "Infrastructure" },
 ];
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -1144,6 +1145,289 @@ function OutreachTab() {
   );
 }
 
+// ── Infrastructure Tab ─────────────────────────────────────────────────────────
+
+interface DedicatedIpSub {
+  id: string;
+  status: "pending" | "active" | "cancelling" | "cancelled";
+  ip_address: string | null;
+  max_domains: number;
+  max_inboxes: number;
+  price_ngn: number;
+  cancel_requested_at: string | null;
+  retire_at: string | null;
+  created_at: string;
+}
+interface BlacklistCheck {
+  checked_at: string;
+  blacklists_hit: string[];
+  is_clean: boolean;
+}
+
+function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean }) {
+  const { currency } = useCurrency();
+  const isNgn = currency === "NGN";
+  const [sub,     setSub]     = useState<DedicatedIpSub | null | undefined>(undefined);
+  const [check,   setCheck]   = useState<BlacklistCheck | null>(null);
+  const [domains, setDomains] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+  const [canceling,  setCanceling]  = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const PRICE_NGN = 78_400;
+  const PRICE_USD = 49;
+
+  function flash(text: string, ok = true) {
+    setMsg({ text, ok });
+    setTimeout(() => setMsg(null), 5000);
+  }
+
+  useEffect(() => {
+    wsGet<{
+      subscription: DedicatedIpSub | null;
+      latestCheck:  BlacklistCheck | null;
+      domainCount:  number;
+    }>("/api/billing/dedicated-ip")
+      .then(d => {
+        setSub(d.subscription);
+        setCheck(d.latestCheck);
+        setDomains(d.domainCount ?? 0);
+      })
+      .catch(() => setSub(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Verify payment on return from Paystack
+  useEffect(() => {
+    if (!dedicatedIpSuccess) return;
+    const ref = new URLSearchParams(window.location.search).get("reference")
+      ?? new URLSearchParams(window.location.search).get("trxref");
+    if (!ref) return;
+    wsPost("/api/billing/dedicated-ip/verify", { reference: ref })
+      .then(() => {
+        flash("Payment received! Your dedicated IP request is being processed. We'll provision it within 24 hours.");
+        setLoading(true);
+        wsGet<{ subscription: DedicatedIpSub | null; latestCheck: BlacklistCheck | null; domainCount: number }>("/api/billing/dedicated-ip")
+          .then(d => { setSub(d.subscription); setCheck(d.latestCheck); setDomains(d.domainCount ?? 0); })
+          .finally(() => setLoading(false));
+      })
+      .catch(() => {});
+  }, [dedicatedIpSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handlePurchase() {
+    setPurchasing(true);
+    try {
+      const { url } = await wsPost<{ url: string }>("/api/billing/dedicated-ip", {});
+      window.location.href = url;
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to start checkout", false);
+      setPurchasing(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (!confirm("Cancel your dedicated IP subscription? Your IP will remain active for 30 days before retirement.")) return;
+    setCanceling(true);
+    try {
+      await wsPost("/api/billing/dedicated-ip/cancel", {});
+      setSub(prev => prev ? { ...prev, status: "cancelling", cancel_requested_at: new Date().toISOString(), retire_at: new Date(Date.now() + 30 * 86400 * 1000).toISOString() } : prev);
+      flash("Cancellation requested. Your IP will be retired in 30 days.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to cancel", false);
+    } finally {
+      setCanceling(false);
+    }
+  }
+
+  const statusColors: Record<string, string> = {
+    pending:    "bg-amber-500/15 text-amber-400 border-amber-500/25",
+    active:     "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+    cancelling: "bg-orange-500/15 text-orange-400 border-orange-500/25",
+    cancelled:  "bg-white/8 text-white/30 border-white/10",
+  };
+
+  if (loading || sub === undefined) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-24 bg-white/4 border border-white/8 rounded-2xl animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {msg && (
+        <div className={`flex items-start gap-3 p-4 rounded-xl border ${msg.ok ? "bg-emerald-500/10 border-emerald-500/25" : "bg-red-500/10 border-red-500/25"}`}>
+          <p className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.text}</p>
+        </div>
+      )}
+
+      {/* No subscription */}
+      {!sub && (
+        <section className="bg-white/4 border border-white/8 rounded-2xl p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-white font-semibold text-base">Dedicated Sending IP</h2>
+              <p className="text-white/40 text-sm mt-1 leading-relaxed max-w-md">
+                Get a dedicated IP address isolated from other senders. Ideal for high-volume teams
+                that want full control over their sending reputation.
+              </p>
+              <ul className="mt-4 space-y-1.5 text-sm text-white/60">
+                {[
+                  "Up to 10 domains on your dedicated IP",
+                  "Up to 50 inboxes across those domains",
+                  "Daily DNS blacklist monitoring (Spamhaus, Barracuda, SpamCop)",
+                  "IP reputation warmup ramp included",
+                  "30-day retirement period on cancellation",
+                ].map(f => (
+                  <li key={f} className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                    </svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex-shrink-0 text-right">
+              <p className="text-white font-bold text-2xl">
+                {isNgn ? `₦${PRICE_NGN.toLocaleString("en-NG")}` : `$${PRICE_USD}`}
+              </p>
+              <p className="text-white/30 text-xs">/month</p>
+              <button
+                onClick={handlePurchase}
+                disabled={purchasing}
+                className="mt-4 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold transition-colors whitespace-nowrap"
+              >
+                {purchasing ? "Loading…" : "Get Dedicated IP"}
+              </button>
+              <p className="text-white/25 text-[11px] mt-2 max-w-[140px]">
+                Requires a paid plan. Provisioned within 24 hours.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Active subscription */}
+      {sub && sub.status !== "cancelled" && (
+        <>
+          {/* Status card */}
+          <Section title="Dedicated IP" description="Your isolated sending infrastructure.">
+            <div className="flex items-start gap-4">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full border uppercase tracking-wide ${statusColors[sub.status]}`}>
+                    {sub.status === "cancelling" ? "Cancelling" : sub.status}
+                  </span>
+                  {sub.status === "active" && sub.ip_address && (
+                    <span className="font-mono text-sm text-white/80">{sub.ip_address}</span>
+                  )}
+                  {sub.status === "pending" && (
+                    <span className="text-amber-400/70 text-xs">Being provisioned — usually within 24 hours</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 pt-1">
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3">
+                    <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Domains</p>
+                    <p className="text-white font-bold text-lg leading-none">{domains}</p>
+                    <p className="text-white/30 text-xs mt-0.5">of {sub.max_domains} max</p>
+                  </div>
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3">
+                    <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Inboxes</p>
+                    <p className="text-white font-bold text-lg leading-none">{sub.max_inboxes}</p>
+                    <p className="text-white/30 text-xs mt-0.5">max allowed</p>
+                  </div>
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3">
+                    <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Price</p>
+                    <p className="text-white font-bold text-sm leading-none">
+                      {isNgn ? `₦${sub.price_ngn.toLocaleString("en-NG")}` : `$${PRICE_USD}`}
+                    </p>
+                    <p className="text-white/30 text-xs mt-0.5">per month</p>
+                  </div>
+                </div>
+
+                {sub.status === "cancelling" && sub.retire_at && (
+                  <div className="flex items-start gap-2.5 p-3 bg-orange-500/8 border border-orange-500/20 rounded-xl text-sm">
+                    <svg className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                    </svg>
+                    <div>
+                      <p className="text-orange-300 font-medium">Cancellation requested</p>
+                      <p className="text-orange-400/60 text-xs mt-0.5">
+                        Your IP will be retired on {new Date(sub.retire_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}.
+                        No new billing will occur.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Cancel link */}
+            {sub.status === "active" && (
+              <div className="flex items-center justify-between pt-4 mt-2 border-t border-white/6">
+                <p className="text-white/30 text-xs">Cancel dedicated IP subscription</p>
+                <button
+                  onClick={handleCancel}
+                  disabled={canceling}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
+                >
+                  {canceling ? "Canceling…" : "Cancel"}
+                </button>
+              </div>
+            )}
+          </Section>
+
+          {/* Blacklist status */}
+          {sub.status === "active" && (
+            <Section title="Blacklist Status" description="Checked daily against Spamhaus, Barracuda, and SpamCop.">
+              {!check ? (
+                <p className="text-white/30 text-sm py-2">No checks run yet — first check runs within 24 hours of provisioning.</p>
+              ) : check.is_clean ? (
+                <div className="flex items-center gap-3 p-4 bg-emerald-500/8 border border-emerald-500/20 rounded-xl">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-emerald-300 font-semibold text-sm">IP is clean</p>
+                    <p className="text-emerald-400/60 text-xs mt-0.5">
+                      Not listed on any monitored blocklist · Last checked {new Date(check.checked_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 p-4 bg-red-500/8 border border-red-500/20 rounded-xl">
+                  <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-red-300 font-semibold text-sm">IP is blacklisted</p>
+                    <p className="text-red-400/60 text-xs mt-0.5 mb-2">
+                      Listed on: {check.blacklists_hit.join(", ")} · Checked {new Date(check.checked_at).toLocaleDateString()}
+                    </p>
+                    <p className="text-red-400/50 text-xs">
+                      Contact support to begin the delisting process.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </Section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Root settings page ─────────────────────────────────────────────────────────
 
 function SettingsInner() {
@@ -1153,15 +1437,19 @@ function SettingsInner() {
 
   // Capture payment params in state at mount — router.replace clears the URL
   // but we need the values to persist for the upgrade/success flow
-  const [billingSuccess]       = useState(() => searchParams.get("billing") === "success");
-  const [paidPlanId]           = useState(() => searchParams.get("plan") ?? undefined);
-  const [paystackReference]    = useState(() => searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined);
+  const [billingSuccess]        = useState(() => searchParams.get("billing") === "success");
+  const [paidPlanId]            = useState(() => searchParams.get("plan") ?? undefined);
+  const [paystackReference]     = useState(() => searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined);
   const [creditPurchaseSuccess] = useState(() => searchParams.get("credit_purchase") === "success");
+  const [dedicatedIpSuccess]    = useState(() => searchParams.get("billing") === "dedicated_ip_success");
 
   // Clean up payment params from URL after mounting (keep tab=billing)
   useEffect(() => {
     if (billingSuccess || creditPurchaseSuccess) {
       router.replace("/settings?tab=billing");
+    }
+    if (dedicatedIpSuccess) {
+      router.replace("/settings?tab=infrastructure");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1189,11 +1477,12 @@ function SettingsInner() {
 
       {/* Content */}
       <div className={`flex-1 overflow-y-auto p-4 md:p-8 ${active !== "billing" ? "max-w-2xl" : ""}`}>
-        {active === "profile"  && <ProfileTab />}
-        {active === "security" && <SecurityTab />}
-        {active === "team"     && <TeamTab />}
-        {active === "billing"  && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} creditPurchaseSuccess={creditPurchaseSuccess} />}
-        {active === "outreach" && <OutreachTab />}
+        {active === "profile"        && <ProfileTab />}
+        {active === "security"       && <SecurityTab />}
+        {active === "team"           && <TeamTab />}
+        {active === "billing"        && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} creditPurchaseSuccess={creditPurchaseSuccess} />}
+        {active === "outreach"       && <OutreachTab />}
+        {active === "infrastructure" && <InfrastructureTab dedicatedIpSuccess={dedicatedIpSuccess} />}
       </div>
     </div>
   );

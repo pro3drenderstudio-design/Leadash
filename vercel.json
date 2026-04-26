@@ -7,6 +7,7 @@
     "enabled": false
   },
   "crons": [
-    { "path": "/api/cron/billing-grace", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/billing-grace",   "schedule": "0 6 * * *" },
+    { "path": "/api/cron/blacklist-check", "schedule": "0 7 * * *" }
   ]
 }

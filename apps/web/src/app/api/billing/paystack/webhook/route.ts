@@ -34,6 +34,39 @@ export async function POST(req: NextRequest) {
     const type       = meta.type as string | undefined;
     const workspaceId = meta.workspace_id as string | undefined;
 
+    // Dedicated IP add-on
+    if (type === "dedicated_ip" && workspaceId) {
+      const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
+      if (paid) {
+        // Idempotency — verify route may have already created the record
+        const { data: existingInvoice } = await db
+          .from("billing_invoices")
+          .select("id")
+          .eq("paystack_reference", data.reference)
+          .maybeSingle();
+
+        if (!existingInvoice) {
+          const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+          await db.from("dedicated_ip_subscriptions").insert({
+            workspace_id:           workspaceId,
+            status:                 "pending",
+            price_ngn:              78400,
+            ...(authorizationCode ? { paystack_auth_code:     authorizationCode } : {}),
+            ...(customerCode      ? { paystack_customer_code: customerCode }      : {}),
+          });
+          await db.from("billing_invoices").insert({
+            workspace_id:       workspaceId,
+            type:               "dedicated_ip",
+            description:        "Dedicated IP add-on",
+            amount_kobo:        amountKobo ?? 7_840_000,
+            paystack_reference: data.reference,
+            status:             "paid",
+          });
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Credit pack purchase
     if (type === "credit_purchase" && workspaceId) {
       const packId  = meta.pack_id  as string | undefined;

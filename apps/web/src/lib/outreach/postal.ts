@@ -154,6 +154,37 @@ export async function deleteInboundRoute(domain: string): Promise<void> {
   await agentFetch<{ ok: boolean }>("DELETE", "/routes", { domain });
 }
 
+// ── Dedicated IP pool management ─────────────────────────────────────────────
+// These call postal-agent endpoints that must be implemented on the VPS side.
+// Agent endpoints needed:
+//   POST   /ip-pools           body: { name }         → { pool_id }
+//   POST   /ip-pools/:id/domains  body: { domain }    → { ok }
+//   DELETE /ip-pools/:id/domains  body: { domain }    → { ok }
+//   GET    /ip-pools           → [{ pool_id, name, ip_address }]
+
+export interface IpPool {
+  pool_id:    string;
+  name:       string;
+  ip_address: string;
+}
+
+export async function createIpPool(name: string): Promise<{ poolId: string }> {
+  const res = await agentFetch<{ pool_id: string }>("POST", "/ip-pools", { name });
+  return { poolId: res.pool_id };
+}
+
+export async function assignDomainToPool(poolId: string, domain: string): Promise<void> {
+  await agentFetch<{ ok: boolean }>("POST", `/ip-pools/${poolId}/domains`, { domain });
+}
+
+export async function removeDomainFromPool(poolId: string, domain: string): Promise<void> {
+  await agentFetch<{ ok: boolean }>("DELETE", `/ip-pools/${poolId}/domains`, { domain });
+}
+
+export async function getIpPools(): Promise<IpPool[]> {
+  return agentFetch<IpPool[]>("GET", "/ip-pools");
+}
+
 interface SmtpSettings {
   host:      string;
   port:      number;
