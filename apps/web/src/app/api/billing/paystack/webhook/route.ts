@@ -129,26 +129,39 @@ export async function POST(req: NextRequest) {
           })().catch(() => {});
 
           // Grant included monthly credits (initial activation — not a renewal)
+          // Guard against double-grant: verify route may have already run before this webhook arrived
           if (plan.included_credits > 0) {
-            const { data: ws } = await db
-              .from("workspaces")
-              .select("lead_credits_balance, subscription_credits_balance")
-              .eq("id", workspaceId)
-              .single();
-            if (ws) {
-              await db.from("workspaces")
-                .update({
-                  lead_credits_balance:         (ws.lead_credits_balance ?? 0) + plan.included_credits,
-                  subscription_credits_balance: plan.included_credits,
-                })
-                .eq("id", workspaceId);
+            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: alreadyGranted } = await db
+              .from("lead_credit_transactions")
+              .select("id")
+              .eq("workspace_id", workspaceId)
+              .eq("type", "grant")
+              .eq("description", `Monthly credits — ${plan.name} plan`)
+              .gte("created_at", since24h)
+              .maybeSingle();
+
+            if (!alreadyGranted) {
+              const { data: ws } = await db
+                .from("workspaces")
+                .select("lead_credits_balance, subscription_credits_balance")
+                .eq("id", workspaceId)
+                .single();
+              if (ws) {
+                await db.from("workspaces")
+                  .update({
+                    lead_credits_balance:         (ws.lead_credits_balance ?? 0) + plan.included_credits,
+                    subscription_credits_balance: plan.included_credits,
+                  })
+                  .eq("id", workspaceId);
+              }
+              await db.from("lead_credit_transactions").insert({
+                workspace_id: workspaceId,
+                type:         "grant",
+                amount:       plan.included_credits,
+                description:  `Monthly credits — ${plan.name} plan`,
+              });
             }
-            await db.from("lead_credit_transactions").insert({
-              workspace_id: workspaceId,
-              type:         "grant",
-              amount:       plan.included_credits,
-              description:  `Monthly credits — ${plan.name} plan`,
-            });
           }
         }
       }

@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
   if (plan.included_credits > 0) {
     const { data: existing } = await db.from("lead_credit_transactions")
       .select("id").eq("workspace_id", workspaceId)
+      .eq("type", "grant")
       .eq("description", `Monthly credits — ${plan.name} plan`)
-      .gte("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString()) // within last 5 min
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .maybeSingle();
 
     if (!existing) {
