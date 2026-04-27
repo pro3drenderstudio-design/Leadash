@@ -47,11 +47,32 @@ function ProvisionModal({
 }) {
   const [ipAddress,    setIpAddress]    = useState(sub.ip_address    ?? "");
   const [poolId,       setPoolId]       = useState(sub.postal_pool_id ?? "");
+  const [serverId,     setServerId]     = useState<number | null>(null);
   const [maxDomains,   setMaxDomains]   = useState(String(sub.max_domains));
   const [maxInboxes,   setMaxInboxes]   = useState(String(sub.max_inboxes));
   const [notes,        setNotes]        = useState(sub.notes ?? "");
   const [saving,       setSaving]       = useState(false);
+  const [creating,     setCreating]     = useState(false);
   const [error,        setError]        = useState<string | null>(null);
+
+  async function createInPostal() {
+    if (!ipAddress) { setError("Enter the IP address first"); return; }
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/dedicated-ip/${sub.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_postal_pool", ip_address: ipAddress }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Failed to create pool"); return; }
+      setPoolId(String(data.pool_id));
+      setServerId(data.server_id);
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -61,12 +82,13 @@ function ProvisionModal({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action:          "provision",
-          ip_address:      ipAddress,
-          postal_pool_id:  poolId || undefined,
-          max_domains:     parseInt(maxDomains),
-          max_inboxes:     parseInt(maxInboxes),
-          notes:           notes || undefined,
+          action:           "provision",
+          ip_address:       ipAddress,
+          postal_pool_id:   poolId || undefined,
+          postal_server_id: serverId ?? undefined,
+          max_domains:      parseInt(maxDomains),
+          max_inboxes:      parseInt(maxInboxes),
+          notes:            notes || undefined,
         }),
       });
       const data = await res.json();
@@ -89,21 +111,34 @@ function ProvisionModal({
         <div className="px-6 py-5 space-y-4">
           <label className="block">
             <span className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider block mb-1.5">IP Address *</span>
-            <input
-              type="text"
-              value={ipAddress}
-              onChange={e => setIpAddress(e.target.value)}
-              placeholder="e.g. 95.217.42.10"
-              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={ipAddress}
+                onChange={e => setIpAddress(e.target.value)}
+                placeholder="e.g. 95.217.42.10"
+                className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+              <button
+                type="button"
+                onClick={createInPostal}
+                disabled={creating || !ipAddress || !!poolId}
+                className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white transition-colors"
+                title={poolId ? "Pool already created" : "Create IP pool in Postal automatically"}
+              >
+                {creating ? "Creating…" : poolId ? "✓ Created" : "Create in Postal"}
+              </button>
+            </div>
           </label>
           <label className="block">
-            <span className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider block mb-1.5">Postal Pool ID</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider block mb-1.5">
+              Postal Pool ID {serverId ? <span className="text-green-500 normal-case">· Server ID: {serverId}</span> : null}
+            </span>
             <input
               type="text"
               value={poolId}
               onChange={e => setPoolId(e.target.value)}
-              placeholder="e.g. pool-42 (leave blank if not using Postal pools)"
+              placeholder="Auto-filled when you click Create in Postal"
               className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
             />
           </label>

@@ -103,14 +103,19 @@ interface SmtpCredential {
 
 /**
  * Create a per-mailbox SMTP credential in Postal.
+ * Pass postalServerId for dedicated-IP customers so the credential lands on
+ * their dedicated server (not the shared one), ensuring mail routes via their IP.
  * Returns username + password to store in outreach_inboxes.
  */
 export async function createSmtpCredential(
   _domain: string,
   login: string,
+  postalServerId?: number,
 ): Promise<SmtpCredential> {
-  // The credential name is the full email address — makes it easy to trace in Postal's UI
-  return agentFetch<SmtpCredential>("POST", "/credentials", { name: login });
+  return agentFetch<SmtpCredential>("POST", "/credentials", {
+    name:      login,
+    ...(postalServerId ? { server_id: postalServerId } : {}),
+  });
 }
 
 /**
@@ -137,8 +142,12 @@ export async function deleteSmtpCredential(login: string): Promise<void> {
  *           }
  *   Response: { ok: true }
  */
-export async function createInboundRoute(domain: string, webhookUrl: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("POST", "/routes", { domain, webhook_url: webhookUrl });
+export async function createInboundRoute(domain: string, webhookUrl: string, postalServerId?: number): Promise<void> {
+  await agentFetch<{ ok: boolean }>("POST", "/routes", {
+    domain,
+    webhook_url: webhookUrl,
+    ...(postalServerId ? { server_id: postalServerId } : {}),
+  });
 }
 
 /**
@@ -150,35 +159,60 @@ export async function createInboundRoute(domain: string, webhookUrl: string): Pr
  *   Action: remove the Postal HTTP endpoint route for the domain
  *   Response: { ok: true }
  */
-export async function deleteInboundRoute(domain: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("DELETE", "/routes", { domain });
+export async function deleteInboundRoute(domain: string, postalServerId?: number): Promise<void> {
+  await agentFetch<{ ok: boolean }>("DELETE", "/routes", {
+    domain,
+    ...(postalServerId ? { server_id: postalServerId } : {}),
+  });
 }
 
 // ── Dedicated IP pool management ─────────────────────────────────────────────
-// These call postal-agent endpoints that must be implemented on the VPS side.
-// Agent endpoints needed:
-//   POST   /ip-pools           body: { name }         → { pool_id }
-//   POST   /ip-pools/:id/domains  body: { domain }    → { ok }
-//   DELETE /ip-pools/:id/domains  body: { domain }    → { ok }
-//   GET    /ip-pools           → [{ pool_id, name, ip_address }]
 
 export interface IpPool {
-  pool_id:    string;
-  name:       string;
-  ip_address: string;
+  pool_id:    number;
+  pool_name:  string;
+  address:    string;
+  server_id:  number;
 }
 
-export async function createIpPool(name: string): Promise<{ poolId: string }> {
-  const res = await agentFetch<{ pool_id: string }>("POST", "/ip-pools", { name });
-  return { poolId: res.pool_id };
+/**
+ * Create an IP pool in Postal with a dedicated server bound to it.
+ * Returns the pool ID (used in URL params) and the server ID (used for
+ * credentials and routes on dedicated-IP customers' domains).
+ */
+export async function createIpPool(
+  name: string,
+  ipAddress: string,
+): Promise<{ poolId: number; serverId: number }> {
+  const res = await agentFetch<{ pool_id: number; server_id: number }>(
+    "POST", "/ip-pools", { name, ip_address: ipAddress },
+  );
+  return { poolId: res.pool_id, serverId: res.server_id };
 }
 
-export async function assignDomainToPool(poolId: string, domain: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("POST", `/ip-pools/${poolId}/domains`, { domain });
+/**
+ * Register a domain on a dedicated Postal server (routes outbound mail via the
+ * pool's IP). Returns the DKIM keys to use for this domain's DNS records.
+ */
+export async function assignDomainToPool(
+  poolId: number | string,
+  serverId: number,
+  domain: string,
+): Promise<{ dkimSelector: string; dkimPublicKey: string }> {
+  const res = await agentFetch<{ ok: boolean; dkim_selector: string; dkim_public_key: string }>(
+    "POST", `/ip-pools/${poolId}/domains`, { domain, server_id: serverId },
+  );
+  return { dkimSelector: res.dkim_selector, dkimPublicKey: res.dkim_public_key };
 }
 
-export async function removeDomainFromPool(poolId: string, domain: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("DELETE", `/ip-pools/${poolId}/domains`, { domain });
+export async function removeDomainFromPool(
+  poolId: number | string,
+  serverId: number,
+  domain: string,
+): Promise<void> {
+  await agentFetch<{ ok: boolean }>(
+    "DELETE", `/ip-pools/${poolId}/domains`, { domain, server_id: serverId },
+  );
 }
 
 export async function getIpPools(): Promise<IpPool[]> {

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { checkIpBlacklists } from "@/lib/billing/blacklist";
+import { createIpPool } from "@/lib/outreach/postal";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -33,12 +34,13 @@ export async function PATCH(
   const { id }         = await params;
   const { adminClient: db } = ctx;
   const body = await req.json() as {
-    action?:         string;
-    ip_address?:     string;
-    postal_pool_id?: string;
-    notes?:          string;
-    max_domains?:    number;
-    max_inboxes?:    number;
+    action?:           string;
+    ip_address?:       string;
+    postal_pool_id?:   string;
+    postal_server_id?: number;
+    notes?:            string;
+    max_domains?:      number;
+    max_inboxes?:      number;
   };
 
   const { data: sub } = await db
@@ -51,18 +53,43 @@ export async function PATCH(
 
   const { action } = body;
 
+  // ── Create IP pool in Postal ──────────────────────────────────────────────
+  if (action === "create_postal_pool") {
+    if (!body.ip_address) {
+      return NextResponse.json({ error: "ip_address is required" }, { status: 400 });
+    }
+    const { data: ws } = await db.from("workspaces").select("name").eq("id", sub.workspace_id).single();
+    const poolName = ws?.name ?? sub.workspace_id;
+    let poolId: number;
+    let newServerId: number;
+    try {
+      ({ poolId, serverId: newServerId } = await createIpPool(poolName, body.ip_address));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Postal agent error: ${msg}` }, { status: 502 });
+    }
+    await db.from("dedicated_ip_subscriptions").update({
+      ip_address:       body.ip_address,
+      postal_pool_id:   String(poolId),
+      postal_server_id: newServerId,
+      updated_at:       new Date().toISOString(),
+    }).eq("id", id);
+    return NextResponse.json({ ok: true, pool_id: poolId, server_id: newServerId });
+  }
+
   // ── Provision ──────────────────────────────────────────────────────────────
   if (action === "provision") {
     if (!body.ip_address) {
       return NextResponse.json({ error: "ip_address is required to provision" }, { status: 400 });
     }
     await db.from("dedicated_ip_subscriptions").update({
-      status:         "active",
-      ip_address:     body.ip_address,
-      postal_pool_id: body.postal_pool_id ?? sub.postal_pool_id,
-      max_domains:    body.max_domains    ?? sub.max_domains,
-      max_inboxes:    body.max_inboxes    ?? sub.max_inboxes,
-      updated_at:     new Date().toISOString(),
+      status:           "active",
+      ip_address:       body.ip_address,
+      postal_pool_id:   body.postal_pool_id   ?? sub.postal_pool_id,
+      postal_server_id: body.postal_server_id ?? sub.postal_server_id,
+      max_domains:      body.max_domains      ?? sub.max_domains,
+      max_inboxes:      body.max_inboxes      ?? sub.max_inboxes,
+      updated_at:       new Date().toISOString(),
     }).eq("id", id);
 
     // Run immediate blacklist check on provisioned IP
@@ -136,11 +163,12 @@ export async function PATCH(
 
   // ── Generic field update ───────────────────────────────────────────────────
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (body.ip_address     !== undefined) updates.ip_address     = body.ip_address;
-  if (body.postal_pool_id !== undefined) updates.postal_pool_id = body.postal_pool_id;
-  if (body.notes          !== undefined) updates.notes          = body.notes;
-  if (body.max_domains    !== undefined) updates.max_domains    = body.max_domains;
-  if (body.max_inboxes    !== undefined) updates.max_inboxes    = body.max_inboxes;
+  if (body.ip_address       !== undefined) updates.ip_address       = body.ip_address;
+  if (body.postal_pool_id   !== undefined) updates.postal_pool_id   = body.postal_pool_id;
+  if (body.postal_server_id !== undefined) updates.postal_server_id = body.postal_server_id;
+  if (body.notes            !== undefined) updates.notes            = body.notes;
+  if (body.max_domains      !== undefined) updates.max_domains      = body.max_domains;
+  if (body.max_inboxes      !== undefined) updates.max_inboxes      = body.max_inboxes;
 
   await db.from("dedicated_ip_subscriptions").update(updates).eq("id", id);
   return NextResponse.json({ ok: true });

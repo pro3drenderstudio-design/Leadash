@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute, assignDomainToPool } from "@/lib/outreach/postal";
 import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
@@ -54,17 +54,38 @@ export async function POST(req: NextRequest) {
 
   const domainRecordId = rec.id;
 
-  // Register with Postal + get DKIM public key
   const postalIp = process.env.POSTAL_SERVER_IP ?? "";
   if (!postalIp) {
     await db.from("outreach_domains").update({ status: "failed", error_message: "POSTAL_SERVER_IP is not configured" }).eq("id", domainRecordId);
     return NextResponse.json({ error: "POSTAL_SERVER_IP is not configured" }, { status: 500 });
   }
 
+  // Check for an active dedicated IP subscription on this workspace
+  const { data: dedicatedSub } = await db
+    .from("dedicated_ip_subscriptions")
+    .select("id, postal_pool_id, postal_server_id")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  const isDedicated = !!(dedicatedSub?.postal_pool_id && dedicatedSub?.postal_server_id);
+
   let dkimPublicKey: string;
   try {
-    const postalDomain = await registerDomain(domain);
-    dkimPublicKey = postalDomain.dkim_public_key;
+    if (isDedicated) {
+      // Register domain on the customer's dedicated Postal server so mail routes
+      // through their IP, not the shared pool.
+      const { dkimPublicKey: dk } = await assignDomainToPool(
+        dedicatedSub!.postal_pool_id!,
+        dedicatedSub!.postal_server_id!,
+        domain,
+      );
+      dkimPublicKey = dk;
+      await db.from("outreach_domains").update({ dedicated_ip_subscription_id: dedicatedSub!.id }).eq("id", domainRecordId);
+    } else {
+      const postalDomain = await registerDomain(domain);
+      dkimPublicKey = postalDomain.dkim_public_key;
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db.from("outreach_domains").update({ status: "failed", error_message: msg }).eq("id", domainRecordId);
@@ -110,6 +131,17 @@ export async function PATCH(req: NextRequest) {
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Look up the dedicated server ID if this domain is on a dedicated IP
+  let dedicatedPostalServerId: number | undefined;
+  if (domainRecord.dedicated_ip_subscription_id) {
+    const { data: dedSub } = await db
+      .from("dedicated_ip_subscriptions")
+      .select("postal_server_id")
+      .eq("id", domainRecord.dedicated_ip_subscription_id)
+      .maybeSingle();
+    dedicatedPostalServerId = dedSub?.postal_server_id ?? undefined;
+  }
+
   if (domainRecord.status === "active") {
     // Check if inboxes were actually created — re-configure sets status=active but skips inbox creation
     const { count: existingCount } = await db
@@ -152,7 +184,7 @@ export async function PATCH(req: NextRequest) {
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
 
-    const cred = await createSmtpCredential(domainRecord.domain, email).catch(err => {
+    const cred = await createSmtpCredential(domainRecord.domain, email, dedicatedPostalServerId).catch(err => {
       throw new Error(`Postal createSmtpCredential(${email}): ${err.message}`);
     });
 
@@ -188,7 +220,7 @@ export async function PATCH(req: NextRequest) {
     "http://localhost:3001",
     process.env.POSTAL_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "",
   );
-  await createInboundRoute(domainRecord.domain, webhookUrl).catch(() => {
+  await createInboundRoute(domainRecord.domain, webhookUrl, dedicatedPostalServerId).catch(() => {
     // Non-fatal — inbound forwarding won't work until route is created, but outbound is fine
   });
 
