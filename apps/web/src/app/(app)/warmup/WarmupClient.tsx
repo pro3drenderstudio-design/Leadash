@@ -162,7 +162,14 @@ export default function WarmupClient() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <p className="text-white/25 text-[10px] mt-1">{pct}% of target reached</p>
+                  {pct >= 100 ? (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400 shrink-0"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                      <span className="text-green-400 text-xs font-medium">Warmup complete — continuing at {current}/day to maintain reputation</span>
+                    </div>
+                  ) : (
+                    <p className="text-white/25 text-[10px] mt-1">{pct}% of target reached</p>
+                  )}
                 </div>
 
                 {/* Settings */}
@@ -202,7 +209,7 @@ export default function WarmupClient() {
                 <div className="flex items-center justify-between">
                   <p className="text-white/25 text-xs">
                     {enabled
-                      ? `Auto-increments by ${ramp}/week every Monday. ${current < target ? `~${Math.ceil((target - current) / ramp)} week${Math.ceil((target - current) / ramp) !== 1 ? "s" : ""} to reach target.` : "Target reached."}`
+                      ? (current < target ? `Auto-increments by ${ramp}/week every Monday. ~${Math.ceil((target - current) / ramp)} week${Math.ceil((target - current) / ramp) !== 1 ? "s" : ""} to reach target.` : `Sending ${current} warmup emails/day. Ramp complete.`)
                       : "Warmup disabled — volume stays fixed at daily_send_limit."}
                   </p>
                   {isDirty && (

@@ -10,7 +10,8 @@ export type ActivityType =
   | "credit_purchase"
   | "support_ticket"
   | "lead_campaign_created"
-  | "lead_campaign_completed";
+  | "lead_campaign_completed"
+  | "warmup_completed";
 
 interface LogActivityParams {
   workspace_id?:   string;

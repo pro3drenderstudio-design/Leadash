@@ -244,19 +244,44 @@ async function rescueSmtp(inbox: OutreachInbox, warmupId: string): Promise<boole
   return rescued;
 }
 
-// ── Daily ramp (+1/day until target reached) ─────────────────────────────────
+// ── Weekly ramp (every Monday, by warmup_ramp_per_week) ──────────────────────
 export async function runWarmupRamp(workspaceId: string): Promise<void> {
+  // Only ramp on Mondays (UTC) — matches the UI "Auto-increments every Monday"
+  if (new Date().getUTCDay() !== 1) return;
+
   const db = supabase();
   const { data: inboxes } = await db.from("outreach_inboxes")
-    .select("id, warmup_current_daily, warmup_target_daily")
-    .eq("workspace_id", workspaceId).eq("warmup_enabled", true);
+    .select("id, warmup_current_daily, warmup_target_daily, warmup_ramp_per_week")
+    .eq("workspace_id", workspaceId)
+    .eq("warmup_enabled", true);
+
+  const newlyCompleted: string[] = [];
 
   for (const inbox of inboxes ?? []) {
     if (inbox.warmup_current_daily >= inbox.warmup_target_daily) continue;
-    const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + 1);
+    const rampBy = Math.max(1, inbox.warmup_ramp_per_week ?? 5);
+    const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + rampBy);
     await db.from("outreach_inboxes").update({
       warmup_current_daily: newVal,
       daily_send_limit:     newVal,
     }).eq("id", inbox.id);
+
+    if (newVal >= inbox.warmup_target_daily) {
+      newlyCompleted.push(inbox.id);
+    }
+  }
+
+  // Log admin activity when inboxes first reach their warmup target
+  if (newlyCompleted.length > 0) {
+    const { data: ws } = await db.from("workspaces").select("id, name").eq("id", workspaceId).single();
+    const { logActivity } = await import("@/lib/activity");
+    await logActivity({
+      workspace_id:   workspaceId,
+      workspace_name: ws?.name,
+      type:           "warmup_completed",
+      title:          `Warmup complete — ${newlyCompleted.length} inbox${newlyCompleted.length > 1 ? "es" : ""}`,
+      description:    `${ws?.name ?? workspaceId}: ${newlyCompleted.length} inbox${newlyCompleted.length > 1 ? "es have" : " has"} reached warmup target. Warmup continues at target rate.`,
+      metadata:       { inbox_ids: newlyCompleted },
+    });
   }
 }
