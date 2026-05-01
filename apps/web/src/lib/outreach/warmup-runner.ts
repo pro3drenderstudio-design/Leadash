@@ -271,16 +271,17 @@ export async function runWarmupRamp(workspaceId: string): Promise<void> {
     }
   }
 
-  // Log admin activity when inboxes first reach their warmup target
+  // Log admin activity when inboxes first reach their warmup target.
+  // Use the db client directly to avoid importing @/lib/activity (requires Next.js @supabase/ssr).
   if (newlyCompleted.length > 0) {
     const { data: ws } = await db.from("workspaces").select("id, name").eq("id", workspaceId).single();
-    const { logActivity } = await import("@/lib/activity");
-    await logActivity({
+    const count = newlyCompleted.length;
+    await db.from("admin_activity_log").insert({
       workspace_id:   workspaceId,
       workspace_name: ws?.name,
       type:           "warmup_completed",
-      title:          `Warmup complete — ${newlyCompleted.length} inbox${newlyCompleted.length > 1 ? "es" : ""}`,
-      description:    `${ws?.name ?? workspaceId}: ${newlyCompleted.length} inbox${newlyCompleted.length > 1 ? "es have" : " has"} reached warmup target. Warmup continues at target rate.`,
+      title:          `Warmup complete — ${count} inbox${count > 1 ? "es" : ""}`,
+      description:    `${ws?.name ?? workspaceId}: ${count} inbox${count > 1 ? "es have" : " has"} reached warmup target. Warmup continues at target rate.`,
       metadata:       { inbox_ids: newlyCompleted },
     });
   }
