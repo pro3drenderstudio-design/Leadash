@@ -227,6 +227,82 @@ function mapApifyRow(r: Record<string, unknown>, workspaceId: string, campaignId
   };
 }
 
+// ─── Discover upsert ──────────────────────────────────────────────────────────
+
+const DISCOVER_CHUNK = 200;
+
+async function saveToDiscover(db: ReturnType<typeof getDb>, rows: Record<string, unknown>[]) {
+  try {
+    // Upsert companies (keyed on domain)
+    const companyMap = new Map<string, string>(); // domain → id
+    const companies = rows
+      .filter(r => r.orgWebsite || r.orgLinkedinUrl)
+      .map(r => {
+        const rawDomain = (r.orgWebsite as string ?? "").replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+        return {
+          name:        (r.orgName as string) ?? null,
+          domain:      rawDomain || null,
+          industry:    (r.orgIndustry as string) ?? null,
+          size_range:  (r.orgSize as string) ?? null,
+          country:     (r.orgCountry as string) ?? null,
+          state:       (r.orgState as string) ?? null,
+          city:        (r.orgCity as string) ?? null,
+          linkedin_url:(r.orgLinkedinUrl as string) ?? null,
+          website:     (r.orgWebsite as string) ?? null,
+          updated_at:  new Date().toISOString(),
+        };
+      })
+      .filter(c => c.domain);
+
+    const uniqueCompanies = [...new Map(companies.map(c => [c.domain, c])).values()];
+    for (let i = 0; i < uniqueCompanies.length; i += DISCOVER_CHUNK) {
+      const { data: saved } = await db
+        .from("discover_companies")
+        .upsert(uniqueCompanies.slice(i, i + DISCOVER_CHUNK), { onConflict: "domain", ignoreDuplicates: false })
+        .select("id, domain");
+      for (const s of saved ?? []) {
+        if (s.domain) companyMap.set(s.domain, s.id);
+      }
+    }
+
+    // Upsert people
+    const people = rows
+      .filter(r => r.email || r.linkedinUrl)
+      .map(r => {
+        const rawDomain = (r.orgWebsite as string ?? "").replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+        const companyId = companyMap.get(rawDomain) ?? null;
+        const firstName = (r.firstName as string) ?? (r.fullName ? String(r.fullName).split(" ")[0] : null);
+        const lastName  = (r.lastName as string) ?? (r.fullName ? String(r.fullName).split(" ").slice(1).join(" ") || null : null);
+        return {
+          company_id:  companyId,
+          first_name:  firstName,
+          last_name:   lastName,
+          title:       (r.position as string) ?? null,
+          seniority:   (r.seniority as string) ?? null,
+          department:  (r.functional as string) ?? null,
+          linkedin_url:(r.linkedinUrl as string) ?? null,
+          email:       r.email ? String(r.email).toLowerCase().trim() : null,
+          email_status:"unverified" as const,
+          phone:       (r.phone as string) ?? null,
+          country:     (r.country as string) ?? null,
+          state:       (r.state as string) ?? null,
+          city:        (r.city as string) ?? null,
+          source:      "apify",
+          updated_at:  new Date().toISOString(),
+        };
+      });
+
+    for (let i = 0; i < people.length; i += DISCOVER_CHUNK) {
+      await db
+        .from("discover_people")
+        .upsert(people.slice(i, i + DISCOVER_CHUNK), { onConflict: "email", ignoreDuplicates: true });
+    }
+  } catch (e) {
+    // Non-fatal — discover population should never fail a campaign
+    console.error("[discover] save failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processLeadCampaign(job: Job<LeadCampaignJobData>): Promise<void> {
@@ -309,6 +385,7 @@ export async function processLeadCampaign(job: Job<LeadCampaignJobData>): Promis
               if (ie) { console.error(`[lead-campaign] ${campaign_id}: insert error`, ie.message); break; }
               totalInserted += rows.slice(i, i + INSERT_CHUNK).length;
             }
+            saveToDiscover(db, valid).catch(() => {});
           }
 
           offset += items.length;
