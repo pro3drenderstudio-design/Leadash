@@ -1194,7 +1194,14 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
             {step > 0 && (
               <button
                 type="button"
-                onClick={() => setStep(s => (s - 1) as Step)}
+                onClick={() => {
+                  if (step === 3) {
+                    setPreviewLeads([]);
+                    setPreviewDone(false);
+                    setError(null);
+                  }
+                  setStep(s => (s - 1) as Step);
+                }}
                 className="px-5 py-2 text-white/50 hover:text-white text-sm font-semibold transition-colors"
               >
                 Back
