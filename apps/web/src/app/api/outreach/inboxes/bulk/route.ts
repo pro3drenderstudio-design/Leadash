@@ -113,13 +113,13 @@ export async function POST(req: NextRequest) {
       imap_port:          row.imap_port ? parseInt(row.imap_port, 10) : null,
       first_name:         row.first_name ?? null,
       last_name:          row.last_name ?? null,
-      daily_send_limit:   row.daily_limit ? parseInt(row.daily_limit, 10) : 30,
-      send_window_start:  row.send_window_start ?? "09:00",
-      send_window_end:    row.send_window_end ?? "17:00",
-      warmup_enabled:     false,
-      warmup_target_daily: row.warmup_target ? parseInt(row.warmup_target, 10) : 40,
-      warmup_ramp_per_week: 5,
-      status:             "active",
+      daily_send_limit:    row.daily_limit ? parseInt(row.daily_limit, 10) : 30,
+      send_window_start:   row.send_window_start ?? "09:00",
+      send_window_end:     row.send_window_end ?? "17:00",
+      warmup_enabled:      false,
+      warmup_current_daily: 1,
+      warmup_target_daily:  row.warmup_target ? parseInt(row.warmup_target, 10) : 30,
+      status:              "active",
     };
 
     if (smtpPass) {

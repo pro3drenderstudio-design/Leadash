@@ -271,9 +271,8 @@ export async function PATCH(
           provider: "smtp", status: "active",
           smtp_host: smtpSettings.host, smtp_port: smtpSettings.port,
           smtp_user: cred.username, smtp_pass_encrypted: encrypt(cred.password),
-          daily_send_limit: 30, warmup_enabled: true,
-          warmup_target_daily: 30, warmup_ramp_per_week: 3,
-          warmup_ends_at: warmupEndsAt,
+          daily_send_limit: 1, warmup_current_daily: 1, warmup_enabled: true,
+          warmup_target_daily: 30, warmup_ends_at: warmupEndsAt,
           first_name: domainRecord.first_name ?? null, last_name: domainRecord.last_name ?? null,
         });
       }
@@ -315,9 +314,8 @@ export async function PATCH(
         provider: "smtp", status: "active",
         smtp_host: smtpSettings.host, smtp_port: smtpSettings.port,
         smtp_user: cred.username, smtp_pass_encrypted: encrypt(cred.password),
-        daily_send_limit: 30, warmup_enabled: true,
-        warmup_target_daily: 30, warmup_ramp_per_week: 3,
-        warmup_ends_at: warmupEndsAt,
+        daily_send_limit: 1, warmup_current_daily: 1, warmup_enabled: true,
+        warmup_target_daily: 30, warmup_ends_at: warmupEndsAt,
         first_name: domainRecord.first_name ?? null, last_name: domainRecord.last_name ?? null,
       });
       created.push(email);
@@ -444,11 +442,11 @@ export async function PATCH(
       smtp_pass_encrypted: encrypt(cred.password),
       imap_host:           smtpSettings.imap_host,
       imap_port:           smtpSettings.imap_port,
-      daily_send_limit:    30,
-      warmup_enabled:      true,
-      warmup_target_daily: 30,
-      warmup_ramp_per_week: 3,
-      warmup_ends_at:      warmupEndsAt,
+      daily_send_limit:     1,
+      warmup_current_daily: 1,
+      warmup_enabled:       true,
+      warmup_target_daily:  30,
+      warmup_ends_at:       warmupEndsAt,
       first_name:          domainRecord.first_name ?? null,
       last_name:           domainRecord.last_name  ?? null,
     });

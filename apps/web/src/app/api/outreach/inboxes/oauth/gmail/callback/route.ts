@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
         oauth_refresh_token: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
         oauth_expiry:        tokens.expiry_date   ? new Date(tokens.expiry_date).toISOString() : null,
         daily_send_limit:    30,
+        warmup_target_daily: 30,
         send_window_start:   "09:00",
         send_window_end:     "17:00",
       }, { onConflict: "workspace_id,email_address" })
