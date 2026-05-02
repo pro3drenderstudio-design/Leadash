@@ -355,14 +355,22 @@ export async function PATCH(
       domain_record_id: string; action: string; inbox_id: string;
       label?: string; first_name?: string; last_name?: string;
       daily_send_limit?: number; warmup_enabled?: boolean;
-      warmup_target_daily?: number; warmup_ramp_per_week?: number;
-      send_window_start?: string; send_window_end?: string; timezone?: string;
+      warmup_target_daily?: number;
+      send_window_start?: string; send_window_end?: string;
     };
     if (!inbox_id) return NextResponse.json({ error: "inbox_id required" }, { status: 400 });
-    const allowed = ["label","first_name","last_name","daily_send_limit","warmup_enabled","warmup_target_daily","warmup_ramp_per_week","send_window_start","send_window_end"];
+    const allowed = ["label","first_name","last_name","daily_send_limit","warmup_enabled","warmup_target_daily","send_window_start","send_window_end"];
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const key of allowed) {
       if (key in fields) update[key] = (fields as Record<string, unknown>)[key] ?? null;
+    }
+    // Extend warmup window when target is raised above current volume
+    if (fields.warmup_target_daily != null) {
+      const { data: cur } = await ctx.db.from("outreach_inboxes")
+        .select("warmup_current_daily").eq("id", inbox_id).single();
+      if (cur && fields.warmup_target_daily > (cur.warmup_current_daily ?? 0)) {
+        update.warmup_ends_at = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
+      }
     }
     const { error: inboxErr } = await ctx.db.from("outreach_inboxes")
       .update(update)

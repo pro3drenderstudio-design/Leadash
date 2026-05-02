@@ -137,6 +137,16 @@ export function startSchedulers() {
     }
   });
 
+  // ── Infrastructure health snapshot: every 5 minutes ────────────────────
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      const { runHealthSnapshot } = await import("./health-snapshot");
+      await runHealthSnapshot();
+    } catch (e) {
+      console.error("[scheduler:health] snapshot failed:", e);
+    }
+  });
+
   // ── Data cleanup: every Sunday at 03:00 UTC ──────────────────────────────
   // Deletes lead campaign records older than 60 days.
   cron.schedule("0 3 * * 0", async () => {

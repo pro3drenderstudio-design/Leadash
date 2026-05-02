@@ -249,7 +249,7 @@ async function rescueSmtp(inbox: OutreachInbox, warmupId: string): Promise<boole
 export async function runWarmupRamp(workspaceId: string): Promise<void> {
   const db = supabase();
   const { data: inboxes } = await db.from("outreach_inboxes")
-    .select("id, warmup_current_daily, warmup_target_daily")
+    .select("id, warmup_current_daily, warmup_target_daily, warmup_ends_at")
     .eq("workspace_id", workspaceId)
     .eq("warmup_enabled", true);
 
@@ -257,7 +257,14 @@ export async function runWarmupRamp(workspaceId: string): Promise<void> {
 
   for (const inbox of inboxes ?? []) {
     if (inbox.warmup_current_daily >= inbox.warmup_target_daily) continue;
-    const rampBy = 1;
+    // Ramp fast enough to hit the target by warmup_ends_at.
+    // If no deadline is set, fall back to +1/day.
+    const now = Date.now();
+    const daysLeft = inbox.warmup_ends_at
+      ? Math.max(1, Math.ceil((new Date(inbox.warmup_ends_at).getTime() - now) / 86_400_000))
+      : 1;
+    const remaining = inbox.warmup_target_daily - inbox.warmup_current_daily;
+    const rampBy = Math.max(1, Math.ceil(remaining / daysLeft));
     const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + rampBy);
     await db.from("outreach_inboxes").update({
       warmup_current_daily: newVal,

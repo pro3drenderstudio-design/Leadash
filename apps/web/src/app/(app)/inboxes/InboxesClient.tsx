@@ -234,7 +234,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     daily_send_limit: "", send_window_start: "", send_window_end: "",
     timezone: "", status: "" as "" | "active" | "paused",
     warmup_enabled: "" as "" | "true" | "false",
-    warmup_target_daily: "", warmup_ramp_per_week: "",
+    warmup_target_daily: "",
   });
 
   // ── Domain settings modal ─────────────────────────────────────────────────
@@ -321,13 +321,12 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (bulkFields.status)              patch.status              = bulkFields.status;
     if (bulkFields.warmup_enabled !== "") patch.warmup_enabled    = bulkFields.warmup_enabled === "true";
     if (bulkFields.warmup_target_daily)  patch.warmup_target_daily  = parseInt(bulkFields.warmup_target_daily);
-    if (bulkFields.warmup_ramp_per_week) patch.warmup_ramp_per_week = parseInt(bulkFields.warmup_ramp_per_week);
     if (!Object.keys(patch).length) { setShowBulkEdit(false); return; }
     setBulkWorking(true);
     await Promise.all(targetIds.map((id) => updateInbox(id, patch)));
     clearSelection();
     setShowBulkEdit(false);
-    setBulkFields({ first_name: "", last_name: "", daily_send_limit: "", send_window_start: "", send_window_end: "", timezone: "", status: "", warmup_enabled: "", warmup_target_daily: "", warmup_ramp_per_week: "" });
+    setBulkFields({ first_name: "", last_name: "", daily_send_limit: "", send_window_start: "", send_window_end: "", timezone: "", status: "", warmup_enabled: "", warmup_target_daily: "" });
     setBulkWorking(false);
     load();
     showToast(`Updated ${effectiveCount} inboxes`);
@@ -1349,17 +1348,11 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           <span className="text-white/20 text-[10px]">Target: {drawerInbox.warmup_target_daily}/day</span>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-white/40 mb-1">Target daily</label>
-                          <input type="number" min="1" max="200" value={(df("warmup_target_daily") as number) ?? ""} onChange={(e) => setDf("warmup_target_daily", parseInt(e.target.value))}
-                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-white/40 mb-1">Ramp / week</label>
-                          <input type="number" min="1" max="50" value={(df("warmup_ramp_per_week") as number) ?? ""} onChange={(e) => setDf("warmup_ramp_per_week", parseInt(e.target.value))}
-                            className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
-                        </div>
+                      <div>
+                        <label className="block text-xs text-white/40 mb-1">Warmup target (emails/day)</label>
+                        <input type="number" min="1" max="200" value={(df("warmup_target_daily") as number) ?? ""} onChange={(e) => setDf("warmup_target_daily", parseInt(e.target.value))}
+                          className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
+                        <p className="text-white/20 text-[10px] mt-1">Ramps automatically to reach this within 21 days. Raising it restarts the 21-day window.</p>
                       </div>
                     </>
                   )}
@@ -1520,13 +1513,6 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                     <input type="number" min="1" max="200" placeholder="e.g. 40"
                       value={bulkFields.warmup_target_daily}
                       onChange={(e) => setBulkFields((f) => ({ ...f, warmup_target_daily: e.target.value }))}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Ramp per week</label>
-                    <input type="number" min="1" max="50" placeholder="e.g. 5"
-                      value={bulkFields.warmup_ramp_per_week}
-                      onChange={(e) => setBulkFields((f) => ({ ...f, warmup_ramp_per_week: e.target.value }))}
                       className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none" />
                   </div>
                 </div>

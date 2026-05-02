@@ -1,7 +1,7 @@
 /**
  * Transactional notification emails for support tickets and beta programme.
- * Primary: Postal/SMTP VPS (POSTAL_HOST env var).
- * Fallback: Resend API (RESEND_API_KEY env var).
+ * Primary: Resend API (reliable from Vercel serverless).
+ * Fallback: Postal HTTP API on VPS (if POSTAL_HOST + POSTAL_API_KEY are set).
  */
 const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
@@ -13,11 +13,32 @@ async function sendEmail(opts: {
   html: string;
   text: string;
 }): Promise<void> {
-  const postalHost = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
+  // ── Primary: Resend API ───────────────────────────────────────────────────
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from:     `Leadash <${FROM}>`,
+        to:       [opts.to],
+        reply_to: opts.replyTo,
+        subject:  opts.subject,
+        html:     opts.html,
+        text:     opts.text,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Resend error ${res.status}: ${body}`);
+    }
+    return;
+  }
 
+  // ── Fallback: Postal HTTP API ─────────────────────────────────────────────
+  const postalHost   = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
   const postalApiKey = process.env.POSTAL_API_KEY;
   if (postalHost && postalApiKey) {
-    // ── Send via Postal HTTP API (SMTP is blocked by Vercel) ─────────────────
     const payload: Record<string, unknown> = {
       from:       `Leadash <${FROM}>`,
       to:         [opts.to],
@@ -29,13 +50,9 @@ async function sendEmail(opts: {
 
     const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
       method:  "POST",
-      headers: {
-        "X-Server-API-Key": postalApiKey,
-        "Content-Type":     "application/json",
-      },
+      headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`Postal API error ${res.status}: ${body}`);
@@ -43,30 +60,7 @@ async function sendEmail(opts: {
     return;
   }
 
-  // ── Fallback: Resend API ───────────────────────────────────────────────────
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("No email transport configured: set POSTAL_HOST or RESEND_API_KEY");
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from:     `Leadash <${FROM}>`,
-      to:       [opts.to],
-      reply_to: opts.replyTo,
-      subject:  opts.subject,
-      html:     opts.html,
-      text:     opts.text,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Resend error ${res.status}: ${body}`);
-  }
+  throw new Error("No email transport configured: set RESEND_API_KEY or POSTAL_HOST + POSTAL_API_KEY");
 }
 
 export async function sendAdminNewTicketNotification(opts: {

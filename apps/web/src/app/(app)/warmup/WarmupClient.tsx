@@ -110,6 +110,7 @@ export default function WarmupClient() {
           {inboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((inbox) => {
             const current = getField(inbox, "warmup_current_daily") as number;
             const target  = getField(inbox, "warmup_target_daily") as number;
+            const limit   = getField(inbox, "daily_send_limit") as number;
             const enabled = getField(inbox, "warmup_enabled") as boolean;
             const pct     = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
             const isDirty = !!edits[inbox.id];
@@ -162,9 +163,12 @@ export default function WarmupClient() {
                     />
                   </div>
                   {pct >= 100 ? (
-                    <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400 shrink-0"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                      <span className="text-green-400 text-xs font-medium">Warmup complete — continuing at {current}/day to maintain reputation</span>
+                    <div className="mt-2 flex flex-col gap-1 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400 shrink-0"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                        <span className="text-green-400 text-xs font-medium">Warmup complete — continuing at {current}/day to maintain reputation</span>
+                      </div>
+                      <p className="text-green-300/60 text-[11px] pl-6">Raise the <span className="font-semibold text-green-300/80">Daily Send Limit</span> below to allow campaign emails on top of warmup sends.</p>
                     </div>
                   ) : (
                     <p className="text-white/25 text-[10px] mt-1">{pct}% of target reached</p>
@@ -172,7 +176,7 @@ export default function WarmupClient() {
                 </div>
 
                 {/* Settings */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Current Daily</label>
                     <input
@@ -184,11 +188,21 @@ export default function WarmupClient() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Target Daily</label>
+                    <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Warmup Target</label>
                     <input
                       type="number"
                       value={target}
                       onChange={(e) => setField(inbox.id, "warmup_target_daily", parseInt(e.target.value) || 0)}
+                      min={1}
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Daily Send Limit</label>
+                    <input
+                      type="number"
+                      value={limit}
+                      onChange={(e) => setField(inbox.id, "daily_send_limit", parseInt(e.target.value) || 1)}
                       min={1}
                       className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
                     />
@@ -198,8 +212,10 @@ export default function WarmupClient() {
                 <div className="flex items-center justify-between">
                   <p className="text-white/25 text-xs">
                     {enabled
-                      ? (current < target ? `Auto-increments by 1/day. ~${target - current} day${target - current !== 1 ? "s" : ""} to reach target.` : `Sending ${current} warmup emails/day. Ramp complete.`)
-                      : "Warmup disabled — volume stays fixed at daily_send_limit."}
+                      ? (current < target
+                          ? `Ramps daily to reach ${target}/day within 21 days of setup.`
+                          : `Sending ${current} warmup emails/day. Ramp complete.`)
+                      : `Warmup disabled — capped at ${limit}/day.`}
                   </p>
                   {isDirty && (
                     <button

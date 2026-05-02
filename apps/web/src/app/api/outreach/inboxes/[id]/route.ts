@@ -17,6 +17,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     delete update.smtp_password;
   }
 
+  // When warmup_target_daily is being raised, reset warmup_ends_at to now + 21 days
+  // so the dynamic ramp has a full window to reach the new target.
+  if (body.warmup_target_daily != null) {
+    const { data: current } = await db
+      .from("outreach_inboxes")
+      .select("warmup_current_daily, warmup_target_daily")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (current && body.warmup_target_daily > (current.warmup_current_daily ?? 0)) {
+      update.warmup_ends_at = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
+    }
+  }
+
   const { data, error } = await db
     .from("outreach_inboxes")
     .update(update)

@@ -120,9 +120,9 @@ export default function WorkspaceDetailPage() {
   const [editingDomainId, setEditingDomainId] = useState<string | null>(null);
   const [inboxEditForm, setInboxEditForm]     = useState<{
     label: string; first_name: string; last_name: string; daily_send_limit: string;
-    warmup_enabled: boolean; warmup_target_daily: string; warmup_ramp_per_week: string;
+    warmup_enabled: boolean; warmup_target_daily: string;
     send_window_start: string; send_window_end: string;
-  }>({ label: "", first_name: "", last_name: "", daily_send_limit: "30", warmup_enabled: true, warmup_target_daily: "30", warmup_ramp_per_week: "3", send_window_start: "08:00", send_window_end: "18:00" });
+  }>({ label: "", first_name: "", last_name: "", daily_send_limit: "30", warmup_enabled: true, warmup_target_daily: "30", send_window_start: "08:00", send_window_end: "18:00" });
   const [inboxEditSaving, setInboxEditSaving] = useState(false);
   const [inboxEditMsg, setInboxEditMsg]       = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [togglingInboxId, setTogglingInboxId] = useState<string | null>(null);
@@ -330,7 +330,6 @@ export default function WorkspaceDetailPage() {
       daily_send_limit:     String(inbox.daily_send_limit     ?? 30),
       warmup_enabled:       inbox.warmup_enabled ?? true,
       warmup_target_daily:  String(inbox.warmup_target_daily  ?? 30),
-      warmup_ramp_per_week: String(inbox.warmup_ramp_per_week ?? 3),
       send_window_start:    inbox.send_window_start ?? "08:00",
       send_window_end:      inbox.send_window_end   ?? "18:00",
     });
@@ -355,7 +354,6 @@ export default function WorkspaceDetailPage() {
         daily_send_limit:     parseInt(inboxEditForm.daily_send_limit)     || 30,
         warmup_enabled:       inboxEditForm.warmup_enabled,
         warmup_target_daily:  parseInt(inboxEditForm.warmup_target_daily)  || 30,
-        warmup_ramp_per_week: parseInt(inboxEditForm.warmup_ramp_per_week) || 3,
         send_window_start:    inboxEditForm.send_window_start || undefined,
         send_window_end:      inboxEditForm.send_window_end   || undefined,
       }),
@@ -866,11 +864,6 @@ export default function WorkspaceDetailPage() {
                                     <div>
                                       <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Warmup target/day</label>
                                       <input type="number" min={1} value={inboxEditForm.warmup_target_daily} onChange={e => setInboxEditForm(f => ({ ...f, warmup_target_daily: e.target.value }))}
-                                        className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
-                                    </div>
-                                    <div>
-                                      <label className="text-[10px] text-slate-400 dark:text-white/40 block mb-1">Warmup ramp/week</label>
-                                      <input type="number" min={1} value={inboxEditForm.warmup_ramp_per_week} onChange={e => setInboxEditForm(f => ({ ...f, warmup_ramp_per_week: e.target.value }))}
                                         className="w-full px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-orange-500/30" />
                                     </div>
                                     <div>
