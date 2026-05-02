@@ -125,6 +125,7 @@ async function fetchImapMessages(
     auth: { user: inbox.smtp_user!, pass }, logger: false,
     connectionTimeout: 8_000, greetingTimeout: 5_000, socketTimeout: 10_000,
   });
+  client.on("error", () => {}); // prevent uncaught error events from crashing the process
 
   try { await client.connect(); }
   catch (e) { return { messages: [], error: `IMAP connect: ${String(e).slice(0, 200)}` }; }

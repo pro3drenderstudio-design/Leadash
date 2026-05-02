@@ -219,9 +219,10 @@ async function rescueSmtp(inbox: OutreachInbox, warmupId: string): Promise<boole
   const { ImapFlow } = await import("imapflow");
   const { decrypt }  = await import("@/lib/outreach/crypto");
   const pass = inbox.smtp_pass_encrypted ? decrypt(inbox.smtp_pass_encrypted) : "";
-  const client = new ImapFlow({ host: inbox.imap_host!, port: inbox.imap_port ?? 993, secure: true, auth: { user: inbox.smtp_user!, pass }, logger: false });
+  const client = new ImapFlow({ host: inbox.imap_host!, port: inbox.imap_port ?? 993, secure: true, auth: { user: inbox.smtp_user!, pass }, logger: false, connectionTimeout: 8_000, greetingTimeout: 5_000, socketTimeout: 15_000 });
+  client.on("error", () => {}); // prevent uncaught error events from crashing the process
 
-  await client.connect();
+  try { await client.connect(); } catch { return false; }
   const folders = ["Junk","[Gmail]/Spam","Spam","Junk Email"];
   let rescued = false;
 
