@@ -245,14 +245,11 @@ async function rescueSmtp(inbox: OutreachInbox, warmupId: string): Promise<boole
   return rescued;
 }
 
-// ── Weekly ramp (every Monday, by warmup_ramp_per_week) ──────────────────────
+// ── Daily ramp (+1/day until target) ─────────────────────────────────────────
 export async function runWarmupRamp(workspaceId: string): Promise<void> {
-  // Only ramp on Mondays (UTC) — matches the UI "Auto-increments every Monday"
-  if (new Date().getUTCDay() !== 1) return;
-
   const db = supabase();
   const { data: inboxes } = await db.from("outreach_inboxes")
-    .select("id, warmup_current_daily, warmup_target_daily, warmup_ramp_per_week")
+    .select("id, warmup_current_daily, warmup_target_daily")
     .eq("workspace_id", workspaceId)
     .eq("warmup_enabled", true);
 
@@ -260,7 +257,7 @@ export async function runWarmupRamp(workspaceId: string): Promise<void> {
 
   for (const inbox of inboxes ?? []) {
     if (inbox.warmup_current_daily >= inbox.warmup_target_daily) continue;
-    const rampBy = Math.max(1, inbox.warmup_ramp_per_week ?? 5);
+    const rampBy = 1;
     const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + rampBy);
     await db.from("outreach_inboxes").update({
       warmup_current_daily: newVal,

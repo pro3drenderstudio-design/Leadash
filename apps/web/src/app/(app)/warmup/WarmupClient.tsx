@@ -110,7 +110,6 @@ export default function WarmupClient() {
           {inboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((inbox) => {
             const current = getField(inbox, "warmup_current_daily") as number;
             const target  = getField(inbox, "warmup_target_daily") as number;
-            const ramp    = getField(inbox, "warmup_ramp_per_week") as number;
             const enabled = getField(inbox, "warmup_enabled") as boolean;
             const pct     = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
             const isDirty = !!edits[inbox.id];
@@ -173,7 +172,7 @@ export default function WarmupClient() {
                 </div>
 
                 {/* Settings */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Current Daily</label>
                     <input
@@ -194,22 +193,12 @@ export default function WarmupClient() {
                       className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-white/35 uppercase tracking-wider mb-1">Ramp/Week</label>
-                    <input
-                      type="number"
-                      value={ramp}
-                      onChange={(e) => setField(inbox.id, "warmup_ramp_per_week", parseInt(e.target.value) || 0)}
-                      min={1}
-                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
-                    />
-                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <p className="text-white/25 text-xs">
                     {enabled
-                      ? (current < target ? `Auto-increments by ${ramp}/week every Monday. ~${Math.ceil((target - current) / ramp)} week${Math.ceil((target - current) / ramp) !== 1 ? "s" : ""} to reach target.` : `Sending ${current} warmup emails/day. Ramp complete.`)
+                      ? (current < target ? `Auto-increments by 1/day. ~${target - current} day${target - current !== 1 ? "s" : ""} to reach target.` : `Sending ${current} warmup emails/day. Ramp complete.`)
                       : "Warmup disabled — volume stays fixed at daily_send_limit."}
                   </p>
                   {isDirty && (
@@ -260,7 +249,7 @@ export default function WarmupClient() {
         <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Schedule</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-white/40">
           <span>⏱ Pool runs <span className="text-white/60">every 4 hours</span></span>
-          <span>📈 Daily ramp increments <span className="text-white/60">every Monday</span></span>
+          <span>📈 Ramp increments <span className="text-white/60">+1/day at midnight UTC</span></span>
           <span>🔍 Reply &amp; spam-rescue check <span className="text-white/60">every 4 hours</span></span>
         </div>
       </div>

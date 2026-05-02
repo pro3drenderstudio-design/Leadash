@@ -80,9 +80,7 @@ export function startSchedulers() {
     }
   });
 
-  // ── Warmup ramp: daily at 00:00 UTC ─────────────────────────────────────
-  // Increments warmup_current_daily by warmup_ramp_per_week for each active inbox
-  // that hasn't yet reached its warmup_target_daily.
+  // ── Warmup ramp: daily at 00:00 UTC (+1/day per inbox until target) ─────────
   cron.schedule("0 0 * * *", async () => {
     const { runWarmupRamp } = await import("../../../web/src/lib/outreach/warmup-runner");
     const workspaceIds = await getActiveWorkspaceIds();
