@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -150,7 +151,16 @@ function SevBadge({ severity }: { severity: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+function alertLink(a: { type: string; workspace_id: string | null }): string | null {
+  if (a.workspace_id && ["inbox_limit", "trial", "warmup"].includes(a.type))
+    return `/admin/workspaces/${a.workspace_id}`;
+  if (a.type === "queue")  return "/admin/system";
+  if (a.type === "infra" || a.type === "postal") return "/admin/infrastructure";
+  return null;
+}
+
 export default function InfrastructurePage() {
+  const router = useRouter();
   const [data, setData]     = useState<InfraData | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
@@ -231,14 +241,18 @@ export default function InfrastructurePage() {
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             Active Alerts ({data!.activeAlerts.length})
           </h2>
-          {data!.activeAlerts.map(a => (
-            <div key={a.id} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
+          {data!.activeAlerts.map(a => {
+            const link = alertLink(a);
+            return (
+            <div key={a.id}
+              onClick={() => link && router.push(link)}
+              className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
               a.severity === "critical"
                 ? "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30"
                 : a.severity === "warning"
                 ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30"
                 : "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30"
-            }`}>
+            } ${link ? "cursor-pointer hover:opacity-90" : ""}`}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <SevBadge severity={a.severity} />
@@ -248,14 +262,14 @@ export default function InfrastructurePage() {
                 <p className="text-slate-400 dark:text-white/20 text-xs mt-1">{timeAgo(a.created_at)}</p>
               </div>
               <button
-                onClick={() => resolveAlert(a.id)}
+                onClick={e => { e.stopPropagation(); resolveAlert(a.id); }}
                 disabled={resolving === a.id}
                 className="text-xs text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/70 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 whitespace-nowrap transition-colors disabled:opacity-50"
               >
                 {resolving === a.id ? "..." : "Resolve"}
               </button>
             </div>
-          ))}
+          );})}
         </div>
       )}
 

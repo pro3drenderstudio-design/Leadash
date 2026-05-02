@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,14 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function notifLink(n: { type: string; workspace_id: string | null }): string | null {
+  if (n.workspace_id && ["inbox_limit", "trial", "warmup"].includes(n.type))
+    return `/admin/workspaces/${n.workspace_id}`;
+  if (n.type === "queue")  return "/admin/system";
+  if (n.type === "infra" || n.type === "postal") return "/admin/infrastructure";
+  return null;
+}
+
 function SevBadge({ severity }: { severity: string }) {
   const cls = severity === "critical"
     ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
@@ -67,6 +76,7 @@ type Tab   = typeof TABS[number];
 const PAGE_SIZE = 25;
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [tab,      setTab]      = useState<Tab>("active");
   const [data,     setData]     = useState<NotifResponse | null>(null);
   const [page,     setPage]     = useState(0);
@@ -311,12 +321,15 @@ export default function NotificationsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {notifs.map(n => (
+          {notifs.map(n => {
+            const link = notifLink(n);
+            return (
             <div
               key={n.id}
+              onClick={() => link && router.push(link)}
               className={`flex items-start gap-3 p-4 rounded-xl border text-sm transition-colors ${
                 !n.read_at && !n.resolved_at ? "bg-white dark:bg-white/5" : "bg-slate-50/50 dark:bg-transparent"
-              } border-slate-200 dark:border-white/10`}
+              } border-slate-200 dark:border-white/10 ${link ? "cursor-pointer hover:border-slate-300 dark:hover:border-white/20" : ""}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -336,7 +349,7 @@ export default function NotificationsPage() {
                 <p className="text-slate-300 dark:text-white/20 text-xs mt-1.5">{timeAgo(n.created_at)}{n.resolved_at ? ` · resolved ${timeAgo(n.resolved_at)}` : ""}</p>
               </div>
               {!n.resolved_at && (
-                <div className="flex gap-1.5 flex-shrink-0">
+                <div className="flex gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
                   {!n.read_at && (
                     <button
                       onClick={() => patchAction([n.id], "mark_read")}
@@ -356,7 +369,7 @@ export default function NotificationsPage() {
                 </div>
               )}
             </div>
-          ))}
+          );})}
         </div>
       )}
 
