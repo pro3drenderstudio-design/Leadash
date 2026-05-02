@@ -1,7 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import {
-  CREDIT_COSTS, JOB_TITLES, SENIORITY_LEVELS, JOB_FUNCTIONS,
+  CREDIT_COSTS, JOB_TITLES, SENIORITY_LEVELS, SENIORITY_API_VALUE,
+  JOB_FUNCTIONS, FUNCTION_API_VALUE,
   INDUSTRIES, EMPLOYEE_SIZES, COUNTRIES,
   type LeadCampaignMode, type ApifyLeadScraperInput,
   type ToneOfVoice, type PersonalizationDepth,
@@ -89,21 +90,29 @@ function cleanVal(v: string | null | undefined): string {
   return v.replace(/^\[['"]?|['"]?\]$/g, "").replace(/['"]/g, "").trim();
 }
 
+function toApiSeniority(vals: string[]): string[] {
+  return vals.map(v => SENIORITY_API_VALUE[v] ?? v).filter(Boolean);
+}
+
+function toApiFunction(vals: string[]): string[] {
+  return vals.map(v => FUNCTION_API_VALUE[v] ?? v).filter(Boolean);
+}
+
 function buildApifyInput(s: WizardState): ApifyLeadScraperInput {
   const input: ApifyLeadScraperInput = {
     totalResults: s.totalResults,
     hasEmail:     s.hasEmail || undefined,
     hasPhone:     s.hasPhone || undefined,
   };
-  if (s.emailStatus) input.emailStatus = s.emailStatus as "verified" | "unverified";
+  if (s.emailStatus) input.emailStatusIncludes = [s.emailStatus as "verified" | "unverified"];
   if (s.startOffset) input.startOffset = s.startOffset;
   if (s.personTitleIncludes.length)           input.personTitleIncludes = s.personTitleIncludes;
   if (s.personTitleExcludes.length)           input.personTitleExcludes = s.personTitleExcludes;
   if (s.personTitleExtraIncludes)             input.personTitleExtraIncludes = csvToArr(s.personTitleExtraIncludes);
-  if (s.seniorityIncludes.length)             input.seniorityIncludes = s.seniorityIncludes;
-  if (s.seniorityExcludes.length)             input.seniorityExcludes = s.seniorityExcludes;
-  if (s.personFunctionIncludes.length)        input.personFunctionIncludes = s.personFunctionIncludes;
-  if (s.personFunctionExcludes.length)        input.personFunctionExcludes = s.personFunctionExcludes;
+  if (s.seniorityIncludes.length)             input.seniorityIncludes = toApiSeniority(s.seniorityIncludes);
+  if (s.seniorityExcludes.length)             input.seniorityExcludes = toApiSeniority(s.seniorityExcludes);
+  if (s.personFunctionIncludes.length)        input.functionIncludes  = toApiFunction(s.personFunctionIncludes);
+  if (s.personFunctionExcludes.length)        input.functionExcludes  = toApiFunction(s.personFunctionExcludes);
   if (s.personLocationCountryIncludes.length) input.personLocationCountryIncludes = s.personLocationCountryIncludes;
   if (s.personLocationCountryExcludes.length) input.personLocationCountryExcludes = s.personLocationCountryExcludes;
   if (s.personLocationStateIncludes)          input.personLocationStateIncludes = csvToArr(s.personLocationStateIncludes);

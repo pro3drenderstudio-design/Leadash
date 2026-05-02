@@ -167,16 +167,18 @@ export const APIFY_ACTOR_ID = "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-p
 
 export interface ApifyLeadScraperInput {
   totalResults?:                  number;
-  emailStatus?:                   "verified" | "unverified";
+  emailStatusIncludes?:           ("verified" | "unverified")[];
   hasEmail?:                      boolean;
   hasPhone?:                      boolean;
   personTitleIncludes?:           string[];
   personTitleExcludes?:           string[];
   personTitleExtraIncludes?:      string[];
+  includeTitleVariants?:          boolean;
   seniorityIncludes?:             string[];
   seniorityExcludes?:             string[];
-  personFunctionIncludes?:        string[];
-  personFunctionExcludes?:        string[];
+  functionIncludes?:              string[];
+  functionExcludes?:              string[];
+  roleMatchMode?:                 "all" | "any";
   personLocationCountryIncludes?: string[];
   personLocationCountryExcludes?: string[];
   personLocationStateIncludes?:   string[];
@@ -321,18 +323,46 @@ export const JOB_TITLES = [
   "Investment Banking Analyst", "Director HR",
 ] as const;
 
+// Display labels shown in the UI — mapped to API enum values via SENIORITY_API_VALUE
 export const SENIORITY_LEVELS = [
   "Entry", "Senior", "Manager", "Director", "VP", "C-Suite",
-  "Owner", "Head", "Founder", "Partner", "Intern",
+  "Owner", "Partner", "Intern",
 ] as const;
 
+// Maps UI display label → Apify actor enum value
+export const SENIORITY_API_VALUE: Record<string, string> = {
+  "Entry":    "entry",
+  "Senior":   "senior",
+  "Manager":  "manager",
+  "Director": "director",
+  "VP":       "vp",
+  "C-Suite":  "c_suite",
+  "Owner":    "owner",
+  "Partner":  "partner",
+  "Intern":   "intern",
+};
+
+// Only the 11 values the Apify actor accepts — mapped via FUNCTION_API_VALUE
 export const JOB_FUNCTIONS = [
-  "Accounting", "Administrative", "Arts & Design", "Business Development",
-  "Consulting", "Data Science", "Education", "Engineering", "Entrepreneurship",
-  "Finance", "Human Resources", "Information Technology", "Legal", "Marketing",
-  "Media & Communications", "Operations", "Product Management", "Research",
-  "Sales", "Support",
+  "Engineering", "Sales", "Marketing", "Finance", "Operations",
+  "Human Resources", "Information Technology", "Business Development",
+  "Support", "Education", "Consulting",
 ] as const;
+
+// Maps UI display label → Apify actor enum value
+export const FUNCTION_API_VALUE: Record<string, string> = {
+  "Engineering":            "engineering",
+  "Sales":                  "sales",
+  "Marketing":              "marketing",
+  "Finance":                "finance",
+  "Operations":             "operations",
+  "Human Resources":        "human_resources",
+  "Information Technology": "information_technology",
+  "Business Development":   "business_development",
+  "Support":                "support",
+  "Education":              "education",
+  "Consulting":             "consulting",
+};
 
 export const INDUSTRIES = [
   "Accounting", "Agriculture", "Airlines/Aviation", "Alternative Dispute Resolution",
