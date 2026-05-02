@@ -51,14 +51,22 @@ interface DbStats {
   sends_today:       number;
 }
 
+interface ExternalService {
+  name:     string;
+  status:   "ok" | "warning" | "error" | "unknown";
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
 interface Snapshot {
-  id:          string;
-  captured_at: string;
-  redis:       RedisStats | null;
-  queues:      QueueStat[] | null;
-  server:      ServerStats | null;
-  postal:      PostalStats | null;
-  db_stats:    DbStats | null;
+  id:                string;
+  captured_at:       string;
+  redis:             RedisStats | null;
+  queues:            QueueStat[] | null;
+  server:            ServerStats | null;
+  postal:            PostalStats | null;
+  db_stats:          DbStats | null;
+  external_services: ExternalService[] | null;
 }
 
 interface Alert {
@@ -390,6 +398,43 @@ export default function InfrastructurePage() {
           </div>
         </section>
       </div>
+
+      {/* External Services */}
+      {(snap?.external_services ?? []).length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-white/60 mb-3 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+            External Services
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {snap!.external_services!.map(svc => {
+              const dotCls = svc.status === "ok"
+                ? "bg-green-500"
+                : svc.status === "warning"
+                ? "bg-amber-500"
+                : svc.status === "error"
+                ? "bg-red-500"
+                : "bg-slate-400";
+              const borderCls = svc.status === "error"
+                ? "border-red-200 dark:border-red-500/30"
+                : svc.status === "warning"
+                ? "border-amber-200 dark:border-amber-500/30"
+                : "border-slate-200 dark:border-white/10";
+              return (
+                <div key={svc.name} className={`bg-white dark:bg-white/5 border ${borderCls} rounded-xl p-4`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls} ${svc.status === "ok" ? "animate-pulse" : ""}`} />
+                    <p className="text-xs font-semibold text-slate-700 dark:text-white/70 truncate">{svc.name}</p>
+                  </div>
+                  <p className="text-xs text-slate-400 dark:text-white/30 leading-snug line-clamp-2">
+                    {svc.message ?? svc.status}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Subscription caps */}
       {(data?.capsNearLimit ?? []).length > 0 && (

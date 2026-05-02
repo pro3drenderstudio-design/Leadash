@@ -124,6 +124,169 @@ async function getServerStats() {
   }
 }
 
+interface ExternalServiceStatus {
+  name:     string;
+  status:   "ok" | "warning" | "error" | "unknown";
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
+async function checkResend(): Promise<ExternalServiceStatus> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return { name: "Resend", status: "unknown", message: "API key not configured" };
+  try {
+    const res = await fetch("https://api.resend.com/domains", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { name: "Resend", status: "error", message: `API ${res.status}` };
+    const { data: domains = [] } = await res.json() as { data: { name: string; status: string }[] };
+    const verified = domains.filter(d => d.status === "verified").length;
+    const total    = domains.length;
+    const allOk    = total > 0 && verified === total;
+    return {
+      name:    "Resend",
+      status:  allOk ? "ok" : total === 0 ? "warning" : "warning",
+      message: total === 0 ? "No domains added" : `${verified}/${total} domains verified`,
+      details: { verified, total, domains: domains.map(d => ({ name: d.name, status: d.status })) },
+    };
+  } catch {
+    return { name: "Resend", status: "error", message: "Request failed" };
+  }
+}
+
+async function checkApify(): Promise<ExternalServiceStatus> {
+  const key = process.env.APIFY_API_KEY;
+  if (!key) return { name: "Apify", status: "unknown", message: "API key not configured" };
+  try {
+    const res = await fetch(`https://api.apify.com/v2/users/me?token=${key}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { name: "Apify", status: "error", message: `API ${res.status}` };
+    const { data } = await res.json() as { data: Record<string, unknown> };
+    const plan    = (data.plan  as Record<string, unknown> | null) ?? {};
+    const usage   = (data.monthlyUsage as Record<string, unknown> | null) ?? {};
+    const limit   = (plan.maxMonthlyActorComputeUnits as number | null) ?? 0;
+    const used    = (usage.ACTOR_COMPUTE_UNITS         as number | null) ?? 0;
+    const pct     = limit > 0 ? Math.round((used / limit) * 100) : 0;
+    return {
+      name:    "Apify",
+      status:  pct >= 90 ? "warning" : "ok",
+      message: limit > 0 ? `${pct}% of monthly compute used` : `${used} compute units used`,
+      details: { plan_id: plan.id, compute_used: used, compute_limit: limit, pct },
+    };
+  } catch {
+    return { name: "Apify", status: "error", message: "Request failed" };
+  }
+}
+
+async function checkReoon(): Promise<ExternalServiceStatus> {
+  const key = process.env.REOON_API_KEY;
+  if (!key) return { name: "Reoon", status: "unknown", message: "API key not configured" };
+  try {
+    const res = await fetch(`https://emailverifier.reoon.com/api/v1/get-credits?key=${key}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { name: "Reoon", status: "error", message: `API ${res.status}` };
+    const body = await res.json() as Record<string, unknown>;
+    const credits = body.data as Record<string, unknown> | null;
+    const remaining = (credits?.remaining_credits ?? body.remaining_credits ?? null) as number | null;
+    if (remaining === null) return { name: "Reoon", status: "ok", message: "Connected", details: body };
+    const status = remaining < 100 ? "critical" : remaining < 500 ? "warning" : "ok";
+    return {
+      name:    "Reoon",
+      status:  status === "critical" ? "error" : status === "warning" ? "warning" : "ok",
+      message: `${remaining.toLocaleString()} credits remaining`,
+      details: credits ?? body,
+    };
+  } catch {
+    return { name: "Reoon", status: "error", message: "Request failed" };
+  }
+}
+
+async function checkPaystack(): Promise<ExternalServiceStatus> {
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) return { name: "Paystack", status: "unknown", message: "API key not configured" };
+  try {
+    const res = await fetch("https://api.paystack.co/balance", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { name: "Paystack", status: "error", message: `API ${res.status}` };
+    const { data: balances = [] } = await res.json() as { data: { currency: string; balance: number }[] };
+    const formatted = balances.map(b => ({ currency: b.currency, balance: b.balance / 100 }));
+    return {
+      name:    "Paystack",
+      status:  "ok",
+      message: formatted.map(b => `${b.currency} ${b.balance.toLocaleString()}`).join(", ") || "No balance",
+      details: { balances: formatted },
+    };
+  } catch {
+    return { name: "Paystack", status: "error", message: "Request failed" };
+  }
+}
+
+async function checkCloudflare(): Promise<ExternalServiceStatus> {
+  const token     = process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token) return { name: "Cloudflare", status: "unknown", message: "API token not configured" };
+  try {
+    const url = accountId
+      ? `https://api.cloudflare.com/client/v4/zones?account.id=${accountId}&per_page=50`
+      : "https://api.cloudflare.com/client/v4/zones?per_page=50";
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { name: "Cloudflare", status: "error", message: `API ${res.status}` };
+    const { result: zones = [], success } = await res.json() as { result: { name: string; status: string }[]; success: boolean };
+    if (!success) return { name: "Cloudflare", status: "error", message: "API error" };
+    const active  = zones.filter(z => z.status === "active").length;
+    const pending = zones.filter(z => z.status !== "active").length;
+    return {
+      name:    "Cloudflare",
+      status:  pending > 0 ? "warning" : "ok",
+      message: `${active} active zone${active !== 1 ? "s" : ""}${pending > 0 ? `, ${pending} pending` : ""}`,
+      details: { total: zones.length, active, pending, zones: zones.map(z => ({ name: z.name, status: z.status })) },
+    };
+  } catch {
+    return { name: "Cloudflare", status: "error", message: "Request failed" };
+  }
+}
+
+async function checkSupabase(db: ReturnType<typeof adminClient>): Promise<ExternalServiceStatus> {
+  try {
+    const start = Date.now();
+    const { error, count } = await db
+      .from("workspaces")
+      .select("id", { count: "exact", head: true });
+    const latency = Date.now() - start;
+    if (error) return { name: "Supabase", status: "error", message: error.message };
+    return {
+      name:    "Supabase",
+      status:  latency > 2000 ? "warning" : "ok",
+      message: latency > 2000 ? `Slow response (${latency}ms)` : `${latency}ms`,
+      details: { latency_ms: latency, workspace_count: count ?? 0 },
+    };
+  } catch {
+    return { name: "Supabase", status: "error", message: "Connection failed" };
+  }
+}
+
+async function getExternalServiceStats(db: ReturnType<typeof adminClient>): Promise<ExternalServiceStatus[]> {
+  const results = await Promise.allSettled([
+    checkSupabase(db),
+    checkResend(),
+    checkApify(),
+    checkReoon(),
+    checkPaystack(),
+    checkCloudflare(),
+  ]);
+  return results.map(r =>
+    r.status === "fulfilled" ? r.value : { name: "unknown", status: "error" as const, message: "Unexpected error" }
+  );
+}
+
 async function getAppStats(db: ReturnType<typeof adminClient>) {
   try {
     const todayStart = new Date();
@@ -393,11 +556,12 @@ export async function runHealthSnapshot(): Promise<void> {
     queue_waiting_critical: raw.queue_waiting_critical ?? 10_000,
   };
 
-  const [redis, queues, server, appStats] = await Promise.all([
+  const [redis, queues, server, appStats, externalServices] = await Promise.all([
     getRedisStats(),
     getQueueStats(),
     getServerStats(),
     getAppStats(db),
+    getExternalServiceStats(db),
   ]);
 
   // Write snapshot
@@ -405,8 +569,9 @@ export async function runHealthSnapshot(): Promise<void> {
     redis,
     queues,
     server,
-    db_stats: appStats,
-    postal:   null,
+    db_stats:          appStats,
+    postal:            null,
+    external_services: externalServices,
   });
 
   // Prune snapshots older than 7 days
@@ -432,7 +597,11 @@ export async function runHealthSnapshot(): Promise<void> {
     }).catch(() => {});
   }
 
+  const extSummary = externalServices
+    .filter(s => s.status !== "unknown")
+    .map(s => `${s.name}=${s.status}`)
+    .join(" ");
   console.log(
-    `[health] snapshot | redis=${redis?.memory_pct ?? "?"}% | ram=${server?.ram_pct ?? "?"}% | disk=${server?.disk_pct ?? "?"}% | queues=${queues.length}`
+    `[health] snapshot | redis=${redis?.memory_pct ?? "?"}% | ram=${server?.ram_pct ?? "?"}% | disk=${server?.disk_pct ?? "?"}% | queues=${queues.length} | ${extSummary}`
   );
 }
