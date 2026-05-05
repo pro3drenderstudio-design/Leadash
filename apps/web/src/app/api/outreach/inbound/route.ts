@@ -21,15 +21,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-
-const AUTO_REPLY_PATTERNS = [
-  /^auto[- ]?reply/i,
-  /^out of office/i,
-  /^automatic reply/i,
-  /^autom.*reply/i,
-  /^vacation/i,
-  /^absence/i,
-];
+import { aiClassify, detectOoo } from "@/lib/outreach/ai-classify";
 
 // DSN (Delivery Status Notification) bounce detection
 const DSN_FROM_PATTERNS = [
@@ -49,10 +41,6 @@ const DSN_SUBJECT_PATTERNS = [
   /message not delivered/i,
   /could not be delivered/i,
 ];
-
-function isAutoReply(subject: string): boolean {
-  return AUTO_REPLY_PATTERNS.some(p => p.test(subject));
-}
 
 function isDsnBounce(from: string, subject: string): boolean {
   return (
@@ -208,7 +196,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Campaign reply: match via In-Reply-To / References ────────────────────────
-  const isFiltered = isAutoReply(subject);
+  const isFiltered = detectOoo(subject, text);
 
   // Collect all message-ids from In-Reply-To and References headers
   const referencedIds: string[] = [];
@@ -267,23 +255,33 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── AI classify (skip for warmup and filtered) ───────────────────────────────
+  let aiCategory = "neutral", aiConfidence = 0;
+  if (!isFiltered && !isWarmup) {
+    const r = await aiClassify(subject, text);
+    aiCategory   = r.category;
+    aiConfidence = r.confidence;
+  }
+
   // ── Store reply ───────────────────────────────────────────────────────────────
   // Return 500 on insert failure so Postal retries delivery — avoids silently
   // dropping a reply while leaving the enrollment in a stale state.
   const { error: replyErr } = await db.from("outreach_replies").insert({
     workspace_id:  workspaceId,
     inbox_id:      inbox.id,
+    send_id:       matchedSendId,
     enrollment_id: enrollmentId,
     from_email:    from,
     from_name:     fromName,
     subject,
     body_text:     text,
     message_id:    messageId,
+    in_reply_to:   inReplyTo,
     received_at:   receivedAt,
     is_filtered:   isFiltered,
     is_warmup:     isWarmup,
-    ai_category:   null,
-    ai_confidence: null,
+    ai_category:   aiCategory,
+    ai_confidence: aiConfidence,
   });
 
   if (replyErr) {
@@ -308,6 +306,21 @@ export async function POST(req: NextRequest) {
         .from("outreach_sends")
         .update({ replied_at: receivedAt })
         .eq("id", matchedSendId);
+    }
+
+    // Promote crm_status to AI-detected intent if confidence is high enough
+    if (aiConfidence >= 0.7 && aiCategory !== "neutral") {
+      const { data: enr } = await db
+        .from("outreach_enrollments")
+        .select("crm_status")
+        .eq("id", enrollmentId)
+        .single();
+      if (enr?.crm_status === "neutral" || enr?.crm_status === "replied") {
+        await db
+          .from("outreach_enrollments")
+          .update({ crm_status: aiCategory })
+          .eq("id", enrollmentId);
+      }
     }
   }
 
