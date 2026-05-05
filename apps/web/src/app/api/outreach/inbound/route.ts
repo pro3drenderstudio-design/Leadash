@@ -102,13 +102,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Support both agent-forwarded format and Postal's native HTTP route format
-  const toRaw       = (body.to ?? body.rcpt_to) as string | undefined;
-  const fromRaw     = (body.from ?? body.mail_from) as string | undefined;
-  const to          = toRaw?.trim().toLowerCase();
-  const from        = fromRaw?.trim().toLowerCase();
-  const fromName    = (body.from_name   as string | undefined)?.trim() ?? null;
-  const subject     = (body.subject     as string | undefined)?.trim() ?? "";
+  // Postal sends rcpt_to/mail_from (clean SMTP envelope addresses) and
+  // to/from (header values that include display names, e.g. "John <john@co.com>").
+  // Always prefer the clean envelope fields; fall back to extracting from header.
+  function extractEmail(raw: string | undefined): string | undefined {
+    if (!raw) return undefined;
+    const m = raw.match(/<([^>]+)>/);
+    return (m ? m[1] : raw).trim().toLowerCase() || undefined;
+  }
+  function extractName(raw: string | undefined): string | null {
+    if (!raw) return null;
+    const m = raw.match(/^(.+?)\s*<[^>]+>/);
+    return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
+  }
+
+  const to      = extractEmail((body.rcpt_to  ?? body.to)       as string | undefined);
+  const from    = extractEmail((body.mail_from ?? body.from)    as string | undefined);
+  const fromName = extractName(body.from as string | undefined) ?? (body.from_name as string | undefined)?.trim() ?? null;
+  const subject  = (body.subject     as string | undefined)?.trim() ?? "";
   const text        = ((body.text ?? body.plain_body) as string | undefined)?.trim() ?? "";
   const messageId   = (body.message_id  as string | undefined)?.trim() ?? null;
   const inReplyTo   = (body.in_reply_to as string | undefined)?.trim() ?? null;
