@@ -229,33 +229,20 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Warmup detection ──────────────────────────────────────────────────────────
-  // Tag as warmup if:
-  //  a) The sender is one of our own registered inboxes (cross-workspace warmup pair), OR
-  //  b) The in_reply_to/references chain matches a warmup send message_id
+  // An email is warmup only if its thread references a warmup send we originated.
+  // Sender-identity checks ("is this a Leadash inbox?") are intentionally omitted —
+  // a Leadash user pitching another Leadash user is a real CRM event, not warmup.
   let isWarmup = false;
 
-  if (!enrollmentId) {
-    // (a) sender is a Leadash inbox
-    const { data: senderInbox } = await db
-      .from("outreach_inboxes")
+  if (!enrollmentId && referencedIds.length > 0) {
+    const { data: warmupSend } = await db
+      .from("outreach_warmup_sends")
       .select("id")
-      .eq("email_address", from)
+      .in("message_id", referencedIds)
       .limit(1)
       .maybeSingle();
 
-    if (senderInbox) {
-      isWarmup = true;
-    } else if (referencedIds.length > 0) {
-      // (b) reply thread matches a warmup send
-      const { data: warmupSend } = await db
-        .from("outreach_warmup_sends")
-        .select("id")
-        .in("message_id", referencedIds)
-        .limit(1)
-        .maybeSingle();
-
-      if (warmupSend) isWarmup = true;
-    }
+    if (warmupSend) isWarmup = true;
   }
 
   // ── AI classify (skip for warmup and filtered) ───────────────────────────────
