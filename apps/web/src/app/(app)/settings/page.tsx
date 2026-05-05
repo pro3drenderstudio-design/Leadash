@@ -1157,6 +1157,15 @@ interface DedicatedIpSub {
   cancel_requested_at: string | null;
   retire_at: string | null;
   created_at: string;
+  postal_node_id: string | null;
+}
+
+interface WorkspaceInbox {
+  id: string;
+  email_address: string;
+  label: string;
+  postal_node_id: string | null;
+  status: string;
 }
 interface BlacklistCheck {
   checked_at: string;
@@ -1167,39 +1176,55 @@ interface BlacklistCheck {
 function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean }) {
   const { currency } = useCurrency();
   const isNgn = currency === "NGN";
-  const [sub,      setSub]     = useState<DedicatedIpSub | null | undefined>(undefined);
-  const [check,    setCheck]   = useState<BlacklistCheck | null>(null);
-  const [domains,  setDomains] = useState(0);
-  const [priceNgn, setPriceNgn] = useState(78_400);
-  const [priceUsd, setPriceUsd] = useState(49);
-  const [loading,  setLoading] = useState(true);
+  const [sub,        setSub]       = useState<DedicatedIpSub | null | undefined>(undefined);
+  const [check,      setCheck]     = useState<BlacklistCheck | null>(null);
+  const [domains,    setDomains]   = useState(0);
+  const [inboxCount, setInboxCount] = useState(0);
+  const [priceNgn,   setPriceNgn]  = useState(78_400);
+  const [priceUsd,   setPriceUsd]  = useState(49);
+  const [loading,    setLoading]   = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [canceling,  setCanceling]  = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  // Inbox assignment panel state
+  const [allInboxes,      setAllInboxes]      = useState<WorkspaceInbox[]>([]);
+  const [selectedInboxes, setSelectedInboxes] = useState<Set<string>>(new Set());
+  const [assigning,       setAssigning]       = useState(false);
+  const [showAssignPanel, setShowAssignPanel] = useState(false);
 
   function flash(text: string, ok = true) {
     setMsg({ text, ok });
     setTimeout(() => setMsg(null), 5000);
   }
 
-  useEffect(() => {
-    wsGet<{
+  function loadDedicatedIp() {
+    return wsGet<{
       subscription: DedicatedIpSub | null;
       latestCheck:  BlacklistCheck | null;
       domainCount:  number;
+      inboxCount:   number;
       priceNgn:     number;
       priceUsd:     number;
-    }>("/api/billing/dedicated-ip")
-      .then(d => {
-        setSub(d.subscription);
-        setCheck(d.latestCheck);
-        setDomains(d.domainCount ?? 0);
-        if (d.priceNgn) setPriceNgn(d.priceNgn);
-        if (d.priceUsd) setPriceUsd(d.priceUsd);
-      })
-      .catch(() => setSub(null))
-      .finally(() => setLoading(false));
-  }, []);
+    }>("/api/billing/dedicated-ip").then(d => {
+      setSub(d.subscription);
+      setCheck(d.latestCheck);
+      setDomains(d.domainCount ?? 0);
+      setInboxCount(d.inboxCount ?? 0);
+      if (d.priceNgn) setPriceNgn(d.priceNgn);
+      if (d.priceUsd) setPriceUsd(d.priceUsd);
+      // Load all workspace inboxes when there's an active dedicated node
+      if (d.subscription?.status === "active" && d.subscription.postal_node_id) {
+        wsGet<WorkspaceInbox[]>("/api/outreach/inboxes?status=active&limit=200")
+          .then(setAllInboxes)
+          .catch(() => {});
+      }
+    });
+  }
+
+  useEffect(() => {
+    loadDedicatedIp().catch(() => setSub(null)).finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Verify payment on return from Paystack
   useEffect(() => {
@@ -1211,9 +1236,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
       .then(() => {
         flash("Payment received! Your dedicated IP request is being processed. We'll provision it within 24 hours.");
         setLoading(true);
-        wsGet<{ subscription: DedicatedIpSub | null; latestCheck: BlacklistCheck | null; domainCount: number }>("/api/billing/dedicated-ip")
-          .then(d => { setSub(d.subscription); setCheck(d.latestCheck); setDomains(d.domainCount ?? 0); })
-          .finally(() => setLoading(false));
+        loadDedicatedIp().finally(() => setLoading(false));
       })
       .catch(() => {});
   }, [dedicatedIpSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1240,6 +1263,23 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
       flash(e instanceof Error ? e.message : "Failed to cancel", false);
     } finally {
       setCanceling(false);
+    }
+  }
+
+  async function handleAssignInboxes() {
+    if (selectedInboxes.size === 0) return;
+    setAssigning(true);
+    try {
+      await wsPost("/api/billing/dedicated-ip/assign-inboxes", { inbox_ids: Array.from(selectedInboxes) });
+      flash(`${selectedInboxes.size} inbox(es) moved to your dedicated IP.`);
+      setSelectedInboxes(new Set());
+      setShowAssignPanel(false);
+      setLoading(true);
+      loadDedicatedIp().finally(() => setLoading(false));
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to move inboxes", false);
+    } finally {
+      setAssigning(false);
     }
   }
 
@@ -1281,7 +1321,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
               <ul className="mt-4 space-y-1.5 text-sm text-white/60">
                 {[
                   "Up to 10 domains on your dedicated IP",
-                  "Up to 50 inboxes across those domains",
+                  "Up to 100 inboxes across those domains",
                   "Daily DNS blacklist monitoring (Spamhaus, Barracuda, SpamCop)",
                   "IP reputation warmup ramp included",
                   "30-day retirement period on cancellation",
@@ -1342,8 +1382,8 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
                   </div>
                   <div className="bg-white/4 border border-white/8 rounded-xl p-3">
                     <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Inboxes</p>
-                    <p className="text-white font-bold text-lg leading-none">{sub.max_inboxes}</p>
-                    <p className="text-white/30 text-xs mt-0.5">max allowed</p>
+                    <p className="text-white font-bold text-lg leading-none">{inboxCount}</p>
+                    <p className="text-white/30 text-xs mt-0.5">of {sub.max_inboxes} max</p>
                   </div>
                   <div className="bg-white/4 border border-white/8 rounded-xl p-3">
                     <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Price</p>
@@ -1385,6 +1425,78 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
               </div>
             )}
           </Section>
+
+          {/* Inbox assignment — only when active + node provisioned */}
+          {sub.status === "active" && sub.postal_node_id && (
+            <Section title="Move Inboxes to Dedicated IP" description={`Route your sending inboxes through your dedicated IP. ${inboxCount} of ${sub.max_inboxes} slots used.`}>
+              {!showAssignPanel ? (
+                <button
+                  onClick={() => setShowAssignPanel(true)}
+                  className="px-4 py-2 rounded-xl bg-white/6 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-colors"
+                >
+                  Select inboxes to move
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  {allInboxes.length === 0 ? (
+                    <p className="text-white/30 text-sm py-2">No active inboxes found in your workspace.</p>
+                  ) : (
+                    <>
+                      <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                        {allInboxes.map(inbox => {
+                          const onDedicated = inbox.postal_node_id === sub.postal_node_id;
+                          const checked     = selectedInboxes.has(inbox.id);
+                          return (
+                            <label
+                              key={inbox.id}
+                              className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors
+                                ${onDedicated ? "opacity-40 cursor-not-allowed border-white/6 bg-white/2" :
+                                  checked     ? "border-orange-500/40 bg-orange-500/8" :
+                                                "border-white/8 bg-white/3 hover:bg-white/5"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={onDedicated}
+                                checked={checked || onDedicated}
+                                onChange={e => {
+                                  setSelectedInboxes(prev => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(inbox.id);
+                                    else next.delete(inbox.id);
+                                    return next;
+                                  });
+                                }}
+                                className="accent-orange-500 w-4 h-4 flex-shrink-0"
+                              />
+                              <span className="text-sm text-white/80 flex-1 truncate">{inbox.email_address}</span>
+                              {onDedicated && (
+                                <span className="text-[11px] text-emerald-400 flex-shrink-0">On dedicated IP</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          onClick={() => { setShowAssignPanel(false); setSelectedInboxes(new Set()); }}
+                          className="text-white/40 hover:text-white/60 text-sm transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleAssignInboxes}
+                          disabled={assigning || selectedInboxes.size === 0}
+                          className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+                        >
+                          {assigning ? "Moving…" : `Move ${selectedInboxes.size > 0 ? selectedInboxes.size : ""} inbox${selectedInboxes.size !== 1 ? "es" : ""}`}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </Section>
+          )}
 
           {/* Blacklist status */}
           {sub.status === "active" && (

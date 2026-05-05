@@ -8,12 +8,20 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const { data, error } = await db
-    .from("outreach_inboxes")
-    .select("id, label, email_address, provider, status, daily_send_limit, send_window_start, send_window_end, signature, first_name, last_name, warmup_enabled, warmup_current_daily, warmup_target_daily, warmup_ramp_per_week, warmup_ends_at, last_error, smtp_host, smtp_port, smtp_user, imap_host, imap_port, domain_id, created_at, updated_at")
-    .eq("workspace_id", workspaceId)
-    .order("created_at");
+  const url        = new URL(req.url);
+  const statusFilter = url.searchParams.get("status");
+  const limit        = parseInt(url.searchParams.get("limit") ?? "500", 10);
 
+  let query = db
+    .from("outreach_inboxes")
+    .select("id, label, email_address, provider, status, daily_send_limit, send_window_start, send_window_end, signature, first_name, last_name, warmup_enabled, warmup_current_daily, warmup_target_daily, warmup_ramp_per_week, warmup_ends_at, last_error, smtp_host, smtp_port, smtp_user, imap_host, imap_port, domain_id, postal_node_id, created_at, updated_at")
+    .eq("workspace_id", workspaceId)
+    .order("created_at")
+    .limit(limit);
+
+  if (statusFilter) query = query.eq("status", statusFilter);
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

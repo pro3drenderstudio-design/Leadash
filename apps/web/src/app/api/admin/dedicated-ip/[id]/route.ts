@@ -82,6 +82,42 @@ export async function PATCH(
     if (!body.ip_address) {
       return NextResponse.json({ error: "ip_address is required to provision" }, { status: 400 });
     }
+
+    // Upsert a postal_nodes row for this dedicated IP and link it to the subscription.
+    // Re-use an existing node for this IP if one already exists (idempotent re-provision).
+    const { data: ws } = await db.from("workspaces").select("name").eq("id", sub.workspace_id).single();
+    let nodeId: string | null = sub.postal_node_id ?? null;
+    const { data: existingNode } = await db
+      .from("postal_nodes")
+      .select("id")
+      .eq("ip_address", body.ip_address)
+      .maybeSingle();
+
+    if (existingNode) {
+      nodeId = existingNode.id;
+      await db.from("postal_nodes").update({
+        status:           "active",
+        workspace_id:     sub.workspace_id,
+        inbox_limit:      body.max_inboxes ?? sub.max_inboxes ?? 100,
+        provisioned_at:   new Date().toISOString(),
+        postal_server_id: body.postal_server_id ?? sub.postal_server_id ?? null,
+        postal_pool_id:   body.postal_pool_id   ?? sub.postal_pool_id   ?? null,
+      }).eq("id", nodeId);
+    } else {
+      const { data: newNode } = await db.from("postal_nodes").insert({
+        label:            `${ws?.name ?? sub.workspace_id} — Dedicated`,
+        ip_address:       body.ip_address,
+        status:           "active",
+        is_shared:        false,
+        workspace_id:     sub.workspace_id,
+        inbox_limit:      body.max_inboxes ?? sub.max_inboxes ?? 100,
+        postal_server_id: body.postal_server_id ?? sub.postal_server_id ?? null,
+        postal_pool_id:   body.postal_pool_id   ?? sub.postal_pool_id   ?? null,
+        provisioned_at:   new Date().toISOString(),
+      }).select("id").single();
+      nodeId = newNode?.id ?? null;
+    }
+
     await db.from("dedicated_ip_subscriptions").update({
       status:           "active",
       ip_address:       body.ip_address,
@@ -89,6 +125,7 @@ export async function PATCH(
       postal_server_id: body.postal_server_id ?? sub.postal_server_id,
       max_domains:      body.max_domains      ?? sub.max_domains,
       max_inboxes:      body.max_inboxes      ?? sub.max_inboxes,
+      postal_node_id:   nodeId,
       updated_at:       new Date().toISOString(),
     }).eq("id", id);
 
@@ -106,7 +143,7 @@ export async function PATCH(
       console.error("[dedicated-ip provision] blacklist check failed:", err);
     }
 
-    return NextResponse.json({ ok: true, newStatus: "active" });
+    return NextResponse.json({ ok: true, newStatus: "active", nodeId });
   }
 
   // ── Set pending ────────────────────────────────────────────────────────────

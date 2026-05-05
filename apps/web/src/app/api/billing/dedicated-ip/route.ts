@@ -33,16 +33,24 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle();
 
-  // Domain count linked to this subscription
-  const { count: domainCount } = await db
-    .from("outreach_domains")
-    .select("id", { count: "exact", head: true })
-    .eq("dedicated_ip_subscription_id", sub.id);
+  // Domain count + inbox count on dedicated node
+  const [{ count: domainCount }, { count: inboxCount }] = await Promise.all([
+    db.from("outreach_domains")
+      .select("id", { count: "exact", head: true })
+      .eq("dedicated_ip_subscription_id", sub.id),
+    sub.postal_node_id
+      ? db.from("outreach_inboxes")
+          .select("id", { count: "exact", head: true })
+          .eq("postal_node_id", sub.postal_node_id)
+          .eq("status", "active")
+      : Promise.resolve({ count: 0 }),
+  ]);
 
   return NextResponse.json({
     subscription:  sub,
     latestCheck,
     domainCount:   domainCount ?? 0,
+    inboxCount:    inboxCount  ?? 0,
     maxDomains:    sub.max_domains,
     maxInboxes:    sub.max_inboxes,
     priceNgn,
