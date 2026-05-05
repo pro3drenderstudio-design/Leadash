@@ -409,6 +409,53 @@ async function checkTrialExpiry(db: ReturnType<typeof adminClient>) {
   } catch { /* non-fatal */ }
 }
 
+async function checkPostalNodes(db: ReturnType<typeof adminClient>): Promise<void> {
+  try {
+    const { data: nodes } = await db
+      .from("postal_nodes")
+      .select("id, label, ip_address, inbox_limit, status, is_shared")
+      .neq("status", "retired");
+
+    if (!nodes?.length) return;
+
+    for (const node of nodes) {
+      const { count } = await db
+        .from("outreach_inboxes")
+        .select("id", { count: "exact", head: true })
+        .eq("postal_node_id", node.id)
+        .eq("status", "active");
+
+      const used  = count ?? 0;
+      const limit = node.inbox_limit as number;
+      const pct   = Math.round((used / limit) * 100);
+      const type  = (node.is_shared as boolean) ? "shared" : "dedicated";
+
+      if (pct >= 100) {
+        await upsertNotification({
+          type: "postal", severity: "critical",
+          title: `Postal ${type} node "${node.label}" is at capacity (${used}/${limit})`,
+          body:  "New inboxes cannot be provisioned on this node. Add a new node immediately to restore provisioning.",
+          metadata: { node_id: node.id, ip: node.ip_address, used, limit, pct },
+          dedup_key: `postal:node:${node.id}:capacity:critical`,
+        });
+        await resolveNotification(`postal:node:${node.id}:capacity:warning`);
+      } else if (pct >= 80) {
+        await upsertNotification({
+          type: "postal", severity: "warning",
+          title: `Postal ${type} node "${node.label}" at ${pct}% capacity (${used}/${limit})`,
+          body:  `${limit - used} inbox slots remaining. Order a new Contabo VPS and add it before this node fills up.`,
+          metadata: { node_id: node.id, ip: node.ip_address, used, limit, pct },
+          dedup_key: `postal:node:${node.id}:capacity:warning`,
+        });
+        await resolveNotification(`postal:node:${node.id}:capacity:critical`);
+      } else {
+        await resolveNotification(`postal:node:${node.id}:capacity:warning`);
+        await resolveNotification(`postal:node:${node.id}:capacity:critical`);
+      }
+    }
+  } catch { /* non-fatal */ }
+}
+
 async function evaluateThresholds(
   redis:  Awaited<ReturnType<typeof getRedisStats>>,
   queues: Awaited<ReturnType<typeof getQueueStats>>,
@@ -583,10 +630,11 @@ export async function runHealthSnapshot(): Promise<void> {
   // Evaluate thresholds + fire/resolve notifications
   await evaluateThresholds(redis, queues, server, thresholds);
 
-  // Run workspace-level checks every snapshot cycle (these have their own dedup)
+  // Run workspace-level and infrastructure checks every snapshot cycle
   await Promise.all([
     checkWorkspacePlanCaps(db),
     checkTrialExpiry(db),
+    checkPostalNodes(db),
   ]);
 
   // Trigger email dispatch on web app (fire-and-forget)

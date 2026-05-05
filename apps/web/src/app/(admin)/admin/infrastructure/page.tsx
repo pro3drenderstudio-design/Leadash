@@ -163,7 +163,8 @@ function alertLink(a: { type: string; workspace_id: string | null }): string | n
   if (a.workspace_id && ["inbox_limit", "trial", "warmup"].includes(a.type))
     return `/admin/workspaces/${a.workspace_id}`;
   if (a.type === "queue")  return "/admin/system";
-  if (a.type === "infra" || a.type === "postal") return "/admin/infrastructure";
+  if (a.type === "postal") return "/admin/postal-nodes";
+  if (a.type === "infra")  return "/admin/infrastructure";
   return null;
 }
 

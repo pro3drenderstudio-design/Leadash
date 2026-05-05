@@ -77,7 +77,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   await publishDnsRecords(domainRecord.domain, dnsRecords)
     .catch(e => { throw new Error(`CF publishDnsRecords: ${e.message}`); });
 
-  await db.from("outreach_domains").update({ dns_records: dnsRecords }).eq("id", domain_record_id);
+  await db.from("outreach_domains").update({ dns_records: dnsRecords, postal_node_id: assignedNodeId }).eq("id", domain_record_id);
 
   // ── Step 4b: Optional web redirect + email forwarding ────────────────────────
   if (domainRecord.redirect_url) {
@@ -107,6 +107,34 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   // ── Step 6: Create per-mailbox Postal SMTP credentials + inboxes ─────────────
   const smtpSettings = getSmtpSettings();
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  // Pick the shared node with the most remaining capacity.
+  // Blocks provisioning if all shared nodes are at or over the inbox_limit.
+  const { data: sharedNodes } = await db
+    .from("postal_nodes")
+    .select("id, inbox_limit")
+    .eq("status", "active")
+    .eq("is_shared", true);
+
+  let assignedNodeId: string | null = null;
+  if (sharedNodes?.length) {
+    // Count active inboxes per node
+    const counts = await Promise.all(
+      sharedNodes.map(async (n: { id: string; inbox_limit: number }) => {
+        const { count } = await db
+          .from("outreach_inboxes")
+          .select("id", { count: "exact", head: true })
+          .eq("postal_node_id", n.id)
+          .eq("status", "active");
+        return { id: n.id, used: count ?? 0, limit: n.inbox_limit };
+      }),
+    );
+    const available = counts.filter(n => n.used < n.limit).sort((a, b) => (a.used / a.limit) - (b.used / b.limit));
+    if (!available.length) {
+      throw new Error("All shared Postal nodes are at capacity. Add a new node before provisioning more inboxes.");
+    }
+    assignedNodeId = available[0].id;
+  }
 
   const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
     ? domainRecord.mailbox_prefixes as string[]
@@ -139,6 +167,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       warmup_ends_at:        warmupEndsAt,
       first_name:           domainRecord.first_name ?? null,
       last_name:            domainRecord.last_name  ?? null,
+      postal_node_id:       assignedNodeId,
     });
     if (inboxError) throw new Error(`Failed to create inbox ${email}: ${inboxError.message}`);
   }
