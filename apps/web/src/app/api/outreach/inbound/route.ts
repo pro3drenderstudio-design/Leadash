@@ -104,8 +104,11 @@ export async function POST(req: NextRequest) {
     return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
   }
 
-  const to      = extractEmail((body.rcpt_to  ?? body.to)       as string | undefined);
-  const from    = extractEmail((body.mail_from ?? body.from)    as string | undefined);
+  // rcpt_to (envelope) gives the clean recipient address without display names.
+  // For the sender, use the From: header — mail_from is Postal's return-path
+  // (e.g. bounce1@rp.postal.leadash.com) and is not the actual sender address.
+  const to      = extractEmail((body.rcpt_to   ?? body.to)   as string | undefined);
+  const from    = extractEmail((body.from      ?? body.mail_from) as string | undefined);
   const fromName = extractName(body.from as string | undefined) ?? (body.from_name as string | undefined)?.trim() ?? null;
   const subject  = (body.subject     as string | undefined)?.trim() ?? "";
   const text        = ((body.text ?? body.plain_body) as string | undefined)?.trim() ?? "";
