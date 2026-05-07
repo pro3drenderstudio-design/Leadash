@@ -99,6 +99,25 @@ function NewInboxPageInner() {
             </div>
           </button>
 
+          <a
+            href="/api/outreach/inboxes/oauth/microsoft"
+            className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-[#0078d4]/30 hover:border-[#0078d4]/60 rounded-xl transition-all"
+          >
+            <div className="w-11 h-11 rounded-full bg-[#0078d4]/15 flex items-center justify-center flex-shrink-0">
+              {/* Microsoft logo */}
+              <svg viewBox="0 0 21 21" className="w-5 h-5" fill="none">
+                <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-white font-medium text-sm">Microsoft / Outlook</p>
+              <p className="text-white/40 text-xs mt-0.5">Connect via OAuth</p>
+            </div>
+          </a>
+
           <button
             onClick={() => router.push("/inboxes/new/domain")}
             className="flex flex-col items-center gap-3 py-8 px-6 bg-white/4 hover:bg-white/8 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl transition-all relative overflow-hidden"
