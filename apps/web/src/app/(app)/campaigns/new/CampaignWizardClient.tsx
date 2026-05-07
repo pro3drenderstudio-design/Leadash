@@ -422,27 +422,26 @@ export default function CampaignWizardClient() {
 
     setSaving(true); setError(null);
 
-    const campaign = await createCampaign({
-      name, inbox_ids: selectedInboxes, list_ids: selectedLists,
-      timezone, send_days: sendDays, send_start_time: startTime,
-      send_end_time: endTime, daily_cap: dailyCap,
-      min_delay_seconds: minDelay, max_delay_seconds: maxDelay,
-      stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply, pause_after_open: pauseAfterOpen,
-    });
+    try {
+      const campaign = await createCampaign({
+        name, inbox_ids: selectedInboxes,
+        timezone, send_days: sendDays, send_start_time: startTime,
+        send_end_time: endTime, daily_cap: dailyCap,
+        min_delay_seconds: minDelay, max_delay_seconds: maxDelay,
+        stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply, pause_after_open: pauseAfterOpen,
+      });
 
-    if ((campaign as unknown as { error?: string }).error) {
-      setError((campaign as unknown as { error: string }).error);
+      await saveSequence(campaign.id, seqSteps.map((s) => ({
+        ...s,
+        subject_template_b: s.subject_template_b || null,
+      })));
+      await enrollLeads(campaign.id, selectedLists);
+
+      router.push(`/campaigns/${campaign.id}?enrolled=1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create campaign");
       setSaving(false);
-      return;
     }
-
-    await saveSequence(campaign.id, seqSteps.map((s) => ({
-      ...s,
-      subject_template_b: s.subject_template_b || null,
-    })));
-    await enrollLeads(campaign.id, selectedLists);
-
-    router.push(`/campaigns/${campaign.id}?enrolled=1`);
   }
 
   const STEP_LABELS = ["Settings", "Leads", "Sequence", "Review"];
