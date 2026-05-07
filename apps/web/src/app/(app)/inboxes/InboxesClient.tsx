@@ -270,6 +270,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (inboxStatusFilter !== "all") {
       if (inboxStatusFilter === "warming") {
         if (!inbox.warmup_enabled) return false;
+      } else if (inboxStatusFilter === "error") {
+        // Match both status==="error" and any inbox with a last_error set
+        if (inbox.status !== "error" && !inbox.last_error) return false;
       } else {
         if (inbox.status !== inboxStatusFilter) return false;
       }

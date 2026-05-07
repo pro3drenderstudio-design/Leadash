@@ -69,15 +69,24 @@ async function fetchImapMessages(
 
   const pass = inbox.smtp_pass_encrypted ? decrypt(inbox.smtp_pass_encrypted) : "";
   const port = inbox.imap_port ?? 993;
+  const isMicrosoft = imapHost.includes("outlook.office365") || imapHost.includes("outlook.com");
   const client = new ImapFlow({
     host: imapHost, port, secure: port === 993 || port === 465,
     auth: { user: inbox.smtp_user!, pass }, logger: false,
-    connectionTimeout: 8_000, greetingTimeout: 5_000, socketTimeout: 10_000,
+    connectionTimeout: 10_000, greetingTimeout: 8_000, socketTimeout: 15_000,
+    ...(isMicrosoft ? { tls: { servername: imapHost } } : {}),
   });
-  client.on("error", () => {}); // prevent uncaught error events from crashing the process
+  client.on("error", () => {});
 
   try { await client.connect(); }
-  catch (e) { return { messages: [], error: `IMAP connect: ${String(e).slice(0, 200)}` }; }
+  catch (e) {
+    const raw = String(e);
+    let msg = `IMAP connect: ${raw.slice(0, 200)}`;
+    if (isMicrosoft && (raw.includes("Command failed") || raw.includes("authentication") || raw.includes("LOGIN"))) {
+      msg = "IMAP connect: Microsoft/Outlook requires an App Password for IMAP. Enable 2FA on your Microsoft account, then go to account.microsoft.com/security → App passwords to generate one, and update this inbox password.";
+    }
+    return { messages: [], error: msg };
+  }
 
   let lock;
   try { lock = await client.getMailboxLock("INBOX"); }
