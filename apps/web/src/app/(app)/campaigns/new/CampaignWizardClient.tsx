@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, generateFollowups, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
@@ -100,6 +100,10 @@ export default function CampaignWizardClient() {
   const [rewriteResult, setRewriteResult]   = useState<{ subject: string; body: string } | null>(null);
   const [rewriteError, setRewriteError]     = useState<string | null>(null);
 
+  // Spintax writer
+  const [spintaxLoading, setSpintaxLoading] = useState<string | null>(null);
+  const [spintaxError, setSpintaxError]     = useState<string | null>(null);
+
   // Generate follow-ups
   const [showFollowupGen, setShowFollowupGen]     = useState(false);
   const [followupCount, setFollowupCount]         = useState(2);
@@ -141,6 +145,24 @@ export default function CampaignWizardClient() {
     updateStep(idx, "body_template",    rewriteResult.body);
     setRewriteIdx(null);
     setRewriteResult(null);
+  }
+
+  async function handleSpintax(stepIdx: number, field: "subject" | "body") {
+    const key = `${stepIdx}-${field}`;
+    const text = field === "subject" ? seqSteps[stepIdx].subject_template : seqSteps[stepIdx].body_template;
+    if (!text.trim()) return;
+    setSpintaxLoading(key); setSpintaxError(null);
+    try {
+      const data = await generateSpintax(text, field);
+      if ((data as { error?: string }).error) { setSpintaxError((data as { error?: string }).error!); return; }
+      if (data.spintax) {
+        setSeqSteps(st => st.map((s, i) => i !== stepIdx ? s : field === "subject" ? { ...s, subject_template: data.spintax } : { ...s, body_template: data.spintax }));
+      }
+    } catch (err) {
+      setSpintaxError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSpintaxLoading(null);
+    }
   }
 
   async function handleGenerateFollowups() {
@@ -716,6 +738,8 @@ export default function CampaignWizardClient() {
       {/* Step 2: Sequence */}
       {step === 2 && (
         <div className="space-y-4">
+          <p className="text-violet-400/50 text-xs">Spintax: <span className="font-mono">{"{Hello|Hi|Hey}"}</span> — AI generates variations. Click <span className="text-violet-300">✦ Spintax</span> on any subject or body field.</p>
+          {spintaxError && <p className="text-red-400 text-xs">Spintax error: {spintaxError}</p>}
           <div className="flex items-center justify-between">
             <p className="text-white/60 text-sm">Use {`{{first_name}}, {{last_name}}, {{company}}, {{title}}`} as variables.</p>
             <button
@@ -808,7 +832,18 @@ export default function CampaignWizardClient() {
 
                   {/* Subject A */}
                   <div>
-                    <label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                      <button
+                        type="button"
+                        onClick={() => handleSpintax(i, "subject")}
+                        disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
+                        className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                        title="AI Spintax — generate variations"
+                      >
+                        {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                      </button>
+                    </div>
                     <input value={s.subject_template} onChange={(e) => updateStep(i, "subject_template", e.target.value)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
@@ -818,7 +853,21 @@ export default function CampaignWizardClient() {
                     <input value={s.subject_template_b} onChange={(e) => updateStep(i, "subject_template_b", e.target.value)} placeholder="Alternate subject for A/B test" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
-                  <textarea value={s.body_template} onChange={(e) => updateStep(i, "body_template", e.target.value)} rows={5} placeholder="Email body (supports {{first_name}} etc)" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40 resize-none" />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-white/40">Body</label>
+                      <button
+                        type="button"
+                        onClick={() => handleSpintax(i, "body")}
+                        disabled={spintaxLoading === `${i}-body` || !s.body_template.trim()}
+                        className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                        title="AI Spintax — generate variations"
+                      >
+                        {spintaxLoading === `${i}-body` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                      </button>
+                    </div>
+                    <textarea value={s.body_template} onChange={(e) => updateStep(i, "body_template", e.target.value)} rows={5} placeholder="Email body (supports {{first_name}} etc)" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40 resize-none" />
+                  </div>
                 </>
               )}
             </div>
