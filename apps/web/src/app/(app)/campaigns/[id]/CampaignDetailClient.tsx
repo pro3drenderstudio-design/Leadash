@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import RichEmailEditor from "@/components/RichEmailEditor";
 import {
   getCampaign, getSequence, updateCampaign, saveSequence,
   getInboxes, getTemplates, sendTestEmail, generateSequence, generateSpintax, generateFollowups,
@@ -543,7 +544,10 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                           {spintaxLoading === `${i}-body` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
                         </button>
                       </div>
-                      <textarea value={s.body_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,body_template:e.target.value}:st2))} rows={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40 resize-none" />
+                      <RichEmailEditor
+                        value={s.body_template}
+                        onChange={html => setEditSteps(st => st.map((st2, idx) => idx === i ? { ...st2, body_template: html } : st2))}
+                      />
                     </div>
                   </>
                 )}

@@ -6,6 +6,7 @@ import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
 import { getWorkspaceId } from "@/lib/workspace/client";
+import RichEmailEditor from "@/components/RichEmailEditor";
 
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 type Step = {
@@ -99,6 +100,9 @@ export default function CampaignWizardClient() {
   const [rewriting, setRewriting]           = useState(false);
   const [rewriteResult, setRewriteResult]   = useState<{ subject: string; body: string } | null>(null);
   const [rewriteError, setRewriteError]     = useState<string | null>(null);
+
+  // Inbox search
+  const [inboxSearch, setInboxSearch] = useState("");
 
   // Spintax writer
   const [spintaxLoading, setSpintaxLoading] = useState<string | null>(null);
@@ -462,28 +466,52 @@ export default function CampaignWizardClient() {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Q2 Real Estate Outreach" className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/50" />
           </div>
 
-          {/* Inboxes — scrollable */}
+          {/* Inboxes — scrollable with search */}
           <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
-              Sending Inboxes {selectedInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{selectedInboxes.length} selected</span>}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                Sending Inboxes {selectedInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{selectedInboxes.length} selected</span>}
+              </label>
+            </div>
+            {inboxes.length > 4 && (
+              <input
+                value={inboxSearch}
+                onChange={e => setInboxSearch(e.target.value)}
+                placeholder="Search by name, email, label…"
+                className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-white/25 focus:outline-none focus:border-orange-500/30 mb-2"
+              />
+            )}
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-              {inboxes.map((inbox) => {
-                const warmupEndsAt = (inbox as OutreachInboxSafe & { warmup_ends_at?: string }).warmup_ends_at;
-                const isWarming    = !!warmupEndsAt && new Date(warmupEndsAt) > new Date();
-                const daysLeft     = isWarming ? Math.ceil((new Date(warmupEndsAt!).getTime() - Date.now()) / 86_400_000) : 0;
-                return (
-                  <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${selectedInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
-                    <input type="checkbox" disabled={isWarming} checked={!isWarming && selectedInboxes.includes(inbox.id)} onChange={() => !isWarming && toggleInbox(inbox.id)} className="accent-orange-500 disabled:opacity-40" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-white text-sm font-medium">{inbox.label}</div>
-                      <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div>
-                      {isWarming && <div className="text-amber-400/70 text-xs mt-0.5">Warming up — available in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>}
-                    </div>
-                  </label>
-                );
-              })}
+              {inboxes
+                .filter(inbox => {
+                  if (!inboxSearch.trim()) return true;
+                  const q = inboxSearch.toLowerCase();
+                  return (
+                    inbox.email_address.toLowerCase().includes(q) ||
+                    (inbox.label ?? "").toLowerCase().includes(q) ||
+                    (inbox.first_name ?? "").toLowerCase().includes(q) ||
+                    (inbox.last_name ?? "").toLowerCase().includes(q)
+                  );
+                })
+                .map((inbox) => {
+                  const warmupEndsAt = (inbox as OutreachInboxSafe & { warmup_ends_at?: string }).warmup_ends_at;
+                  const isWarming    = !!warmupEndsAt && new Date(warmupEndsAt) > new Date();
+                  const daysLeft     = isWarming ? Math.ceil((new Date(warmupEndsAt!).getTime() - Date.now()) / 86_400_000) : 0;
+                  return (
+                    <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${selectedInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
+                      <input type="checkbox" disabled={isWarming} checked={!isWarming && selectedInboxes.includes(inbox.id)} onChange={() => !isWarming && toggleInbox(inbox.id)} className="accent-orange-500 disabled:opacity-40" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium">{inbox.label}</div>
+                        <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div>
+                        {isWarming && <div className="text-amber-400/70 text-xs mt-0.5">Warming up — available in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>}
+                      </div>
+                    </label>
+                  );
+                })}
               {!inboxes.length && <p className="text-white/30 text-sm">No active inboxes. <a href="/inboxes/new" className="text-orange-400">Add one first.</a></p>}
+              {inboxes.length > 0 && inboxSearch.trim() && inboxes.filter(i => i.email_address.toLowerCase().includes(inboxSearch.toLowerCase()) || (i.label ?? "").toLowerCase().includes(inboxSearch.toLowerCase())).length === 0 && (
+                <p className="text-white/30 text-sm text-center py-4">No inboxes match "{inboxSearch}"</p>
+              )}
             </div>
           </div>
 
@@ -866,7 +894,11 @@ export default function CampaignWizardClient() {
                         {spintaxLoading === `${i}-body` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
                       </button>
                     </div>
-                    <textarea value={s.body_template} onChange={(e) => updateStep(i, "body_template", e.target.value)} rows={5} placeholder="Email body (supports {{first_name}} etc)" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40 resize-none" />
+                    <RichEmailEditor
+                      value={s.body_template}
+                      onChange={(html) => updateStep(i, "body_template", html)}
+                      placeholder="Email body (supports {{first_name}} etc)"
+                    />
                   </div>
                 </>
               )}
