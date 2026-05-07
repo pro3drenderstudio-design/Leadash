@@ -54,6 +54,9 @@ export const createList  = (name: string, description?: string) => post<Outreach
 export const deleteList  = (id: string)                   => del(`${base}/lists/${id}`);
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
+export const importLeadRows = (listId: string, rows: Record<string, string>[]) =>
+  post<ImportResult>(`${base}/leads/import`, { list_id: listId, rows });
+
 export async function importLeads(rows: Record<string, string>[], listId: string, mapping: unknown[]): Promise<ImportResult> {
   // Build mapped rows from mapping
   const mapped = rows.map(row => {
@@ -76,7 +79,10 @@ export const updateCampaign = (id: string, d: Partial<OutreachCampaign>) => patc
 export const deleteCampaign = (id: string)                      => del(`${base}/campaigns/${id}`);
 
 export const enrollLeads = (campaignId: string, listIds: string[]) =>
-  post<{ enrolled: number }>(`${base}/campaigns/${campaignId}/enrollments`, { list_ids: listIds });
+  post<{ enrolled: number; new_count: number; duplicate_count: number }>(`${base}/campaigns/${campaignId}/enrollments`, { list_ids: listIds });
+
+export const checkEnrollmentDuplicates = (campaignId: string, listIds: string[]) =>
+  post<{ new_count: number; duplicate_count: number; total: number }>(`${base}/campaigns/${campaignId}/enrollments?dry_run=1`, { list_ids: listIds });
 
 export const getCampaignEnrollments = (campaignId: string, page = 0, limit = 50, status = "all") =>
   get<{ enrollments: CampaignEnrollmentRow[]; total: number }>(
@@ -109,6 +115,9 @@ export async function saveSequenceSteps(campaignId: string, steps: Partial<Outre
 export const createSequenceStep = (d: Partial<OutreachSequenceStep>) => post<OutreachSequenceStep>(`${base}/sequences`, d);
 export const updateSequenceStep = (id: string, d: Partial<OutreachSequenceStep>) => patch<OutreachSequenceStep>(`${base}/sequences/${id}`, d);
 export const deleteSequenceStep = (id: string) => del(`${base}/sequences/${id}`);
+
+export const generateSpintax = (text: string, field: "subject" | "body") =>
+  post<{ spintax: string }>(`${base}/sequences/spintax`, { text, field });
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 export const getTemplates    = ()                                          => get<OutreachTemplate[]>(`${base}/templates`);

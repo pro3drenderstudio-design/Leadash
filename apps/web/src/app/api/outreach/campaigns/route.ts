@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
     track_clicks:       body.track_clicks ?? true,
     min_delay_seconds:  body.min_delay_seconds ?? 30,
     max_delay_seconds:  body.max_delay_seconds ?? 120,
-    stop_on_reply:      body.stop_on_reply ?? true,
-    pause_after_open:   body.pause_after_open ?? false,
+    stop_on_reply:       body.stop_on_reply ?? true,
+    stop_on_auto_reply:  body.stop_on_auto_reply ?? false,
+    pause_after_open:    body.pause_after_open ?? false,
     reply_to_email:     body.reply_to_email ?? null,
   }).select().single();
 

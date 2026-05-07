@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail, checkInboxDns } from "@/lib/outreach/api";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
@@ -33,11 +33,23 @@ export default function CampaignWizardClient() {
   const [dailyCap, setDailyCap]     = useState(100);
   const [minDelay, setMinDelay]     = useState(30);
   const [maxDelay, setMaxDelay]     = useState(120);
-  const [stopOnReply, setStopOnReply]     = useState(true);
-  const [pauseAfterOpen, setPauseAfterOpen] = useState(false);
+  const [stopOnReply, setStopOnReply]           = useState(true);
+  const [stopOnAutoReply, setStopOnAutoReply]   = useState(false);
+  const [pauseAfterOpen, setPauseAfterOpen]     = useState(false);
 
   // Step 2 fields
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
+
+  // Inline lead import
+  const [showImport, setShowImport]         = useState(false);
+  const [importName, setImportName]         = useState("");
+  const [importMode, setImportMode]         = useState<"csv" | "paste">("csv");
+  const [importFile, setImportFile]         = useState<File | null>(null);
+  const [importText, setImportText]         = useState("");
+  const [importParsed, setImportParsed]     = useState<Record<string, string>[]>([]);
+  const [importing, setImporting]           = useState(false);
+  const [importResult, setImportResult]     = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [importError, setImportError]       = useState<string | null>(null);
 
   // Step 3 fields
   const [seqSteps, setSeqSteps] = useState<Step[]>([
@@ -153,6 +165,102 @@ export default function CampaignWizardClient() {
   function updateStep(i: number, field: keyof Step, value: string | number) {
     setSeqSteps((s) => s.map((st, idx) => idx === i ? { ...st, [field]: value } : st));
   }
+  // ── Lead import helpers ────────────────────────────────────────────────────
+  const LEAD_FIELDS = ["email","first_name","last_name","company","title","website"];
+  const FIELD_ALIASES: Record<string, string[]> = {
+    email:      ["email","email_address","e-mail","mail"],
+    first_name: ["first_name","first","firstname","given_name","given"],
+    last_name:  ["last_name","last","lastname","surname","family_name"],
+    company:    ["company","company_name","organization","org","employer"],
+    title:      ["title","job_title","position","role"],
+    website:    ["website","url","web","site","domain"],
+  };
+
+  function normalizeHeader(h: string): string {
+    const lower = h.toLowerCase().replace(/[\s\-]/g, "_");
+    for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+      if (aliases.includes(lower)) return field;
+    }
+    return lower;
+  }
+
+  function parseCsvText(text: string): Record<string, string>[] {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const rawHeaders = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+    const headers = rawHeaders.map(normalizeHeader);
+    return lines.slice(1).map(line => {
+      const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { if (cells[i]) row[h] = cells[i]; });
+      return row;
+    }).filter(r => r.email);
+  }
+
+  function parsePasteText(text: string): Record<string, string>[] {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    // Detect if first line looks like a header
+    const firstLower = lines[0].toLowerCase();
+    const hasHeader = firstLower.includes("email") || firstLower.includes("first") || firstLower.includes("name");
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+    const sep = lines[0].includes("\t") ? "\t" : ",";
+    // If first non-header line has a separator, treat as delimited
+    const firstData = dataLines[0] ?? "";
+    if (firstData.includes(sep)) {
+      const headers = hasHeader
+        ? lines[0].split(sep).map(h => normalizeHeader(h.trim()))
+        : ["email","first_name","last_name","company","title"];
+      return dataLines.map(line => {
+        const cells = line.split(sep).map(c => c.trim());
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => { if (cells[i]) row[h] = cells[i]; });
+        return row;
+      }).filter(r => r.email);
+    }
+    // Plain email list — one per line
+    return dataLines
+      .filter(l => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(l))
+      .map(email => ({ email: email.toLowerCase() }));
+  }
+
+  async function handleImportFileSelect(file: File) {
+    setImportFile(file);
+    setImportError(null);
+    setImportResult(null);
+    const text = await file.text();
+    const rows = parseCsvText(text);
+    setImportParsed(rows);
+    if (!rows.length) setImportError("No valid rows found — make sure the CSV has an 'email' column");
+  }
+
+  function handlePasteChange(text: string) {
+    setImportText(text);
+    setImportResult(null);
+    setImportError(null);
+    setImportParsed(parsePasteText(text));
+  }
+
+  async function handleCreateAndImport() {
+    const listName = importName.trim() || `Imported ${new Date().toLocaleDateString()}`;
+    if (!importParsed.length) { setImportError("No leads to import"); return; }
+    setImporting(true);
+    setImportError(null);
+    try {
+      const list = await createList(listName);
+      const result = await importLeadRows(list.id, importParsed);
+      setImportResult({ imported: result.imported, skipped: (result.skipped_duplicate ?? 0) + (result.skipped_unsubscribed ?? 0), total: importParsed.length });
+      setSelectedLists(prev => prev.includes(list.id) ? prev : [...prev, list.id]);
+      setLists(prev => [{ ...list, lead_count: result.imported }, ...prev]);
+      setImportName(""); setImportFile(null); setImportText(""); setImportParsed([]);
+      setTimeout(() => { setShowImport(false); setImportResult(null); }, 3000);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function loadTemplate(stepIdx: number, template: OutreachTemplate) {
     setSeqSteps((s) => s.map((st, idx) => idx === stepIdx
       ? { ...st, subject_template: template.subject, body_template: template.body }
@@ -249,7 +357,7 @@ export default function CampaignWizardClient() {
       timezone, send_days: sendDays, send_start_time: startTime,
       send_end_time: endTime, daily_cap: dailyCap,
       min_delay_seconds: minDelay, max_delay_seconds: maxDelay,
-      stop_on_reply: stopOnReply, pause_after_open: pauseAfterOpen,
+      stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply, pause_after_open: pauseAfterOpen,
     });
 
     if ((campaign as unknown as { error?: string }).error) {
@@ -375,6 +483,21 @@ export default function CampaignWizardClient() {
               </div>
             </label>
 
+            {stopOnReply && (
+              <label className="flex items-center justify-between cursor-pointer pl-4 border-l border-white/8">
+                <div>
+                  <p className="text-white/70 text-sm font-medium">Stop on Auto-Reply</p>
+                  <p className="text-white/30 text-xs">Also stop when an out-of-office or auto-reply is detected</p>
+                </div>
+                <div
+                  onClick={() => setStopOnAutoReply(!stopOnAutoReply)}
+                  className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${stopOnAutoReply ? "bg-green-500" : "bg-white/15"}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${stopOnAutoReply ? "translate-x-4" : "translate-x-0"}`} />
+                </div>
+              </label>
+            )}
+
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <p className="text-white/80 text-sm font-medium">Pause After Open</p>
@@ -393,18 +516,160 @@ export default function CampaignWizardClient() {
 
       {/* Step 1: Lead lists */}
       {step === 1 && (
-        <div className="space-y-4">
-          <p className="text-white/60 text-sm">Select which lead lists to include in this campaign</p>
-          {lists.map((list) => (
-            <label key={list.id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${selectedLists.includes(list.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-              <input type="checkbox" checked={selectedLists.includes(list.id)} onChange={() => toggleList(list.id)} className="accent-orange-500" />
-              <div>
-                <div className="text-white text-sm font-medium">{list.name}</div>
-                <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-white/60 text-sm">Select lead lists to include in this campaign</p>
+            <button
+              onClick={() => { setShowImport(v => !v); setImportResult(null); setImportError(null); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-300 text-xs font-semibold rounded-lg transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+              Import leads
+            </button>
+          </div>
+
+          {/* Inline import panel */}
+          {showImport && (
+            <div className="bg-white/3 border border-white/10 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-white/70 text-sm font-semibold">Import leads into a new list</p>
+                <button onClick={() => setShowImport(false)} className="text-white/30 hover:text-white/60 text-xs transition-colors">✕</button>
               </div>
-            </label>
-          ))}
-          {!lists.length && <p className="text-white/30 text-sm">No lead lists. <a href="/leads" className="text-orange-400">Create one first.</a></p>}
+
+              {/* List name */}
+              <div>
+                <label className="block text-xs text-white/40 mb-1">List name</label>
+                <input
+                  value={importName}
+                  onChange={e => setImportName(e.target.value)}
+                  placeholder={`Imported ${new Date().toLocaleDateString()}`}
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50"
+                />
+              </div>
+
+              {/* Mode toggle */}
+              <div className="flex gap-1 p-1 bg-white/5 rounded-lg w-fit">
+                {(["csv","paste"] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => { setImportMode(m); setImportParsed([]); setImportError(null); setImportResult(null); }}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${importMode === m ? "bg-white/15 text-white" : "text-white/40 hover:text-white/60"}`}
+                  >
+                    {m === "csv" ? "CSV file" : "Paste emails"}
+                  </button>
+                ))}
+              </div>
+
+              {/* CSV upload */}
+              {importMode === "csv" && (
+                <div>
+                  <label className="block text-xs text-white/40 mb-1.5">
+                    Upload a CSV — must have an <span className="text-white/60 font-mono">email</span> column. Optional: <span className="font-mono text-white/50">first_name, last_name, company, title</span>
+                  </label>
+                  <label className={`flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${importFile ? "border-orange-500/40 bg-orange-500/8" : "border-white/12 hover:border-white/20"}`}>
+                    <svg className="w-5 h-5 text-white/30 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                    <div className="flex-1 min-w-0">
+                      {importFile ? (
+                        <p className="text-white text-sm truncate">{importFile.name} <span className="text-white/40">· {importParsed.length} rows detected</span></p>
+                      ) : (
+                        <p className="text-white/40 text-sm">Click to choose a CSV file</p>
+                      )}
+                    </div>
+                    <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFileSelect(f); e.target.value = ""; }} />
+                  </label>
+                </div>
+              )}
+
+              {/* Paste */}
+              {importMode === "paste" && (
+                <div>
+                  <label className="block text-xs text-white/40 mb-1.5">
+                    Paste emails — one per line, or include <span className="font-mono text-white/50">email, first_name, last_name, company, title</span> separated by commas
+                  </label>
+                  <textarea
+                    value={importText}
+                    onChange={e => handlePasteChange(e.target.value)}
+                    rows={5}
+                    placeholder={"john@company.com, John, Doe, Acme Corp, CEO\njane@startup.io\nbob@example.com, Bob, Smith"}
+                    className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm font-mono placeholder-white/20 focus:outline-none focus:border-orange-500/50 resize-none"
+                  />
+                  {importParsed.length > 0 && (
+                    <p className="text-white/40 text-xs mt-1">{importParsed.length} valid email{importParsed.length !== 1 ? "s" : ""} detected</p>
+                  )}
+                </div>
+              )}
+
+              {/* Preview */}
+              {importParsed.length > 0 && (
+                <div className="bg-white/4 border border-white/8 rounded-lg overflow-hidden">
+                  <div className="px-3 py-1.5 border-b border-white/6 text-white/35 text-[10px] font-semibold uppercase tracking-wider">
+                    Preview — first {Math.min(3, importParsed.length)} of {importParsed.length}
+                  </div>
+                  {importParsed.slice(0, 3).map((row, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 border-b border-white/4 last:border-0 text-xs">
+                      <span className="text-white/80 font-medium">{row.email}</span>
+                      {row.first_name && <span className="text-white/40">{row.first_name} {row.last_name ?? ""}</span>}
+                      {row.company && <span className="text-white/30 truncate">{row.company}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {importError && <p className="text-red-400 text-xs">{importError}</p>}
+              {importResult && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-xs">
+                  <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                  <span className="text-green-300 font-medium">{importResult.imported} leads imported</span>
+                  {importResult.skipped > 0 && <span className="text-white/40">· {importResult.skipped} skipped (duplicates/unsubscribed)</span>}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={handleCreateAndImport}
+                  disabled={importing || importParsed.length === 0}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {importing ? "Importing…" : `Create list & import ${importParsed.length > 0 ? importParsed.length : ""} leads`}
+                </button>
+                <button onClick={() => setShowImport(false)} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/50 text-sm rounded-lg transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Existing lists */}
+          {lists.length > 0 && (
+            <div className="space-y-2">
+              {lists.map((list) => (
+                <label key={list.id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${selectedLists.includes(list.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
+                  <input type="checkbox" checked={selectedLists.includes(list.id)} onChange={() => toggleList(list.id)} className="accent-orange-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-medium">{list.name}</div>
+                    <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
+                  </div>
+                  {selectedLists.includes(list.id) && (
+                    <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                  )}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {!lists.length && !showImport && (
+            <div className="text-center py-10 text-white/30">
+              <div className="text-3xl mb-3">📋</div>
+              <p className="text-sm font-medium text-white/50">No lead lists yet</p>
+              <p className="text-xs mt-1">Click <span className="text-orange-400">Import leads</span> above to create your first list right here, or <a href="/leads" className="text-orange-400 hover:text-orange-300">manage leads</a> separately.</p>
+            </div>
+          )}
+
+          {selectedLists.length > 0 && (
+            <p className="text-orange-400 text-xs">
+              {selectedLists.reduce((sum, id) => sum + (lists.find(l => l.id === id)?.lead_count ?? 0), 0).toLocaleString()} leads selected
+            </p>
+          )}
         </div>
       )}
 

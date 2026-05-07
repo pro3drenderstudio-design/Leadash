@@ -92,6 +92,7 @@ export interface OutreachCampaign {
   min_delay_seconds: number;
   max_delay_seconds: number;
   stop_on_reply: boolean;
+  stop_on_auto_reply: boolean;
   pause_after_open: boolean;
   reply_to_email?: string | null;
   created_at: string;

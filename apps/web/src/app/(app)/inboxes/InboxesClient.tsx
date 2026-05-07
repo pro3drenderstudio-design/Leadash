@@ -221,6 +221,8 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [colMapping, setColMapping]     = useState<Record<string, string>>({});
   const [showMapping, setShowMapping]   = useState(false);
   const [page, setPage]                 = useState(0);
+  const [inboxSearch, setInboxSearch]   = useState("");
+  const [inboxStatusFilter, setInboxStatusFilter] = useState<"all" | "active" | "paused" | "error" | "warming">("all");
 
   const PAGE_SIZE = 10;
 
@@ -264,7 +266,28 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [delivTesting, setDelivTesting]   = useState(false);
   const [delivRecipient, setDelivRecipient] = useState("");
 
-  const pageInboxes = inboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filteredInboxes = inboxes.filter((inbox) => {
+    if (inboxStatusFilter !== "all") {
+      if (inboxStatusFilter === "warming") {
+        if (!inbox.warmup_enabled) return false;
+      } else {
+        if (inbox.status !== inboxStatusFilter) return false;
+      }
+    }
+    if (inboxSearch.trim()) {
+      const q = inboxSearch.toLowerCase();
+      return (
+        inbox.email_address.toLowerCase().includes(q) ||
+        (inbox.label ?? "").toLowerCase().includes(q) ||
+        (inbox.first_name ?? "").toLowerCase().includes(q) ||
+        (inbox.last_name ?? "").toLowerCase().includes(q) ||
+        inbox.status.toLowerCase().includes(q) ||
+        inbox.provider.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+  const pageInboxes = filteredInboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const allPageSelected = pageInboxes.length > 0 && pageInboxes.every((i) => selected.has(i.id));
   const effectiveCount  = allSelected ? inboxes.length : selected.size;
 
@@ -282,7 +305,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   }
   function selectAllInboxes() {
     setAllSelected(true);
-    setSelected(new Set(inboxes.map((i) => i.id)));
+    setSelected(new Set(filteredInboxes.map((i) => i.id)));
   }
   function clearSelection() {
     setAllSelected(false);
@@ -954,6 +977,44 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
         </div>
       ) : (
         <>
+        {/* Search + Status filter */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="relative flex-1 min-w-48">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              value={inboxSearch}
+              onChange={e => { setInboxSearch(e.target.value); setPage(0); }}
+              placeholder="Search by email, name, label, provider…"
+              className="w-full bg-white/6 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-orange-500/50"
+            />
+            {inboxSearch && (
+              <button onClick={() => { setInboxSearch(""); setPage(0); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors text-xs">✕</button>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {(["all", "active", "paused", "error", "warming"] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => { setInboxStatusFilter(s); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${inboxStatusFilter === s ? "bg-white/15 text-white" : "bg-white/5 text-white/40 hover:text-white/60"}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          {(inboxSearch || inboxStatusFilter !== "all") && (
+            <span className="text-white/30 text-xs flex-shrink-0">{filteredInboxes.length} result{filteredInboxes.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+
+        {filteredInboxes.length === 0 ? (
+          <div className="text-center py-12 text-white/30">
+            <p>No inboxes match your search.</p>
+          </div>
+        ) : (<>
+
         {/* Bulk action bar */}
         {selected.size > 0 && (
           <div className="mb-3 space-y-2">
@@ -1059,10 +1120,10 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
         </div>
 
         {/* Pagination */}
-        {inboxes.length > PAGE_SIZE && (
+        {filteredInboxes.length > PAGE_SIZE && (
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/8">
             <span className="text-white/30 text-xs">
-              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, inboxes.length)} of {inboxes.length}
+              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredInboxes.length)} of {filteredInboxes.length}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -1072,10 +1133,10 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
               >
                 ← Prev
               </button>
-              <span className="text-white/40 text-xs">Page {page + 1} / {Math.ceil(inboxes.length / PAGE_SIZE)}</span>
+              <span className="text-white/40 text-xs">Page {page + 1} / {Math.ceil(filteredInboxes.length / PAGE_SIZE)}</span>
               <button
-                onClick={() => setPage((p) => Math.min(Math.ceil(inboxes.length / PAGE_SIZE) - 1, p + 1))}
-                disabled={(page + 1) * PAGE_SIZE >= inboxes.length}
+                onClick={() => setPage((p) => Math.min(Math.ceil(filteredInboxes.length / PAGE_SIZE) - 1, p + 1))}
+                disabled={(page + 1) * PAGE_SIZE >= filteredInboxes.length}
                 className="px-3 py-1.5 bg-white/6 hover:bg-white/10 disabled:opacity-30 text-white/60 text-xs font-medium rounded-lg transition-colors"
               >
                 Next →
@@ -1083,6 +1144,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
             </div>
           </div>
         )}
+        </> )}
         </>
       )}
       </>)}

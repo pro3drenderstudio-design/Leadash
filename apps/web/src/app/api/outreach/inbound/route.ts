@@ -284,13 +284,38 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Update enrollment + send if matched ──────────────────────────────────────
-  if (enrollmentId && !isFiltered) {
-    await db
+  if (enrollmentId) {
+    // Fetch campaign flags (stop_on_reply, stop_on_auto_reply)
+    const { data: enrRow } = await db
       .from("outreach_enrollments")
-      .update({ crm_status: "replied", status: "replied" })
+      .select("campaign_id")
       .eq("id", enrollmentId)
-      .not("crm_status", "in", '("won","lost","not_interested")');
+      .single();
 
+    let stopOnReply     = true;  // safe default
+    let stopOnAutoReply = false; // default: keep going on OOO
+
+    if (enrRow?.campaign_id) {
+      const { data: camp } = await db
+        .from("outreach_campaigns")
+        .select("stop_on_reply, stop_on_auto_reply")
+        .eq("id", enrRow.campaign_id)
+        .single();
+      if (camp) {
+        stopOnReply     = camp.stop_on_reply     ?? true;
+        stopOnAutoReply = camp.stop_on_auto_reply ?? false;
+      }
+    }
+
+    // Decide whether to stop the sequence:
+    // - Real reply + stop_on_reply → stop
+    // - Auto-reply/OOO + stop_on_auto_reply + stop_on_reply → stop
+    // - Auto-reply/OOO + !stop_on_auto_reply → keep going (don't update status)
+    const shouldStop = !isFiltered
+      ? stopOnReply
+      : (isFiltered && stopOnAutoReply && stopOnReply);
+
+    // Always record send replied_at (factual event regardless of stop setting)
     if (matchedSendId) {
       await db
         .from("outreach_sends")
@@ -298,8 +323,16 @@ export async function POST(req: NextRequest) {
         .eq("id", matchedSendId);
     }
 
-    // Promote crm_status to AI-detected intent if confidence is high enough
-    if (aiConfidence >= 0.7 && aiCategory !== "neutral") {
+    if (shouldStop) {
+      await db
+        .from("outreach_enrollments")
+        .update({ crm_status: "replied", status: "replied" })
+        .eq("id", enrollmentId)
+        .not("crm_status", "in", '("won","lost","not_interested")');
+    }
+
+    // Promote crm_status to AI-detected intent if confident and not an OOO
+    if (!isFiltered && aiConfidence >= 0.7 && aiCategory !== "neutral") {
       const { data: enr } = await db
         .from("outreach_enrollments")
         .select("crm_status")

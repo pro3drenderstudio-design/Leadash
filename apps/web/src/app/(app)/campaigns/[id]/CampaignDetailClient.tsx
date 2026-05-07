@@ -4,9 +4,9 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   getCampaign, getSequence, updateCampaign, saveSequence,
-  getInboxes, getTemplates, sendTestEmail, generateSequence,
+  getInboxes, getTemplates, sendTestEmail, generateSequence, generateSpintax,
   getCampaignAnalytics, triggerSendBatch,
-  getCampaignEnrollments, unenrollLead, enrollLeads, getLists,
+  getCampaignEnrollments, unenrollLead, enrollLeads, checkEnrollmentDuplicates, getLists,
   checkInboxDns,
 } from "@/lib/outreach/api";
 import type {
@@ -150,8 +150,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editDailyCap, setEditDailyCap]       = useState(100);
   const [editMinDelay, setEditMinDelay]       = useState(30);
   const [editMaxDelay, setEditMaxDelay]       = useState(120);
-  const [editStopOnReply, setEditStopOnReply] = useState(true);
-  const [editPauseAfterOpen, setEditPauseAfterOpen] = useState(false);
+  const [editStopOnReply, setEditStopOnReply]           = useState(true);
+  const [editStopOnAutoReply, setEditStopOnAutoReply]   = useState(false);
+  const [editPauseAfterOpen, setEditPauseAfterOpen]     = useState(false);
   const [editSteps, setEditSteps]             = useState<EditStep[]>([]);
   const [loadingTpl, setLoadingTpl]           = useState<number | null>(null);
 
@@ -166,6 +167,14 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [aiMessageLength, setAiMessageLength] = useState("standard");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError]           = useState<string | null>(null);
+
+  // Spintax writer
+  const [spintaxLoading, setSpintaxLoading] = useState<string | null>(null); // "stepIdx-field"
+  const [spintaxError, setSpintaxError]     = useState<string | null>(null);
+
+  // Duplicate check + enrollment confirmation
+  const [dupCheck, setDupCheck] = useState<{ new_count: number; duplicate_count: number; total: number } | null>(null);
+  const [dupChecking, setDupChecking] = useState(false);
 
   // Trigger sends
   const [triggering, setTriggering] = useState(false);
@@ -252,6 +261,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     setEditMinDelay(campaign.min_delay_seconds ?? 30);
     setEditMaxDelay(campaign.max_delay_seconds ?? 120);
     setEditStopOnReply(campaign.stop_on_reply ?? true);
+    setEditStopOnAutoReply(campaign.stop_on_auto_reply ?? false);
     setEditPauseAfterOpen(campaign.pause_after_open ?? false);
     setEditSteps(steps.map(s => ({ id: s.id, type: s.type, wait_days: s.wait_days ?? 0, subject_template: s.subject_template ?? "", subject_template_b: s.subject_template_b ?? "", body_template: s.body_template ?? "" })));
     setEditing(true);
@@ -261,7 +271,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     if (!campaign) return;
     setSaving(true);
     const [updated] = await Promise.all([
-      updateCampaign(campaign.id, { name: editName, inbox_ids: editInboxes, timezone: editTimezone, send_start_time: editStartTime, send_end_time: editEndTime, send_days: editDays, daily_cap: editDailyCap, min_delay_seconds: editMinDelay, max_delay_seconds: editMaxDelay, stop_on_reply: editStopOnReply, pause_after_open: editPauseAfterOpen }),
+      updateCampaign(campaign.id, { name: editName, inbox_ids: editInboxes, timezone: editTimezone, send_start_time: editStartTime, send_end_time: editEndTime, send_days: editDays, daily_cap: editDailyCap, min_delay_seconds: editMinDelay, max_delay_seconds: editMaxDelay, stop_on_reply: editStopOnReply, stop_on_auto_reply: editStopOnAutoReply, pause_after_open: editPauseAfterOpen }),
       saveSequence(campaign.id, editSteps.map(s => ({ ...s, subject_template_b: s.subject_template_b || null }))),
     ]);
     setCampaign(updated);
@@ -295,6 +305,24 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       setAiError(err instanceof Error ? err.message : String(err));
     } finally {
       setAiGenerating(false);
+    }
+  }
+
+  async function handleSpintax(stepIdx: number, field: "subject" | "body") {
+    const key = `${stepIdx}-${field}`;
+    const text = field === "subject" ? editSteps[stepIdx].subject_template : editSteps[stepIdx].body_template;
+    if (!text.trim()) return;
+    setSpintaxLoading(key); setSpintaxError(null);
+    try {
+      const data = await generateSpintax(text, field);
+      if ((data as { error?: string }).error) { setSpintaxError((data as { error?: string }).error!); return; }
+      if (data.spintax) {
+        setEditSteps(st => st.map((s, i) => i !== stepIdx ? s : field === "subject" ? { ...s, subject_template: data.spintax } : { ...s, body_template: data.spintax }));
+      }
+    } catch (err) {
+      setSpintaxError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSpintaxLoading(null);
     }
   }
 
@@ -345,12 +373,30 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Campaign Name</label>
           <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
 
-        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Sending Inboxes {editInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{editInboxes.length} selected</span>}</label>
+        <div>
+          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
+            Sending Inboxes
+            {editInboxes.length > 0 && <span className="text-orange-400 normal-case ml-1">{editInboxes.length} selected</span>}
+          </label>
+          {editInboxes.length > 0 && (
+            <div className="mb-2 px-3 py-2 bg-white/4 border border-white/8 rounded-lg flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" /></svg>
+              <span className="text-white/50 text-xs">
+                {editDailyCap} emails/day ÷ {editInboxes.length} inboxes = <span className="text-orange-400 font-semibold">{Math.round(editDailyCap / editInboxes.length)} per inbox</span> (redistributes automatically)
+              </span>
+            </div>
+          )}
           <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
             {inboxes.map(inbox => (
               <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${editInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
                 <input type="checkbox" checked={editInboxes.includes(inbox.id)} onChange={() => setEditInboxes(p => p.includes(inbox.id) ? p.filter(x => x !== inbox.id) : [...p, inbox.id])} className="accent-orange-500" />
-                <div><div className="text-white text-sm font-medium">{inbox.label}</div><div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day</div></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-medium">{inbox.label}</div>
+                  <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day limit</div>
+                </div>
+                {editInboxes.includes(inbox.id) && editInboxes.length > 0 && (
+                  <span className="text-orange-400/70 text-xs flex-shrink-0">~{Math.round(editDailyCap / editInboxes.length)}/day</span>
+                )}
               </label>
             ))}
           </div>
@@ -386,6 +432,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
           <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Campaign Behavior</p>
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Stop on Reply</p><p className="text-white/35 text-xs">Halt sequence when a lead replies</p></div><Toggle value={editStopOnReply} onChange={setEditStopOnReply} /></div>
+          {editStopOnReply && (
+            <div className="flex items-center justify-between pl-4 border-l border-white/8"><div><p className="text-white/70 text-sm font-medium">Stop on Auto-Reply</p><p className="text-white/30 text-xs">Also stop when an out-of-office or auto-reply is detected</p></div><Toggle value={editStopOnAutoReply} onChange={setEditStopOnAutoReply} /></div>
+          )}
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Pause After Open</p><p className="text-white/35 text-xs">Pause when a lead opens an email</p></div><Toggle value={editPauseAfterOpen} onChange={setEditPauseAfterOpen} color="amber" /></div>
         </div>
 
@@ -398,7 +447,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
               AI Generate
             </button>
           </div>
-          <p className="text-white/40 text-xs mb-3">Use {`{{first_name}}, {{company}}, {{title}}`} as variables.</p>
+          <p className="text-white/40 text-xs mb-1">Use {`{{first_name}}, {{company}}, {{title}}`} as variables.</p>
+          <p className="text-violet-400/50 text-xs mb-3">Spintax: <span className="font-mono">{"{Hello|Hi|Hey}"}</span> — AI generates variations automatically. Click ✦ Spintax on any field.</p>
+          {spintaxError && <p className="text-red-400 text-xs mb-2">Spintax error: {spintaxError}</p>}
           <div className="space-y-3">
             {editSteps.map((s, i) => (
               <div key={i} className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3">
@@ -423,9 +474,37 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                       )}
                       <button onClick={() => { setTestStepIdx(i); setTestResult(null); setTestSampleIdx(-1); setTestToEmail(""); setTestInboxId(editInboxes[0]??""); }} className="text-amber-400/80 hover:text-amber-300 text-xs ml-auto">Send Test ↗</button>
                     </div>
-                    <div><label className="block text-xs text-white/40 mb-1">Subject {s.subject_template_b ? "(Variant A)" : ""}</label><input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" /></div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                        <button
+                          type="button"
+                          onClick={() => handleSpintax(i, "subject")}
+                          disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
+                          className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                          title="AI Spintax — generate variations"
+                        >
+                          {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                        </button>
+                      </div>
+                      <input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                    </div>
                     <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><input value={s.subject_template_b} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:e.target.value}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
-                    <textarea value={s.body_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,body_template:e.target.value}:st2))} rows={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40 resize-none" />
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs text-white/40">Body</label>
+                        <button
+                          type="button"
+                          onClick={() => handleSpintax(i, "body")}
+                          disabled={spintaxLoading === `${i}-body` || !s.body_template.trim()}
+                          className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                          title="AI Spintax — generate variations"
+                        >
+                          {spintaxLoading === `${i}-body` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                        </button>
+                      </div>
+                      <textarea value={s.body_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,body_template:e.target.value}:st2))} rows={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40 resize-none" />
+                    </div>
                   </>
                 )}
               </div>
@@ -837,6 +916,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                 ["Daily Cap",        `${campaign.daily_cap} emails`],
                 ["Throttle",         `${campaign.min_delay_seconds ?? 30}–${campaign.max_delay_seconds ?? 120}s`],
                 ["Stop on Reply",    campaign.stop_on_reply ? "Yes" : "No"],
+                ["Stop on Auto-Reply", campaign.stop_on_auto_reply ? "Yes" : "No"],
                 ["Pause After Open", campaign.pause_after_open ? "Yes" : "No"],
                 ["Track Opens",      campaign.track_opens  ? "Yes" : "No"],
                 ["Track Clicks",     campaign.track_clicks ? "Yes" : "No"],
@@ -1103,41 +1183,69 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       {tab === "leads" && (
         <div className="space-y-4">
           {/* Add leads from list */}
-          <div className="bg-white/3 border border-white/6 rounded-xl p-4 flex items-end gap-3 flex-wrap">
-            <div className="flex-1 min-w-48">
-              <label className="block text-xs font-semibold text-white/40 uppercase tracking-wider mb-1.5">Add Leads from List</label>
-              <select
-                value={addListId}
-                onChange={e => setAddListId(e.target.value)}
-                className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50"
-              >
-                <option value="">— select a list —</option>
-                {lists.map(l => (
-                  <option key={l.id} value={l.id}>{l.name} ({l.lead_count ?? "?"} leads)</option>
-                ))}
-              </select>
+          <div className="bg-white/3 border border-white/6 rounded-xl p-4 space-y-3">
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-48">
+                <label className="block text-xs font-semibold text-white/40 uppercase tracking-wider mb-1.5">Add Leads from List</label>
+                <select
+                  value={addListId}
+                  onChange={e => { setAddListId(e.target.value); setDupCheck(null); setAddLeadsResult(null); }}
+                  className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50"
+                >
+                  <option value="">— select a list —</option>
+                  {lists.map(l => (
+                    <option key={l.id} value={l.id}>{l.name} ({l.lead_count ?? "?"} leads)</option>
+                  ))}
+                </select>
+              </div>
+              {!dupCheck ? (
+                <button
+                  disabled={!addListId || dupChecking}
+                  onClick={async () => {
+                    if (!addListId) return;
+                    setDupChecking(true); setAddLeadsResult(null);
+                    const result = await checkEnrollmentDuplicates(campaignId, [addListId]).catch(() => null);
+                    setDupChecking(false);
+                    if (result) setDupCheck(result);
+                  }}
+                  className="px-4 py-2 bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white/70 text-sm font-semibold rounded-lg border border-white/10 transition-colors flex-shrink-0"
+                >
+                  {dupChecking ? "Checking…" : "Check Duplicates"}
+                </button>
+              ) : (
+                <button
+                  disabled={addingLeads || dupCheck.new_count === 0}
+                  onClick={async () => {
+                    if (!addListId) return;
+                    setAddingLeads(true); setAddLeadsResult(null);
+                    const res = await enrollLeads(campaignId, [addListId]);
+                    setAddLeadsResult(`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`);
+                    setAddingLeads(false); setAddListId(""); setDupCheck(null);
+                    const [data, fresh] = await Promise.all([
+                      getCampaignEnrollments(campaignId, leadsPage, LEADS_PAGE_SIZE, leadsStatus),
+                      getCampaign(campaignId),
+                    ]);
+                    setLeadsData(data); setCampaign(fresh);
+                  }}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
+                >
+                  {addingLeads ? "Enrolling…" : `Enroll ${dupCheck.new_count}`}
+                </button>
+              )}
+              {addLeadsResult && <span className="text-green-400 text-xs flex-shrink-0">{addLeadsResult}</span>}
             </div>
-            <button
-              disabled={!addListId || addingLeads}
-              onClick={async () => {
-                if (!addListId) return;
-                setAddingLeads(true); setAddLeadsResult(null);
-                const res = await enrollLeads(campaignId, [addListId]);
-                setAddLeadsResult(`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`);
-                setAddingLeads(false);
-                setAddListId("");
-                const [data, fresh] = await Promise.all([
-                  getCampaignEnrollments(campaignId, leadsPage, LEADS_PAGE_SIZE, leadsStatus),
-                  getCampaign(campaignId),
-                ]);
-                setLeadsData(data);
-                setCampaign(fresh);
-              }}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
-            >
-              {addingLeads ? "Enrolling…" : "Enroll"}
-            </button>
-            {addLeadsResult && <span className="text-green-400 text-xs flex-shrink-0">{addLeadsResult}</span>}
+
+            {/* Duplicate check summary */}
+            {dupCheck && (
+              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${dupCheck.new_count === 0 ? "bg-amber-500/8 border-amber-500/20 text-amber-300" : "bg-white/4 border-white/8"}`}>
+                <div className="flex items-center gap-4 flex-1">
+                  <span className="text-green-400 font-semibold">{dupCheck.new_count} new</span>
+                  {dupCheck.duplicate_count > 0 && <span className="text-white/40">{dupCheck.duplicate_count} already enrolled (will be skipped)</span>}
+                  <span className="text-white/25">{dupCheck.total} total in list</span>
+                </div>
+                <button onClick={() => { setDupCheck(null); setAddListId(""); }} className="text-white/30 hover:text-white/60 transition-colors">✕</button>
+              </div>
+            )}
           </div>
 
           {/* Filters */}

@@ -33,6 +33,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { workspaceId, db } = auth;
   const { id: campaignId } = await params;
 
+  const url     = new URL(req.url);
+  const dryRun  = url.searchParams.get("dry_run") === "1";
+
   const { list_ids } = await req.json() as { list_ids: string[] };
   if (!list_ids?.length) return NextResponse.json({ error: "list_ids required" }, { status: 400 });
 
@@ -44,18 +47,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .in("list_id", list_ids)
     .eq("status", "active");
 
-  if (!leads?.length) return NextResponse.json({ enrolled: 0 });
+  if (!leads?.length) return NextResponse.json({ enrolled: 0, new_count: 0, duplicate_count: 0 });
 
-  // Get campaign to check stop_on_reply + list of already enrolled
+  // List of already enrolled leads in this campaign
   const { data: existing } = await db
     .from("outreach_enrollments")
     .select("lead_id")
     .eq("campaign_id", campaignId);
 
   const enrolledIds = new Set((existing ?? []).map((e: { lead_id: string }) => e.lead_id));
-  const toEnroll = leads.filter((l: { id: string }) => !enrolledIds.has(l.id));
+  const toEnroll    = leads.filter((l: { id: string }) => !enrolledIds.has(l.id));
+  const duplicates  = leads.length - toEnroll.length;
 
-  if (!toEnroll.length) return NextResponse.json({ enrolled: 0 });
+  // Dry-run: return counts without inserting
+  if (dryRun) {
+    return NextResponse.json({ new_count: toEnroll.length, duplicate_count: duplicates, total: leads.length });
+  }
+
+  if (!toEnroll.length) return NextResponse.json({ enrolled: 0, new_count: 0, duplicate_count: duplicates });
 
   const rows = toEnroll.map((l: { id: string }) => ({
     workspace_id: workspaceId,
@@ -66,5 +75,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: inserted, error } = await db.from("outreach_enrollments").insert(rows).select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ enrolled: inserted?.length ?? 0 });
+  return NextResponse.json({ enrolled: inserted?.length ?? 0, new_count: inserted?.length ?? 0, duplicate_count: duplicates });
 }
