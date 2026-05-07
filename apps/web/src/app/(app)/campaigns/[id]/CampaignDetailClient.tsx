@@ -117,6 +117,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [campaign, setCampaign]   = useState<OutreachCampaign | null>(null);
   const [steps, setSteps]         = useState<OutreachSequenceStep[]>([]);
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [inboxes, setInboxes]     = useState<OutreachInboxSafe[]>([]);
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -222,11 +223,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
   // Load analytics when tab changes to analytics/activity/queue
   useEffect(() => {
-    if ((tab === "analytics" || tab === "activity" || tab === "queue") && !analytics) {
+    if ((tab === "analytics" || tab === "activity" || tab === "queue") && !analytics && !analyticsError) {
       setAnalyticsLoading(true);
-      getCampaignAnalytics(campaignId).then(a => { setAnalytics(a); setAnalyticsLoading(false); });
+      getCampaignAnalytics(campaignId)
+        .then(a => { setAnalytics(a); setAnalyticsLoading(false); })
+        .catch(e => { setAnalyticsError(e instanceof Error ? e.message : String(e)); setAnalyticsLoading(false); });
     }
-  }, [tab, analytics, campaignId]);
+  }, [tab, analytics, analyticsError, campaignId]);
 
   // Load leads tab
   useEffect(() => {
@@ -1035,7 +1038,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
       {/* ── TAB: ANALYTICS ──────────────────────────────────────────────────── */}
       {tab === "analytics" && (
-        analyticsLoading || !analytics ? <AnalyticsSpinner /> : (
+        analyticsLoading ? <AnalyticsSpinner /> : analyticsError ? <div className="py-12 text-center text-red-400 text-sm">{analyticsError}</div> : !analytics ? <AnalyticsSpinner /> : (
           <div className="space-y-6">
             {/* Enrollment funnel */}
             <div>
@@ -1153,7 +1156,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
       {/* ── TAB: ACTIVITY ───────────────────────────────────────────────────── */}
       {tab === "activity" && (
-        analyticsLoading || !analytics ? <AnalyticsSpinner /> : (
+        analyticsLoading ? <AnalyticsSpinner /> : analyticsError ? <div className="py-12 text-center text-red-400 text-sm">{analyticsError}</div> : !analytics ? <AnalyticsSpinner /> : (
           <div className="space-y-4">
             {/* Status filter */}
             <div className="flex gap-2 flex-wrap">
@@ -1206,7 +1209,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
       {/* ── TAB: QUEUE ──────────────────────────────────────────────────────── */}
       {tab === "queue" && (
-        analyticsLoading || !analytics ? <AnalyticsSpinner /> : (
+        analyticsLoading ? <AnalyticsSpinner /> : analyticsError ? <div className="py-12 text-center text-red-400 text-sm">{analyticsError}</div> : !analytics ? <AnalyticsSpinner /> : (
           <div className="space-y-4">
             {campaign.status !== "active" && (
               <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
