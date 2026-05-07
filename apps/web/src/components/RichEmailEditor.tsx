@@ -101,7 +101,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Email 
   const minHeight = `${Math.max(minRows, 4) * 1.6}rem`;
 
   return (
-    <div className="bg-white/6 border border-white/10 rounded-lg overflow-hidden focus-within:border-orange-500/40 transition-colors">
+    <div className="bg-white/6 border border-white/10 rounded-lg focus-within:border-orange-500/40 transition-colors">
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-white/8 flex-wrap">
         {/* Text formatting */}
@@ -128,7 +128,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Email 
             <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6.5 9.5a3.536 3.536 0 005 0l2-2a3.536 3.536 0 00-5-5l-1 1"/><path d="M9.5 6.5a3.536 3.536 0 00-5 0l-2 2a3.536 3.536 0 005 5l1-1"/></svg>
           </ToolbarButton>
           {showLink && (
-            <div className="absolute left-0 top-8 z-30 bg-[#1e1e1e] border border-white/15 rounded-xl shadow-xl p-3 w-64">
+            <div className="absolute left-0 top-8 z-50 bg-[#1e1e1e] border border-white/15 rounded-xl shadow-xl p-3 w-64">
               <input
                 autoFocus
                 value={linkUrl}
@@ -161,7 +161,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Email 
             Variables
           </button>
           {showVars && (
-            <div className="absolute left-0 top-8 z-30 bg-[#1e1e1e] border border-white/15 rounded-xl shadow-xl py-1 min-w-44">
+            <div className="absolute left-0 top-8 z-50 bg-[#1e1e1e] border border-white/15 rounded-xl shadow-xl py-1 min-w-44">
               {VARIABLES.map(v => (
                 <button
                   key={v.token}
