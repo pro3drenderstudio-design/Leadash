@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, generateFollowups, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
@@ -100,6 +100,13 @@ export default function CampaignWizardClient() {
   const [rewriteResult, setRewriteResult]   = useState<{ subject: string; body: string } | null>(null);
   const [rewriteError, setRewriteError]     = useState<string | null>(null);
 
+  // Generate follow-ups
+  const [showFollowupGen, setShowFollowupGen]     = useState(false);
+  const [followupCount, setFollowupCount]         = useState(2);
+  const [followupWaitDays, setFollowupWaitDays]   = useState(3);
+  const [followupGenerating, setFollowupGenerating] = useState(false);
+  const [followupError, setFollowupError]         = useState<string | null>(null);
+
   async function handleRewrite(idx: number) {
     const s = seqSteps[idx];
     if (s.type !== "email") return;
@@ -134,6 +141,39 @@ export default function CampaignWizardClient() {
     updateStep(idx, "body_template",    rewriteResult.body);
     setRewriteIdx(null);
     setRewriteResult(null);
+  }
+
+  async function handleGenerateFollowups() {
+    const firstEmailIdx = seqSteps.findIndex(s => s.type === "email");
+    if (firstEmailIdx === -1) return;
+    const firstEmail = seqSteps[firstEmailIdx];
+    const existingFollowups = seqSteps
+      .filter((s, i) => s.type === "email" && i !== firstEmailIdx)
+      .map(s => ({ subject: s.subject_template, body: s.body_template }));
+    setFollowupGenerating(true);
+    setFollowupError(null);
+    try {
+      const data = await generateFollowups({
+        first_email: { subject: firstEmail.subject_template, body: firstEmail.body_template },
+        existing_steps: existingFollowups,
+        num_followups: followupCount,
+        wait_days: followupWaitDays,
+      });
+      if ((data as { error?: string }).error) { setFollowupError((data as { error?: string }).error!); return; }
+      const newSteps: Step[] = (data.steps ?? []).map(s => ({
+        type: s.type,
+        wait_days: s.wait_days,
+        subject_template: s.subject ?? "",
+        subject_template_b: "",
+        body_template: s.body ?? "",
+      }));
+      setSeqSteps(prev => [...prev, ...newSteps]);
+      setShowFollowupGen(false);
+    } catch (e) {
+      setFollowupError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFollowupGenerating(false);
+    }
   }
 
   useEffect(() => {
@@ -783,10 +823,32 @@ export default function CampaignWizardClient() {
               )}
             </div>
           ))}
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button onClick={() => addStep("email")} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Email</button>
             <button onClick={() => addStep("wait")}  className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Wait Step</button>
+            <button onClick={() => { setShowFollowupGen(s => !s); setFollowupError(null); }} className="px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-sm rounded-xl border border-orange-500/20 transition-colors">✦ Generate follow-ups</button>
           </div>
+          {showFollowupGen && (
+            <div className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-white/50">Generates follow-up emails based on your first email and appends them to the sequence.</p>
+              <div className="flex gap-4 items-end flex-wrap">
+                <div>
+                  <label className="block text-xs text-white/40 mb-1">Follow-ups</label>
+                  <select value={followupCount} onChange={e => setFollowupCount(+e.target.value)} className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40">
+                    {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-white/40 mb-1">Wait days between</label>
+                  <input type="number" min={1} max={14} value={followupWaitDays} onChange={e => setFollowupWaitDays(+e.target.value)} className="w-20 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                </div>
+                <button onClick={handleGenerateFollowups} disabled={followupGenerating} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                  {followupGenerating ? "Generating…" : "Generate"}
+                </button>
+              </div>
+              {followupError && <p className="text-red-400 text-xs">{followupError}</p>}
+            </div>
+          )}
         </div>
       )}
 

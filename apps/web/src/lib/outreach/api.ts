@@ -181,6 +181,13 @@ export const generateSequence = (opts: {
   tone?: string; num_emails?: number; wait_days_between?: number; message_length?: string;
 }) => post<{ steps?: { type: string; subject?: string; body?: string; wait_days?: number }[]; error?: string }>(`${base}/sequences/generate`, opts);
 
+export const generateFollowups = (opts: {
+  first_email: { subject: string; body: string };
+  existing_steps?: { subject: string; body: string }[];
+  num_followups?: number;
+  wait_days?: number;
+}) => post<{ steps: { type: "email" | "wait"; wait_days: number; subject: string; body: string }[]; error?: string }>(`${base}/sequences/generate-followups`, opts);
+
 // ─── CRM extras ───────────────────────────────────────────────────────────────
 export const addNote           = (enrollmentId: string, note: string) =>
   post(`${base}/crm/${enrollmentId}/notes`, { note });
