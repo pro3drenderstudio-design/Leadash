@@ -212,6 +212,10 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       .then(([c, s, i, t]) => {
         setCampaign(c); setSteps(s); setInboxes(i); setTemplates(t);
         setLoading(false);
+      })
+      .catch((e) => {
+        setToast(e instanceof Error ? e.message : "Failed to load campaign");
+        setLoading(false);
       });
   }, [campaignId]);
 
@@ -394,7 +398,12 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       {[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-xl animate-pulse" />)}
     </div>
   );
-  if (!campaign) return <div className="p-6 text-white/40">Campaign not found.</div>;
+  if (!campaign) return (
+    <div className="p-6 text-white/40 flex flex-col items-center gap-3 pt-20">
+      <p>Failed to load campaign.</p>
+      <button onClick={() => window.location.reload()} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl border border-white/10 transition-colors">Retry</button>
+    </div>
+  );
 
   const openRate  = campaign.total_sent ? ((campaign.total_opened ?? 0) / campaign.total_sent * 100).toFixed(1) : "0";
   const replyRate = campaign.total_sent ? ((campaign.total_replied ?? 0) / campaign.total_sent * 100).toFixed(1) : "0";
