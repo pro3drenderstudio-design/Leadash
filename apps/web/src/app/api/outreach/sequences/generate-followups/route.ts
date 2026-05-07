@@ -13,11 +13,15 @@ export async function POST(req: NextRequest) {
     existing_steps = [],
     num_followups = 2,
     wait_days = 3,
+    tone = "match",
+    length = "shorter",
   } = await req.json() as {
     first_email: { subject: string; body: string };
     existing_steps?: { subject: string; body: string }[];
     num_followups?: number;
     wait_days?: number;
+    tone?: string;
+    length?: string;
   };
 
   if (!first_email?.subject && !first_email?.body) {
@@ -26,15 +30,32 @@ export async function POST(req: NextRequest) {
 
   const count = Math.min(Math.max(num_followups, 1), 5);
 
+  const toneGuide: Record<string, string> = {
+    match:        "Mirror the tone of the first email exactly.",
+    professional: "Professional and polished — formal but not stiff.",
+    friendly:     "Warm, conversational, and approachable. Like emailing a colleague.",
+    direct:       "Direct and confident. Get to the point fast, no fluff.",
+    casual:       "Casual and relaxed — sounds like a real person, not marketing.",
+    persuasive:   "Persuasive — build urgency and value without being pushy.",
+  };
+
+  const lengthGuide: Record<string, string> = {
+    shorter:  "Each follow-up must be shorter than the previous email. Keep trimming.",
+    short:    "2–4 sentences maximum per follow-up. Ultra concise.",
+    medium:   "5–8 sentences. Enough to make the point without overstaying.",
+    long:     "Can be as long as needed to make a compelling case, but no filler.",
+    same:     "Match the approximate length of the first email.",
+  };
+
   const existingContext = existing_steps.length > 0
     ? `\n\nThe sequence already has these additional emails after the first:\n${existing_steps.map((s, i) => `Email ${i + 2}:\nSubject: ${s.subject}\nBody: ${s.body}`).join("\n\n")}\n\nGenerate follow-ups that continue AFTER these emails, building on what was already said.`
     : "";
 
   const angleGuides: Record<number, string> = {
-    1: "Short, friendly bump — assume they were busy. 2–3 sentences max. Don't re-pitch, just nudge.",
+    1: "Short, friendly bump — assume they were busy. Don't re-pitch, just nudge.",
     2: "New angle — introduce a benefit, pain point, or use case not covered in the first email.",
     3: "Social proof or specificity — reference a customer result, a relevant stat, or a specific insight about their industry.",
-    4: "Breakup email — very short, acknowledge this is likely your last email, give them an easy way to respond with a simple 'not interested'.",
+    4: "Breakup email — very short, acknowledge this is likely your last email, give them an easy out.",
     5: "Final value drop — one last compelling reason or resource, then bow out gracefully.",
   };
 
@@ -51,10 +72,11 @@ ${existingContext}
 Angle guide (follow these in order):
 ${anglesText}
 
+Tone: ${toneGuide[tone] ?? toneGuide.match}
+Length: ${lengthGuide[length] ?? lengthGuide.shorter}
+
 Rules:
-- Keep each follow-up shorter than the one before it
 - Acknowledge it's a follow-up naturally in the opening, don't be mechanical about it
-- Match the tone of the first email (professional, friendly, direct — mirror what the user wrote)
 - Use {{first_name}}, {{company}}, {{title}} where it sounds natural
 - Subject lines: short (under 8 words); follow-ups often work as "Re:" or a fresh subject
 - No filler phrases like "I hope this email finds you well"

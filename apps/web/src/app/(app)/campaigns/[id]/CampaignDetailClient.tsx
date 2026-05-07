@@ -177,6 +177,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [showFollowupGen, setShowFollowupGen]     = useState(false);
   const [followupCount, setFollowupCount]         = useState(2);
   const [followupWaitDays, setFollowupWaitDays]   = useState(3);
+  const [followupTone, setFollowupTone]           = useState("match");
+  const [followupLength, setFollowupLength]       = useState("shorter");
   const [followupGenerating, setFollowupGenerating] = useState(false);
   const [followupError, setFollowupError]         = useState<string | null>(null);
 
@@ -349,6 +351,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         existing_steps: existingFollowups,
         num_followups: followupCount,
         wait_days: followupWaitDays,
+        tone: followupTone,
+        length: followupLength,
       });
       if ((data as { error?: string }).error) { setFollowupError((data as { error?: string }).error!); return; }
       const newSteps = (data.steps ?? []).map(s => ({
@@ -561,22 +565,43 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           </div>
           {showFollowupGen && (
             <div className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3 mt-3">
-              <p className="text-xs text-white/50">Generates follow-up emails based on your first email and appends them to the sequence.</p>
-              <div className="flex gap-4 items-end flex-wrap">
+              <p className="text-xs text-white/50">AI writes follow-up emails based on your first email and appends them to the sequence.</p>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-white/40 mb-1">Follow-ups</label>
-                  <select value={followupCount} onChange={e => setFollowupCount(+e.target.value)} className="bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40">
+                  <label className="block text-xs text-white/40 mb-1">Follow-ups to generate</label>
+                  <select value={followupCount} onChange={e => setFollowupCount(+e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40">
                     {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-white/40 mb-1">Wait days between</label>
-                  <input type="number" min={1} max={14} value={followupWaitDays} onChange={e => setFollowupWaitDays(+e.target.value)} className="w-20 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                  <input type="number" min={1} max={14} value={followupWaitDays} onChange={e => setFollowupWaitDays(+e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
                 </div>
-                <button onClick={handleGenerateFollowups} disabled={followupGenerating} className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
-                  {followupGenerating ? "Generating…" : "Generate"}
-                </button>
+                <div>
+                  <label className="block text-xs text-white/40 mb-1">Tone</label>
+                  <select value={followupTone} onChange={e => setFollowupTone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40">
+                    <option value="match">Match first email</option>
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="direct">Direct</option>
+                    <option value="casual">Casual</option>
+                    <option value="persuasive">Persuasive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-white/40 mb-1">Length</label>
+                  <select value={followupLength} onChange={e => setFollowupLength(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40">
+                    <option value="shorter">Each shorter than last</option>
+                    <option value="short">Short (2–4 sentences)</option>
+                    <option value="medium">Medium (5–8 sentences)</option>
+                    <option value="same">Match first email</option>
+                    <option value="long">Long (detailed)</option>
+                  </select>
+                </div>
               </div>
+              <button onClick={handleGenerateFollowups} disabled={followupGenerating} className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                {followupGenerating ? "Generating…" : "Generate follow-ups"}
+              </button>
               {followupError && <p className="text-red-400 text-xs">{followupError}</p>}
             </div>
           )}

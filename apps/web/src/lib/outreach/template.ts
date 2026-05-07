@@ -8,11 +8,19 @@ const UNSUB_SECRET = process.env.OUTREACH_ENCRYPTION_KEY ?? "fallback-secret";
 
 /**
  * Resolves {option1|option2|option3} spintax groups by randomly picking one
- * variant. Nested spintax is supported (inner groups resolved first).
+ * variant. {{variables}} are protected before resolution so they are never
+ * corrupted (the inner {variable} would otherwise match the spintax pattern).
  */
 export function resolveSpintax(text: string): string {
-  // Keep resolving until no more spintax groups remain (handles nesting)
-  let result = text;
+  // Stash {{variables}} behind null-byte placeholders so they are invisible
+  // to the spintax regex, then restore them after resolution.
+  const stash: string[] = [];
+  const protected_ = text.replace(/\{\{[^{}]+\}\}/g, (m) => {
+    stash.push(m);
+    return `\x00${stash.length - 1}\x00`;
+  });
+
+  let result = protected_;
   let prev: string;
   do {
     prev = result;
@@ -21,7 +29,9 @@ export function resolveSpintax(text: string): string {
       return options[Math.floor(Math.random() * options.length)];
     });
   } while (result !== prev);
-  return result;
+
+  // Restore {{variables}}
+  return result.replace(/\x00(\d+)\x00/g, (_, i) => stash[parseInt(i)]);
 }
 
 // ─── Variable Interpolation ───────────────────────────────────────────────────

@@ -186,6 +186,8 @@ export const generateFollowups = (opts: {
   existing_steps?: { subject: string; body: string }[];
   num_followups?: number;
   wait_days?: number;
+  tone?: string;
+  length?: string;
 }) => post<{ steps: { type: "email" | "wait"; wait_days: number; subject: string; body: string }[]; error?: string }>(`${base}/sequences/generate-followups`, opts);
 
 // ─── CRM extras ───────────────────────────────────────────────────────────────
