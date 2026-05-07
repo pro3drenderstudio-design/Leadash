@@ -4,7 +4,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getDueEnrollments, checkDailyLimits, advanceEnrollment, computeNextSendAt } from "@/lib/outreach/scheduler";
-import { renderEmail } from "@/lib/outreach/template";
+import { renderEmail, generateUnsubscribeToken } from "@/lib/outreach/template";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
 import { sendMicrosoftMessage } from "@/lib/outreach/microsoft";
 import { sendSmtpMessage } from "@/lib/outreach/smtp";
@@ -181,18 +181,32 @@ export async function runSendBatch(
 
       if (!sendRecord) { result.errors++; continue; }
 
+      const isFirstEmail = seqStep.step_order === 0;
+      const sendTextOnly = campaign.text_only || (campaign.first_email_text_only && isFirstEmail);
+
       const rendered = renderEmail({
         subjectTemplate,
         bodyTemplate:    seqStep.body_template ?? "",
         lead,
         sendId:          sendRecord.id,
         signature:       slot.inbox.signature,
-        trackOpens:      campaign.track_opens,
-        trackClicks:     campaign.track_clicks,
+        trackOpens:      sendTextOnly ? false : campaign.track_opens,
+        trackClicks:     sendTextOnly ? false : campaign.track_clicks,
         footerEnabled,
         footerText,
         physicalAddress: footerAddress,
       });
+
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
+      const unsubToken = generateUnsubscribeToken(lead.email);
+      const unsubUrl   = `${APP_URL}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&token=${unsubToken}`;
+      const customHeaders: Record<string, string> | undefined =
+        campaign.insert_unsubscribe_header !== false
+          ? {
+              "List-Unsubscribe":      `<${unsubUrl}>`,
+              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            }
+          : undefined;
 
       if (rendered.trackedLinks.length) {
         await db.from("outreach_tracked_links").insert(
@@ -222,8 +236,13 @@ export async function runSendBatch(
 
       try {
         const sendResult = await sendViaInbox(slot.inbox, {
-          to: lead.email, subject: rendered.subject, htmlBody: rendered.body, textBody: rendered.textBody,
-          inReplyToMessageId, replyToThreadId,
+          to:           lead.email,
+          subject:      rendered.subject,
+          htmlBody:     sendTextOnly ? "" : rendered.body,
+          textBody:     rendered.textBody,
+          inReplyToMessageId,
+          replyToThreadId,
+          customHeaders,
         });
 
         await db.from("outreach_sends").update({
@@ -310,7 +329,7 @@ export async function runSendBatch(
 
 async function sendViaInbox(
   inbox: OutreachInbox,
-  opts: { to: string; subject: string; htmlBody: string; textBody: string; inReplyToMessageId?: string; replyToThreadId?: string },
+  opts: { to: string; subject: string; htmlBody: string; textBody: string; inReplyToMessageId?: string; replyToThreadId?: string; customHeaders?: Record<string, string> },
 ): Promise<{ messageId: string; threadId?: string }> {
   if (inbox.provider === "gmail"   && inbox.oauth_refresh_token) return sendGmailMessage(inbox, opts);
   if (inbox.provider === "outlook" && inbox.oauth_refresh_token) return sendMicrosoftMessage(inbox, opts);

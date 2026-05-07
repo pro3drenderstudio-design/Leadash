@@ -322,6 +322,50 @@ async function ingestMessages(
           await db.from("outreach_enrollments").update({ crm_status: aiCategory }).eq("id", send.enrollment_id);
         }
       }
+
+      // stop_on_company_reply: pause all other active enrollments from the same company in this campaign
+      try {
+        const { data: enrRow } = await db
+          .from("outreach_enrollments")
+          .select("campaign_id, lead_id")
+          .eq("id", send.enrollment_id)
+          .single();
+        if (enrRow) {
+          const { data: campaign } = await db
+            .from("outreach_campaigns")
+            .select("stop_on_company_reply")
+            .eq("id", enrRow.campaign_id)
+            .single();
+          if (campaign?.stop_on_company_reply) {
+            const { data: lead } = await db
+              .from("outreach_leads")
+              .select("email, company")
+              .eq("id", enrRow.lead_id)
+              .single();
+            const emailDomain = lead?.email?.split("@")[1]?.toLowerCase();
+            const company     = lead?.company?.trim().toLowerCase();
+            if (emailDomain || company) {
+              // Find all leads from the same domain or company
+              let leadQuery = db.from("outreach_leads").select("id");
+              if (company) {
+                leadQuery = leadQuery.ilike("company", company);
+              } else {
+                leadQuery = leadQuery.ilike("email", `%@${emailDomain}`);
+              }
+              const { data: peers } = await leadQuery;
+              const peerIds = (peers ?? []).map((l: { id: string }) => l.id).filter(id => id !== enrRow.lead_id);
+              if (peerIds.length) {
+                await db.from("outreach_enrollments")
+                  .update({ status: "paused" })
+                  .eq("campaign_id", enrRow.campaign_id)
+                  .eq("status", "active")
+                  .in("lead_id", peerIds);
+              }
+            }
+          }
+        }
+      } catch { /* non-fatal */ }
+
       matched++;
     } else { unmatched++; }
   }

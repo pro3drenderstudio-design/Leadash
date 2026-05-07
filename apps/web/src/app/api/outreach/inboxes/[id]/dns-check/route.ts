@@ -54,8 +54,8 @@ export async function GET(
     checks.dmarc = { pass: false, detail: `No DMARC record. Add TXT on _dmarc.${domain}: v=DMARC1; p=quarantine; rua=mailto:dmarc@${domain}` };
   }
 
-  // DKIM — try common selectors
-  const selectors = ["postal", "mail", "default", "google", "k1", "s1", "s2", "selector1", "selector2", "dkim"];
+  // DKIM — try common selectors (postal-1 is the Leadash Postal selector)
+  const selectors = ["postal-1", "postal", "mail", "default", "google", "k1", "s1", "s2", "selector1", "selector2", "dkim"];
   let dkimFound = false;
   for (const selector of selectors) {
     try {
@@ -68,7 +68,7 @@ export async function GET(
     } catch { /* selector not present */ }
   }
   if (!dkimFound) {
-    checks.dkim = { pass: false, detail: "No DKIM record found on common selectors (postal, mail, default, …)" };
+    checks.dkim = { pass: false, detail: "No DKIM record found on common selectors (postal-1, postal, mail, default, …)" };
   }
 
   // MX

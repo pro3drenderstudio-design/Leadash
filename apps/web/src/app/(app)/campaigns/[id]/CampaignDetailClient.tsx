@@ -1,8 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import RichEmailEditor from "@/components/RichEmailEditor";
+import SpamCheckerPanel from "@/components/SpamCheckerPanel";
+import { resolveSpintax } from "@/lib/outreach/spintax";
+import { scoreMessage } from "@/lib/outreach/spam-scorer";
+import { getWorkspaceId } from "@/lib/workspace/client";
 import {
   getCampaign, getSequence, updateCampaign, saveSequence,
   getInboxes, getTemplates, sendTestEmail, generateSequence, generateSpintax, generateFollowups,
@@ -153,9 +157,15 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editDailyCap, setEditDailyCap]       = useState(100);
   const [editMinDelay, setEditMinDelay]       = useState(30);
   const [editMaxDelay, setEditMaxDelay]       = useState(120);
-  const [editStopOnReply, setEditStopOnReply]           = useState(true);
-  const [editStopOnAutoReply, setEditStopOnAutoReply]   = useState(false);
-  const [editPauseAfterOpen, setEditPauseAfterOpen]     = useState(false);
+  const [editStopOnReply, setEditStopOnReply]                   = useState(true);
+  const [editStopOnAutoReply, setEditStopOnAutoReply]           = useState(false);
+  const [editStopOnCompanyReply, setEditStopOnCompanyReply]     = useState(false);
+  const [editPauseAfterOpen, setEditPauseAfterOpen]             = useState(false);
+  const [editTextOnly, setEditTextOnly]                         = useState(false);
+  const [editFirstEmailTextOnly, setEditFirstEmailTextOnly]     = useState(false);
+  const [editInsertUnsubHeader, setEditInsertUnsubHeader]       = useState(true);
+  const [editCustomTags, setEditCustomTags]                     = useState<string[]>([]);
+  const [editTagInput, setEditTagInput]                         = useState("");
   const [editSteps, setEditSteps]             = useState<EditStep[]>([]);
   const [loadingTpl, setLoadingTpl]           = useState<number | null>(null);
 
@@ -174,6 +184,19 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   // Spintax writer
   const [spintaxLoading, setSpintaxLoading] = useState<string | null>(null); // "stepIdx-field"
   const [spintaxError, setSpintaxError]     = useState<string | null>(null);
+
+  // Spam rewrite
+  const [rewriteIdx, setRewriteIdx]     = useState<number | null>(null);
+  const [rewriting, setRewriting]       = useState(false);
+  const [rewriteResult, setRewriteResult] = useState<{ subject: string; body: string } | null>(null);
+  const [rewriteError, setRewriteError] = useState<string | null>(null);
+
+  const stepScores = useMemo(
+    () => editSteps.map(s =>
+      s.type === "email" ? scoreMessage(s.subject_template, s.body_template) : scoreMessage("", "")
+    ),
+    [editSteps],
+  );
 
   // Generate follow-ups
   const [showFollowupGen, setShowFollowupGen]     = useState(false);
@@ -257,6 +280,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   // Variable substitution for email preview
   function renderTemplate(tmpl: string, lead: CampaignEnrollmentRow["lead"]): string {
     if (!tmpl) return "";
+    const resolved = resolveSpintax(tmpl);
     const vars: Record<string, string> = {
       first_name:  lead?.first_name  ?? "Jane",
       last_name:   lead?.last_name   ?? "Smith",
@@ -264,7 +288,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       title:       lead?.title       ?? "CEO",
       email:       lead?.email       ?? "jane@example.com",
     };
-    return tmpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+    return resolved.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
   }
 
   function openEdit() {
@@ -280,7 +304,12 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     setEditMaxDelay(campaign.max_delay_seconds ?? 120);
     setEditStopOnReply(campaign.stop_on_reply ?? true);
     setEditStopOnAutoReply(campaign.stop_on_auto_reply ?? false);
+    setEditStopOnCompanyReply(campaign.stop_on_company_reply ?? false);
     setEditPauseAfterOpen(campaign.pause_after_open ?? false);
+    setEditTextOnly(campaign.text_only ?? false);
+    setEditFirstEmailTextOnly(campaign.first_email_text_only ?? false);
+    setEditInsertUnsubHeader(campaign.insert_unsubscribe_header ?? true);
+    setEditCustomTags(campaign.custom_tags ?? []);
     setEditSteps(steps.map(s => ({ id: s.id, type: s.type, wait_days: s.wait_days ?? 0, subject_template: s.subject_template ?? "", subject_template_b: s.subject_template_b ?? "", body_template: s.body_template ?? "" })));
     setEditing(true);
   }
@@ -289,7 +318,17 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     if (!campaign) return;
     setSaving(true);
     const [updated] = await Promise.all([
-      updateCampaign(campaign.id, { name: editName, inbox_ids: editInboxes, timezone: editTimezone, send_start_time: editStartTime, send_end_time: editEndTime, send_days: editDays, daily_cap: editDailyCap, min_delay_seconds: editMinDelay, max_delay_seconds: editMaxDelay, stop_on_reply: editStopOnReply, stop_on_auto_reply: editStopOnAutoReply, pause_after_open: editPauseAfterOpen }),
+      updateCampaign(campaign.id, {
+        name: editName, inbox_ids: editInboxes, timezone: editTimezone,
+        send_start_time: editStartTime, send_end_time: editEndTime, send_days: editDays,
+        daily_cap: editDailyCap, min_delay_seconds: editMinDelay, max_delay_seconds: editMaxDelay,
+        stop_on_reply: editStopOnReply, stop_on_auto_reply: editStopOnAutoReply,
+        stop_on_company_reply: editStopOnCompanyReply,
+        pause_after_open: editPauseAfterOpen,
+        text_only: editTextOnly, first_email_text_only: editFirstEmailTextOnly,
+        insert_unsubscribe_header: editInsertUnsubHeader,
+        custom_tags: editCustomTags,
+      }),
       saveSequence(campaign.id, editSteps.map(s => ({ ...s, subject_template_b: s.subject_template_b || null }))),
     ]);
     setCampaign(updated);
@@ -342,6 +381,41 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     } finally {
       setSpintaxLoading(null);
     }
+  }
+
+  async function handleRewrite(idx: number) {
+    const s = editSteps[idx];
+    if (s.type !== "email") return;
+    setRewriteIdx(idx);
+    setRewriteResult(null);
+    setRewriteError(null);
+    setRewriting(true);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res  = await fetch("/api/outreach/rewrite", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body:    JSON.stringify({
+          subject: s.subject_template,
+          body:    s.body_template,
+          issues:  stepScores[idx]?.issues.map(issue => issue.label) ?? [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Rewrite failed");
+      setRewriteResult(data);
+    } catch (err) {
+      setRewriteError(err instanceof Error ? err.message : "Rewrite failed");
+    } finally {
+      setRewriting(false);
+    }
+  }
+
+  function applyRewrite(idx: number) {
+    if (!rewriteResult) return;
+    setEditSteps(st => st.map((s, i) => i !== idx ? s : { ...s, subject_template: rewriteResult!.subject, body_template: rewriteResult!.body }));
+    setRewriteIdx(null);
+    setRewriteResult(null);
   }
 
   async function handleGenerateFollowups() {
@@ -446,18 +520,24 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             </div>
           )}
           <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
-            {inboxes.map(inbox => (
-              <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${editInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-                <input type="checkbox" checked={editInboxes.includes(inbox.id)} onChange={() => setEditInboxes(p => p.includes(inbox.id) ? p.filter(x => x !== inbox.id) : [...p, inbox.id])} className="accent-orange-500" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-sm font-medium">{inbox.label}</div>
-                  <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day limit</div>
-                </div>
-                {editInboxes.includes(inbox.id) && editInboxes.length > 0 && (
-                  <span className="text-orange-400/70 text-xs flex-shrink-0">~{Math.round(editDailyCap / editInboxes.length)}/day</span>
-                )}
-              </label>
-            ))}
+            {inboxes.map(inbox => {
+              const warmupEndsAt = (inbox as OutreachInboxSafe & { warmup_ends_at?: string }).warmup_ends_at;
+              const isWarming    = !!warmupEndsAt && new Date(warmupEndsAt) > new Date();
+              const daysLeft     = isWarming ? Math.ceil((new Date(warmupEndsAt!).getTime() - Date.now()) / 86_400_000) : 0;
+              return (
+                <label key={inbox.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isWarming ? "border-white/5 bg-white/2 cursor-not-allowed opacity-60" : `cursor-pointer ${editInboxes.includes(inbox.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}`}>
+                  <input type="checkbox" disabled={isWarming} checked={!isWarming && editInboxes.includes(inbox.id)} onChange={() => !isWarming && setEditInboxes(p => p.includes(inbox.id) ? p.filter(x => x !== inbox.id) : [...p, inbox.id])} className="accent-orange-500 disabled:opacity-40" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-medium">{inbox.label}</div>
+                    <div className="text-white/35 text-xs">{inbox.email_address} · {inbox.daily_send_limit}/day limit</div>
+                    {isWarming && <div className="text-amber-400/70 text-xs mt-0.5">Warming up — available in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>}
+                  </div>
+                  {!isWarming && editInboxes.includes(inbox.id) && editInboxes.length > 0 && (
+                    <span className="text-orange-400/70 text-xs flex-shrink-0">~{Math.round(editDailyCap / editInboxes.length)}/day</span>
+                  )}
+                </label>
+              );
+            })}
           </div>
         </div>
 
@@ -481,20 +561,76 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label><input type="number" value={editDailyCap} onChange={e => setEditDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
-          <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Send Throttle</p>
+          <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Sending Pattern</p>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-xs text-white/40 mb-1">Min Delay (s)</label><input type="number" value={editMinDelay} onChange={e => setEditMinDelay(parseInt(e.target.value)||30)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none" /></div>
-            <div><label className="block text-xs text-white/40 mb-1">Max Delay (s)</label><input type="number" value={editMaxDelay} onChange={e => setEditMaxDelay(parseInt(e.target.value)||120)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none" /></div>
+            <div>
+              <label className="block text-xs text-white/40 mb-1">Min gap (minutes)</label>
+              <input type="number" value={Math.round(editMinDelay / 60) || 1} onChange={e => setEditMinDelay((parseInt(e.target.value) || 1) * 60)} min={1} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+            </div>
+            <div>
+              <label className="block text-xs text-white/40 mb-1">Random extra (minutes)</label>
+              <input type="number" value={Math.max(0, Math.round((editMaxDelay - editMinDelay) / 60))} onChange={e => setEditMaxDelay(editMinDelay + (parseInt(e.target.value) || 0) * 60)} min={0} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+            </div>
           </div>
+          <p className="text-white/25 text-xs">Each email waits at least {Math.round(editMinDelay / 60)}m, plus up to {Math.max(0, Math.round((editMaxDelay - editMinDelay) / 60))}m random extra.</p>
         </div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
           <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Campaign Behavior</p>
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Stop on Reply</p><p className="text-white/35 text-xs">Halt sequence when a lead replies</p></div><Toggle value={editStopOnReply} onChange={setEditStopOnReply} /></div>
           {editStopOnReply && (
-            <div className="flex items-center justify-between pl-4 border-l border-white/8"><div><p className="text-white/70 text-sm font-medium">Stop on Auto-Reply</p><p className="text-white/30 text-xs">Also stop when an out-of-office or auto-reply is detected</p></div><Toggle value={editStopOnAutoReply} onChange={setEditStopOnAutoReply} /></div>
+            <>
+              <div className="flex items-center justify-between pl-4 border-l border-white/8"><div><p className="text-white/70 text-sm font-medium">Stop on Auto-Reply</p><p className="text-white/30 text-xs">Also stop when an out-of-office or auto-reply is detected</p></div><Toggle value={editStopOnAutoReply} onChange={setEditStopOnAutoReply} /></div>
+              <div className="flex items-center justify-between pl-4 border-l border-white/8"><div><p className="text-white/70 text-sm font-medium">Stop Company on Reply</p><p className="text-white/30 text-xs">When one lead replies, pause all other active leads from the same company</p></div><Toggle value={editStopOnCompanyReply} onChange={setEditStopOnCompanyReply} /></div>
+            </>
           )}
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Pause After Open</p><p className="text-white/35 text-xs">Pause when a lead opens an email</p></div><Toggle value={editPauseAfterOpen} onChange={setEditPauseAfterOpen} color="amber" /></div>
+        </div>
+
+        <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
+          <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Delivery Optimization</p>
+          <div className="flex items-center justify-between">
+            <div><p className="text-white/80 text-sm font-medium">Send as text-only</p><p className="text-white/35 text-xs">No HTML — better deliverability for some inboxes</p></div>
+            <Toggle value={editTextOnly} onChange={v => { setEditTextOnly(v); if (v) setEditFirstEmailTextOnly(false); }} />
+          </div>
+          {!editTextOnly && (
+            <div className="flex items-center justify-between pl-4 border-l border-white/8">
+              <div><p className="text-white/70 text-sm font-medium">First email text-only</p><p className="text-white/30 text-xs">Send only the first email as plain text to boost initial deliverability</p></div>
+              <Toggle value={editFirstEmailTextOnly} onChange={setEditFirstEmailTextOnly} />
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div><p className="text-white/80 text-sm font-medium">Insert Unsubscribe Header</p><p className="text-white/35 text-xs">Adds List-Unsubscribe header for one-click unsubscribe in supporting clients</p></div>
+            <Toggle value={editInsertUnsubHeader} onChange={setEditInsertUnsubHeader} />
+          </div>
+        </div>
+
+        <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
+          <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Custom Tags</p>
+          <div className="flex flex-wrap gap-1.5">
+            {editCustomTags.map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/8 border border-white/12 text-white/60 text-xs">
+                {tag}
+                <button type="button" onClick={() => setEditCustomTags(t => t.filter(x => x !== tag))} className="text-white/30 hover:text-white/70 leading-none">✕</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={editTagInput}
+              onChange={e => setEditTagInput(e.target.value)}
+              onKeyDown={e => {
+                if ((e.key === "Enter" || e.key === ",") && editTagInput.trim()) {
+                  e.preventDefault();
+                  const tag = editTagInput.trim().toLowerCase();
+                  if (!editCustomTags.includes(tag)) setEditCustomTags(t => [...t, tag]);
+                  setEditTagInput("");
+                }
+              }}
+              placeholder="Add tag, press Enter"
+              className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-white/25 focus:outline-none focus:border-orange-500/40"
+            />
+          </div>
         </div>
 
         {/* Sequence editor */}
@@ -567,6 +703,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         onChange={html => setEditSteps(st => st.map((st2, idx) => idx === i ? { ...st2, body_template: html } : st2))}
                       />
                     </div>
+
+                    <SpamCheckerPanel
+                      subject={s.subject_template}
+                      body={s.body_template}
+                      onFix={() => handleRewrite(i)}
+                      fixLoading={rewriteIdx === i && rewriting}
+                    />
                   </>
                 )}
               </div>
@@ -648,6 +791,56 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                 <button onClick={handleAiGenerate} disabled={aiGenerating} className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2">
                   {aiGenerating ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</> : "Generate Sequence"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fix with AI (rewrite) modal */}
+        {rewriteIdx !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-[#161616] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <span className="text-white font-semibold text-sm">Fix with AI — Step {rewriteIdx + 1}</span>
+                </div>
+                <button onClick={() => { setRewriteIdx(null); setRewriteResult(null); setRewriteError(null); }} className="text-white/40 hover:text-white transition-colors">✕</button>
+              </div>
+              <div className="p-6 space-y-4">
+                {rewriting && (
+                  <div className="flex items-center gap-3 text-white/50 text-sm">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3" />
+                    </svg>
+                    Rewriting…
+                  </div>
+                )}
+                {rewriteError && <p className="text-red-400 text-sm">{rewriteError}</p>}
+                {rewriteResult && (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] text-white/30 font-semibold uppercase tracking-wide mb-1">New subject</p>
+                      <p className="text-white/80 text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/8">{rewriteResult.subject}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/30 font-semibold uppercase tracking-wide mb-1">New body</p>
+                      <div
+                        className="text-white/70 text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/8 max-h-48 overflow-y-auto prose prose-invert prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: rewriteResult.body }}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => applyRewrite(rewriteIdx)} className="flex-1 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition-colors">Apply</button>
+                      <button onClick={() => handleRewrite(rewriteIdx)} disabled={rewriting} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors disabled:opacity-40">Retry</button>
+                    </div>
+                  </div>
+                )}
+                {!rewriting && !rewriteResult && !rewriteError && (
+                  <button onClick={() => handleRewrite(rewriteIdx)} className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition-colors">Rewrite now</button>
+                )}
               </div>
             </div>
           </div>

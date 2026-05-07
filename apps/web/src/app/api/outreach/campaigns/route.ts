@@ -18,13 +18,15 @@ export async function GET(req: NextRequest) {
   const enriched = await Promise.all((campaigns ?? []).map(async (c: { id: string; [key: string]: unknown }) => {
     const [enrolled, sent, opened, replied] = await Promise.all([
       db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", c.id),
-      db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).in("status", ["sent","opened"]).eq("enrollment_id", c.id),
-      db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("status", "opened"),
-      db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", c.id).eq("status", "replied"),
+      db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("campaign_id", c.id),
+      db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("campaign_id", c.id).not("opened_at", "is", null),
+      db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", c.id).or("crm_status.eq.replied,status.eq.replied"),
     ]);
     return {
       ...c,
       total_enrolled: enrolled.count ?? 0,
+      total_sent:     sent.count ?? 0,
+      total_opened:   opened.count ?? 0,
       total_replied:  replied.count ?? 0,
     };
   }));
@@ -56,10 +58,15 @@ export async function POST(req: NextRequest) {
     track_clicks:       body.track_clicks ?? true,
     min_delay_seconds:  body.min_delay_seconds ?? 30,
     max_delay_seconds:  body.max_delay_seconds ?? 120,
-    stop_on_reply:       body.stop_on_reply ?? true,
-    stop_on_auto_reply:  body.stop_on_auto_reply ?? false,
-    pause_after_open:    body.pause_after_open ?? false,
-    reply_to_email:     body.reply_to_email ?? null,
+    stop_on_reply:             body.stop_on_reply ?? true,
+    stop_on_auto_reply:        body.stop_on_auto_reply ?? false,
+    stop_on_company_reply:     body.stop_on_company_reply ?? false,
+    pause_after_open:          body.pause_after_open ?? false,
+    reply_to_email:            body.reply_to_email ?? null,
+    text_only:                 body.text_only ?? false,
+    first_email_text_only:     body.first_email_text_only ?? false,
+    insert_unsubscribe_header: body.insert_unsubscribe_header ?? true,
+    custom_tags:               body.custom_tags ?? [],
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

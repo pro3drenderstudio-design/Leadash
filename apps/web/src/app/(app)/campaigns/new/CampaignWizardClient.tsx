@@ -7,6 +7,7 @@ import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import RichEmailEditor from "@/components/RichEmailEditor";
+import SpamCheckerPanel from "@/components/SpamCheckerPanel";
 
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 type Step = {
@@ -16,6 +17,23 @@ type Step = {
   subject_template_b: string;
   body_template: string;
 };
+
+function WizToggle({ label, desc, value, onChange, color = "green", indent = false }: {
+  label: string; desc: string; value: boolean; onChange: (v: boolean) => void;
+  color?: "green" | "amber"; indent?: boolean;
+}) {
+  return (
+    <label className={`flex items-center justify-between cursor-pointer ${indent ? "pl-4 border-l border-white/8" : ""}`}>
+      <div>
+        <p className={`text-sm font-medium ${indent ? "text-white/70" : "text-white/80"}`}>{label}</p>
+        <p className="text-white/30 text-xs">{desc}</p>
+      </div>
+      <div onClick={() => onChange(!value)} className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${value ? (color === "amber" ? "bg-amber-500" : "bg-green-500") : "bg-white/15"}`}>
+        <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : "translate-x-0"}`} />
+      </div>
+    </label>
+  );
+}
 
 export default function CampaignWizardClient() {
   const router = useRouter();
@@ -34,9 +52,15 @@ export default function CampaignWizardClient() {
   const [dailyCap, setDailyCap]     = useState(100);
   const [minDelay, setMinDelay]     = useState(30);
   const [maxDelay, setMaxDelay]     = useState(120);
-  const [stopOnReply, setStopOnReply]           = useState(true);
-  const [stopOnAutoReply, setStopOnAutoReply]   = useState(false);
-  const [pauseAfterOpen, setPauseAfterOpen]     = useState(false);
+  const [stopOnReply, setStopOnReply]                     = useState(true);
+  const [stopOnAutoReply, setStopOnAutoReply]             = useState(false);
+  const [stopOnCompanyReply, setStopOnCompanyReply]       = useState(false);
+  const [pauseAfterOpen, setPauseAfterOpen]               = useState(false);
+  const [textOnly, setTextOnly]                           = useState(false);
+  const [firstEmailTextOnly, setFirstEmailTextOnly]       = useState(false);
+  const [insertUnsubHeader, setInsertUnsubHeader]         = useState(true);
+  const [customTags, setCustomTags]                       = useState<string[]>([]);
+  const [tagInput, setTagInput]                           = useState("");
 
   // Step 2 fields
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
@@ -428,7 +452,12 @@ export default function CampaignWizardClient() {
         timezone, send_days: sendDays, send_start_time: startTime,
         send_end_time: endTime, daily_cap: dailyCap,
         min_delay_seconds: minDelay, max_delay_seconds: maxDelay,
-        stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply, pause_after_open: pauseAfterOpen,
+        stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply,
+        stop_on_company_reply: stopOnCompanyReply,
+        pause_after_open: pauseAfterOpen,
+        text_only: textOnly, first_email_text_only: firstEmailTextOnly,
+        insert_unsubscribe_header: insertUnsubHeader,
+        custom_tags: customTags,
       });
 
       await saveSequence(campaign.id, seqSteps.map((s) => ({
@@ -543,66 +572,70 @@ export default function CampaignWizardClient() {
             <input type="number" value={dailyCap} onChange={(e) => setDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
           </div>
 
-          {/* Throttle */}
+          {/* Sending Pattern */}
           <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
-            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Send Throttle (human-like delays)</p>
+            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Sending Pattern</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-white/40 mb-1">Min Delay (seconds)</label>
-                <input type="number" value={minDelay} onChange={(e) => setMinDelay(parseInt(e.target.value) || 30)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                <label className="block text-xs text-white/40 mb-1">Min gap (minutes)</label>
+                <input type="number" value={Math.round(minDelay / 60) || 1} onChange={e => setMinDelay((parseInt(e.target.value) || 1) * 60)} min={1} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
               </div>
               <div>
-                <label className="block text-xs text-white/40 mb-1">Max Delay (seconds)</label>
-                <input type="number" value={maxDelay} onChange={(e) => setMaxDelay(parseInt(e.target.value) || 120)} min={5} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                <label className="block text-xs text-white/40 mb-1">Random extra (minutes)</label>
+                <input type="number" value={Math.max(0, Math.round((maxDelay - minDelay) / 60))} onChange={e => setMaxDelay(minDelay + (parseInt(e.target.value) || 0) * 60)} min={0} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
               </div>
             </div>
-            <p className="text-white/25 text-xs">A random delay between {minDelay}–{maxDelay}s is applied between each email send.</p>
+            <p className="text-white/25 text-xs">Each email waits at least {Math.round(minDelay / 60)}m, plus up to {Math.max(0, Math.round((maxDelay - minDelay) / 60))}m random extra.</p>
           </div>
 
           {/* Campaign behavior toggles */}
           <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
             <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Campaign Behavior</p>
-
-            <label className="flex items-center justify-between cursor-pointer">
-              <div>
-                <p className="text-white/80 text-sm font-medium">Stop on Reply</p>
-                <p className="text-white/35 text-xs">Halt sequence when a lead replies</p>
-              </div>
-              <div
-                onClick={() => setStopOnReply(!stopOnReply)}
-                className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${stopOnReply ? "bg-green-500" : "bg-white/15"}`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${stopOnReply ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </label>
-
+            <WizToggle label="Stop on Reply" desc="Halt sequence when a lead replies" value={stopOnReply} onChange={setStopOnReply} />
             {stopOnReply && (
-              <label className="flex items-center justify-between cursor-pointer pl-4 border-l border-white/8">
-                <div>
-                  <p className="text-white/70 text-sm font-medium">Stop on Auto-Reply</p>
-                  <p className="text-white/30 text-xs">Also stop when an out-of-office or auto-reply is detected</p>
-                </div>
-                <div
-                  onClick={() => setStopOnAutoReply(!stopOnAutoReply)}
-                  className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${stopOnAutoReply ? "bg-green-500" : "bg-white/15"}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${stopOnAutoReply ? "translate-x-4" : "translate-x-0"}`} />
-                </div>
-              </label>
+              <>
+                <WizToggle indent label="Stop on Auto-Reply" desc="Also stop when an OOO or auto-reply is detected" value={stopOnAutoReply} onChange={setStopOnAutoReply} />
+                <WizToggle indent label="Stop Company on Reply" desc="Pause all leads from the same company when one replies" value={stopOnCompanyReply} onChange={setStopOnCompanyReply} />
+              </>
             )}
+            <WizToggle label="Pause After Open" desc="Pause when a lead opens an email (wait for manual review)" value={pauseAfterOpen} onChange={setPauseAfterOpen} color="amber" />
+          </div>
 
-            <label className="flex items-center justify-between cursor-pointer">
-              <div>
-                <p className="text-white/80 text-sm font-medium">Pause After Open</p>
-                <p className="text-white/35 text-xs">Pause sequence when a lead opens an email (wait for manual review)</p>
-              </div>
-              <div
-                onClick={() => setPauseAfterOpen(!pauseAfterOpen)}
-                className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${pauseAfterOpen ? "bg-amber-500" : "bg-white/15"}`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${pauseAfterOpen ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </label>
+          {/* Delivery optimization */}
+          <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
+            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Delivery Optimization</p>
+            <WizToggle label="Send as text-only" desc="No HTML — better deliverability for some inboxes" value={textOnly} onChange={v => { setTextOnly(v); if (v) setFirstEmailTextOnly(false); }} />
+            {!textOnly && (
+              <WizToggle indent label="First email text-only" desc="Send only the first email as plain text to boost initial deliverability" value={firstEmailTextOnly} onChange={setFirstEmailTextOnly} />
+            )}
+            <WizToggle label="Insert Unsubscribe Header" desc="Adds List-Unsubscribe header for one-click unsubscribe" value={insertUnsubHeader} onChange={setInsertUnsubHeader} />
+          </div>
+
+          {/* Custom tags */}
+          <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
+            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Custom Tags</p>
+            <div className="flex flex-wrap gap-1.5">
+              {customTags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/8 border border-white/12 text-white/60 text-xs">
+                  {tag}
+                  <button type="button" onClick={() => setCustomTags(t => t.filter(x => x !== tag))} className="text-white/30 hover:text-white/70 leading-none">✕</button>
+                </span>
+              ))}
+            </div>
+            <input
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => {
+                if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                  e.preventDefault();
+                  const tag = tagInput.trim().toLowerCase();
+                  if (!customTags.includes(tag)) setCustomTags(t => [...t, tag]);
+                  setTagInput("");
+                }
+              }}
+              placeholder="Add tag, press Enter"
+              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-white/25 focus:outline-none focus:border-orange-500/40"
+            />
           </div>
         </div>
       )}
@@ -803,17 +836,6 @@ export default function CampaignWizardClient() {
                   })()}
                 </div>
                 <div className="flex items-center gap-3">
-                  {s.type === "email" && stepScores[i] && !stepScores[i].passed && (
-                    <button
-                      onClick={() => handleRewrite(i)}
-                      className="text-violet-400/80 hover:text-violet-300 text-xs transition-colors flex items-center gap-1"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                      </svg>
-                      Fix with AI
-                    </button>
-                  )}
                   <button onClick={() => removeStep(i)} className="text-red-400/60 hover:text-red-400 text-xs">Remove</button>
                 </div>
               </div>
@@ -903,6 +925,13 @@ export default function CampaignWizardClient() {
                       placeholder="Email body (supports {{first_name}} etc)"
                     />
                   </div>
+
+                  <SpamCheckerPanel
+                    subject={s.subject_template}
+                    body={s.body_template}
+                    onFix={() => handleRewrite(i)}
+                    fixLoading={rewriteIdx === i && rewriting}
+                  />
                 </>
               )}
             </div>

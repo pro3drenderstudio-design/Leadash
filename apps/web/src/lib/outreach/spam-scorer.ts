@@ -22,22 +22,62 @@ const SPAM_PHRASES: Array<{
   severity: SpamIssue["severity"];
   label:    string;
 }> = [
-  { pattern: /\bact now\b/i,              score: 1.5, severity: "high",   label: "Urgent action phrase: 'act now'" },
-  { pattern: /\bclick here\b/i,           score: 1.5, severity: "high",   label: "Generic link text: 'click here'" },
-  { pattern: /\blimited time offer\b/i,   score: 1.5, severity: "high",   label: "High-pressure phrase: 'limited time offer'" },
-  { pattern: /\bdon'?t miss out\b/i,      score: 1.0, severity: "high",   label: "Urgency phrase: 'don't miss out'" },
-  { pattern: /\b100%\s*free\b/i,          score: 1.5, severity: "high",   label: "Spam trigger: '100% free'" },
-  { pattern: /\bno cost\b/i,              score: 1.0, severity: "medium", label: "Spam trigger: 'no cost'" },
-  { pattern: /\bmake money\b/i,           score: 2.0, severity: "high",   label: "Spam trigger: 'make money'" },
-  { pattern: /\bearn \$\d/i,              score: 2.0, severity: "high",   label: "Spam trigger: monetary earn phrases" },
-  { pattern: /\bwinner\b/i,               score: 1.0, severity: "medium", label: "Trigger word: 'winner'" },
-  { pattern: /\bexclusive deal\b/i,       score: 1.0, severity: "medium", label: "Sales phrase: 'exclusive deal'" },
-  { pattern: /\bright now\b/i,            score: 0.5, severity: "low",    label: "Urgency word: 'right now'" },
-  { pattern: /\bspecial promotion\b/i,    score: 1.0, severity: "medium", label: "Sales phrase: 'special promotion'" },
-  { pattern: /\bdouble your\b/i,          score: 1.5, severity: "high",   label: "Spam trigger: 'double your'" },
-  { pattern: /\b(buy now|order now)\b/i,  score: 1.5, severity: "high",   label: "Sales command: 'buy/order now'" },
-  { pattern: /\bopt.?in\b/i,              score: 0.5, severity: "low",    label: "Marketing term: 'opt-in'" },
-  { pattern: /\bunsubscribe\b/i,          score: -0.5, severity: "low",   label: "Unsubscribe text present (good)" },
+  // ── Prize / lottery ────────────────────────────────────────────────────────
+  { pattern: /\bcongratulations\b/i,                    score: 2.0, severity: "high",   label: "Prize/lottery trigger: 'congratulations'" },
+  { pattern: /\byou('?ve|\s+have)\s+won\b/i,            score: 2.5, severity: "high",   label: "Classic spam phrase: 'you have won'" },
+  { pattern: /\b(won|win)\s+(a\s+)?(prize|award|gift|reward)\b/i, score: 2.0, severity: "high", label: "Prize claim phrase" },
+  { pattern: /\b(claim\s+your|collect\s+your)\s+(prize|reward|gift|money|cash)\b/i, score: 2.5, severity: "high", label: "Prize claim trigger" },
+  { pattern: /\blottery\b/i,                            score: 2.0, severity: "high",   label: "Lottery keyword" },
+  { pattern: /\bjackpot\b/i,                            score: 2.0, severity: "high",   label: "Jackpot keyword" },
+  { pattern: /\bsweepstake/i,                           score: 1.5, severity: "high",   label: "Sweepstakes keyword" },
+  { pattern: /\bfree\s+gift\b/i,                        score: 1.5, severity: "high",   label: "Spam trigger: 'free gift'" },
+  { pattern: /\bfree\s+prize\b/i,                       score: 2.0, severity: "high",   label: "Spam trigger: 'free prize'" },
+
+  // ── Monetary / financial ───────────────────────────────────────────────────
+  { pattern: /\b\d+\s*(million|billion)\s*(dollar|pound|euro|usd)/i, score: 2.5, severity: "high", label: "Large monetary amount claim" },
+  { pattern: /\$\s*\d[\d,]*\s*(million|billion)\b/i,    score: 2.5, severity: "high",   label: "Large monetary dollar amount" },
+  { pattern: /\bmake\s+money\b/i,                       score: 2.0, severity: "high",   label: "Spam trigger: 'make money'" },
+  { pattern: /\bearn\s+\$\d/i,                          score: 2.0, severity: "high",   label: "Monetary earn phrase" },
+  { pattern: /\b(cash|money)\s+(bonus|reward|prize|gift)\b/i, score: 1.5, severity: "high", label: "Cash reward phrase" },
+  { pattern: /\bget\s+paid\b/i,                         score: 1.5, severity: "high",   label: "Spam trigger: 'get paid'" },
+  { pattern: /\bincome\s+(from\s+home|opportunity|stream)\b/i, score: 2.0, severity: "high", label: "Income scheme phrase" },
+  { pattern: /\bpassive\s+income\b/i,                   score: 1.5, severity: "high",   label: "Spam trigger: 'passive income'" },
+  { pattern: /\bwork\s+from\s+home\b/i,                 score: 1.5, severity: "high",   label: "Spam trigger: 'work from home'" },
+  { pattern: /\bfinancial\s+freedom\b/i,                score: 1.5, severity: "high",   label: "Spam trigger: 'financial freedom'" },
+  { pattern: /\bno\s+(risk|obligation|commitment)\b/i,  score: 1.5, severity: "high",   label: "Risk-free / no-obligation phrase" },
+  { pattern: /\brisk.?free\b/i,                         score: 1.0, severity: "medium", label: "Spam trigger: 'risk-free'" },
+
+  // ── Urgency / pressure ─────────────────────────────────────────────────────
+  { pattern: /\bact\s+now\b/i,                          score: 1.5, severity: "high",   label: "Urgent action phrase: 'act now'" },
+  { pattern: /\blimited\s+time\s+(offer|only|deal)\b/i, score: 1.5, severity: "high",   label: "High-pressure phrase: 'limited time offer'" },
+  { pattern: /\bdon'?t\s+miss\s+out\b/i,                score: 1.0, severity: "high",   label: "Urgency phrase: 'don't miss out'" },
+  { pattern: /\burgent\b/i,                             score: 0.8, severity: "medium", label: "Urgency word: 'urgent'" },
+  { pattern: /\bexpires?\s+(today|soon|tonight|in\s+\d)/i, score: 1.0, severity: "medium", label: "Expiry pressure phrase" },
+  { pattern: /\blast\s+chance\b/i,                      score: 1.0, severity: "medium", label: "Pressure phrase: 'last chance'" },
+  { pattern: /\bright\s+now\b/i,                        score: 0.5, severity: "low",    label: "Urgency word: 'right now'" },
+  { pattern: /\b(buy now|order now)\b/i,                score: 1.5, severity: "high",   label: "Sales command: 'buy/order now'" },
+
+  // ── Free / cost ────────────────────────────────────────────────────────────
+  { pattern: /\b100\s*%\s*free\b/i,                     score: 1.5, severity: "high",   label: "Spam trigger: '100% free'" },
+  { pattern: /\bno\s+cost\b/i,                          score: 1.0, severity: "medium", label: "Spam trigger: 'no cost'" },
+  { pattern: /\babsolutely\s+free\b/i,                  score: 1.5, severity: "high",   label: "Spam trigger: 'absolutely free'" },
+  { pattern: /\bfree\s+access\b/i,                      score: 0.5, severity: "low",    label: "Spam trigger: 'free access'" },
+
+  // ── Guaranteed / promises ──────────────────────────────────────────────────
+  { pattern: /\bguaranteed\b/i,                         score: 1.0, severity: "medium", label: "Overconfidence trigger: 'guaranteed'" },
+  { pattern: /\b(100|one\s+hundred)\s*%\s*guaranteed\b/i, score: 2.0, severity: "high", label: "Spam trigger: '100% guaranteed'" },
+  { pattern: /\bdouble\s+your\b/i,                      score: 1.5, severity: "high",   label: "Spam trigger: 'double your'" },
+  { pattern: /\btriple\s+your\b/i,                      score: 1.5, severity: "high",   label: "Spam trigger: 'triple your'" },
+
+  // ── Generic sales spam ─────────────────────────────────────────────────────
+  { pattern: /\bclick\s+here\b/i,                       score: 1.5, severity: "high",   label: "Generic link text: 'click here'" },
+  { pattern: /\bwinner\b/i,                             score: 1.0, severity: "medium", label: "Trigger word: 'winner'" },
+  { pattern: /\bexclusive\s+deal\b/i,                   score: 1.0, severity: "medium", label: "Sales phrase: 'exclusive deal'" },
+  { pattern: /\bspecial\s+promotion\b/i,                score: 1.0, severity: "medium", label: "Sales phrase: 'special promotion'" },
+  { pattern: /\bopt.?in\b/i,                            score: 0.5, severity: "low",    label: "Marketing term: 'opt-in'" },
+  { pattern: /\bunsubscribe\b/i,                        score: -0.5, severity: "low",   label: "Unsubscribe text present (good)" },
+  { pattern: /\bthis\s+is\s+not\s+spam\b/i,            score: 3.0, severity: "high",   label: "Classic spam self-declaration" },
+  { pattern: /\bnot\s+(junk|spam)\b/i,                  score: 2.0, severity: "high",   label: "Spam self-declaration" },
 ];
 
 export function scoreMessage(subject: string, body: string): SpamResult {

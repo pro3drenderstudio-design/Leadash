@@ -3,7 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { sendSmtpMessage } from "@/lib/outreach/smtp";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
 import { sendMicrosoftMessage } from "@/lib/outreach/microsoft";
-import { interpolate } from "@/lib/outreach/template";
+import { interpolate, resolveSpintax } from "@/lib/outreach/template";
 import type { OutreachInbox, OutreachLead } from "@/types/outreach";
 
 const SAMPLE_LEAD: OutreachLead = {
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (fetchedLead) lead = fetchedLead as OutreachLead;
   }
 
-  const subject = interpolate(subject_template ?? "", lead);
-  let body = interpolate(body_template ?? "", lead);
+  const subject = interpolate(resolveSpintax(subject_template ?? ""), lead);
+  let body = interpolate(resolveSpintax(body_template ?? ""), lead);
 
   // Wrap plain text as HTML paragraphs if no HTML tags present
   if (!/<[a-z][\s\S]*>/i.test(body)) {
@@ -74,10 +74,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     body += `<br/><br/>${(inbox as OutreachInbox).signature}`;
   }
 
-  // Add a test banner so the recipient knows it's a test
-  body += `<br/><p style="font-size:11px;color:#999;border-top:1px solid #eee;padding-top:10px;margin-top:16px">
-    This is a test email sent from Leadash. It was not sent to any real leads.
-  </p>`;
 
   const textBody = body
     .replace(/<br\s*\/?>/gi, "\n")

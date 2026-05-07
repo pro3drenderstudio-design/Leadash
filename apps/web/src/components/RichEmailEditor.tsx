@@ -49,6 +49,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Email 
   const linkRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Underline,

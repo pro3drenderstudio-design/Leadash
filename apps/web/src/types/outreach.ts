@@ -93,8 +93,13 @@ export interface OutreachCampaign {
   max_delay_seconds: number;
   stop_on_reply: boolean;
   stop_on_auto_reply: boolean;
+  stop_on_company_reply: boolean;
   pause_after_open: boolean;
   reply_to_email?: string | null;
+  text_only: boolean;
+  first_email_text_only: boolean;
+  insert_unsubscribe_header: boolean;
+  custom_tags: string[];
   created_at: string;
   updated_at: string;
   // Computed
