@@ -4,6 +4,26 @@ import type { OutreachLead, OutreachSend } from "@/types/outreach";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://proplanstudio.com";
 const UNSUB_SECRET = process.env.OUTREACH_ENCRYPTION_KEY ?? "fallback-secret";
 
+// ─── Spintax Resolution ───────────────────────────────────────────────────────
+
+/**
+ * Resolves {option1|option2|option3} spintax groups by randomly picking one
+ * variant. Nested spintax is supported (inner groups resolved first).
+ */
+export function resolveSpintax(text: string): string {
+  // Keep resolving until no more spintax groups remain (handles nesting)
+  let result = text;
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(/\{([^{}]+)\}/g, (_, inner: string) => {
+      const options = inner.split("|");
+      return options[Math.floor(Math.random() * options.length)];
+    });
+  } while (result !== prev);
+  return result;
+}
+
 // ─── Variable Interpolation ───────────────────────────────────────────────────
 
 /**
@@ -101,8 +121,8 @@ export function renderEmail(opts: {
 }): RenderedEmail {
   const { subjectTemplate, bodyTemplate, lead, sendId, signature, trackOpens, trackClicks, physicalAddress, footerEnabled = true, footerText } = opts;
 
-  const subject = interpolate(subjectTemplate, lead);
-  let body = interpolate(bodyTemplate, lead);
+  const subject = interpolate(resolveSpintax(subjectTemplate), lead);
+  let body = interpolate(resolveSpintax(bodyTemplate), lead);
 
   // Append signature if present
   if (signature) {
