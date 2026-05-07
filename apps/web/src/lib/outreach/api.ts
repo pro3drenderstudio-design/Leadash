@@ -109,7 +109,7 @@ export async function saveSequenceSteps(campaignId: string, steps: Partial<Outre
   // Delete all existing and recreate
   const existing = await get<OutreachSequenceStep[]>(`${base}/sequences?campaign_id=${campaignId}`).catch(() => []);
   await Promise.all(existing.map(s => del(`${base}/sequences/${s.id}`)));
-  return Promise.all(steps.map(s => post<OutreachSequenceStep>(`${base}/sequences`, { ...s, campaign_id: campaignId })));
+  return Promise.all(steps.map((s, i) => post<OutreachSequenceStep>(`${base}/sequences`, { ...s, campaign_id: campaignId, step_order: i })));
 }
 
 export const createSequenceStep = (d: Partial<OutreachSequenceStep>) => post<OutreachSequenceStep>(`${base}/sequences`, d);
