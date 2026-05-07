@@ -120,6 +120,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [inboxes, setInboxes]     = useState<OutreachInboxSafe[]>([]);
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [editing, setEditing]     = useState(false);
@@ -214,7 +215,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         setLoading(false);
       })
       .catch((e) => {
-        setToast(e instanceof Error ? e.message : "Failed to load campaign");
+        setLoadError(e instanceof Error ? e.message : String(e));
         setLoading(false);
       });
   }, [campaignId]);
@@ -399,8 +400,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     </div>
   );
   if (!campaign) return (
-    <div className="p-6 text-white/40 flex flex-col items-center gap-3 pt-20">
-      <p>Failed to load campaign.</p>
+    <div className="p-6 flex flex-col items-center gap-4 pt-20">
+      <p className="text-white/50 text-sm">Failed to load campaign</p>
+      {loadError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 max-w-lg text-center">{loadError}</p>}
       <button onClick={() => window.location.reload()} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl border border-white/10 transition-colors">Retry</button>
     </div>
   );
