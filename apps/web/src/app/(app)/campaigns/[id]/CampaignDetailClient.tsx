@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import RichEmailEditor from "@/components/RichEmailEditor";
+import VariableInput from "@/components/VariableInput";
 import SpamCheckerPanel from "@/components/SpamCheckerPanel";
 import { resolveSpintax } from "@/lib/outreach/spintax";
 import { scoreMessage } from "@/lib/outreach/spam-scorer";
@@ -682,9 +683,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                           {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
                         </button>
                       </div>
-                      <input value={s.subject_template} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:e.target.value}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                      <VariableInput value={s.subject_template} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:v}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
                     </div>
-                    <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><input value={s.subject_template_b} onChange={e => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:e.target.value}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
+                    <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><VariableInput value={s.subject_template_b} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:v}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs text-white/40">Body</label>

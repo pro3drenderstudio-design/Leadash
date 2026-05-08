@@ -63,6 +63,14 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Email 
       attributes: {
         class: "prose prose-invert prose-sm max-w-none focus:outline-none min-h-[120px] text-white/90 text-sm leading-relaxed",
       },
+      handleKeyDown: (_view, event) => {
+        if (event.key === "{") {
+          event.preventDefault();
+          setShowVars(true);
+          return true;
+        }
+        return false;
+      },
     },
   });
 

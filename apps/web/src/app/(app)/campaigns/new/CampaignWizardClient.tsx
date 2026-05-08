@@ -7,6 +7,7 @@ import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import RichEmailEditor from "@/components/RichEmailEditor";
+import VariableInput from "@/components/VariableInput";
 import SpamCheckerPanel from "@/components/SpamCheckerPanel";
 
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
@@ -897,13 +898,13 @@ export default function CampaignWizardClient() {
                         {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
                       </button>
                     </div>
-                    <input value={s.subject_template} onChange={(e) => updateStep(i, "subject_template", e.target.value)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
+                    <VariableInput value={s.subject_template} onChange={(v) => updateStep(i, "subject_template", v)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
                   {/* Subject B (A/B testing) */}
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(optional — 50% of sends use this)</span></label>
-                    <input value={s.subject_template_b} onChange={(e) => updateStep(i, "subject_template_b", e.target.value)} placeholder="Alternate subject for A/B test" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
+                    <VariableInput value={s.subject_template_b} onChange={(v) => updateStep(i, "subject_template_b", v)} placeholder="Alternate subject for A/B test" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
                   </div>
 
                   <div>
