@@ -96,6 +96,8 @@ export async function runSendBatch(
 
   // Group by campaign → one inbox pool per campaign
   const byCampaign = new Map<string, { items: typeof due; slots: InboxSlot[]; rrIdx: number }>();
+  const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+
   for (const item of due) {
     const cid = item.campaign.id;
     if (!byCampaign.has(cid)) {
@@ -103,6 +105,32 @@ export async function runSendBatch(
       byCampaign.set(cid, { items: [], slots, rrIdx: 0 });
     }
     byCampaign.get(cid)!.items.push(item);
+  }
+
+  // Enforce campaign daily_cap — trim each campaign's item list to what's left today
+  for (const [cid, entry] of byCampaign.entries()) {
+    const cap = entry.items[0]?.campaign.daily_cap;
+    if (!cap || cap <= 0) continue;
+
+    const { data: enrollmentRows } = await db
+      .from("outreach_enrollments")
+      .select("id")
+      .eq("campaign_id", cid);
+    const eids = (enrollmentRows ?? []).map((r: { id: string }) => r.id);
+    if (!eids.length) continue;
+
+    const { count: sentToday } = await db
+      .from("outreach_sends")
+      .select("id", { count: "exact", head: true })
+      .in("enrollment_id", eids)
+      .in("status", ["sent", "queued", "opened", "replied", "clicked"])
+      .gte("created_at", todayStart.toISOString());
+
+    const remaining = Math.max(0, cap - (sentToday ?? 0));
+    if (remaining < entry.items.length) {
+      result.skipped += entry.items.length - remaining;
+      entry.items = entry.items.slice(0, remaining);
+    }
   }
 
   for (const { items, slots, rrIdx: startRr } of byCampaign.values()) {
