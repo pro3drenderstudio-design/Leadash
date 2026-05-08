@@ -3,7 +3,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { promises as dns } from "dns";
+import { promises as dns, type MxRecord } from "dns";
 import { getDueEnrollments, checkDailyLimits, advanceEnrollment, computeNextSendAt } from "@/lib/outreach/scheduler";
 import { renderEmail, generateUnsubscribeToken } from "@/lib/outreach/template";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
@@ -27,7 +27,7 @@ const MICROSOFT_DOMAINS = new Set([
 // Per-invocation MX cache — avoids redundant lookups for the same domain
 const _mxCache = new Map<string, "gmail" | "outlook" | null>();
 
-async function resolveMx(domain: string, timeoutMs = 1500): Promise<dns.MxRecord[] | null> {
+async function resolveMx(domain: string, timeoutMs = 1500): Promise<MxRecord[] | null> {
   return new Promise(resolve => {
     const t = setTimeout(() => resolve(null), timeoutMs);
     dns.resolveMx(domain).then(
