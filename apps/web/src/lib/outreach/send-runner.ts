@@ -3,6 +3,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { promises as dns } from "dns";
 import { getDueEnrollments, checkDailyLimits, advanceEnrollment, computeNextSendAt } from "@/lib/outreach/scheduler";
 import { renderEmail, generateUnsubscribeToken } from "@/lib/outreach/template";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
@@ -12,6 +13,48 @@ import type { OutreachInbox, OutreachSequenceStep, OutreachCampaign } from "@/ty
 
 const BOUNCE_PATTERN     = /5\d\d|user unknown|mailbox not found|no such user|does not exist|invalid.*address|recipient.*rejected/i;
 const AUTH_ERROR_PATTERN = /invalid_grant|token.*expired|token.*revoked|access.*denied|unauthorized|authentication.*fail|auth.*fail|535|534|530|credentials|wrong.*password|password.*incorrect|account.*suspended|account.*disabled|login.*fail|AUTHENTICATIONFAILED|AUTH.*FAILED/i;
+
+// ── Provider matching ─────────────────────────────────────────────────────────
+// Known consumer domains — no MX lookup needed
+const GOOGLE_DOMAINS    = new Set(["gmail.com", "googlemail.com"]);
+const MICROSOFT_DOMAINS = new Set([
+  "outlook.com", "hotmail.com", "live.com", "msn.com",
+  "hotmail.co.uk", "live.co.uk", "outlook.co.uk",
+  "hotmail.fr", "live.fr", "hotmail.de", "live.de",
+  "hotmail.es", "live.es", "hotmail.it", "live.it",
+]);
+
+// Per-invocation MX cache — avoids redundant lookups for the same domain
+const _mxCache = new Map<string, "gmail" | "outlook" | null>();
+
+async function resolveMx(domain: string, timeoutMs = 1500): Promise<dns.MxRecord[] | null> {
+  return new Promise(resolve => {
+    const t = setTimeout(() => resolve(null), timeoutMs);
+    dns.resolveMx(domain).then(
+      mx  => { clearTimeout(t); resolve(mx); },
+      ()  => { clearTimeout(t); resolve(null); },
+    );
+  });
+}
+
+async function detectRecipientProvider(email: string): Promise<"gmail" | "outlook" | null> {
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain) return null;
+  if (GOOGLE_DOMAINS.has(domain))    return "gmail";
+  if (MICROSOFT_DOMAINS.has(domain)) return "outlook";
+
+  if (_mxCache.has(domain)) return _mxCache.get(domain)!;
+
+  const mx = await resolveMx(domain);
+  const mxStr = (mx ?? []).map(r => r.exchange.toLowerCase()).join(" ");
+  const provider: "gmail" | "outlook" | null =
+    (mxStr.includes("google") || mxStr.includes("aspmx"))       ? "gmail"   :
+    (mxStr.includes("outlook.com") || mxStr.includes("protection.outlook")) ? "outlook" :
+    null;
+
+  _mxCache.set(domain, provider);
+  return provider;
+}
 
 // Module-level singleton — shared across all concurrent runSendBatch calls within
 // the same Vercel function invocation, avoiding redundant client construction.
@@ -67,8 +110,23 @@ async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: Outreac
   return slots;
 }
 
-function pickInbox(slots: InboxSlot[], rrIndex: number): { slot: InboxSlot; nextRr: number } | null {
+function pickInbox(
+  slots: InboxSlot[],
+  rrIndex: number,
+  preferProvider?: "gmail" | "outlook" | null,
+): { slot: InboxSlot; nextRr: number } | null {
   const n = slots.length;
+  // First pass: try preferred provider (e.g. gmail inbox for gmail recipient)
+  if (preferProvider) {
+    for (let i = 0; i < n; i++) {
+      const idx  = (rrIndex + i) % n;
+      const slot = slots[idx];
+      if (slot.used < slot.remaining && slot.inbox.provider === preferProvider) {
+        return { slot, nextRr: (idx + 1) % n };
+      }
+    }
+  }
+  // Second pass: any available slot (SMTP fallback)
   for (let i = 0; i < n; i++) {
     const slot = slots[(rrIndex + i) % n];
     if (slot.used < slot.remaining) return { slot, nextRr: (rrIndex + i + 1) % n };
@@ -138,12 +196,7 @@ export async function runSendBatch(
     let rr = startRr;
 
     for (const { enrollment, campaign, step: seqStep } of items) {
-      const pick = pickInbox(slots, rr);
-      if (!pick) { result.skipped++; continue; }
-      const { slot } = pick;
-      rr = pick.nextRr;
-      slot.used++;
-
+      // Wait steps don't send — advance enrollment and move on
       if (seqStep.type === "wait") {
         const nextSendAt = computeNextSendAt(seqStep.wait_days, campaign);
         const { data: nextStep } = await db.from("outreach_sequences").select("*")
@@ -153,8 +206,17 @@ export async function runSendBatch(
         continue;
       }
 
+      // Fetch lead first so provider detection can inform inbox selection
       const { data: lead } = await db.from("outreach_leads").select("*").eq("id", enrollment.lead_id).single();
       if (!lead) { result.skipped++; continue; }
+
+      // Pick inbox with provider preference (gmail→gmail, outlook→outlook, else any)
+      const recipientProvider = await detectRecipientProvider(lead.email);
+      const pick = pickInbox(slots, rr, recipientProvider);
+      if (!pick) { result.skipped++; continue; }
+      const { slot } = pick;
+      rr = pick.nextRr;
+      slot.used++;
 
       // Global suppression check (cross-workspace hard bounces, spam complaints)
       const { data: suppressed } = await db
