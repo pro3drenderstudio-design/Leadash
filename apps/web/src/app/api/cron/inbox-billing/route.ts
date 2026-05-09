@@ -1,5 +1,5 @@
 /**
- * GET /api/cron/inbox-billing
+ * POST /api/cron/inbox-billing
  *
  * Daily cron — charges Paystack authorization codes for active inbox domains
  * whose billing date has passed. Runs at 02:00 UTC every day.
@@ -11,7 +11,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
 import { sendInboxPaymentSuccess, sendInboxPaymentFailed } from "@/lib/email/notifications";
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
   const authHeader = req.headers.get("authorization");
   if (authHeader && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
