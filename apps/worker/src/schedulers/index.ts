@@ -26,9 +26,11 @@ export function startSchedulers() {
     const workspaceIds = await getActiveWorkspaceIds();
     for (const workspace_id of workspaceIds) {
       await sendQueue.add("send", { workspace_id, batch_limit: 100 }, {
-        jobId:   `send:${workspace_id}:${Date.now()}`,
-        attempts: 2,
-        backoff:  { type: "fixed", delay: 30_000 },
+        jobId:            `send:${workspace_id}:${Date.now()}`,
+        attempts:         2,
+        backoff:          { type: "fixed", delay: 30_000 },
+        removeOnComplete: { count: 200 },
+        removeOnFail:     { count: 500 },
       });
     }
     console.log(`[scheduler:send] Enqueued ${workspaceIds.length} workspaces`);
@@ -39,8 +41,10 @@ export function startSchedulers() {
     const workspaceIds = await getActiveWorkspaceIds();
     for (const workspace_id of workspaceIds) {
       await replyQueue.add("reply-poll", { workspace_id }, {
-        jobId:   `reply:${workspace_id}:${Date.now()}`,
-        attempts: 2,
+        jobId:            `reply:${workspace_id}:${Date.now()}`,
+        attempts:         2,
+        removeOnComplete: { count: 200 },
+        removeOnFail:     { count: 500 },
       });
     }
     console.log(`[scheduler:reply] Enqueued ${workspaceIds.length} workspaces`);
@@ -51,8 +55,10 @@ export function startSchedulers() {
     const workspaceIds = await getActiveWorkspaceIds();
     for (const workspace_id of workspaceIds) {
       await warmupQueue.add("warmup", { workspace_id }, {
-        jobId:   `warmup:${workspace_id}:${Date.now()}`,
-        attempts: 1,
+        jobId:            `warmup:${workspace_id}:${Date.now()}`,
+        attempts:         1,
+        removeOnComplete: { count: 100 },
+        removeOnFail:     { count: 200 },
       });
     }
     console.log(`[scheduler:warmup] Enqueued ${workspaceIds.length} workspaces`);

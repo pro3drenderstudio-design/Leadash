@@ -14,6 +14,21 @@ import { startSchedulers } from "./schedulers";
 
 console.log("[Leadash Worker] Starting...");
 
+// Prevent ImapFlow socket-timeout errors (emitted after logout) from crashing the process.
+// These are expected transient network events, not application bugs.
+process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
+  if (err.code === "ETIMEOUT" || (err as unknown as { _connId?: string })._connId) {
+    console.warn("[worker] suppressed IMAP socket error:", err.message);
+    return;
+  }
+  console.error("[worker] uncaughtException — restarting:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[worker] unhandledRejection:", reason);
+});
+
 function startHeartbeat() {
   const payload = JSON.stringify({ ts: Date.now(), pid: process.pid, hostname: os.hostname() });
   connection.set("leadash:worker:heartbeat", payload, "EX", 120).catch(() => {});
