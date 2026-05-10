@@ -54,9 +54,16 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   const [accessible, setAccessible] = useState<boolean | null>(null);
 
   useEffect(() => {
-    wsGet<{ accessible: boolean }>("/api/academy/access")
-      .then(d => setAccessible(d.accessible ?? true))
-      .catch(() => setAccessible(true)); // fail open
+    // Retry once in case workspace ID lands in localStorage just after mount
+    const check = (attempt = 0) => {
+      wsGet<{ accessible: boolean }>("/api/academy/access")
+        .then(d => setAccessible(d.accessible ?? false))
+        .catch(() => {
+          if (attempt === 0) setTimeout(() => check(1), 800);
+          else setAccessible(false); // fail closed — show overlay when uncertain
+        });
+    };
+    check();
   }, []);
 
   // Still checking — show nothing (avoids flash)
