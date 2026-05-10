@@ -60,9 +60,7 @@ export async function GET(req: NextRequest) {
     if (revenueMin  > 0) { conditions.push(`c.revenue_usd >= $${i}`);   params.push(revenueMin);  i++; }
     if (revenueMax  > 0) { conditions.push(`c.revenue_usd <= $${i}`);   params.push(revenueMax);  i++; }
     if (hasPeople) {
-      conditions.push(
-        `EXISTS (SELECT 1 FROM discover_people p WHERE p.company_id = c.source_id OR p.company_id = c.id::text)`
-      );
+      conditions.push(`EXISTS (SELECT 1 FROM discover_people p WHERE p.company_id = c.id)`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -79,7 +77,7 @@ export async function GET(req: NextRequest) {
           c.country, c.state, c.city,
           COUNT(p.id)::int AS people_count
         FROM discover_companies c
-        LEFT JOIN discover_people p ON p.company_id = c.source_id OR p.company_id = c.id::text
+        LEFT JOIN discover_people p ON p.company_id = c.id
         ${where}
         GROUP BY c.id
         ORDER BY people_count DESC, c.name ASC

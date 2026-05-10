@@ -38,8 +38,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
              c.domain AS company_domain, c.industry AS company_industry, c.size_range AS company_size,
              c.website_url AS company_website, c.linkedin_url AS company_linkedin
       FROM discover_people p
-      LEFT JOIN discover_companies c ON c.source_id = p.company_id OR (c.source_id IS NULL AND c.id::text = p.company_id)
-      WHERE p.id = $1
+      LEFT JOIN discover_companies c ON c.id = p.company_id
+      WHERE p.id = $1::uuid
     `, [id] as never[]);
 
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                c.domain AS company_domain, c.industry AS company_industry, c.size_range AS company_size
         FROM discover_people p2
         LEFT JOIN discover_companies c ON c.id = p2.company_id
-        WHERE p2.company_id = $1 AND p2.id <> $2
+        WHERE p2.company_id = $1::uuid AND p2.id <> $2::uuid
         ORDER BY p2.seniority, p2.created_at
         LIMIT 6
       `, [person.company_id, id] as never[]);

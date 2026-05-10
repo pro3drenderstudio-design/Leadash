@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       leadsDb.unsafe(`
         SELECT COUNT(*) AS total
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.source_id = p.company_id OR (c.source_id IS NULL AND c.id::text = p.company_id)
+        LEFT JOIN discover_companies c ON c.id = p.company_id
         ${where}
       `, params as never[]),
       leadsDb.unsafe(`
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
           c.domain AS company_domain,
           c.industry AS company_industry, c.size_range AS company_size
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.source_id = p.company_id OR (c.source_id IS NULL AND c.id::text = p.company_id)
+        LEFT JOIN discover_companies c ON c.id = p.company_id
         ${where}
         ORDER BY p.created_at DESC
         LIMIT $${i} OFFSET $${i + 1}

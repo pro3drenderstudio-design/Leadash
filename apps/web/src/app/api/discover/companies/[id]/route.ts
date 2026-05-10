@@ -28,36 +28,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     type CompanyRow = {
-      id: string; source_id: string | null; name: string; domain: string | null; website_url: string | null;
+      id: string; name: string; domain: string | null; website_url: string | null;
       linkedin_url: string | null; industry: string | null; size_range: string | null;
       country: string | null; state: string | null; city: string | null;
     };
 
-    // Accept either UUID (companies tab) or Apollo source_id (person drawer)
     const companies = await leadsDb.unsafe<CompanyRow[]>(
-      `SELECT id, source_id, name, domain, website_url, linkedin_url, industry, size_range, country, state, city
-       FROM discover_companies WHERE id::text = $1 OR source_id = $1`,
+      `SELECT id, name, domain, website_url, linkedin_url, industry, size_range, country, state, city
+       FROM discover_companies WHERE id = $1::uuid`,
       [id] as never[]
     );
     if (!companies.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const company = companies[0];
-    // Apollo people store the hex source_id in company_id; demo people store the UUID
-    const peopleKey = company.source_id ?? company.id;
 
     const [countRows, peopleRows] = await Promise.all([
       leadsDb.unsafe(
-        `SELECT COUNT(*) AS total FROM discover_people WHERE company_id = $1`,
-        [peopleKey] as never[]
+        `SELECT COUNT(*) AS total FROM discover_people WHERE company_id = $1::uuid`,
+        [company.id] as never[]
       ),
       leadsDb.unsafe(`
         SELECT id, first_name, last_name, title, seniority, department,
                linkedin_url, email, email_status, phone,
                country, state, city, company_name, company_id
         FROM discover_people
-        WHERE company_id = $1
+        WHERE company_id = $1::uuid
         ORDER BY seniority, created_at
         LIMIT $2 OFFSET $3
-      `, [peopleKey, limit, offset] as never[]),
+      `, [company.id, limit, offset] as never[]),
     ]);
 
     const people_total = parseInt((countRows[0] as unknown as { total: string }).total, 10);
