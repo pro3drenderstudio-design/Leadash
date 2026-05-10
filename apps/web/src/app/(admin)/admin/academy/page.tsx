@@ -35,6 +35,9 @@ interface DiscountCode {
   discount_value: number; max_uses: number | null; uses_count: number;
   expires_at: string | null; is_active: boolean;
 }
+interface WorkspaceOption {
+  id: string; name: string;
+}
 
 type Tab = "builder" | "cohorts" | "enrollments" | "codes" | "products" | "access";
 type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
@@ -71,7 +74,8 @@ export default function AdminAcademyPage() {
 
   // ── Access / coming-soon state ─────────────────────────────────────────────
   const [comingSoon, setComingSoon]         = useState<{ enabled: boolean; beta_workspaces: string[] }>({ enabled: true, beta_workspaces: [] });
-  const [betaInput,  setBetaInput]          = useState("");
+  const [allWorkspaces, setAllWorkspaces]   = useState<WorkspaceOption[]>([]);
+  const [wsSearch,     setWsSearch]         = useState("");
   const [accessSaving, setAccessSaving]     = useState(false);
 
   const notify = (text: string, ok = true) => {
@@ -84,16 +88,18 @@ export default function AdminAcademyPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [adminRes, codesRes, accessRes] = await Promise.all([
+      const [adminRes, codesRes, accessRes, wsRes] = await Promise.all([
         fetch("/api/admin/academy").then(r => r.json()),
         fetch("/api/admin/academy/discount-codes").then(r => r.json()),
         fetch("/api/admin/academy/coming-soon").then(r => r.json()),
+        fetch("/api/admin/workspaces?page=1").then(r => r.json()),
       ]);
       setProducts(adminRes.products ?? []);
       setCohorts(adminRes.cohorts ?? []);
       setEnrollments(adminRes.enrollments ?? []);
       setCodes(codesRes.codes ?? []);
       if (accessRes.setting) setComingSoon(accessRes.setting);
+      if (wsRes.workspaces) setAllWorkspaces(wsRes.workspaces.map((w: WorkspaceOption) => ({ id: w.id, name: w.name })));
 
       if (!selectedProduct && adminRes.products?.length) {
         setSelectedProduct(adminRes.products[0].id);
@@ -121,11 +127,10 @@ export default function AdminAcademyPage() {
     setAccessSaving(false);
   }
 
-  function addBetaWorkspace() {
-    const id = betaInput.trim();
+  function addBetaWorkspace(id: string) {
     if (!id || comingSoon.beta_workspaces.includes(id)) return;
     saveComingSoon({ beta_workspaces: [...comingSoon.beta_workspaces, id] });
-    setBetaInput("");
+    setWsSearch("");
   }
 
   function removeBetaWorkspace(id: string) {
@@ -933,48 +938,70 @@ export default function AdminAcademyPage() {
               <h3 className="font-semibold text-white mb-1">Beta Access</h3>
               <p className="text-xs text-gray-400 mb-4">
                 These workspaces bypass the Coming Soon overlay regardless of the global toggle.
-                Paste a workspace ID to add it.
+                You can exempt multiple workspaces.
               </p>
 
-              <div className="flex gap-2 mb-4">
-                <input
-                  value={betaInput}
-                  onChange={e => setBetaInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && addBetaWorkspace()}
-                  placeholder="Paste workspace ID…"
-                  className="input-base flex-1 font-mono text-xs"
-                />
-                <button
-                  onClick={addBetaWorkspace}
-                  disabled={!betaInput.trim() || accessSaving}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 py-1.5 rounded-lg text-sm font-medium">
-                  Add
-                </button>
-              </div>
+              {/* Searchable workspace dropdown */}
+              {(() => {
+                const available = allWorkspaces.filter(
+                  w => !comingSoon.beta_workspaces.includes(w.id) &&
+                    (w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
+                     w.id.toLowerCase().includes(wsSearch.toLowerCase()))
+                );
+                return (
+                  <div className="relative mb-4">
+                    <input
+                      value={wsSearch}
+                      onChange={e => setWsSearch(e.target.value)}
+                      placeholder="Search workspaces to exempt…"
+                      className="input-base w-full"
+                    />
+                    {wsSearch && available.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                        {available.slice(0, 20).map(w => (
+                          <button
+                            key={w.id}
+                            onClick={() => addBetaWorkspace(w.id)}
+                            disabled={accessSaving}
+                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center justify-between gap-3">
+                            <span className="text-gray-200 truncate">{w.name}</span>
+                            <span className="text-gray-500 text-xs font-mono shrink-0">{w.id.slice(0, 8)}…</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {wsSearch && available.length === 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-500">
+                        No matching workspaces
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
+              {/* Exempted list */}
               {comingSoon.beta_workspaces.length === 0 ? (
-                <p className="text-xs text-gray-600">No beta workspaces yet.</p>
+                <p className="text-xs text-gray-600">No workspaces exempted yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {comingSoon.beta_workspaces.map(id => (
-                    <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-                      <span className="font-mono text-xs text-gray-300">{id}</span>
-                      <button
-                        onClick={() => removeBetaWorkspace(id)}
-                        className="text-gray-500 hover:text-red-400 text-xs ml-4">
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                  {comingSoon.beta_workspaces.map(id => {
+                    const ws = allWorkspaces.find(w => w.id === id);
+                    return (
+                      <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2.5">
+                        <div>
+                          <p className="text-sm text-gray-200">{ws?.name ?? "Unknown workspace"}</p>
+                          <p className="font-mono text-[10px] text-gray-500">{id}</p>
+                        </div>
+                        <button
+                          onClick={() => removeBetaWorkspace(id)}
+                          className="text-gray-500 hover:text-red-400 text-xs ml-4 shrink-0">
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-
-              <div className="mt-5 pt-4 border-t border-gray-800">
-                <p className="text-xs text-gray-500 mb-2">Where to find your workspace ID:</p>
-                <p className="text-xs text-gray-600 font-mono bg-gray-800 rounded px-3 py-2">
-                  Supabase → workspaces table → id column
-                </p>
-              </div>
             </div>
 
           </div>
