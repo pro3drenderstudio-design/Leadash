@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { wsGet } from "@/lib/workspace/client";
 
 function ComingSoonOverlay() {
   return (
@@ -54,16 +53,10 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   const [accessible, setAccessible] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Retry once in case workspace ID lands in localStorage just after mount
-    const check = (attempt = 0) => {
-      wsGet<{ accessible: boolean }>("/api/academy/access")
-        .then(d => setAccessible(d.accessible ?? false))
-        .catch(() => {
-          if (attempt === 0) setTimeout(() => check(1), 800);
-          else setAccessible(false); // fail closed — show overlay when uncertain
-        });
-    };
-    check();
+    fetch("/api/academy/access", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setAccessible(d.accessible === true))
+      .catch(() => setAccessible(false));
   }, []);
 
   // Still checking — show nothing (avoids flash)

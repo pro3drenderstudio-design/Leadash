@@ -1,30 +1,41 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireWorkspace } from "@/lib/api/workspace";
-import { createAdminClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 /** GET /api/academy/access
- *  Returns whether the current workspace can access the Academy.
- *  accessible = true when coming_soon is disabled OR workspace is in beta list. */
-export async function GET(req: NextRequest) {
-  const auth = await requireWorkspace(req);
-  if (!auth.ok) return auth.res;
-
-  const { workspaceId } = auth;
+ *  No workspace header required — reads the user's session from cookies.
+ *  accessible = true when coming_soon is disabled OR any of the user's workspaces is in the beta list. */
+export async function GET() {
   const db = createAdminClient();
 
-  const { data } = await db
+  const { data: settingRow } = await db
     .from("admin_settings")
     .select("value")
     .eq("key", "academy_coming_soon")
     .maybeSingle();
 
-  // If no setting found, default to coming soon (closed)
-  if (!data) return NextResponse.json({ accessible: false });
+  // No setting row → coming soon is on by default
+  if (!settingRow) return NextResponse.json({ accessible: false });
 
-  const setting = data.value as { enabled?: boolean; beta_workspaces?: string[] };
+  const setting  = settingRow.value as { enabled?: boolean; beta_workspaces?: string[] };
   const enabled  = setting.enabled  ?? false;
   const betaList = setting.beta_workspaces ?? [];
 
-  const accessible = !enabled || betaList.includes(workspaceId);
-  return NextResponse.json({ accessible, coming_soon_enabled: enabled, beta_workspaces: betaList });
+  // Coming soon is off → everyone can access
+  if (!enabled) return NextResponse.json({ accessible: true });
+
+  // Coming soon is on → check if the user has any workspace in the beta list
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return NextResponse.json({ accessible: false });
+
+  const { data: memberships } = await db
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", user.id);
+
+  const userWorkspaceIds = (memberships ?? []).map((m: { workspace_id: string }) => m.workspace_id);
+  const accessible = userWorkspaceIds.some(id => betaList.includes(id));
+
+  return NextResponse.json({ accessible });
 }
