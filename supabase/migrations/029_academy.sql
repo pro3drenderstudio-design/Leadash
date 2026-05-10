@@ -94,10 +94,10 @@ INSERT INTO academy_products (id, name, description, price_ngn, credits_grant, l
 VALUES
   ('challenge', '5-Day Foreign Job Challenge',
    'Land your first foreign job or client in 5 days using real outreach.',
-   1000000, 4000, 1),
+   10000, 4000, 1),
   ('academy', 'Leadash $10k Academy',
    '30-day sprint to a working outreach machine that lands foreign clients.',
-   13500000, 15000, 4)
+   135000, 15000, 4)
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed challenge modules
