@@ -5,6 +5,7 @@ import {
   COMPANY_SIZE_OPTIONS, FUNDING_STAGE_OPTIONS,
   EMPLOYEE_RANGE_OPTIONS, REVENUE_RANGE_OPTIONS,
 } from "@/types/discover";
+import { wsFetch } from "@/lib/workspace/client";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,148 @@ function IncludeExcludeInput({
   );
 }
 
+// ── Location autocomplete with include/exclude ────────────────────────────────
+
+type LocationResult = { value: string; type: "country" | "state" | "city" };
+
+const LOC_TYPE_ICON: Record<string, string> = {
+  country: "🌍",
+  state:   "📍",
+  city:    "🏙️",
+};
+const LOC_TYPE_LABEL: Record<string, string> = {
+  country: "Country",
+  state:   "State / Region",
+  city:    "City",
+};
+
+function LocationIncludeExclude({
+  includes, excludes,
+  onAddInclude, onAddExclude, onRemoveInclude, onRemoveExclude,
+}: {
+  includes: string[]; excludes: string[];
+  onAddInclude: (v: string) => void; onAddExclude: (v: string) => void;
+  onRemoveInclude: (v: string) => void; onRemoveExclude: (v: string) => void;
+}) {
+  const [query, setQuery]   = useState("");
+  const [results, setResults] = useState<LocationResult[]>([]);
+  const [open, setOpen]     = useState(false);
+  const [mode, setMode]     = useState<"include" | "exclude">("include");
+  const [loading, setLoading] = useState(false);
+  const ref  = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  function search(val: string) {
+    setQuery(val);
+    if (timer.current) clearTimeout(timer.current);
+    if (!val.trim()) { setResults([]); setOpen(false); return; }
+    timer.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await wsFetch(`/api/discover/locations?q=${encodeURIComponent(val)}`);
+        const data = await res.json() as { results?: LocationResult[] };
+        const all  = includes.concat(excludes);
+        setResults((data.results ?? []).filter(r => !all.includes(r.value)));
+        setOpen(true);
+      } catch { /* ignore */ }
+      setLoading(false);
+    }, 220);
+  }
+
+  function select(loc: LocationResult) {
+    if (mode === "include") onAddInclude(loc.value);
+    else                    onAddExclude(loc.value);
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+  }
+
+  // Group results by type for Apollo-style sectioned list
+  const grouped = ["country", "state", "city"].reduce<Record<string, LocationResult[]>>(
+    (acc, t) => { acc[t] = results.filter(r => r.type === t); return acc; }, {}
+  );
+  const hasResults = results.length > 0;
+
+  return (
+    <div className="space-y-2">
+      {/* Include / Exclude toggle */}
+      <div className="flex rounded overflow-hidden border border-white/10 text-[10px] font-semibold">
+        <button onClick={() => setMode("include")} className={`flex-1 py-1 transition-colors ${mode === "include" ? "bg-orange-500/20 text-orange-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><PlusIcon /> Include</span>
+        </button>
+        <button onClick={() => setMode("exclude")} className={`flex-1 py-1 transition-colors border-l border-white/10 ${mode === "exclude" ? "bg-rose-500/20 text-rose-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><MinusIcon /> Exclude</span>
+        </button>
+      </div>
+
+      {/* Search input + dropdown */}
+      <div ref={ref} className="relative">
+        <div className="relative">
+          <input
+            value={query}
+            onChange={e => search(e.target.value)}
+            onFocus={() => { if (results.length) setOpen(true); }}
+            placeholder="Search countries, states, cities…"
+            className={`w-full bg-white/5 border rounded px-2.5 py-1.5 pr-7 text-[11px] text-white/70 placeholder-white/20 focus:outline-none transition-colors ${
+              mode === "include" ? "border-white/10 focus:border-orange-500/40" : "border-white/10 focus:border-rose-500/40"
+            }`}
+          />
+          {loading && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              <svg className="w-3 h-3 text-white/30 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            </div>
+          )}
+        </div>
+
+        {open && hasResults && (
+          <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-[#191919] border border-white/10 rounded-md shadow-2xl overflow-hidden">
+            {["country", "state", "city"].map(type => {
+              const group = grouped[type];
+              if (!group?.length) return null;
+              return (
+                <div key={type}>
+                  <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-white/25 bg-white/[0.02] border-b border-white/[0.05]">
+                    {LOC_TYPE_ICON[type]} {LOC_TYPE_LABEL[type]}
+                  </div>
+                  {group.map(loc => (
+                    <button
+                      key={loc.value}
+                      onClick={() => select(loc)}
+                      className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-white/8 transition-colors flex items-center gap-2 ${
+                        mode === "include" ? "text-white/60 hover:text-orange-200" : "text-white/60 hover:text-rose-200"
+                      }`}
+                    >
+                      <span className="flex-1 truncate">{loc.value}</span>
+                      <span className={`text-[9px] px-1 py-0.5 rounded flex-shrink-0 ${
+                        mode === "include" ? "bg-orange-500/15 text-orange-400" : "bg-rose-500/15 text-rose-400"
+                      }`}>
+                        {mode === "include" ? "+" : "−"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <TagArea includes={includes} excludes={excludes} onRemoveInclude={onRemoveInclude} onRemoveExclude={onRemoveExclude} />
+    </div>
+  );
+}
+
 // ── Searchable multi-select with include/exclude ──────────────────────────────
 
 function SearchableIncludeExclude({
@@ -255,19 +398,21 @@ const APOLLO_EMPLOYEE_RANGES = [
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface PeopleFilters {
-  keyword:          string;
-  titleIncludes:    string[];
-  titleExcludes:    string[];
-  seniorities:      string[];
-  departments:      string[];
-  locationIncludes: string[];
-  locationExcludes: string[];
-  companyIncludes:  string[];
-  companyExcludes:  string[];
-  industryIncludes: string[];
-  industryExcludes: string[];
-  companySizes:     string[];
-  emailStatus:      "any" | "has_email" | "verified";
+  keyword:              string;
+  titleIncludes:        string[];
+  titleExcludes:        string[];
+  seniorities:          string[];
+  departments:          string[];
+  locationIncludes:     string[];
+  locationExcludes:     string[];
+  companyIncludes:      string[];
+  companyExcludes:      string[];
+  industryIncludes:     string[];
+  industryExcludes:     string[];
+  companySizes:         string[];
+  emailStatus:          "any" | "has_email" | "verified";
+  companyKeywordIncludes: string[];
+  companyKeywordExcludes: string[];
 }
 
 export interface CompanyFilters {
@@ -281,6 +426,8 @@ export interface CompanyFilters {
   coEmployeeRange:    { min: number; max: number } | null;
   coRevenueRange:     { min: number; max: number } | null;
   coHasPeople:        boolean;
+  coKeywordIncludes:  string[];
+  coKeywordExcludes:  string[];
 }
 
 export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
@@ -288,12 +435,14 @@ export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   departments: [], locationIncludes: [], locationExcludes: [],
   companyIncludes: [], companyExcludes: [], industryIncludes: [],
   industryExcludes: [], companySizes: [], emailStatus: "has_email",
+  companyKeywordIncludes: [], companyKeywordExcludes: [],
 };
 
 export const DEFAULT_COMPANY_FILTERS: CompanyFilters = {
   coKeyword: "", coLocationIncludes: [], coLocationExcludes: [],
   coIndustryIncludes: [], coIndustryExcludes: [], coSizes: [],
   coFundingStages: [], coEmployeeRange: null, coRevenueRange: null, coHasPeople: false,
+  coKeywordIncludes: [], coKeywordExcludes: [],
 };
 
 // ── Revenue ranges ────────────────────────────────────────────────────────────
@@ -340,6 +489,7 @@ export function PeopleSidebar({
   const indCount      = filters.industryIncludes.length + filters.industryExcludes.length;
   const sizeCount     = filters.companySizes.length;
   const emailCount    = filters.emailStatus !== "has_email" ? 1 : 0;
+  const kwCount       = filters.companyKeywordIncludes.length + filters.companyKeywordExcludes.length;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -414,11 +564,9 @@ export function PeopleSidebar({
 
       {/* Location */}
       <FilterSection title="Location" activeCount={locCount}>
-        <IncludeExcludeInput
+        <LocationIncludeExclude
           includes={filters.locationIncludes}
           excludes={filters.locationExcludes}
-          placeholder="Country, state, or city…"
-          excludePlaceholder="Locations to exclude…"
           onAddInclude={v => addInc("locationIncludes", v)}
           onAddExclude={v => addInc("locationExcludes", v)}
           onRemoveInclude={v => rmInc("locationIncludes", v)}
@@ -436,7 +584,7 @@ export function PeopleSidebar({
       </FilterSection>
 
       {/* Industry */}
-      <FilterSection title="Industry & Keywords" activeCount={indCount}>
+      <FilterSection title="Industry" activeCount={indCount}>
         <SearchableIncludeExclude
           options={INDUSTRY_OPTIONS}
           includes={filters.industryIncludes}
@@ -446,6 +594,21 @@ export function PeopleSidebar({
           onAddExclude={v => addInc("industryExcludes", v)}
           onRemoveInclude={v => rmInc("industryIncludes", v)}
           onRemoveExclude={v => rmInc("industryExcludes", v)}
+        />
+      </FilterSection>
+
+      {/* Company Keywords */}
+      <FilterSection title="Company Keywords" activeCount={kwCount}>
+        <p className="text-[10px] text-white/25 mb-2 leading-relaxed">Filter by LinkedIn specialties — e.g. &quot;floor plans&quot;, &quot;saas&quot;, &quot;solar&quot;</p>
+        <IncludeExcludeInput
+          includes={filters.companyKeywordIncludes}
+          excludes={filters.companyKeywordExcludes}
+          placeholder="e.g. homebuilder, floor plans…"
+          excludePlaceholder="Keywords to exclude…"
+          onAddInclude={v => addInc("companyKeywordIncludes", v)}
+          onAddExclude={v => addInc("companyKeywordExcludes", v)}
+          onRemoveInclude={v => rmInc("companyKeywordIncludes", v)}
+          onRemoveExclude={v => rmInc("companyKeywordExcludes", v)}
         />
       </FilterSection>
 
@@ -480,6 +643,7 @@ export function CompanySidebar({
   const fundCount   = filters.coFundingStages.length;
   const revCount    = filters.coRevenueRange ? 1 : 0;
   const hasPeopleCount = filters.coHasPeople ? 1 : 0;
+  const kwCount     = filters.coKeywordIncludes.length + filters.coKeywordExcludes.length;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -487,11 +651,9 @@ export function CompanySidebar({
 
       {/* Account Location */}
       <FilterSection title="Account Location" activeCount={locCount}>
-        <IncludeExcludeInput
+        <LocationIncludeExclude
           includes={filters.coLocationIncludes}
           excludes={filters.coLocationExcludes}
-          placeholder="Country, state, or city…"
-          excludePlaceholder="Locations to exclude…"
           onAddInclude={v => addInc("coLocationIncludes", v)}
           onAddExclude={v => addInc("coLocationExcludes", v)}
           onRemoveInclude={v => rmInc("coLocationIncludes", v)}
@@ -509,7 +671,7 @@ export function CompanySidebar({
       </FilterSection>
 
       {/* Industry */}
-      <FilterSection title="Industry & Keywords" activeCount={indCount}>
+      <FilterSection title="Industry" activeCount={indCount}>
         <SearchableIncludeExclude
           options={INDUSTRY_OPTIONS}
           includes={filters.coIndustryIncludes}
@@ -519,6 +681,21 @@ export function CompanySidebar({
           onAddExclude={v => addInc("coIndustryExcludes", v)}
           onRemoveInclude={v => rmInc("coIndustryIncludes", v)}
           onRemoveExclude={v => rmInc("coIndustryExcludes", v)}
+        />
+      </FilterSection>
+
+      {/* Keywords */}
+      <FilterSection title="Keywords" activeCount={kwCount}>
+        <p className="text-[10px] text-white/25 mb-2 leading-relaxed">LinkedIn specialties — e.g. &quot;homebuilder&quot;, &quot;floor plans&quot;, &quot;solar&quot;</p>
+        <IncludeExcludeInput
+          includes={filters.coKeywordIncludes}
+          excludes={filters.coKeywordExcludes}
+          placeholder="e.g. saas, quick move-ins…"
+          excludePlaceholder="Keywords to exclude…"
+          onAddInclude={v => addInc("coKeywordIncludes", v)}
+          onAddExclude={v => addInc("coKeywordExcludes", v)}
+          onRemoveInclude={v => rmInc("coKeywordIncludes", v)}
+          onRemoveExclude={v => rmInc("coKeywordExcludes", v)}
         />
       </FilterSection>
 
@@ -581,19 +758,19 @@ export function CompanySidebar({
 // ── AI filter bar ─────────────────────────────────────────────────────────────
 
 const PEOPLE_QUICK_FILTERS = [
-  { label: "CTOs in the US",       filters: { titleIncludes: ["CTO", "Chief Technology Officer"], locationIncludes: ["United States"] } },
-  { label: "Sales VPs",            filters: { titleIncludes: ["VP Sales", "Vice President Sales"], seniorities: ["vp"] } },
-  { label: "Founders & CEOs",      filters: { seniorities: ["founder", "owner", "c_suite"], titleIncludes: ["CEO", "Founder"] } },
-  { label: "Tech companies",       filters: { industryIncludes: ["Technology", "Software", "SaaS"] } },
-  { label: "Marketing Directors",  filters: { titleIncludes: ["Marketing Director", "Director of Marketing"], departments: ["marketing"] } },
+  { label: "CTOs in the US",        filters: { titleIncludes: ["CTO", "Chief Technology Officer"], locationIncludes: ["United States"] } },
+  { label: "Sales VPs",             filters: { titleIncludes: ["VP Sales", "Vice President Sales"], seniorities: ["vp"] } },
+  { label: "Founders & CEOs",       filters: { seniorities: ["founder", "owner", "c_suite"], titleIncludes: ["CEO", "Founder"] } },
+  { label: "Tech leads",            filters: { industryIncludes: ["Information Technology & Services", "Computer Software"] } },
+  { label: "Marketing Directors",   filters: { titleIncludes: ["Marketing Director", "Director of Marketing"], departments: ["marketing"] } },
 ];
 
 const COMPANY_QUICK_FILTERS = [
-  { label: "SaaS companies",       filters: { coIndustryIncludes: ["SaaS", "Software"] } },
-  { label: "Series A+",            filters: { coFundingStages: ["Series A", "Series B", "Series C"] } },
-  { label: "Mid-size (51-500)",    filters: { coSizes: ["51-200", "201-500"] } },
-  { label: "US companies",         filters: { coLocationIncludes: ["United States"] } },
-  { label: "Fintech",              filters: { coIndustryIncludes: ["Financial Services", "Banking"] } },
+  { label: "Software companies",    filters: { coIndustryIncludes: ["Computer Software", "Internet"] } },
+  { label: "Series A+",             filters: { coFundingStages: ["Series A", "Series B", "Series C"] } },
+  { label: "Mid-size (51–500)",     filters: { coSizes: ["51-200", "201-500"] } },
+  { label: "US companies",          filters: { coLocationIncludes: ["United States"] } },
+  { label: "Finance & Banking",     filters: { coIndustryIncludes: ["Financial Services", "Banking"] } },
 ];
 
 function AiFilterBar({
@@ -601,24 +778,32 @@ function AiFilterBar({
 }: { mode: "people" | "companies"; onApply: (f: Partial<PeopleFilters & CompanyFilters>) => void }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const quickFilters = mode === "people" ? PEOPLE_QUICK_FILTERS : COMPANY_QUICK_FILTERS;
 
   async function handleAi() {
     if (!query.trim()) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/discover/ai-filter", {
+      const res = await wsFetch("/api/discover/ai-filter", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ query, mode }),
       });
       const data = await res.json() as Record<string, unknown>;
-      if (data.filters) onApply(data.filters as Partial<PeopleFilters & CompanyFilters>);
-    } catch { /* ignore */ }
+      if (!res.ok) {
+        setError((data.error as string) ?? "AI filter failed");
+      } else if (data.filters && typeof data.filters === "object") {
+        onApply(data.filters as Partial<PeopleFilters & CompanyFilters>);
+        setQuery("");
+      } else {
+        setError("No filters returned");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error");
+    }
     setLoading(false);
-    setQuery("");
   }
 
   return (
@@ -641,9 +826,12 @@ function AiFilterBar({
           {loading ? "…" : "Go"}
         </button>
       </div>
+      {error && (
+        <p className="text-[10px] text-rose-400 px-0.5">{error}</p>
+      )}
       <div className="flex flex-wrap gap-1">
         {quickFilters.map(qf => (
-          <button key={qf.label} onClick={() => onApply(qf.filters as Partial<PeopleFilters & CompanyFilters>)}
+          <button key={qf.label} onClick={() => { setError(null); onApply(qf.filters as Partial<PeopleFilters & CompanyFilters>); }}
             className="px-2 py-0.5 rounded-full bg-white/6 hover:bg-white/10 text-[10px] text-white/45 hover:text-white/70 transition-colors border border-white/8">
             {qf.label}
           </button>

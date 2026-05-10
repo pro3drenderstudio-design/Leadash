@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
   const locationIncludes = csv(p.get("location_include"));
   const locationExcludes = csv(p.get("location_exclude"));
   const fundingStages    = csv(p.get("funding_stage"));
+  const keywordIncludes  = csv(p.get("keyword_include"));
+  const keywordExcludes  = csv(p.get("keyword_exclude"));
   const employeeMin      = parseInt(p.get("employee_min") || "0") || 0;
   const employeeMax      = parseInt(p.get("employee_max") || "0") || 0;
   const revenueMin       = parseInt(p.get("revenue_min") || "0") || 0;
@@ -88,15 +90,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (keyword) {
-      conditions.push(`(c.name ILIKE $${i} OR c.domain ILIKE $${i})`);
+      conditions.push(`(c.name ILIKE $${i} OR c.domain ILIKE $${i} OR c.description ILIKE $${i} OR c.keywords ILIKE $${i})`);
       params.push(`%${keyword}%`); i++;
     }
+    addOr("c.keywords",   keywordIncludes, true);
+    addNone("c.keywords", keywordExcludes, true);
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
     addOr("c.size_range",    companySizes,     false);
     addLocationOr(locationIncludes);
     addLocationNone(locationExcludes);
-    addOr("c.funding_stage", fundingStages,    false);
+    addOr("c.funding_stage", fundingStages,    true);
     if (employeeMin > 0) { conditions.push(`c.employee_count >= $${i}`); params.push(employeeMin); i++; }
     if (employeeMax > 0) { conditions.push(`c.employee_count <= $${i}`); params.push(employeeMax); i++; }
     if (revenueMin  > 0) { conditions.push(`c.revenue_usd >= $${i}`);   params.push(revenueMin);  i++; }
@@ -106,6 +110,20 @@ export async function GET(req: NextRequest) {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    // Check which optional columns exist (keywords was added via backfill; description was always there)
+    const colCheck = await leadsDb.unsafe<{ column_name: string }[]>(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='discover_companies' AND column_name IN ('keywords','description')`,
+      [] as never[]
+    );
+    const existingCols = new Set(colCheck.map(r => r.column_name));
+    const descSql  = existingCols.has("description") ? "c.description," : "NULL::text AS description,";
+    const kwSql    = existingCols.has("keywords")    ? "c.keywords,"    : "NULL::text AS keywords,";
+
+    // keyword filter on c.keywords only applies when column exists
+    if (!existingCols.has("keywords") && conditions.some(c => c.includes("c.keywords"))) {
+      return NextResponse.json({ results: [], total: 0, page, limit }, { status: 200 });
+    }
 
     const [countRows, rows] = await Promise.all([
       leadsDb.unsafe(`
@@ -117,6 +135,8 @@ export async function GET(req: NextRequest) {
           c.industry, c.size_range, c.employee_count, c.revenue_usd,
           c.funding_stage, c.funding_total,
           c.country, c.state, c.city,
+          ${descSql}
+          ${kwSql}
           COUNT(p.id)::int AS people_count
         FROM discover_companies c
         LEFT JOIN discover_people p ON p.company_id = c.id
@@ -144,6 +164,8 @@ export async function GET(req: NextRequest) {
       country:       r.country       as string | null,
       state:         r.state         as string | null,
       city:          r.city          as string | null,
+      description:   r.description   as string | null,
+      keywords:      r.keywords      as string | null,
       people_count:  (r.people_count as number) || 0,
     }));
 

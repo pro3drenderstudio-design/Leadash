@@ -377,6 +377,18 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
           {!!data.size_range && <span className="text-[10px] text-white/40">{data.size_range as string} employees</span>}
           {!!data.country && <span className="text-[10px] text-white/40">{([data.city as string | null, data.country as string | null]).filter(Boolean).join(", ")}</span>}
         </div>
+        {!!(data.description as string | null) && (
+          <p className="mt-3 text-[11px] text-white/45 leading-relaxed line-clamp-4">{data.description as string}</p>
+        )}
+        {!!(data.keywords as string | null) && (
+          <div className="flex flex-wrap gap-1 mt-3">
+            {(data.keywords as string).split(",").slice(0, 16).map(kw => kw.trim()).filter(Boolean).map(kw => (
+              <span key={kw} className="px-1.5 py-0.5 rounded bg-white/6 border border-white/10 text-[9px] text-white/40">
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-5 py-3">
@@ -455,6 +467,7 @@ export default function DiscoverPage() {
     peopleFilters.companyIncludes.length + peopleFilters.companyExcludes.length +
     peopleFilters.industryIncludes.length + peopleFilters.industryExcludes.length +
     peopleFilters.companySizes.length +
+    peopleFilters.companyKeywordIncludes.length + peopleFilters.companyKeywordExcludes.length +
     (peopleFilters.emailStatus !== "has_email" ? 1 : 0);
 
   const activeCoFilterCount =
@@ -462,6 +475,7 @@ export default function DiscoverPage() {
     companyFilters.coLocationIncludes.length + companyFilters.coLocationExcludes.length +
     companyFilters.coIndustryIncludes.length + companyFilters.coIndustryExcludes.length +
     companyFilters.coSizes.length + companyFilters.coFundingStages.length +
+    companyFilters.coKeywordIncludes.length + companyFilters.coKeywordExcludes.length +
     (companyFilters.coEmployeeRange ? 1 : 0) + (companyFilters.coRevenueRange ? 1 : 0) +
     (companyFilters.coHasPeople ? 1 : 0);
 
@@ -492,7 +506,9 @@ export default function DiscoverPage() {
       if (f.companyExcludes.length)  params.set("company_exclude",  f.companyExcludes.join(","));
       if (f.industryIncludes.length) params.set("industry_include", f.industryIncludes.join(","));
       if (f.industryExcludes.length) params.set("industry_exclude", f.industryExcludes.join(","));
-      if (f.companySizes.length)     params.set("company_size",    f.companySizes.join(","));
+      if (f.companySizes.length)             params.set("company_size",       f.companySizes.join(","));
+      if (f.companyKeywordIncludes.length)   params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
+      if (f.companyKeywordExcludes.length)   params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
       params.set("email_status", f.emailStatus);
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
@@ -513,7 +529,9 @@ export default function DiscoverPage() {
       if (f.coIndustryIncludes.length) params.set("industry_include", f.coIndustryIncludes.join(","));
       if (f.coIndustryExcludes.length) params.set("industry_exclude", f.coIndustryExcludes.join(","));
       if (f.coSizes.length)            params.set("company_size",    f.coSizes.join(","));
-      if (f.coFundingStages.length)    params.set("funding_stage",   f.coFundingStages.join(","));
+      if (f.coFundingStages.length)    params.set("funding_stage",    f.coFundingStages.join(","));
+      if (f.coKeywordIncludes.length)  params.set("keyword_include",  f.coKeywordIncludes.join(","));
+      if (f.coKeywordExcludes.length)  params.set("keyword_exclude",  f.coKeywordExcludes.join(","));
       if (f.coEmployeeRange?.min)      params.set("employee_min",    String(f.coEmployeeRange.min));
       if (f.coEmployeeRange?.max)      params.set("employee_max",    String(f.coEmployeeRange.max));
       if (f.coRevenueRange?.min)       params.set("revenue_min",     String(f.coRevenueRange.min));

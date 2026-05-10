@@ -31,10 +31,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       id: string; name: string; domain: string | null; website_url: string | null;
       linkedin_url: string | null; industry: string | null; size_range: string | null;
       country: string | null; state: string | null; city: string | null;
+      description: string | null; keywords: string | null;
     };
 
+    const colCheck = await leadsDb.unsafe<{ column_name: string }[]>(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='discover_companies' AND column_name IN ('keywords','description')`,
+      [] as never[]
+    );
+    const existingCols = new Set(colCheck.map(r => r.column_name));
+    const extras = [
+      existingCols.has("description") ? "description" : "NULL::text AS description",
+      existingCols.has("keywords")    ? "keywords"    : "NULL::text AS keywords",
+    ].join(", ");
+
     const companies = await leadsDb.unsafe<CompanyRow[]>(
-      `SELECT id, name, domain, website_url, linkedin_url, industry, size_range, country, state, city
+      `SELECT id, name, domain, website_url, linkedin_url, industry, size_range, country, state, city, ${extras}
        FROM discover_companies WHERE id = $1::uuid`,
       [id] as never[]
     );

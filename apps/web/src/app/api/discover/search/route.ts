@@ -45,8 +45,10 @@ export async function GET(req: NextRequest) {
   const companyExcludes = csv(p.get("company_exclude"));
   const industryIncludes = csv(p.get("industry_include"));
   const industryExcludes = csv(p.get("industry_exclude"));
-  const companySizes    = csv(p.get("company_size"));
-  const emailStatus     = p.get("email_status") || "has_email";
+  const companySizes           = csv(p.get("company_size"));
+  const companyKeywordIncludes = csv(p.get("co_keyword_include"));
+  const companyKeywordExcludes = csv(p.get("co_keyword_exclude"));
+  const emailStatus            = p.get("email_status") || "has_email";
   const page            = Math.max(1, parseInt(p.get("page") || "1"));
   const limit           = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
   const offset          = (page - 1) * limit;
@@ -119,6 +121,8 @@ export async function GET(req: NextRequest) {
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
     addOr("c.size_range", companySizes, false);
+    addOr("c.keywords",  companyKeywordIncludes, true);
+    addNone("c.keywords", companyKeywordExcludes, true);
 
     if (emailStatus === "has_email") {
       conditions.push(`p.email IS NOT NULL AND p.email <> ''`);

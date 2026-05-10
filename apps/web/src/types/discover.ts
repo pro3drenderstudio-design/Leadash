@@ -56,11 +56,13 @@ export interface DiscoverCompanyResult {
   country:        string | null;
   state:          string | null;
   city:           string | null;
+  description:    string | null;
+  keywords:       string | null;
   people_count:   number;
 }
 
 export const FUNDING_STAGE_OPTIONS = [
-  "Seed", "Angel", "Series A", "Series B", "Series C", "Series D", "Series E+",
+  "Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Series D", "Series E",
   "Private Equity", "IPO", "Acquired",
 ] as const;
 
@@ -100,6 +102,8 @@ export interface DiscoverCompanyDetail {
   country:      string | null;
   state:        string | null;
   city:         string | null;
+  description:  string | null;
+  keywords:     string | null;
   people:       DiscoverResult[];
   people_total: number;
 }
@@ -170,20 +174,21 @@ export const SENIORITY_OPTIONS: { label: string; value: string }[] = [
 ];
 
 export const DEPARTMENT_OPTIONS: { label: string; value: string }[] = [
-  { label: "Sales",             value: "sales" },
-  { label: "Marketing",         value: "marketing" },
-  { label: "Engineering",       value: "engineering" },
-  { label: "Finance",           value: "finance" },
-  { label: "HR",                value: "hr" },
-  { label: "IT",                value: "it" },
-  { label: "Legal",             value: "legal" },
-  { label: "Operations",        value: "operations" },
-  { label: "Product",           value: "product" },
-  { label: "Customer Success",  value: "customer_success" },
-  { label: "Support",           value: "support" },
-  { label: "Design",            value: "design" },
-  { label: "Data & Analytics",  value: "data" },
-  { label: "Other",             value: "other" },
+  { label: "Sales",               value: "sales" },
+  { label: "Marketing",           value: "marketing" },
+  { label: "Engineering",         value: "engineer" },
+  { label: "Finance",             value: "finance" },
+  { label: "Operations",          value: "operations" },
+  { label: "Human Resources",     value: "human resources" },
+  { label: "IT",                  value: "information technology" },
+  { label: "Legal",               value: "legal" },
+  { label: "Design",              value: "design" },
+  { label: "Customer Service",    value: "customer service" },
+  { label: "Consulting",          value: "consulting" },
+  { label: "Management",          value: "manager" },
+  { label: "Business Development",value: "business development" },
+  { label: "Healthcare",          value: "health" },
+  { label: "Education",           value: "education" },
 ];
 
 export const COMPANY_SIZE_OPTIONS = [
@@ -191,24 +196,66 @@ export const COMPANY_SIZE_OPTIONS = [
 ] as const;
 
 export const INDUSTRY_OPTIONS = [
-  "Technology", "Software", "SaaS", "Information Technology",
-  "Financial Services", "Banking", "Insurance", "Investment Management",
-  "Healthcare", "Medical Devices", "Biotechnology", "Pharmaceuticals",
-  "Marketing & Advertising", "Digital Marketing", "Public Relations",
-  "Consulting", "Management Consulting", "Staffing & Recruiting",
-  "Real Estate", "Construction", "Architecture",
-  "Education", "E-Learning",
-  "Media & Entertainment", "Publishing",
-  "Retail", "E-commerce", "Consumer Goods",
-  "Manufacturing", "Industrial", "Automotive",
-  "Legal Services",
-  "Logistics & Supply Chain", "Transportation",
-  "Hospitality", "Food & Beverage",
+  "Information Technology & Services",
+  "Marketing & Advertising",
+  "Construction",
+  "Hospital & Health Care",
+  "Real Estate",
+  "Computer Software",
+  "Financial Services",
+  "Retail",
+  "Education Management",
+  "Accounting",
+  "Management Consulting",
+  "Staffing & Recruiting",
   "Telecommunications",
-  "Energy", "Oil & Gas", "Renewable Energy",
-  "Government", "Non-profit",
-  "Aerospace & Defense",
-  "Agriculture",
+  "Internet",
+  "Automotive",
+  "Health, Wellness & Fitness",
+  "Insurance",
+  "Oil & Energy",
+  "Food & Beverages",
+  "Banking",
+  "Architecture & Planning",
+  "Logistics & Supply Chain",
+  "Legal Services",
+  "Electrical & Electronic Manufacturing",
+  "Consumer Goods",
+  "Facilities Services",
+  "Human Resources",
+  "Wholesale",
+  "Restaurants",
+  "Civil Engineering",
+  "Government Administration",
+  "Pharmaceuticals",
+  "Building Materials",
+  "Medical Practice",
+  "Outsourcing/Offshoring",
+  "Mechanical or Industrial Engineering",
+  "Events Services",
+  "Transportation/Trucking/Railroad",
+  "Environmental Services",
+  "Non-Profit Organization Management",
+  "Media Production",
+  "Professional Training & Coaching",
+  "Design",
+  "Publishing",
+  "Biotechnology",
+  "Semiconductors",
+  "Renewables & Environment",
+  "Business Supplies & Equipment",
+  "Entertainment",
+  "International Trade & Development",
+  "Market Research",
+  "Mining & Metals",
+  "Chemicals",
+  "Aviation & Aerospace",
+  "Packaging & Containers",
+  "Textiles",
+  "Sporting Goods",
+  "Cosmetics",
+  "Fund-Raising",
+  "Luxury Goods & Jewelry",
 ] as const;
 
 export const DISCOVER_SENIORITY_OPTIONS   = SENIORITY_OPTIONS.map(o => o.label);
