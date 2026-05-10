@@ -138,7 +138,6 @@ function AcademyHero({ featuredProduct }: { featuredProduct: ProductWithEnrollme
                 </svg>
               </div>
               <p className="text-white/40 text-xs">Academy intro video</p>
-              <p className="text-white/25 text-[10px]">Upload via Admin → Academy → Course Builder</p>
             </div>
           </div>
         </div>

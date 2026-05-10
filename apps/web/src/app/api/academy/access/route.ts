@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
     .eq("key", "academy_coming_soon")
     .maybeSingle();
 
-  // If no setting found, default to open
-  if (!data) return NextResponse.json({ accessible: true });
+  // If no setting found, default to coming soon (closed)
+  if (!data) return NextResponse.json({ accessible: false });
 
   const setting = data.value as { enabled?: boolean; beta_workspaces?: string[] };
   const enabled  = setting.enabled  ?? false;
