@@ -92,7 +92,7 @@ export default function AdminAcademyPage() {
         fetch("/api/admin/academy").then(r => r.json()),
         fetch("/api/admin/academy/discount-codes").then(r => r.json()),
         fetch("/api/admin/academy/coming-soon").then(r => r.json()),
-        fetch("/api/admin/workspaces?page=1").then(r => r.json()),
+        fetch("/api/admin/workspaces?page=1&per_page=200").then(r => r.json()),
       ]);
       setProducts(adminRes.products ?? []);
       setCohorts(adminRes.cohorts ?? []);
@@ -942,41 +942,43 @@ export default function AdminAcademyPage() {
                 You can exempt multiple workspaces.
               </p>
 
-              {/* Searchable workspace dropdown */}
+              {/* Workspace selector — shows all, filters as you type */}
               {(() => {
                 const betaList = comingSoon.beta_workspaces ?? [];
-                const available = allWorkspaces.filter(
+                const filtered = allWorkspaces.filter(
                   w => !betaList.includes(w.id) &&
-                    (w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
-                     w.id.toLowerCase().includes(wsSearch.toLowerCase()))
+                    (!wsSearch ||
+                      w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
+                      w.id.toLowerCase().includes(wsSearch.toLowerCase()))
                 );
                 return (
-                  <div className="relative mb-4">
-                    <input
-                      value={wsSearch}
-                      onChange={e => setWsSearch(e.target.value)}
-                      placeholder="Search workspaces to exempt…"
-                      className="input-base w-full"
-                    />
-                    {wsSearch && available.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
-                        {available.slice(0, 20).map(w => (
+                  <div className="mb-4 border border-gray-700 rounded-lg overflow-hidden">
+                    <div className="bg-gray-800 px-3 py-2 border-b border-gray-700">
+                      <input
+                        value={wsSearch}
+                        onChange={e => setWsSearch(e.target.value)}
+                        placeholder="Filter workspaces…"
+                        className="w-full bg-transparent text-sm text-gray-200 placeholder-gray-500 outline-none"
+                      />
+                    </div>
+                    <div className="max-h-52 overflow-y-auto">
+                      {filtered.length === 0 ? (
+                        <p className="px-4 py-3 text-sm text-gray-500">
+                          {allWorkspaces.length === 0 ? "Loading…" : "No matching workspaces"}
+                        </p>
+                      ) : (
+                        filtered.slice(0, 50).map(w => (
                           <button
                             key={w.id}
                             onClick={() => addBetaWorkspace(w.id)}
                             disabled={accessSaving}
-                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center justify-between gap-3">
+                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-700/60 flex items-center justify-between gap-3 border-b border-gray-800 last:border-0">
                             <span className="text-gray-200 truncate">{w.name}</span>
                             <span className="text-gray-500 text-xs font-mono shrink-0">{w.id.slice(0, 8)}…</span>
                           </button>
-                        ))}
-                      </div>
-                    )}
-                    {wsSearch && available.length === 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-500">
-                        No matching workspaces
-                      </div>
-                    )}
+                        ))
+                      )}
+                    </div>
                   </div>
                 );
               })()}
