@@ -128,13 +128,14 @@ export default function AdminAcademyPage() {
   }
 
   function addBetaWorkspace(id: string) {
-    if (!id || comingSoon.beta_workspaces.includes(id)) return;
-    saveComingSoon({ beta_workspaces: [...comingSoon.beta_workspaces, id] });
+    const list = comingSoon.beta_workspaces ?? [];
+    if (!id || list.includes(id)) return;
+    saveComingSoon({ beta_workspaces: [...list, id] });
     setWsSearch("");
   }
 
   function removeBetaWorkspace(id: string) {
-    saveComingSoon({ beta_workspaces: comingSoon.beta_workspaces.filter(w => w !== id) });
+    saveComingSoon({ beta_workspaces: (comingSoon.beta_workspaces ?? []).filter(w => w !== id) });
   }
 
   // Load sections+lessons when product changes
@@ -943,8 +944,9 @@ export default function AdminAcademyPage() {
 
               {/* Searchable workspace dropdown */}
               {(() => {
+                const betaList = comingSoon.beta_workspaces ?? [];
                 const available = allWorkspaces.filter(
-                  w => !comingSoon.beta_workspaces.includes(w.id) &&
+                  w => !betaList.includes(w.id) &&
                     (w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
                      w.id.toLowerCase().includes(wsSearch.toLowerCase()))
                 );
@@ -980,11 +982,11 @@ export default function AdminAcademyPage() {
               })()}
 
               {/* Exempted list */}
-              {comingSoon.beta_workspaces.length === 0 ? (
+              {(comingSoon.beta_workspaces ?? []).length === 0 ? (
                 <p className="text-xs text-gray-600">No workspaces exempted yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {comingSoon.beta_workspaces.map(id => {
+                  {(comingSoon.beta_workspaces ?? []).map(id => {
                     const ws = allWorkspaces.find(w => w.id === id);
                     return (
                       <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2.5">
