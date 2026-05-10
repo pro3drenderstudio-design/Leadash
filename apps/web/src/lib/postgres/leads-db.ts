@@ -1,8 +1,7 @@
 import postgres from "postgres";
 
-const connectionString =
-  process.env.LEADS_DB_URL ||
-  "postgres://leadash_user:Ld!Disc0ver2026@89.117.51.235:5432/leadash_leads";
+const connectionString = process.env.LEADS_DB_URL;
+if (!connectionString) throw new Error("LEADS_DB_URL environment variable is not set");
 
 // Single connection pool shared across the process
 const leadsDb = postgres(connectionString, {
