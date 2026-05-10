@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
     db.from("academy_lesson_progress").select("lesson_id").eq("enrollment_id", enrollment.id).eq("status", "completed"),
   ]);
 
-  const allLessonIds   = (allLessonsRes.data ?? []).map(l => l.id);
-  const completedIds   = new Set((allProgressRes.data ?? []).map(p => p.lesson_id));
+  const allLessonIds   = ((allLessonsRes.data ?? []) as any[]).map((l: any) => l.id);
+  const completedIds   = new Set(((allProgressRes.data ?? []) as any[]).map((p: any) => p.lesson_id));
   const totalCompleted = allLessonIds.filter(id => completedIds.has(id)).length;
   const pctComplete    = allLessonIds.length ? (totalCompleted / allLessonIds.length) * 100 : 0;
 

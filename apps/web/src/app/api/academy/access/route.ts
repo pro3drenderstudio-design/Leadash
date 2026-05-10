@@ -35,7 +35,7 @@ export async function GET() {
     .eq("user_id", user.id);
 
   const userWorkspaceIds = (memberships ?? []).map((m: { workspace_id: string }) => m.workspace_id);
-  const accessible = userWorkspaceIds.some(id => betaList.includes(id));
+  const accessible = userWorkspaceIds.some((id: string) => betaList.includes(id));
 
   return NextResponse.json({ accessible });
 }

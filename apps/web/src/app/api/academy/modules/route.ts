@@ -39,20 +39,20 @@ export async function GET(req: NextRequest) {
       .from("academy_progress")
       .select("module_id")
       .eq("enrollment_id", enrollment.id);
-    progressSet = new Set((progress ?? []).map(p => p.module_id));
+    progressSet = new Set((progress ?? []).map((p: { module_id: string }) => p.module_id));
   }
 
   const now = Date.now();
   const cohortStart = cohort ? new Date(cohort.starts_at).getTime() : null;
 
-  const modulesWithState = modules.map(m => {
+  const modulesWithState = (modules as Record<string, unknown>[]).map(m => {
     const unlocked = cohortStart === null
       ? true
-      : now >= cohortStart + m.unlock_offset_hours * 3_600_000;
+      : now >= cohortStart + (m.unlock_offset_hours as number) * 3_600_000;
     return {
       ...m,
       unlocked,
-      completed: progressSet.has(m.id),
+      completed: progressSet.has(m.id as string),
     };
   });
 

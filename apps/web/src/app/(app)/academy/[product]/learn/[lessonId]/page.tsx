@@ -108,7 +108,7 @@ function Comments({ lessonId, productId }: { lessonId: string; productId: string
 function Notes({ lessonId, productId }: { lessonId: string; productId: string }) {
   const [body, setBody]   = useState("");
   const [saved, setSaved] = useState(true);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     wsGet<{ note: AcademyNote | null }>(`/api/academy/notes?lesson_id=${lessonId}`)
@@ -123,7 +123,7 @@ function Notes({ lessonId, productId }: { lessonId: string; productId: string })
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setBody(e.target.value);
     setSaved(false);
-    clearTimeout(timer.current);
+    if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(e.target.value), 800);
   }
 
@@ -270,9 +270,9 @@ export default function LessonViewer() {
                   tokens={{ playback: token }}
                   streamType="on-demand"
                   style={{ width: "100%", height: "100%" }}
-                  onTimeUpdate={(e: React.SyntheticEvent<HTMLVideoElement>) => {
-                    const v = e.currentTarget;
-                    if (v.duration) onVideoProgress((v.currentTime / v.duration) * 100);
+                  onTimeUpdate={(e: Event) => {
+                    const v = e.target as HTMLVideoElement;
+                    if (v && v.duration) onVideoProgress((v.currentTime / v.duration) * 100);
                   }}
                 />
               </div>

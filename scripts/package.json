@@ -1,0 +1,8 @@
+{
+  "name": "leadash-scripts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  }
+}

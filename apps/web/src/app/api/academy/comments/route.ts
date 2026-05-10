@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Fetch replies for top-level comments
-  const commentIds = (data ?? []).map(c => c.id);
+  const commentIds = (data ?? []).map((c: { id: string }) => c.id);
   let replies: unknown[] = [];
   if (commentIds.length) {
     const { data: replyData } = await db
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     replies = replyData ?? [];
   }
 
-  const comments = (data ?? []).map(c => ({
+  const comments = (data ?? []).map((c: Record<string, unknown>) => ({
     ...c,
     user_name:   (c.profiles as Record<string, string> | null)?.full_name ?? "User",
     user_avatar: (c.profiles as Record<string, string> | null)?.avatar_url ?? null,

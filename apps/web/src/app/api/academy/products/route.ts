@@ -35,35 +35,35 @@ export async function GET(req: NextRequest) {
   // Fetch progress for enrolled products
   let progressMap: Record<string, Set<string>> = {};
   if (userId && enrollments.length) {
-    const enrollmentIds = enrollments.map(e => e.id);
+    const enrollmentIds = (enrollments as any[]).map(e => e.id);
     const { data: progress } = await db
       .from("academy_lesson_progress")
       .select("enrollment_id, lesson_id")
       .in("enrollment_id", enrollmentIds)
       .eq("status", "completed");
-    for (const p of progress ?? []) {
+    for (const p of (progress ?? []) as any[]) {
       if (!progressMap[p.enrollment_id]) progressMap[p.enrollment_id] = new Set();
       progressMap[p.enrollment_id].add(p.lesson_id);
     }
   }
 
-  const products = (productsRes.data ?? []).map(p => {
-    const enrollment = enrollments.find(e => e.product_id === p.id) ?? null;
+  const products = ((productsRes.data ?? []) as any[]).map(p => {
+    const enrollment = (enrollments as any[]).find(e => e.product_id === p.id) ?? null;
     const cohort = enrollment?.cohort_id
-      ? cohorts.find(c => c.id === enrollment.cohort_id) ?? null
-      : cohorts.find(c => c.product_id === p.id && c.is_default) ?? null;
-    const certificate = certificates.find(c => c.product_id === p.id) ?? null;
+      ? (cohorts as any[]).find(c => c.id === enrollment.cohort_id) ?? null
+      : (cohorts as any[]).find(c => c.product_id === p.id && c.is_default) ?? null;
+    const certificate = (certificates as any[]).find(c => c.product_id === p.id) ?? null;
 
-    const productSections = (sections ?? []).filter(s => s.product_id === p.id);
-    const productLessons  = (lessons  ?? []).filter(l => l.product_id === p.id);
+    const productSections = ((sections ?? []) as any[]).filter(s => s.product_id === p.id);
+    const productLessons  = ((lessons  ?? []) as any[]).filter(l => l.product_id === p.id);
 
     const completedSet = enrollment ? (progressMap[enrollment.id] ?? new Set()) : new Set();
 
-    const sectionsWithLessons = productSections.map(s => ({
+    const sectionsWithLessons = productSections.map((s: any) => ({
       ...s,
       lessons: productLessons
-        .filter(l => l.section_id === s.id)
-        .map(l => ({
+        .filter((l: any) => l.section_id === s.id)
+        .map((l: any) => ({
           ...l,
           unlocked:  enrollment ? isLessonUnlocked(l, enrollment, cohort) : l.is_free_preview,
           completed: completedSet.has(l.id),
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     }));
 
     const totalLessons    = productLessons.length;
-    const completedCount  = enrollment ? productLessons.filter(l => completedSet.has(l.id)).length : 0;
+    const completedCount  = enrollment ? productLessons.filter((l: any) => completedSet.has(l.id)).length : 0;
 
     return { ...p, enrollment, cohort, certificate, sections: sectionsWithLessons, total_lessons: totalLessons, completed_count: completedCount };
   });

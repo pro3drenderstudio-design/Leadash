@@ -5,8 +5,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 
 interface Product {
   id: string; slug: string; name: string; price_ngn: number;
-  credits_grant: number; leadash_months: number; is_active: boolean;
-  is_published: boolean; certificate_enabled: boolean;
+  compare_price_ngn: number | null; credits_grant: number; leadash_months: number;
+  is_active: boolean; is_published: boolean; certificate_enabled: boolean;
   completion_threshold_pct: number; trailer_playback_id: string | null;
 }
 interface Section {
@@ -16,7 +16,7 @@ interface Lesson {
   id: string; section_id: string; product_id: string; title: string;
   lesson_type: string; mux_playback_id: string | null; mux_upload_id: string | null;
   duration_secs: number | null; position: number; drip_type: string;
-  drip_value: number | null; is_free_preview: boolean; is_published: boolean;
+  drip_value: number | null; drip_date: string | null; is_free_preview: boolean; is_published: boolean;
   description: string | null;
 }
 interface Cohort {

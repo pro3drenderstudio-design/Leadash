@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createClient } from "@/lib/supabase/server";
-import { isLessonUnlocked } from "@/types/academy";
+import { isLessonUnlocked, AcademyLesson, AcademyEnrollment, AcademyCohort } from "@/types/academy";
 
 /** GET /api/academy/lessons?product_id=xxx
  *  Returns sections+lessons with unlock/complete state for current user.
@@ -52,15 +52,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const sectionsWithLessons = sections.map(s => ({
+  const sectionsWithLessons = ((sections ?? []) as any[]).map((s: any) => ({
     ...s,
-    lessons: lessons
-      .filter(l => l.section_id === s.id)
-      .map(l => {
+    lessons: ((lessons ?? []) as any[])
+      .filter((l: any) => l.section_id === s.id)
+      .map((l: any) => {
         const prog = progressMap[l.id] ?? null;
         return {
           ...l,
-          unlocked:  enrollment ? isLessonUnlocked(l, enrollment, cohort) : l.is_free_preview,
+          unlocked:  enrollment ? isLessonUnlocked(l, enrollment as AcademyEnrollment, cohort as AcademyCohort | null) : l.is_free_preview,
           completed: prog?.status === "completed",
           progress:  prog ? { ...prog, lesson_id: l.id, enrollment_id: enrollment!.id } : null,
         };
