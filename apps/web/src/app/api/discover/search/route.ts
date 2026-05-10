@@ -34,19 +34,22 @@ export async function GET(req: NextRequest) {
 
   const p = new URL(req.url).searchParams;
 
-  const keyword      = p.get("q")?.trim() || null;
-  const titleKws     = csv(p.get("title"));
-  const seniorities  = csv(p.get("seniority"));
-  const departments  = csv(p.get("department"));
-  const countries    = csv(p.get("country"));
-  const city         = p.get("city")?.trim() || null;
-  const companies    = csv(p.get("company"));
-  const industries   = csv(p.get("industry"));
-  const companySizes = csv(p.get("company_size"));
-  const emailStatus  = p.get("email_status") || "has_email";
-  const page         = Math.max(1, parseInt(p.get("page") || "1"));
-  const limit        = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
-  const offset       = (page - 1) * limit;
+  const keyword         = p.get("q")?.trim() || null;
+  const titleIncludes   = csv(p.get("title_include"));
+  const titleExcludes   = csv(p.get("title_exclude"));
+  const seniorities     = csv(p.get("seniority"));
+  const departments     = csv(p.get("department"));
+  const locationIncludes = csv(p.get("location_include"));
+  const locationExcludes = csv(p.get("location_exclude"));
+  const companyIncludes = csv(p.get("company_include"));
+  const companyExcludes = csv(p.get("company_exclude"));
+  const industryIncludes = csv(p.get("industry_include"));
+  const industryExcludes = csv(p.get("industry_exclude"));
+  const companySizes    = csv(p.get("company_size"));
+  const emailStatus     = p.get("email_status") || "has_email";
+  const page            = Math.max(1, parseInt(p.get("page") || "1"));
+  const limit           = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
+  const offset          = (page - 1) * limit;
 
   const SORT_COLS: Record<string, string> = {
     name:         "p.first_name, p.last_name",
@@ -73,17 +76,48 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
+    function addNone(field: string, values: string[], substring = false) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `${field} ILIKE $${i + j}`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values.map(v => substring ? `%${v}%` : v));
+      i += values.length;
+    }
+
+    function addLocationOr(values: string[]) {
+      if (!values.length) return;
+      const perVal = values.map((_, j) =>
+        `(p.country ILIKE $${i + j} OR p.state ILIKE $${i + j} OR p.city ILIKE $${i + j})`
+      );
+      conditions.push(`(${perVal.join(" OR ")})`);
+      params.push(...values.map(v => `%${v}%`));
+      i += values.length;
+    }
+
+    function addLocationNone(values: string[]) {
+      if (!values.length) return;
+      const perVal = values.map((_, j) =>
+        `(p.country ILIKE $${i + j} OR p.state ILIKE $${i + j} OR p.city ILIKE $${i + j})`
+      );
+      conditions.push(`NOT (${perVal.join(" OR ")})`);
+      params.push(...values.map(v => `%${v}%`));
+      i += values.length;
+    }
+
     if (keyword) {
       conditions.push(`(p.first_name ILIKE $${i} OR p.last_name ILIKE $${i} OR p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
       params.push(`%${keyword}%`); i++;
     }
-    addOr("p.title",      titleKws,     true);
-    addOr("p.seniority",  seniorities,  false);
-    addOr("p.department", departments,  true);
-    addOr("p.country",    countries,    false);
-    if (city) { conditions.push(`p.city ILIKE $${i}`); params.push(`%${city}%`); i++; }
-    addOr("p.company_name", companies,  true);
-    addOr("c.industry",   industries,   true);
+    addOr("p.title",      titleIncludes,   true);
+    addNone("p.title",    titleExcludes,   true);
+    addOr("p.seniority",  seniorities,     false);
+    addOr("p.department", departments,     true);
+    addLocationOr(locationIncludes);
+    addLocationNone(locationExcludes);
+    addOr("p.company_name",  companyIncludes,  true);
+    addNone("p.company_name", companyExcludes, true);
+    addOr("c.industry",      industryIncludes, true);
+    addNone("c.industry",    industryExcludes, true);
     addOr("c.size_range", companySizes, false);
 
     if (emailStatus === "has_email") {
@@ -119,7 +153,6 @@ export async function GET(req: NextRequest) {
     const total = parseInt((countRows[0] as unknown as { total: string }).total, 10);
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 
-    // Fetch reveals for visible IDs
     const adminDb = createAdminClient();
     const revealMap = new Map<string, { email: string | null; phone: string | null; email_status: string | null; exported: boolean }>();
     if (personIds.length > 0) {

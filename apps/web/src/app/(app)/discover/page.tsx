@@ -2,12 +2,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { wsGet, wsFetch } from "@/lib/workspace/client";
 import {
-  SENIORITY_OPTIONS, DEPARTMENT_OPTIONS, COMPANY_SIZE_OPTIONS, INDUSTRY_OPTIONS,
-  FUNDING_STAGE_OPTIONS, EMPLOYEE_RANGE_OPTIONS, REVENUE_RANGE_OPTIONS,
   type DiscoverResult, type DiscoverSearchResponse,
   type DiscoverCompanyResult, type DiscoverCompanySearchResponse,
   type SavedSearch,
 } from "@/types/discover";
+import {
+  PeopleSidebar, CompanySidebar,
+  DEFAULT_PEOPLE_FILTERS, DEFAULT_COMPANY_FILTERS,
+  type PeopleFilters, type CompanyFilters,
+} from "./DiscoverFilters";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -42,14 +45,6 @@ function LockIcon({ open }: { open?: boolean }) {
   );
 }
 
-function ChevronDown({ open }: { open: boolean }) {
-  return (
-    <svg className={`w-3.5 h-3.5 text-white/30 transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
-    </svg>
-  );
-}
-
 function XIcon({ sm }: { sm?: boolean }) {
   return (
     <svg className={sm ? "w-3 h-3" : "w-4 h-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -80,72 +75,6 @@ function Avatar({ first, last, size = "md" }: { first: string | null; last: stri
   const color  = colors[(first?.charCodeAt(0) ?? 0) % colors.length];
   const sz = size === "sm" ? "w-6 h-6 text-[9px]" : "w-8 h-8 text-[11px]";
   return <div className={`${sz} rounded-full ${color} flex items-center justify-center font-bold flex-shrink-0`}>{initials}</div>;
-}
-
-// ── Sidebar building blocks ───────────────────────────────────────────────────
-
-function FilterSection({ title, count, children, defaultOpen = true }: { title: string; count?: number; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-b border-white/6">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/3 transition-colors">
-        <span className="text-[11px] font-semibold text-white/45 uppercase tracking-wider">{title}</span>
-        <div className="flex items-center gap-1.5">
-          {!!count && <span className="bg-orange-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{count > 9 ? "9+" : count}</span>}
-          <ChevronDown open={open} />
-        </div>
-      </button>
-      {open && <div className="pb-2">{children}</div>}
-    </div>
-  );
-}
-
-function CheckboxGroup({ options, selected, onChange }: { options: { label: string; value: string }[]; selected: string[]; onChange: (v: string[]) => void }) {
-  function toggle(val: string) { onChange(selected.includes(val) ? selected.filter(s => s !== val) : [...selected, val]); }
-  return (
-    <div className="px-4 space-y-0.5 max-h-52 overflow-y-auto">
-      {options.map(o => (
-        <label key={o.value} className="flex items-center gap-2.5 py-1 cursor-pointer group">
-          <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} className="w-3.5 h-3.5 accent-orange-500 flex-shrink-0 rounded" />
-          <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">{o.label}</span>
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function StringCheckboxGroup({ options, selected, onChange }: { options: readonly string[]; selected: string[]; onChange: (v: string[]) => void }) {
-  return <CheckboxGroup options={options.map(o => ({ label: o, value: o }))} selected={selected} onChange={onChange} />;
-}
-
-function TagInput({ tags, onAdd, onRemove, placeholder }: { tags: string[]; onAdd: (t: string) => void; onRemove: (t: string) => void; placeholder: string }) {
-  const [val, setVal] = useState("");
-  function commit() { const t = val.trim(); if (t && !tags.includes(t)) onAdd(t); setVal(""); }
-  return (
-    <div className="mx-3">
-      <div className="flex flex-wrap gap-1 mb-1.5">
-        {tags.map(t => (
-          <span key={t} className="flex items-center gap-1 bg-orange-500/15 text-orange-300 text-[11px] px-2 py-0.5 rounded-full border border-orange-500/20">
-            {t}
-            <button onClick={() => onRemove(t)} className="text-orange-400/60 hover:text-orange-300 leading-none">×</button>
-          </span>
-        ))}
-      </div>
-      <input value={val} onChange={e => setVal(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commit(); } }}
-        onBlur={commit} placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors" />
-    </div>
-  );
-}
-
-function TextFilter({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
-  return (
-    <div className="px-3">
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors" />
-    </div>
-  );
 }
 
 // ── Campaign picker modal ─────────────────────────────────────────────────────
@@ -484,28 +413,9 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
 export default function DiscoverPage() {
   const [mode, setMode] = useState<"people" | "companies">("people");
 
-  // ── People filter state ───────────────────────────────────────────────────
-  const [keyword,      setKeyword]      = useState("");
-  const [titleKws,     setTitleKws]     = useState<string[]>([]);
-  const [seniorities,  setSeniorities]  = useState<string[]>([]);
-  const [departments,  setDepartments]  = useState<string[]>([]);
-  const [countries,    setCountries]    = useState<string[]>([]);
-  const [city,         setCity]         = useState("");
-  const [companies,    setCompanies]    = useState<string[]>([]);
-  const [industries,   setIndustries]   = useState<string[]>([]);
-  const [companySizes, setCompanySizes] = useState<string[]>([]);
-  const [emailStatus,  setEmailStatus]  = useState<"any" | "has_email" | "verified">("has_email");
-
-  // ── Company filter state ──────────────────────────────────────────────────
-  const [coKeyword,       setCoKeyword]       = useState("");
-  const [coIndustries,    setCoIndustries]    = useState<string[]>([]);
-  const [coSizes,         setCoSizes]         = useState<string[]>([]);
-  const [coCountries,     setCoCountries]     = useState<string[]>([]);
-  const [coCity,          setCoCity]          = useState("");
-  const [coFundingStages, setCoFundingStages] = useState<string[]>([]);
-  const [coEmployeeRange, setCoEmployeeRange] = useState<{ min: number; max: number } | null>(null);
-  const [coRevenueRange,  setCoRevenueRange]  = useState<{ min: number; max: number } | null>(null);
-  const [coHasPeople,     setCoHasPeople]     = useState(false);
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [peopleFilters,  setPeopleFilters]  = useState<PeopleFilters>(DEFAULT_PEOPLE_FILTERS);
+  const [companyFilters, setCompanyFilters] = useState<CompanyFilters>(DEFAULT_COMPANY_FILTERS);
 
   // ── Sort state ────────────────────────────────────────────────────────────
   const [peopleSortBy,  setPeopleSortBy]  = useState("created_at");
@@ -514,12 +424,12 @@ export default function DiscoverPage() {
   const [coSortDir,     setCoSortDir]     = useState<"asc" | "desc">("desc");
 
   // ── Result state ──────────────────────────────────────────────────────────
-  const [results,         setResults]         = useState<DiscoverResult[]>([]);
-  const [companyResults,  setCompanyResults]   = useState<DiscoverCompanyResult[]>([]);
-  const [total,           setTotal]           = useState(0);
-  const [page,            setPage]            = useState(1);
-  const [loading,         setLoading]         = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
+  const [results,        setResults]        = useState<DiscoverResult[]>([]);
+  const [companyResults, setCompanyResults] = useState<DiscoverCompanyResult[]>([]);
+  const [total,          setTotal]          = useState(0);
+  const [page,           setPage]           = useState(1);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
@@ -538,13 +448,22 @@ export default function DiscoverPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const activePeopleFilterCount =
-    titleKws.length + seniorities.length + departments.length + countries.length +
-    (city ? 1 : 0) + companies.length + industries.length + companySizes.length +
-    (emailStatus !== "has_email" ? 1 : 0) + (keyword ? 1 : 0);
+    (peopleFilters.keyword ? 1 : 0) +
+    peopleFilters.titleIncludes.length + peopleFilters.titleExcludes.length +
+    peopleFilters.seniorities.length + peopleFilters.departments.length +
+    peopleFilters.locationIncludes.length + peopleFilters.locationExcludes.length +
+    peopleFilters.companyIncludes.length + peopleFilters.companyExcludes.length +
+    peopleFilters.industryIncludes.length + peopleFilters.industryExcludes.length +
+    peopleFilters.companySizes.length +
+    (peopleFilters.emailStatus !== "has_email" ? 1 : 0);
 
   const activeCoFilterCount =
-    coIndustries.length + coSizes.length + coCountries.length + (coCity ? 1 : 0) + (coKeyword ? 1 : 0) +
-    coFundingStages.length + (coEmployeeRange ? 1 : 0) + (coRevenueRange ? 1 : 0) + (coHasPeople ? 1 : 0);
+    (companyFilters.coKeyword ? 1 : 0) +
+    companyFilters.coLocationIncludes.length + companyFilters.coLocationExcludes.length +
+    companyFilters.coIndustryIncludes.length + companyFilters.coIndustryExcludes.length +
+    companyFilters.coSizes.length + companyFilters.coFundingStages.length +
+    (companyFilters.coEmployeeRange ? 1 : 0) + (companyFilters.coRevenueRange ? 1 : 0) +
+    (companyFilters.coHasPeople ? 1 : 0);
 
   const activeFilterCount = mode === "people" ? activePeopleFilterCount : activeCoFilterCount;
 
@@ -560,47 +479,53 @@ export default function DiscoverPage() {
   const searchPeople = useCallback(async (p = 1) => {
     setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
     try {
+      const f = peopleFilters;
       const params = new URLSearchParams();
-      if (keyword)            params.set("q",            keyword);
-      if (titleKws.length)    params.set("title",        titleKws.join(","));
-      if (seniorities.length) params.set("seniority",    seniorities.join(","));
-      if (departments.length) params.set("department",   departments.join(","));
-      if (countries.length)   params.set("country",      countries.join(","));
-      if (city)               params.set("city",         city);
-      if (companies.length)   params.set("company",      companies.join(","));
-      if (industries.length)  params.set("industry",     industries.join(","));
-      if (companySizes.length) params.set("company_size", companySizes.join(","));
-      params.set("email_status", emailStatus);
+      if (f.keyword)                 params.set("q",               f.keyword);
+      if (f.titleIncludes.length)    params.set("title_include",   f.titleIncludes.join(","));
+      if (f.titleExcludes.length)    params.set("title_exclude",   f.titleExcludes.join(","));
+      if (f.seniorities.length)      params.set("seniority",       f.seniorities.join(","));
+      if (f.departments.length)      params.set("department",      f.departments.join(","));
+      if (f.locationIncludes.length) params.set("location_include", f.locationIncludes.join(","));
+      if (f.locationExcludes.length) params.set("location_exclude", f.locationExcludes.join(","));
+      if (f.companyIncludes.length)  params.set("company_include",  f.companyIncludes.join(","));
+      if (f.companyExcludes.length)  params.set("company_exclude",  f.companyExcludes.join(","));
+      if (f.industryIncludes.length) params.set("industry_include", f.industryIncludes.join(","));
+      if (f.industryExcludes.length) params.set("industry_exclude", f.industryExcludes.join(","));
+      if (f.companySizes.length)     params.set("company_size",    f.companySizes.join(","));
+      params.set("email_status", f.emailStatus);
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
       setResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus, peopleSortBy, peopleSortDir]);
+  }, [peopleFilters, peopleSortBy, peopleSortDir]);
 
   const searchCompanies = useCallback(async (p = 1) => {
     setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
     try {
+      const f = companyFilters;
       const params = new URLSearchParams();
-      if (coKeyword)               params.set("q",             coKeyword);
-      if (coIndustries.length)     params.set("industry",      coIndustries.join(","));
-      if (coSizes.length)          params.set("company_size",  coSizes.join(","));
-      if (coCountries.length)      params.set("country",       coCountries.join(","));
-      if (coCity)                  params.set("city",          coCity);
-      if (coFundingStages.length)  params.set("funding_stage", coFundingStages.join(","));
-      if (coEmployeeRange?.min)    params.set("employee_min",  String(coEmployeeRange.min));
-      if (coEmployeeRange?.max)    params.set("employee_max",  String(coEmployeeRange.max));
-      if (coRevenueRange?.min)     params.set("revenue_min",   String(coRevenueRange.min));
-      if (coRevenueRange?.max)     params.set("revenue_max",   String(coRevenueRange.max));
-      params.set("has_people", String(coHasPeople));
+      if (f.coKeyword)                 params.set("q",               f.coKeyword);
+      if (f.coLocationIncludes.length) params.set("location_include", f.coLocationIncludes.join(","));
+      if (f.coLocationExcludes.length) params.set("location_exclude", f.coLocationExcludes.join(","));
+      if (f.coIndustryIncludes.length) params.set("industry_include", f.coIndustryIncludes.join(","));
+      if (f.coIndustryExcludes.length) params.set("industry_exclude", f.coIndustryExcludes.join(","));
+      if (f.coSizes.length)            params.set("company_size",    f.coSizes.join(","));
+      if (f.coFundingStages.length)    params.set("funding_stage",   f.coFundingStages.join(","));
+      if (f.coEmployeeRange?.min)      params.set("employee_min",    String(f.coEmployeeRange.min));
+      if (f.coEmployeeRange?.max)      params.set("employee_max",    String(f.coEmployeeRange.max));
+      if (f.coRevenueRange?.min)       params.set("revenue_min",     String(f.coRevenueRange.min));
+      if (f.coRevenueRange?.max)       params.set("revenue_max",     String(f.coRevenueRange.max));
+      params.set("has_people", String(f.coHasPeople));
       params.set("sort", coSortBy); params.set("order", coSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`);
       setCompanyResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople, coSortBy, coSortDir]);
+  }, [companyFilters, coSortBy, coSortDir]);
 
   const search = mode === "people" ? searchPeople : searchCompanies;
 
@@ -610,20 +535,11 @@ export default function DiscoverPage() {
     debounceRef.current = setTimeout(() => search(1), 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus,
-      peopleSortBy, peopleSortDir,
-      coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople,
-      coSortBy, coSortDir, mode]);
+  }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters, coSortBy, coSortDir, mode]);
 
   function clearAll() {
-    if (mode === "people") {
-      setKeyword(""); setTitleKws([]); setSeniorities([]); setDepartments([]);
-      setCountries([]); setCity(""); setCompanies([]); setIndustries([]);
-      setCompanySizes([]); setEmailStatus("has_email");
-    } else {
-      setCoKeyword(""); setCoIndustries([]); setCoSizes([]); setCoCountries([]); setCoCity("");
-      setCoFundingStages([]); setCoEmployeeRange(null); setCoRevenueRange(null); setCoHasPeople(false);
-    }
+    if (mode === "people") setPeopleFilters(DEFAULT_PEOPLE_FILTERS);
+    else setCompanyFilters(DEFAULT_COMPANY_FILTERS);
   }
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -644,7 +560,6 @@ export default function DiscoverPage() {
         return;
       }
       const data = await res.json() as { reveals: Record<string, { email: string | null; phone: string | null; email_status: string | null }>; credits_used: number };
-      // Update results in place
       setResults(prev => prev.map(r => {
         const rev = data.reveals[r.id];
         if (!rev) return r;
@@ -713,9 +628,7 @@ export default function DiscoverPage() {
     if (!saveNameVal.trim()) return;
     setSavingSearch(true);
     try {
-      const filters = mode === "people"
-        ? { keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus }
-        : { coKeyword, coIndustries, coSizes, coCountries, coCity, coHasPeople, coFundingStages, coEmployeeRange, coRevenueRange };
+      const filters = mode === "people" ? peopleFilters : companyFilters;
       const res = await fetch("/api/discover/saved-searches", {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "include", body: JSON.stringify({ name: saveNameVal.trim(), mode, filters }),
@@ -730,28 +643,10 @@ export default function DiscoverPage() {
 
   function applySavedSearch(s: SavedSearch) {
     setMode(s.mode);
-    const f = s.filters as Record<string, unknown>;
     if (s.mode === "people") {
-      setKeyword((f.keyword as string) ?? "");
-      setTitleKws((f.titleKws as string[]) ?? []);
-      setSeniorities((f.seniorities as string[]) ?? []);
-      setDepartments((f.departments as string[]) ?? []);
-      setCountries((f.countries as string[]) ?? []);
-      setCity((f.city as string) ?? "");
-      setCompanies((f.companies as string[]) ?? []);
-      setIndustries((f.industries as string[]) ?? []);
-      setCompanySizes((f.companySizes as string[]) ?? []);
-      setEmailStatus((f.emailStatus as "any" | "has_email" | "verified") ?? "has_email");
+      setPeopleFilters({ ...DEFAULT_PEOPLE_FILTERS, ...(s.filters as Partial<PeopleFilters>) });
     } else {
-      setCoKeyword((f.coKeyword as string) ?? "");
-      setCoIndustries((f.coIndustries as string[]) ?? []);
-      setCoSizes((f.coSizes as string[]) ?? []);
-      setCoCountries((f.coCountries as string[]) ?? []);
-      setCoCity((f.coCity as string) ?? "");
-      setCoHasPeople((f.coHasPeople as boolean) ?? false);
-      setCoFundingStages((f.coFundingStages as string[]) ?? []);
-      setCoEmployeeRange((f.coEmployeeRange as { min: number; max: number } | null) ?? null);
-      setCoRevenueRange((f.coRevenueRange as { min: number; max: number } | null) ?? null);
+      setCompanyFilters({ ...DEFAULT_COMPANY_FILTERS, ...(s.filters as Partial<CompanyFilters>) });
     }
   }
 
@@ -768,7 +663,7 @@ export default function DiscoverPage() {
     <div className="flex h-full min-h-0 overflow-hidden">
 
       {/* ── Sidebar ── */}
-      <div className="w-[220px] flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
+      <div className="w-[240px] flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
 
         {/* Sidebar header */}
         <div className="flex-shrink-0 px-4 py-3 border-b border-white/8">
@@ -788,99 +683,33 @@ export default function DiscoverPage() {
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
             </svg>
-            <input value={mode === "people" ? keyword : coKeyword}
-              onChange={e => mode === "people" ? setKeyword(e.target.value) : setCoKeyword(e.target.value)}
+            <input
+              value={mode === "people" ? peopleFilters.keyword : companyFilters.coKeyword}
+              onChange={e => mode === "people"
+                ? setPeopleFilters(f => ({ ...f, keyword: e.target.value }))
+                : setCompanyFilters(f => ({ ...f, coKeyword: e.target.value }))
+              }
               placeholder={mode === "people" ? "Name, title, company…" : "Company name, domain…"}
-              className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors" />
+              className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors"
+            />
           </div>
         </div>
 
         {/* Filters — scrollable */}
-        <div className="flex-1 overflow-y-auto">
-
-          {mode === "people" && (<>
-            <FilterSection title="Job Title" count={titleKws.length}>
-              <TagInput tags={titleKws} onAdd={t => setTitleKws(v => [...v, t])} onRemove={t => setTitleKws(v => v.filter(x => x !== t))} placeholder="e.g. CEO, VP Sales…" />
-            </FilterSection>
-            <FilterSection title="Seniority" count={seniorities.length}>
-              <CheckboxGroup options={SENIORITY_OPTIONS} selected={seniorities} onChange={setSeniorities} />
-            </FilterSection>
-            <FilterSection title="Department" count={departments.length} defaultOpen={false}>
-              <CheckboxGroup options={DEPARTMENT_OPTIONS} selected={departments} onChange={setDepartments} />
-            </FilterSection>
-            <FilterSection title="Location" count={countries.length + (city ? 1 : 0)} defaultOpen={false}>
-              <div className="space-y-2">
-                <TagInput tags={countries} onAdd={t => setCountries(v => [...v, t])} onRemove={t => setCountries(v => v.filter(x => x !== t))} placeholder="Country…" />
-                <TextFilter value={city} onChange={setCity} placeholder="City…" />
-              </div>
-            </FilterSection>
-            <FilterSection title="Company" count={companies.length} defaultOpen={false}>
-              <TagInput tags={companies} onAdd={t => setCompanies(v => [...v, t])} onRemove={t => setCompanies(v => v.filter(x => x !== t))} placeholder="e.g. Google, Stripe…" />
-            </FilterSection>
-            <FilterSection title="Industry" count={industries.length} defaultOpen={false}>
-              <StringCheckboxGroup options={INDUSTRY_OPTIONS} selected={industries} onChange={setIndustries} />
-            </FilterSection>
-            <FilterSection title="Company Size" count={companySizes.length} defaultOpen={false}>
-              <StringCheckboxGroup options={COMPANY_SIZE_OPTIONS} selected={companySizes} onChange={setCompanySizes} />
-            </FilterSection>
-            <FilterSection title="Email" count={emailStatus !== "has_email" ? 1 : 0} defaultOpen={false}>
-              <div className="px-4 space-y-1">
-                {([{ label: "Has email", value: "has_email" }, { label: "Verified only", value: "verified" }, { label: "Any (incl. no email)", value: "any" }] as const).map(o => (
-                  <label key={o.value} className="flex items-center gap-2.5 py-0.5 cursor-pointer group">
-                    <input type="radio" name="email_status" value={o.value} checked={emailStatus === o.value} onChange={() => setEmailStatus(o.value)} className="accent-orange-500 flex-shrink-0" />
-                    <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">{o.label}</span>
-                  </label>
-                ))}
-              </div>
-            </FilterSection>
-          </>)}
-
-          {mode === "companies" && (<>
-            <FilterSection title="Industry" count={coIndustries.length}>
-              <StringCheckboxGroup options={INDUSTRY_OPTIONS} selected={coIndustries} onChange={setCoIndustries} />
-            </FilterSection>
-            <FilterSection title="# Employees" count={coEmployeeRange ? 1 : 0} defaultOpen={false}>
-              <div className="px-4 space-y-1">
-                {EMPLOYEE_RANGE_OPTIONS.map(r => (
-                  <label key={r.label} className="flex items-center gap-2.5 py-0.5 cursor-pointer group">
-                    <input type="radio" name="emp_range" className="accent-orange-500"
-                      checked={coEmployeeRange?.min === r.min && coEmployeeRange?.max === r.max}
-                      onChange={() => setCoEmployeeRange(coEmployeeRange?.min === r.min ? null : { min: r.min, max: r.max })} />
-                    <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">{r.label}</span>
-                  </label>
-                ))}
-              </div>
-            </FilterSection>
-            <FilterSection title="Revenue" count={coRevenueRange ? 1 : 0} defaultOpen={false}>
-              <div className="px-4 space-y-1">
-                {REVENUE_RANGE_OPTIONS.map(r => (
-                  <label key={r.label} className="flex items-center gap-2.5 py-0.5 cursor-pointer group">
-                    <input type="radio" name="rev_range" className="accent-orange-500"
-                      checked={coRevenueRange?.min === r.min && coRevenueRange?.max === r.max}
-                      onChange={() => setCoRevenueRange(coRevenueRange?.min === r.min ? null : { min: r.min, max: r.max })} />
-                    <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">{r.label}</span>
-                  </label>
-                ))}
-              </div>
-            </FilterSection>
-            <FilterSection title="Funding Stage" count={coFundingStages.length} defaultOpen={false}>
-              <StringCheckboxGroup options={FUNDING_STAGE_OPTIONS} selected={coFundingStages} onChange={setCoFundingStages} />
-            </FilterSection>
-            <FilterSection title="Location" count={coCountries.length + (coCity ? 1 : 0)} defaultOpen={false}>
-              <div className="space-y-2">
-                <TagInput tags={coCountries} onAdd={t => setCoCountries(v => [...v, t])} onRemove={t => setCoCountries(v => v.filter(x => x !== t))} placeholder="Country…" />
-                <TextFilter value={coCity} onChange={setCoCity} placeholder="City…" />
-              </div>
-            </FilterSection>
-            <FilterSection title="More" defaultOpen={false}>
-              <div className="px-4">
-                <label className="flex items-center gap-2.5 py-1 cursor-pointer group">
-                  <input type="checkbox" checked={coHasPeople} onChange={e => setCoHasPeople(e.target.checked)} className="w-3.5 h-3.5 accent-orange-500 flex-shrink-0 rounded" />
-                  <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">Has contacts</span>
-                </label>
-              </div>
-            </FilterSection>
-          </>)}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+          {mode === "people" ? (
+            <PeopleSidebar
+              filters={peopleFilters}
+              onChange={setPeopleFilters}
+              onAiApply={(partial) => setPeopleFilters(f => ({ ...f, ...partial }))}
+            />
+          ) : (
+            <CompanySidebar
+              filters={companyFilters}
+              onChange={setCompanyFilters}
+              onAiApply={(partial) => setCompanyFilters(f => ({ ...f, ...partial }))}
+            />
+          )}
 
           {/* Saved searches */}
           <div className="border-b border-white/6">
@@ -917,7 +746,6 @@ export default function DiscoverPage() {
               <p className="px-4 pb-3 text-[10px] text-white/20">No saved searches yet</p>
             )}
           </div>
-
         </div>
       </div>
 
@@ -1145,8 +973,11 @@ export default function DiscoverPage() {
                     <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{c.size_range ?? "—"}</td>
                     <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
                     <td className="px-3 py-2.5">
-                      <button onClick={e => { e.stopPropagation(); setMode("people"); setCompanies([c.name]); }}
-                        className="flex items-center gap-1.5 text-orange-400/70 hover:text-orange-400 transition-colors">
+                      <button onClick={e => {
+                        e.stopPropagation();
+                        setMode("people");
+                        setPeopleFilters(f => ({ ...f, companyIncludes: [c.name] }));
+                      }} className="flex items-center gap-1.5 text-orange-400/70 hover:text-orange-400 transition-colors">
                         <span className="font-semibold">{c.people_count}</span>
                         <span className="text-white/25">contacts</span>
                       </button>

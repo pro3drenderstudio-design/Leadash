@@ -18,20 +18,21 @@ export async function GET(req: NextRequest) {
 
   const p = new URL(req.url).searchParams;
 
-  const keyword        = p.get("q")?.trim() || null;
-  const industries     = csv(p.get("industry"));
-  const companySizes   = csv(p.get("company_size"));
-  const countries      = csv(p.get("country"));
-  const city           = p.get("city")?.trim() || null;
-  const fundingStages  = csv(p.get("funding_stage"));
-  const employeeMin    = parseInt(p.get("employee_min") || "0") || 0;
-  const employeeMax    = parseInt(p.get("employee_max") || "0") || 0;
-  const revenueMin     = parseInt(p.get("revenue_min") || "0") || 0;
-  const revenueMax     = parseInt(p.get("revenue_max") || "0") || 0;
-  const hasPeople      = p.get("has_people") === "true";
-  const page           = Math.max(1, parseInt(p.get("page") || "1"));
-  const limit          = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
-  const offset         = (page - 1) * limit;
+  const keyword          = p.get("q")?.trim() || null;
+  const industryIncludes = csv(p.get("industry_include"));
+  const industryExcludes = csv(p.get("industry_exclude"));
+  const companySizes     = csv(p.get("company_size"));
+  const locationIncludes = csv(p.get("location_include"));
+  const locationExcludes = csv(p.get("location_exclude"));
+  const fundingStages    = csv(p.get("funding_stage"));
+  const employeeMin      = parseInt(p.get("employee_min") || "0") || 0;
+  const employeeMax      = parseInt(p.get("employee_max") || "0") || 0;
+  const revenueMin       = parseInt(p.get("revenue_min") || "0") || 0;
+  const revenueMax       = parseInt(p.get("revenue_max") || "0") || 0;
+  const hasPeople        = p.get("has_people") === "true";
+  const page             = Math.max(1, parseInt(p.get("page") || "1"));
+  const limit            = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
+  const offset           = (page - 1) * limit;
 
   const CO_SORT_COLS: Record<string, string> = {
     name:         "c.name",
@@ -58,15 +59,44 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
+    function addNone(field: string, values: string[], substring = false) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `${field} ILIKE $${i + j}`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values.map(v => substring ? `%${v}%` : v));
+      i += values.length;
+    }
+
+    function addLocationOr(values: string[]) {
+      if (!values.length) return;
+      const perVal = values.map((_, j) =>
+        `(c.country ILIKE $${i + j} OR c.state ILIKE $${i + j} OR c.city ILIKE $${i + j})`
+      );
+      conditions.push(`(${perVal.join(" OR ")})`);
+      params.push(...values.map(v => `%${v}%`));
+      i += values.length;
+    }
+
+    function addLocationNone(values: string[]) {
+      if (!values.length) return;
+      const perVal = values.map((_, j) =>
+        `(c.country ILIKE $${i + j} OR c.state ILIKE $${i + j} OR c.city ILIKE $${i + j})`
+      );
+      conditions.push(`NOT (${perVal.join(" OR ")})`);
+      params.push(...values.map(v => `%${v}%`));
+      i += values.length;
+    }
+
     if (keyword) {
       conditions.push(`(c.name ILIKE $${i} OR c.domain ILIKE $${i})`);
       params.push(`%${keyword}%`); i++;
     }
-    addOr("c.industry",      industries,   true);
-    addOr("c.size_range",    companySizes, false);
-    addOr("c.country",       countries,    false);
-    addOr("c.funding_stage", fundingStages, false);
-    if (city) { conditions.push(`c.city ILIKE $${i}`); params.push(`%${city}%`); i++; }
+    addOr("c.industry",      industryIncludes, true);
+    addNone("c.industry",    industryExcludes, true);
+    addOr("c.size_range",    companySizes,     false);
+    addLocationOr(locationIncludes);
+    addLocationNone(locationExcludes);
+    addOr("c.funding_stage", fundingStages,    false);
     if (employeeMin > 0) { conditions.push(`c.employee_count >= $${i}`); params.push(employeeMin); i++; }
     if (employeeMax > 0) { conditions.push(`c.employee_count <= $${i}`); params.push(employeeMax); i++; }
     if (revenueMin  > 0) { conditions.push(`c.revenue_usd >= $${i}`);   params.push(revenueMin);  i++; }
