@@ -203,6 +203,78 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // Academy enrollment
+    if (type === "academy_enrollment" && workspaceId) {
+      const productId  = meta.product_id as string | undefined;
+      const cohortId   = meta.cohort_id  as string | undefined;
+      const userId     = meta.user_id    as string | undefined;
+      const phone      = meta.phone      as string | undefined;
+      const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+
+      if (productId && userId) {
+        const { paid } = await verifyPaystackPayment(data.reference);
+        if (paid) {
+          const { data: existing } = await db
+            .from("academy_enrollments")
+            .select("id")
+            .eq("paystack_reference", data.reference)
+            .maybeSingle();
+
+          if (!existing) {
+            const { data: product } = await db
+              .from("academy_products")
+              .select("credits_grant, leadash_months, name")
+              .eq("id", productId)
+              .single();
+
+            if (product) {
+              const leadashAccessEndsAt = product.leadash_months
+                ? new Date(Date.now() + product.leadash_months * 30 * 24 * 60 * 60 * 1000).toISOString()
+                : null;
+
+              const { data: enrollment } = await db.from("academy_enrollments").insert({
+                user_id:               userId,
+                workspace_id:          workspaceId,
+                product_id:            productId,
+                cohort_id:             cohortId ?? null,
+                status:                "active",
+                paystack_reference:    data.reference,
+                amount_kobo:           amountKobo ?? null,
+                phone:                 phone ?? null,
+                credits_granted:       false,
+                leadash_access_ends_at: leadashAccessEndsAt,
+              }).select("id").single();
+
+              if (enrollment && product.credits_grant > 0) {
+                const { data: ws } = await db.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
+                if (ws) {
+                  await db.from("workspaces").update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + product.credits_grant }).eq("id", workspaceId);
+                  await db.from("lead_credit_transactions").insert({
+                    workspace_id: workspaceId,
+                    type: "grant",
+                    amount: product.credits_grant,
+                    description: `Academy enrollment — ${product.name}`,
+                    paystack_reference: data.reference,
+                  });
+                  await db.from("academy_enrollments").update({ credits_granted: true }).eq("id", enrollment.id);
+                }
+              }
+
+              await db.from("billing_invoices").insert({
+                workspace_id:       workspaceId,
+                type:               "academy_enrollment",
+                description:        `Academy — ${product.name}`,
+                amount_kobo:        amountKobo ?? 0,
+                paystack_reference: data.reference,
+                status:             "paid",
+              }).then(() => {}).catch(() => {});
+            }
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Domain purchase payment
     const domainRecordId = meta.domain_record_id as string | undefined;
     if (!domainRecordId || !workspaceId) {
