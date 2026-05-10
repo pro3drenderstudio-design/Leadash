@@ -6,9 +6,24 @@ import { Suspense } from "react";
 
 interface Workspace {
   id: string; name: string; slug: string; owner_id: string; owner_email: string;
-  plan_id: string; plan_status: string; lead_credits_balance: number;
-  sends_this_month: number; max_monthly_sends: number; max_inboxes: number;
-  created_at: string; stripe_customer_id: string | null;
+  plan_id: string; plan_status: string; trial_ends_at: string | null;
+  lead_credits_balance: number; sends_this_month: number; max_monthly_sends: number;
+  max_inboxes: number; created_at: string; stripe_customer_id: string | null;
+}
+
+function daysLeft(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / 86400000);
+}
+
+function ExpiryBadge({ trial_ends_at }: { trial_ends_at: string | null }) {
+  const days = daysLeft(trial_ends_at);
+  if (days === null) return <span className="text-white/20 text-xs">—</span>;
+  if (days < 0)  return <span className="text-xs text-red-400 font-medium">Expired</span>;
+  if (days === 0) return <span className="text-xs text-orange-400 font-semibold">Today</span>;
+  const color = days <= 3 ? "text-orange-400" : days <= 7 ? "text-yellow-400" : "text-white/50";
+  return <span className={`text-xs tabular-nums ${color}`}>{days}d left</span>;
 }
 
 function PlanBadge({ plan }: { plan: string }) {
@@ -109,6 +124,7 @@ function WorkspacesInner() {
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">Plan</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider hidden lg:table-cell">Credits</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider hidden lg:table-cell">Sends</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider hidden lg:table-cell">Expiry</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider hidden xl:table-cell">Created</th>
               <th className="px-4 py-3" />
             </tr>
@@ -121,12 +137,13 @@ function WorkspacesInner() {
                 <td className="px-4 py-3"><div className="h-4 bg-slate-200 dark:bg-white/10 rounded animate-pulse w-16" /></td>
                 <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 bg-slate-200 dark:bg-white/10 rounded animate-pulse w-12" /></td>
                 <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 bg-slate-200 dark:bg-white/10 rounded animate-pulse w-20" /></td>
+                <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 bg-slate-200 dark:bg-white/10 rounded animate-pulse w-16" /></td>
                 <td className="px-4 py-3 hidden xl:table-cell"><div className="h-4 bg-slate-200 dark:bg-white/10 rounded animate-pulse w-20" /></td>
                 <td className="px-4 py-3" />
               </tr>
             ))}
             {!loading && workspaces.length === 0 && (
-              <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-400">No workspaces found.</td></tr>
+              <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400">No workspaces found.</td></tr>
             )}
             {!loading && workspaces.map(ws => (
               <tr key={ws.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
@@ -150,6 +167,9 @@ function WorkspacesInner() {
                 </td>
                 <td className="px-4 py-3 hidden lg:table-cell text-slate-500 dark:text-white/40 text-xs tabular-nums">
                   {ws.sends_this_month.toLocaleString()} / {ws.max_monthly_sends.toLocaleString()}
+                </td>
+                <td className="px-4 py-3 hidden lg:table-cell">
+                  <ExpiryBadge trial_ends_at={ws.trial_ends_at} />
                 </td>
                 <td className="px-4 py-3 hidden xl:table-cell text-slate-500 dark:text-white/40 text-xs">
                   {new Date(ws.created_at).toLocaleDateString()}

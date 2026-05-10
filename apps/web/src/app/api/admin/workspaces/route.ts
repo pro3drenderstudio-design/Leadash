@@ -16,15 +16,15 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
-  const page    = parseInt(searchParams.get("page")   ?? "1");
+  const page    = parseInt(searchParams.get("page")    ?? "1");
   const search  = searchParams.get("search") ?? "";
   const plan    = searchParams.get("plan")   ?? "";
-  const perPage = 25;
+  const perPage = Math.min(parseInt(searchParams.get("per_page") ?? "25"), 200);
 
   // Fetch all workspaces with owner info via auth.users join
   let query = ctx.adminClient
     .from("workspaces")
-    .select("id, name, slug, owner_id, plan_id, plan_status, lead_credits_balance, sends_this_month, max_monthly_sends, max_inboxes, max_seats, created_at, stripe_customer_id, billing_email", { count: "exact" })
+    .select("id, name, slug, owner_id, plan_id, plan_status, trial_ends_at, lead_credits_balance, sends_this_month, max_monthly_sends, max_inboxes, max_seats, created_at, stripe_customer_id, billing_email", { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (plan)   query = query.eq("plan_id", plan);
