@@ -36,7 +36,7 @@ interface DiscountCode {
   expires_at: string | null; is_active: boolean;
 }
 
-type Tab = "builder" | "cohorts" | "enrollments" | "codes" | "products";
+type Tab = "builder" | "cohorts" | "enrollments" | "codes" | "products" | "access";
 type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -69,6 +69,11 @@ export default function AdminAcademyPage() {
   const [uploadPct,   setUploadPct]   = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Access / coming-soon state ─────────────────────────────────────────────
+  const [comingSoon, setComingSoon]         = useState<{ enabled: boolean; beta_workspaces: string[] }>({ enabled: true, beta_workspaces: [] });
+  const [betaInput,  setBetaInput]          = useState("");
+  const [accessSaving, setAccessSaving]     = useState(false);
+
   const notify = (text: string, ok = true) => {
     setMsg({ text, ok });
     setTimeout(() => setMsg(null), 3500);
@@ -79,14 +84,16 @@ export default function AdminAcademyPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [adminRes, codesRes] = await Promise.all([
+      const [adminRes, codesRes, accessRes] = await Promise.all([
         fetch("/api/admin/academy").then(r => r.json()),
         fetch("/api/admin/academy/discount-codes").then(r => r.json()),
+        fetch("/api/admin/academy/coming-soon").then(r => r.json()),
       ]);
       setProducts(adminRes.products ?? []);
       setCohorts(adminRes.cohorts ?? []);
       setEnrollments(adminRes.enrollments ?? []);
       setCodes(codesRes.codes ?? []);
+      if (accessRes.setting) setComingSoon(accessRes.setting);
 
       if (!selectedProduct && adminRes.products?.length) {
         setSelectedProduct(adminRes.products[0].id);
@@ -97,6 +104,33 @@ export default function AdminAcademyPage() {
   }, [selectedProduct]);
 
   useEffect(() => { load(); }, []);
+
+  // ── Access actions ─────────────────────────────────────────────────────────
+
+  async function saveComingSoon(patch: Partial<typeof comingSoon>) {
+    setAccessSaving(true);
+    const next = { ...comingSoon, ...patch };
+    setComingSoon(next);
+    const res = await fetch("/api/admin/academy/coming-soon", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    }).then(r => r.json());
+    if (res.setting) { setComingSoon(res.setting); notify("Access settings saved"); }
+    else notify(res.error ?? "Error", false);
+    setAccessSaving(false);
+  }
+
+  function addBetaWorkspace() {
+    const id = betaInput.trim();
+    if (!id || comingSoon.beta_workspaces.includes(id)) return;
+    saveComingSoon({ beta_workspaces: [...comingSoon.beta_workspaces, id] });
+    setBetaInput("");
+  }
+
+  function removeBetaWorkspace(id: string) {
+    saveComingSoon({ beta_workspaces: comingSoon.beta_workspaces.filter(w => w !== id) });
+  }
 
   // Load sections+lessons when product changes
   useEffect(() => {
@@ -323,6 +357,7 @@ export default function AdminAcademyPage() {
     { key: "enrollments", label: "Enrollments" },
     { key: "codes",       label: "Discount Codes" },
     { key: "products",    label: "Product Settings" },
+    { key: "access",      label: comingSoon.enabled ? "🔒 Coming Soon ON" : "✅ Live" },
   ];
 
   return (
@@ -857,6 +892,91 @@ export default function AdminAcademyPage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── ACCESS / COMING SOON ─────────────────────────────────────────── */}
+        {tab === "access" && (
+          <div className="max-w-xl space-y-6">
+
+            {/* Global toggle */}
+            <div className="bg-gray-900 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-white">Coming Soon Mode</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    When ON, all users see the "Coming Soon" overlay instead of the Academy.
+                    Beta workspaces below bypass it.
+                  </p>
+                </div>
+                <button
+                  onClick={() => saveComingSoon({ enabled: !comingSoon.enabled })}
+                  disabled={accessSaving}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                    comingSoon.enabled ? "bg-orange-500" : "bg-emerald-500"
+                  }`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    comingSoon.enabled ? "translate-x-1" : "translate-x-6"
+                  }`} />
+                </button>
+              </div>
+
+              <div className={`mt-4 flex items-center gap-2 text-sm font-medium ${comingSoon.enabled ? "text-orange-400" : "text-emerald-400"}`}>
+                {comingSoon.enabled
+                  ? "🔒 Academy is hidden — Coming Soon overlay is active"
+                  : "✅ Academy is live — all users can access it"}
+              </div>
+            </div>
+
+            {/* Beta workspaces */}
+            <div className="bg-gray-900 rounded-xl p-5">
+              <h3 className="font-semibold text-white mb-1">Beta Access</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                These workspaces bypass the Coming Soon overlay regardless of the global toggle.
+                Paste a workspace ID to add it.
+              </p>
+
+              <div className="flex gap-2 mb-4">
+                <input
+                  value={betaInput}
+                  onChange={e => setBetaInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addBetaWorkspace()}
+                  placeholder="Paste workspace ID…"
+                  className="input-base flex-1 font-mono text-xs"
+                />
+                <button
+                  onClick={addBetaWorkspace}
+                  disabled={!betaInput.trim() || accessSaving}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 py-1.5 rounded-lg text-sm font-medium">
+                  Add
+                </button>
+              </div>
+
+              {comingSoon.beta_workspaces.length === 0 ? (
+                <p className="text-xs text-gray-600">No beta workspaces yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {comingSoon.beta_workspaces.map(id => (
+                    <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+                      <span className="font-mono text-xs text-gray-300">{id}</span>
+                      <button
+                        onClick={() => removeBetaWorkspace(id)}
+                        className="text-gray-500 hover:text-red-400 text-xs ml-4">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-5 pt-4 border-t border-gray-800">
+                <p className="text-xs text-gray-500 mb-2">Where to find your workspace ID:</p>
+                <p className="text-xs text-gray-600 font-mono bg-gray-800 rounded px-3 py-2">
+                  Supabase → workspaces table → id column
+                </p>
+              </div>
+            </div>
+
           </div>
         )}
 
