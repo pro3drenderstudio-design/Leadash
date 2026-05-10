@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const client = new Anthropic();
+const client = new OpenAI();
 
 const PEOPLE_SYSTEM = `You are a lead search filter parser. Convert natural language queries into structured JSON filter parameters.
 
@@ -53,14 +53,16 @@ export async function POST(req: NextRequest) {
   const system = mode === "companies" ? COMPANY_SYSTEM : PEOPLE_SYSTEM;
 
   try {
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
       max_tokens: 512,
-      system,
-      messages: [{ role: "user", content: query.trim() }],
+      messages: [
+        { role: "system", content: system },
+        { role: "user",   content: query.trim() },
+      ],
     });
 
-    const text = msg.content.find(b => b.type === "text")?.text ?? "{}";
+    const text = completion.choices[0]?.message?.content ?? "{}";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const filters = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 
