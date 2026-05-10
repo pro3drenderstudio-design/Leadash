@@ -33,6 +33,18 @@ export async function GET(req: NextRequest) {
   const limit          = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
   const offset         = (page - 1) * limit;
 
+  const CO_SORT_COLS: Record<string, string> = {
+    name:         "c.name",
+    industry:     "c.industry",
+    size:         "c.employee_count",
+    location:     "c.country",
+    people_count: "people_count",
+    revenue:      "c.revenue_usd",
+  };
+  const sortRaw = p.get("sort") || "people_count";
+  const sortCol = CO_SORT_COLS[sortRaw] ?? "people_count";
+  const sortDir = p.get("order") === "asc" ? "ASC" : "DESC";
+
   try {
     const conditions: string[] = [];
     const params: unknown[]    = [];
@@ -80,7 +92,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN discover_people p ON p.company_id = c.id
         ${where}
         GROUP BY c.id
-        ORDER BY people_count DESC, c.name ASC
+        ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
         LIMIT $${i} OFFSET $${i + 1}
       `, [...params, limit, offset] as never[]),
     ]);

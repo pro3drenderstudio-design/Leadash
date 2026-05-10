@@ -48,6 +48,18 @@ export async function GET(req: NextRequest) {
   const limit        = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
   const offset       = (page - 1) * limit;
 
+  const SORT_COLS: Record<string, string> = {
+    name:         "p.first_name, p.last_name",
+    title:        "p.title",
+    company_name: "p.company_name",
+    location:     "p.country, p.city",
+    email_status: "p.email_status",
+    created_at:   "p.created_at",
+  };
+  const sortRaw  = p.get("sort") || "created_at";
+  const sortCol  = SORT_COLS[sortRaw] ?? "p.created_at";
+  const sortDir  = p.get("order") === "asc" ? "ASC" : "DESC";
+
   try {
     const conditions: string[] = [];
     const params: unknown[]    = [];
@@ -99,7 +111,7 @@ export async function GET(req: NextRequest) {
         FROM discover_people p
         LEFT JOIN discover_companies c ON c.id = p.company_id
         ${where}
-        ORDER BY p.created_at DESC
+        ORDER BY ${sortCol} ${sortDir} NULLS LAST
         LIMIT $${i} OFFSET $${i + 1}
       `, [...params, limit, offset] as never[]),
     ]);

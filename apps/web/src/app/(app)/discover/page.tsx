@@ -507,6 +507,12 @@ export default function DiscoverPage() {
   const [coRevenueRange,  setCoRevenueRange]  = useState<{ min: number; max: number } | null>(null);
   const [coHasPeople,     setCoHasPeople]     = useState(false);
 
+  // ── Sort state ────────────────────────────────────────────────────────────
+  const [peopleSortBy,  setPeopleSortBy]  = useState("created_at");
+  const [peopleSortDir, setPeopleSortDir] = useState<"asc" | "desc">("desc");
+  const [coSortBy,      setCoSortBy]      = useState("people_count");
+  const [coSortDir,     setCoSortDir]     = useState<"asc" | "desc">("desc");
+
   // ── Result state ──────────────────────────────────────────────────────────
   const [results,         setResults]         = useState<DiscoverResult[]>([]);
   const [companyResults,  setCompanyResults]   = useState<DiscoverCompanyResult[]>([]);
@@ -565,12 +571,13 @@ export default function DiscoverPage() {
       if (industries.length)  params.set("industry",     industries.join(","));
       if (companySizes.length) params.set("company_size", companySizes.join(","));
       params.set("email_status", emailStatus);
+      params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
       setResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus]);
+  }, [keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus, peopleSortBy, peopleSortDir]);
 
   const searchCompanies = useCallback(async (p = 1) => {
     setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
@@ -587,12 +594,13 @@ export default function DiscoverPage() {
       if (coRevenueRange?.min)     params.set("revenue_min",   String(coRevenueRange.min));
       if (coRevenueRange?.max)     params.set("revenue_max",   String(coRevenueRange.max));
       params.set("has_people", String(coHasPeople));
+      params.set("sort", coSortBy); params.set("order", coSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`);
       setCompanyResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople]);
+  }, [coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople, coSortBy, coSortDir]);
 
   const search = mode === "people" ? searchPeople : searchCompanies;
 
@@ -603,7 +611,9 @@ export default function DiscoverPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, titleKws, seniorities, departments, countries, city, companies, industries, companySizes, emailStatus,
-      coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople, mode]);
+      peopleSortBy, peopleSortDir,
+      coKeyword, coIndustries, coSizes, coCountries, coCity, coFundingStages, coEmployeeRange, coRevenueRange, coHasPeople,
+      coSortBy, coSortDir, mode]);
 
   function clearAll() {
     if (mode === "people") {
@@ -985,8 +995,26 @@ export default function DiscoverPage() {
                     <input type="checkbox" checked={results.length > 0 && selected.size === results.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  {["Person", "Company", "Location", "Email", "Phone"].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">{h}</th>
+                  {([
+                    { label: "Person",   col: "name" },
+                    { label: "Company",  col: "company_name" },
+                    { label: "Location", col: "location" },
+                    { label: "Email",    col: null },
+                    { label: "Phone",    col: null },
+                  ] as { label: string; col: string | null }[]).map(({ label, col }) => (
+                    <th key={label} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
+                      {col ? (
+                        <button onClick={() => {
+                          if (peopleSortBy === col) setPeopleSortDir(d => d === "asc" ? "desc" : "asc");
+                          else { setPeopleSortBy(col); setPeopleSortDir("asc"); }
+                        }} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
+                          {label}
+                          <span className="text-[9px] opacity-50 group-hover:opacity-100">
+                            {peopleSortBy === col ? (peopleSortDir === "asc" ? "▲" : "▼") : "⇅"}
+                          </span>
+                        </button>
+                      ) : label}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -1064,8 +1092,24 @@ export default function DiscoverPage() {
                     <input type="checkbox" checked={companyResults.length > 0 && selected.size === companyResults.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  {["Company", "Industry", "Size", "Location", "Contacts"].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">{h}</th>
+                  {([
+                    { label: "Company",  col: "name" },
+                    { label: "Industry", col: "industry" },
+                    { label: "Size",     col: "size" },
+                    { label: "Location", col: "location" },
+                    { label: "Contacts", col: "people_count" },
+                  ] as { label: string; col: string }[]).map(({ label, col }) => (
+                    <th key={label} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
+                      <button onClick={() => {
+                        if (coSortBy === col) setCoSortDir(d => d === "asc" ? "desc" : "asc");
+                        else { setCoSortBy(col); setCoSortDir("desc"); }
+                      }} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
+                        {label}
+                        <span className="text-[9px] opacity-50 group-hover:opacity-100">
+                          {coSortBy === col ? (coSortDir === "asc" ? "▲" : "▼") : "⇅"}
+                        </span>
+                      </button>
+                    </th>
                   ))}
                 </tr>
               </thead>
