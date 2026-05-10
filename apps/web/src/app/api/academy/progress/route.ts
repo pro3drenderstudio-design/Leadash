@@ -1,59 +1,95 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createClient } from "@/lib/supabase/server";
+import { isLessonUnlocked } from "@/types/academy";
+
+const POINTS_PER_LESSON = 10;
+const POINTS_PER_COURSE = 200;
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
-  const { db, workspaceId } = auth;
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { db, workspaceId, userId } = auth;
 
-  let body: { module_id?: string; product_id?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  let body: { lesson_id?: string; product_id?: string; watch_percent?: number };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const { module_id, product_id } = body;
-  if (!module_id || !product_id) return NextResponse.json({ error: "module_id and product_id required" }, { status: 400 });
+  const { lesson_id, product_id, watch_percent = 100 } = body;
+  if (!lesson_id || !product_id) return NextResponse.json({ error: "lesson_id and product_id required" }, { status: 400 });
 
-  const { data: enrollment } = await db
-    .from("academy_enrollments")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("workspace_id", workspaceId)
-    .eq("product_id", product_id)
-    .eq("status", "active")
-    .maybeSingle();
+  const [enrollmentRes, lessonRes] = await Promise.all([
+    db.from("academy_enrollments")
+      .select("*, academy_cohorts(*)")
+      .eq("user_id", userId)
+      .eq("workspace_id", workspaceId)
+      .eq("product_id", product_id)
+      .eq("status", "active")
+      .maybeSingle(),
+    db.from("academy_lessons").select("*").eq("id", lesson_id).single(),
+  ]);
+
+  const enrollment = enrollmentRes.data;
+  const lesson     = lessonRes.data;
 
   if (!enrollment) return NextResponse.json({ error: "Not enrolled" }, { status: 403 });
+  if (!lesson)     return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
 
-  await db.from("academy_progress")
-    .insert({ enrollment_id: enrollment.id, module_id })
-    .throwOnError()
-    .then(() => {})
-    .catch(e => { if (e.code !== "23505") throw e; });
+  const cohort = (enrollment as Record<string, unknown>).academy_cohorts as Parameters<typeof isLessonUnlocked>[2];
+  if (!isLessonUnlocked(lesson, enrollment, cohort))
+    return NextResponse.json({ error: "Lesson not unlocked" }, { status: 403 });
 
-  const { count } = await db
-    .from("academy_progress")
-    .select("*", { count: "exact", head: true })
-    .eq("enrollment_id", enrollment.id);
+  const isComplete = watch_percent >= 85;
+  const now = new Date().toISOString();
 
-  const { count: total } = await db
-    .from("academy_modules")
-    .select("*", { count: "exact", head: true })
-    .eq("product_id", product_id);
+  const { data: prog } = await db.from("academy_lesson_progress")
+    .upsert({
+      enrollment_id:   enrollment.id,
+      lesson_id,
+      status:          isComplete ? "completed" : "started",
+      watch_percent,
+      last_watched_at: now,
+      ...(isComplete ? { completed_at: now } : {}),
+    }, { onConflict: "enrollment_id,lesson_id", ignoreDuplicates: false })
+    .select().single();
 
-  if (count && total && count >= total) {
+  if (!isComplete) return NextResponse.json({ progress: prog });
+
+  // Check overall course completion
+  const [allLessonsRes, allProgressRes] = await Promise.all([
+    db.from("academy_lessons").select("id").eq("product_id", product_id).eq("is_published", true),
+    db.from("academy_lesson_progress").select("lesson_id").eq("enrollment_id", enrollment.id).eq("status", "completed"),
+  ]);
+
+  const allLessonIds   = (allLessonsRes.data ?? []).map(l => l.id);
+  const completedIds   = new Set((allProgressRes.data ?? []).map(p => p.lesson_id));
+  const totalCompleted = allLessonIds.filter(id => completedIds.has(id)).length;
+  const pctComplete    = allLessonIds.length ? (totalCompleted / allLessonIds.length) * 100 : 0;
+
+  const { data: product } = await db.from("academy_products")
+    .select("completion_threshold_pct, certificate_enabled")
+    .eq("id", product_id).single();
+  const threshold = product?.completion_threshold_pct ?? 80;
+
+  let certificate = null;
+  if (pctComplete >= threshold) {
     await db.from("academy_enrollments")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .update({ status: "completed", completed_at: now })
       .eq("id", enrollment.id);
+
+    if (product?.certificate_enabled) {
+      const { count } = await db.from("academy_certificates").select("*", { count: "exact", head: true });
+      const certNum = `LEADASH-${new Date().getFullYear()}-${String((count ?? 0) + 1).padStart(5, "0")}`;
+      const { data: cert } = await db.from("academy_certificates")
+        .insert({ enrollment_id: enrollment.id, user_id: userId, product_id, certificate_number: certNum })
+        .select().single();
+      certificate = cert;
+    }
   }
 
-  return NextResponse.json({ ok: true, progress: count, total });
+  return NextResponse.json({
+    progress:       prog,
+    course_complete: pctComplete >= threshold,
+    pct_complete:   Math.round(pctComplete),
+    certificate,
+  });
 }

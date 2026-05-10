@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createClient } from "@/lib/supabase/server";
+import { isLessonUnlocked } from "@/types/academy";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -12,37 +13,68 @@ export async function GET(req: NextRequest) {
 
   const { db, workspaceId } = auth;
 
-  const [productsRes, enrollmentsRes, cohortsRes, progressRes, modulesRes] = await Promise.all([
-    db.from("academy_products").select("*").eq("is_active", true).order("price_ngn"),
+  const [productsRes, enrollmentsRes, cohortsRes, certificatesRes] = await Promise.all([
+    db.from("academy_products").select("*").eq("is_active", true).eq("is_published", true).order("price_ngn"),
     userId
       ? db.from("academy_enrollments").select("*").eq("user_id", userId).eq("workspace_id", workspaceId)
       : Promise.resolve({ data: [] }),
     db.from("academy_cohorts").select("*").in("status", ["upcoming", "active"]).order("starts_at"),
     userId
-      ? db.from("academy_progress")
-          .select("enrollment_id")
-          .in("enrollment_id",
-            (await db.from("academy_enrollments").select("id").eq("user_id", userId).eq("workspace_id", workspaceId)).data?.map(e => e.id) ?? []
-          )
+      ? db.from("academy_certificates").select("*").eq("user_id", userId)
       : Promise.resolve({ data: [] }),
-    db.from("academy_modules").select("id, product_id"),
   ]);
 
-  const enrollments = enrollmentsRes.data ?? [];
-  const cohorts     = cohortsRes.data ?? [];
-  const allProgress = progressRes.data ?? [];
-  const allModules  = modulesRes.data ?? [];
+  const enrollments  = enrollmentsRes.data  ?? [];
+  const cohorts      = cohortsRes.data      ?? [];
+  const certificates = certificatesRes.data ?? [];
+
+  // Fetch sections + lessons for all products
+  const { data: sections } = await db.from("academy_sections").select("*").order("position");
+  const { data: lessons }  = await db.from("academy_lessons").select("*").eq("is_published", true).order("position");
+
+  // Fetch progress for enrolled products
+  let progressMap: Record<string, Set<string>> = {};
+  if (userId && enrollments.length) {
+    const enrollmentIds = enrollments.map(e => e.id);
+    const { data: progress } = await db
+      .from("academy_lesson_progress")
+      .select("enrollment_id, lesson_id")
+      .in("enrollment_id", enrollmentIds)
+      .eq("status", "completed");
+    for (const p of progress ?? []) {
+      if (!progressMap[p.enrollment_id]) progressMap[p.enrollment_id] = new Set();
+      progressMap[p.enrollment_id].add(p.lesson_id);
+    }
+  }
 
   const products = (productsRes.data ?? []).map(p => {
     const enrollment = enrollments.find(e => e.product_id === p.id) ?? null;
-    const cohort     = enrollment?.cohort_id
+    const cohort = enrollment?.cohort_id
       ? cohorts.find(c => c.id === enrollment.cohort_id) ?? null
-      : cohorts.find(c => c.product_id === p.id) ?? null;
-    const progress_count = enrollment
-      ? allProgress.filter(pr => pr.enrollment_id === enrollment.id).length
-      : 0;
-    const module_count = allModules.filter(m => m.product_id === p.id).length;
-    return { ...p, enrollment, cohort, progress_count, module_count };
+      : cohorts.find(c => c.product_id === p.id && c.is_default) ?? null;
+    const certificate = certificates.find(c => c.product_id === p.id) ?? null;
+
+    const productSections = (sections ?? []).filter(s => s.product_id === p.id);
+    const productLessons  = (lessons  ?? []).filter(l => l.product_id === p.id);
+
+    const completedSet = enrollment ? (progressMap[enrollment.id] ?? new Set()) : new Set();
+
+    const sectionsWithLessons = productSections.map(s => ({
+      ...s,
+      lessons: productLessons
+        .filter(l => l.section_id === s.id)
+        .map(l => ({
+          ...l,
+          unlocked:  enrollment ? isLessonUnlocked(l, enrollment, cohort) : l.is_free_preview,
+          completed: completedSet.has(l.id),
+          progress:  null,
+        })),
+    }));
+
+    const totalLessons    = productLessons.length;
+    const completedCount  = enrollment ? productLessons.filter(l => completedSet.has(l.id)).length : 0;
+
+    return { ...p, enrollment, cohort, certificate, sections: sectionsWithLessons, total_lessons: totalLessons, completed_count: completedCount };
   });
 
   return NextResponse.json({ products });
