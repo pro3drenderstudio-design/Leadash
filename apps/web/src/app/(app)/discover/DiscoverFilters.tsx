@@ -434,7 +434,7 @@ export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   keyword: "", titleIncludes: [], titleExcludes: [], seniorities: [],
   departments: [], locationIncludes: [], locationExcludes: [],
   companyIncludes: [], companyExcludes: [], industryIncludes: [],
-  industryExcludes: [], companySizes: [], emailStatus: "has_email",
+  industryExcludes: [], companySizes: [], emailStatus: "any",
   companyKeywordIncludes: [], companyKeywordExcludes: [],
 };
 
@@ -488,7 +488,7 @@ export function PeopleSidebar({
   const coCount       = filters.companyIncludes.length  + filters.companyExcludes.length;
   const indCount      = filters.industryIncludes.length + filters.industryExcludes.length;
   const sizeCount     = filters.companySizes.length;
-  const emailCount    = filters.emailStatus !== "has_email" ? 1 : 0;
+  const emailCount    = filters.emailStatus !== "any" ? 1 : 0;
   const kwCount       = filters.companyKeywordIncludes.length + filters.companyKeywordExcludes.length;
 
   return (

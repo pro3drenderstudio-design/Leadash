@@ -245,6 +245,16 @@ export default function CrmClient() {
   const [linkUrl, setLinkUrl]           = useState("");
   const noteRef   = useRef<HTMLTextAreaElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevThreadsRef     = useRef<CrmThread[]>([]);
+  const initialLoadDoneRef = useRef(false);
+  const [notifications, setNotifications] = useState<Array<{ id: string; text: string; enrollment_id: string }>>([]);
+
+  // Auto-dismiss notifications after 7 seconds
+  useEffect(() => {
+    if (!notifications.length) return;
+    const t = setTimeout(() => setNotifications(n => n.slice(1)), 7000);
+    return () => clearTimeout(t);
+  }, [notifications]);
 
   // ── Unmatched state ────────────────────────────────────────────────────────
   const [unmatched, setUnmatched]         = useState<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>([]);
@@ -279,6 +289,32 @@ export default function CrmClient() {
   const loadThreads = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     const data = await getCrmThreads();
+
+    // Detect threads that newly flipped to a positive status
+    if (initialLoadDoneRef.current) {
+      const POSITIVE = new Set<string>(["interested", "meeting_booked", "won"]);
+      const STATUS_LABEL: Record<string, string> = {
+        interested: "expressed interest",
+        meeting_booked: "booked a meeting",
+        won: "marked as won",
+      };
+      const prevPositiveIds = new Set(
+        prevThreadsRef.current.filter(t => POSITIVE.has(t.crm_status)).map(t => t.enrollment_id)
+      );
+      const newPositive = data.threads.filter(t => POSITIVE.has(t.crm_status) && !prevPositiveIds.has(t.enrollment_id));
+      if (newPositive.length) {
+        setNotifications(prev => [
+          ...prev.slice(-(4)),
+          ...newPositive.map(t => {
+            const name = [t.lead?.first_name, t.lead?.last_name].filter(Boolean).join(" ") || t.lead?.email || "A lead";
+            return { id: `${t.enrollment_id}-${Date.now()}`, text: `${name} ${STATUS_LABEL[t.crm_status] ?? t.crm_status}`, enrollment_id: t.enrollment_id };
+          }),
+        ]);
+      }
+    }
+
+    prevThreadsRef.current = data.threads;
+    initialLoadDoneRef.current = true;
     setThreads(data.threads);
     if (!silent) setLoading(false); else setRefreshing(false);
   }, []);
@@ -1273,6 +1309,34 @@ export default function CrmClient() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Positive reply notifications ── */}
+      {notifications.length > 0 && (
+        <div className="fixed bottom-5 right-5 flex flex-col gap-2 z-50 pointer-events-none">
+          {notifications.map(n => (
+            <div key={n.id}
+              className="pointer-events-auto flex items-center gap-3 bg-[#1a1a1a] border border-emerald-500/30 rounded-xl px-4 py-3 shadow-2xl min-w-[260px] max-w-[340px] animate-fade-in"
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0 animate-pulse" />
+              <p className="text-sm text-white/85 flex-1 leading-snug">{n.text}</p>
+              <button
+                onClick={() => {
+                  const thread = prevThreadsRef.current.find(t => t.enrollment_id === n.enrollment_id);
+                  if (thread) { setSelected(thread); setMainTab("inbox"); }
+                  setNotifications(prev => prev.filter(p => p.id !== n.id));
+                }}
+                className="text-[10px] text-emerald-400 font-semibold hover:text-emerald-300 transition-colors flex-shrink-0"
+              >
+                View
+              </button>
+              <button
+                onClick={() => setNotifications(prev => prev.filter(p => p.id !== n.id))}
+                className="text-white/20 hover:text-white/50 transition-colors flex-shrink-0 text-xs"
+              >✕</button>
+            </div>
+          ))}
         </div>
       )}
     </div>

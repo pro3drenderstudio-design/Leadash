@@ -3,6 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getInboxes, deleteInbox, updateInbox, importInboxes } from "@/lib/outreach/api";
+import dynamic from "next/dynamic";
+const WarmupClient = dynamic(() => import("@/app/(app)/warmup/WarmupClient"), { ssr: false });
 import { wsFetch, getWorkspaceId } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
@@ -202,7 +204,10 @@ function generateCombos(first: string, last: string): string[] {
 export default function InboxesClient({ trialExpired = false, planId = "free", maxInboxes = 5 }: InboxesClientProps) {
   const params = useSearchParams();
   const { currency: globalCurrency } = useCurrency();
-  const [activeTab, setActiveTab]       = useState<"inboxes" | "domains">("inboxes");
+  const [activeTab, setActiveTab]       = useState<"inboxes" | "domains" | "warmup">(() => {
+    const t = params.get("tab");
+    return (t === "warmup" || t === "domains") ? t : "inboxes";
+  });
   const [inboxes, setInboxes]           = useState<OutreachInboxSafe[]>([]);
   const [loading, setLoading]           = useState(true);
   const [toast, setToast]               = useState<string | null>(null);
@@ -759,16 +764,17 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
               + Connect Domain
             </Link>
           )}
+          {activeTab === "warmup" && null}
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-5 border-b border-white/8 pb-0">
-        {(["inboxes", "domains"] as const).map((t) => (
+        {(["inboxes", "domains", "warmup"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
-            className={`px-4 py-2 text-sm font-semibold capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${activeTab === t ? "text-white border-blue-500" : "text-white/40 border-transparent hover:text-white/60"}`}
+            className={`px-4 py-2 text-sm font-semibold capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${activeTab === t ? "text-white border-orange-500" : "text-white/40 border-transparent hover:text-white/60"}`}
           >
             {t}
           </button>
@@ -912,6 +918,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
           )}
         </div>
       )}
+
+      {/* ── WARMUP TAB ─────────────────────────────────────────────────────────── */}
+      {activeTab === "warmup" && <WarmupClient />}
 
       {activeTab === "inboxes" && (<>
 

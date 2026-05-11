@@ -468,7 +468,7 @@ export default function DiscoverPage() {
     peopleFilters.industryIncludes.length + peopleFilters.industryExcludes.length +
     peopleFilters.companySizes.length +
     peopleFilters.companyKeywordIncludes.length + peopleFilters.companyKeywordExcludes.length +
-    (peopleFilters.emailStatus !== "has_email" ? 1 : 0);
+    (peopleFilters.emailStatus !== "any" ? 1 : 0);
 
   const activeCoFilterCount =
     (companyFilters.coKeyword ? 1 : 0) +

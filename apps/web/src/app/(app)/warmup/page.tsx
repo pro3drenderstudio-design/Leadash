@@ -1,2 +1,2 @@
-import WarmupClient from "./WarmupClient";
-export default function WarmupPage() { return <WarmupClient />; }
+import { redirect } from "next/navigation";
+export default function WarmupPage() { redirect("/inboxes?tab=warmup"); }

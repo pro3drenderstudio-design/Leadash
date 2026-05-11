@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   const companySizes           = csv(p.get("company_size"));
   const companyKeywordIncludes = csv(p.get("co_keyword_include"));
   const companyKeywordExcludes = csv(p.get("co_keyword_exclude"));
-  const emailStatus            = p.get("email_status") || "has_email";
+  const emailStatus            = p.get("email_status") || "any";
   const page            = Math.max(1, parseInt(p.get("page") || "1"));
   const limit           = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
   const offset          = (page - 1) * limit;

@@ -245,6 +245,21 @@ async function ingestMessages(
       const { data: wu } = await db.from("outreach_warmup_sends").select("id").eq("thread_id", msg.messageId).limit(1).single();
       if (wu) continue;
     }
+    // Mirror the Postal inbound check: if In-Reply-To points to a warmup send's
+    // message_id, store as warmup (not unmatched). Catches emails where the
+    // X-LD-Ref header was stripped by the receiving mail server.
+    if (msg.inReplyTo) {
+      const { data: wu } = await db.from("outreach_warmup_sends").select("id").eq("message_id", msg.inReplyTo).limit(1).single();
+      if (wu) {
+        await db.from("outreach_replies").insert({
+          workspace_id: workspaceId, inbox_id: inboxId,
+          from_email: msg.fromEmail, from_name: msg.fromName, subject: msg.subject,
+          body_text: msg.bodyText, message_id: msg.messageId || null, in_reply_to: msg.inReplyTo,
+          received_at: msg.receivedAt, is_warmup: true, is_filtered: false, attachments: [],
+        });
+        continue;
+      }
+    }
 
     const filterHit = applyFilters(filters, { fromEmail: msg.fromEmail, subject: msg.subject, bodyText: msg.bodyText });
 

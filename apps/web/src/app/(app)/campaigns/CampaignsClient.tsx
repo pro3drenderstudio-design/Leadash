@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { getCampaigns, updateCampaign, deleteCampaign, cloneCampaign } from "@/lib/outreach/api";
 import type { OutreachCampaign, CampaignStatus } from "@/types/outreach";
+import dynamic from "next/dynamic";
+const TemplatesClient = dynamic(() => import("@/app/(app)/templates/TemplatesClient"), { ssr: false });
 
 const STATUS_COLORS: Record<CampaignStatus, string> = {
   draft:     "text-white/40 bg-white/8",
@@ -14,6 +17,10 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
 const ALL_STATUSES: Array<CampaignStatus | "all"> = ["all", "active", "paused", "draft", "completed"];
 
 export default function CampaignsClient() {
+  const params = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"sequences" | "templates">(() =>
+    params.get("tab") === "templates" ? "templates" : "sequences"
+  );
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
@@ -69,10 +76,30 @@ export default function CampaignsClient() {
           <h1 className="text-xl font-bold text-white">Sequences</h1>
           <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
         </div>
-        <Link href="/campaigns/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
-          + New Sequence
-        </Link>
+        {activeTab === "sequences" && (
+          <Link href="/campaigns/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
+            + New Sequence
+          </Link>
+        )}
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 border-b border-white/8 pb-0">
+        {(["sequences", "templates"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={`px-4 py-2 text-sm font-semibold capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${activeTab === t ? "text-white border-orange-500" : "text-white/40 border-transparent hover:text-white/60"}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TEMPLATES TAB ── */}
+      {activeTab === "templates" && <TemplatesClient />}
+
+      {activeTab === "sequences" && <>
 
       {/* Clone error */}
       {cloneError && (
@@ -205,6 +232,7 @@ export default function CampaignsClient() {
           })}
         </div>
       )}
+      </>}
     </div>
   );
 }
