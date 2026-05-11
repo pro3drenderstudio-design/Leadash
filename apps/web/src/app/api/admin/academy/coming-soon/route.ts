@@ -36,9 +36,16 @@ export async function PATCH(req: NextRequest) {
 
   const { data, error } = await db
     .from("admin_settings")
-    .upsert({ key: "academy_coming_soon", value: merged, updated_at: new Date().toISOString() })
-    .select().single();
+    .upsert(
+      { key: "academy_coming_soon", value: merged, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    )
+    .select("value")
+    .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[coming-soon PATCH]", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ setting: data.value });
 }
