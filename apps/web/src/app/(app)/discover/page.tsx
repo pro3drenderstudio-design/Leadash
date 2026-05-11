@@ -77,11 +77,11 @@ function Avatar({ first, last, size = "md" }: { first: string | null; last: stri
   return <div className={`${sz} rounded-full ${color} flex items-center justify-center font-bold flex-shrink-0`}>{initials}</div>;
 }
 
-// ── Campaign picker modal ─────────────────────────────────────────────────────
+// ── Sequence picker modal ─────────────────────────────────────────────────────
 
 type Campaign = { id: string; name: string; total_enrolled: number; status?: string };
 
-function CampaignModal({ count, onClose, onConfirm }: {
+function SequenceModal({ count, onClose, onConfirm }: {
   count: number;
   onClose: () => void;
   onConfirm: (campaignId: string | null, campaignName: string | null) => void;
@@ -115,7 +115,7 @@ function CampaignModal({ count, onClose, onConfirm }: {
       <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[520px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
           <div>
-            <h2 className="text-sm font-bold text-white">Add to Campaign</h2>
+            <h2 className="text-sm font-bold text-white">Add to Sequence</h2>
             <p className="text-xs text-white/35 mt-0.5">{count} lead{count !== 1 ? "s" : ""} will be enrolled</p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
@@ -123,10 +123,10 @@ function CampaignModal({ count, onClose, onConfirm }: {
 
         <div className="px-5 py-3 border-b border-white/8">
           {!creating ? (
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search campaigns…"
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search sequences…"
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
           ) : (
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New campaign name…" autoFocus
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New sequence name…" autoFocus
               className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
           )}
         </div>
@@ -135,18 +135,18 @@ function CampaignModal({ count, onClose, onConfirm }: {
           {!creating && (
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
               <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">+</div>
-              <span className="text-xs text-orange-400 font-medium">Create new campaign</span>
+              <span className="text-xs text-orange-400 font-medium">Create new sequence</span>
             </button>
           )}
           {creating && (
             <button onClick={() => setCreating(false)} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
-              ← Back to existing campaigns
+              ← Back to existing sequences
             </button>
           )}
           {!creating && (loading ? (
             <div className="flex justify-center py-6"><Spinner sm /></div>
           ) : filtered.length === 0 ? (
-            <p className="text-center text-xs text-white/25 py-6">No campaigns found</p>
+            <p className="text-center text-xs text-white/25 py-6">No sequences found</p>
           ) : (
             filtered.map(c => (
               <button key={c.id} onClick={() => setSelected(c.id)}
@@ -165,7 +165,103 @@ function CampaignModal({ count, onClose, onConfirm }: {
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
           <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
             className="px-4 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-40">
-            {creating ? "Create & Add" : "Add to Campaign"}
+            {creating ? "Create & Add" : "Add to Sequence"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── List picker modal ─────────────────────────────────────────────────────────
+
+type LeadList = { id: string; name: string; description: string | null; lead_count: number };
+
+function ListModal({ count, onClose, onConfirm }: {
+  count: number;
+  onClose: () => void;
+  onConfirm: (listId: string | null, listName: string | null) => void;
+}) {
+  const [lists, setLists]       = useState<LeadList[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [q, setQ]               = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [newName, setNewName]   = useState("");
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    wsGet<LeadList[]>("/api/outreach/lists")
+      .then(d => setLists(d ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = lists.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
+
+  function handleConfirm() {
+    if (creating && newName.trim()) {
+      onConfirm(null, newName.trim());
+    } else if (selected) {
+      onConfirm(selected, null);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[520px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+          <div>
+            <h2 className="text-sm font-bold text-white">Add to List</h2>
+            <p className="text-xs text-white/35 mt-0.5">{count} lead{count !== 1 ? "s" : ""} will be added</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-white/8">
+          {!creating ? (
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lists…"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
+          ) : (
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New list name…" autoFocus
+              className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-2">
+          {!creating && (
+            <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
+              <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">+</div>
+              <span className="text-xs text-blue-400 font-medium">Create new list</span>
+            </button>
+          )}
+          {creating && (
+            <button onClick={() => setCreating(false)} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
+              ← Back to existing lists
+            </button>
+          )}
+          {!creating && (loading ? (
+            <div className="flex justify-center py-6"><Spinner sm /></div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-xs text-white/25 py-6">No lists yet</p>
+          ) : (
+            filtered.map(l => (
+              <button key={l.id} onClick={() => setSelected(l.id)}
+                className={`w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left ${selected === l.id ? "bg-blue-500/10" : ""}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selected === l.id ? "bg-blue-400" : "bg-white/15"}`} />
+                  <span className="text-xs text-white/70 truncate max-w-[220px]">{l.name}</span>
+                </div>
+                <span className="text-[10px] text-white/30 flex-shrink-0">{l.lead_count.toLocaleString()} leads</span>
+              </button>
+            ))
+          ))}
+        </div>
+
+        <div className="px-5 py-3 border-t border-white/8 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
+          <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
+            className="px-4 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/15 border border-white/15 text-white rounded-lg transition-colors disabled:opacity-40">
+            {creating ? "Create & Add" : "Add to List"}
           </button>
         </div>
       </div>
@@ -470,6 +566,8 @@ export default function DiscoverPage() {
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
   const [showCampaign,  setShowCampaign]  = useState(false);
   const [campaignIds,   setCampaignIds]   = useState<string[] | null>(null); // null = use selected
+  const [showList,      setShowList]      = useState(false);
+  const [listIds,       setListIds]       = useState<string[] | null>(null); // null = use selected
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savingSearch,  setSavingSearch]  = useState(false);
   const [saveNameVal,   setSaveNameVal]   = useState("");
@@ -615,7 +713,7 @@ export default function DiscoverPage() {
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
     const ids = overrideIds ?? Array.from(selected);
     if (!ids.length) return;
-    setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null);
+    setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
     try {
       const res = await wsFetch("/api/discover/export", {
         method: "POST",
@@ -639,6 +737,29 @@ export default function DiscoverPage() {
       }
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Export failed" });
+    } finally { setExporting(false); }
+  }
+
+  async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
+    const ids = overrideIds ?? Array.from(selected);
+    if (!ids.length) return;
+    setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
+    try {
+      const res = await wsFetch("/api/discover/export", {
+        method: "POST",
+        body: JSON.stringify({ ids, format: "list", list_id: listId, list_name: listName }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        setExportMsg({ ok: true, text: `${j.leads_added} lead${j.leads_added !== 1 ? "s" : ""} added to list` });
+        if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
+        setSelected(new Set());
+      } else {
+        const j = await res.json().catch(() => ({ error: res.statusText }));
+        setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
+      }
+    } catch (e) {
+      setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed to add to list" });
     } finally { setExporting(false); }
   }
 
@@ -832,7 +953,7 @@ export default function DiscoverPage() {
                 className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
                 {exporting ? "…" : "Add to Sequence"}
               </button>
-              <button onClick={() => handleExport("campaign", null, null)} disabled={exporting || revealing}
+              <button onClick={() => { setListIds(null); setShowList(true); }} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
                 {exporting ? "…" : "Add to List"}
               </button>
@@ -1079,7 +1200,7 @@ export default function DiscoverPage() {
                 onReveal={id => revealIds([id])}
                 onViewCompany={cid => setDrawer({ type: "company", id: cid })}
                 onAddToSequence={id => { setCampaignIds([id]); setShowCampaign(true); }}
-                onAddToList={id => handleExport("campaign", null, null, [id])}
+                onAddToList={id => { setListIds([id]); setShowList(true); }}
               />
             ) : (
               <CompanyDrawer
@@ -1093,12 +1214,21 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* ── Campaign modal ── */}
+      {/* ── Sequence modal ── */}
       {showCampaign && (
-        <CampaignModal
+        <SequenceModal
           count={campaignIds ? campaignIds.length : selected.size}
           onClose={() => { setShowCampaign(false); setCampaignIds(null); }}
           onConfirm={(cid, cname) => handleExport("campaign", cid, cname, campaignIds ?? undefined)}
+        />
+      )}
+
+      {/* ── List modal ── */}
+      {showList && (
+        <ListModal
+          count={listIds ? listIds.length : selected.size}
+          onClose={() => { setShowList(false); setListIds(null); }}
+          onConfirm={(lid, lname) => handleAddToList(lid, lname, listIds ?? undefined)}
         />
       )}
 

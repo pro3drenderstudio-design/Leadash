@@ -12,7 +12,8 @@ export async function POST(req: NextRequest) {
   const { workspaceId } = auth;
 
   const body: DiscoverExportRequest = await req.json();
-  const { ids, format, campaign_id, campaign_name } = body;
+  const { ids, format } = body;
+  let { campaign_id, campaign_name, list_id, list_name } = body;
 
   if (!Array.isArray(ids) || ids.length === 0)
     return NextResponse.json({ error: "No leads selected" }, { status: 400 });
@@ -141,8 +142,82 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (format === "list") {
+    // Add leads to a specific list (or create one)
+    let resolvedListId: string | null = list_id ?? null;
+
+    if (!resolvedListId && list_name) {
+      const { data: newList } = await adminDb
+        .from("outreach_lists")
+        .insert({ workspace_id: workspaceId, name: list_name })
+        .select("id")
+        .single();
+      resolvedListId = newList?.id ?? null;
+    }
+
+    const leads = mergedPeople.map((p) => ({
+      workspace_id: workspaceId,
+      list_id:      resolvedListId,
+      first_name:   p.first_name   ?? null,
+      last_name:    p.last_name    ?? null,
+      email:        p.email        ?? null,
+      title:        p.title        ?? null,
+      company:      p.company_name ?? null,
+      linkedin_url: p.linkedin_url ?? null,
+      country:      p.country      ?? null,
+      city:         p.city         ?? null,
+      status:       "active",
+    }));
+
+    const { data: insertedLeads, error: insertError } = await adminDb
+      .from("outreach_leads")
+      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: false })
+      .select("id, email");
+
+    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+
+    return NextResponse.json({
+      ok:           true,
+      leads_added:  insertedLeads?.length ?? 0,
+      credits_used: totalCost,
+    });
+  }
+
   if (format === "campaign") {
-    // Upsert leads into outreach_leads using a dedicated Discover list
+    // If only a name was given, create the campaign first
+    if (!campaign_id && campaign_name) {
+      const { data: newCampaign } = await adminDb
+        .from("outreach_campaigns")
+        .insert({
+          workspace_id,
+          name:                     campaign_name,
+          inbox_ids:                [],
+          list_ids:                 [],
+          timezone:                 "America/New_York",
+          send_days:                ["mon","tue","wed","thu","fri"],
+          send_start_time:          "09:00",
+          send_end_time:            "17:00",
+          daily_cap:                100,
+          track_opens:              true,
+          track_clicks:             true,
+          min_delay_seconds:        30,
+          max_delay_seconds:        120,
+          stop_on_reply:            true,
+          stop_on_auto_reply:       false,
+          stop_on_company_reply:    false,
+          pause_after_open:         false,
+          reply_to_email:           null,
+          text_only:                false,
+          first_email_text_only:    false,
+          insert_unsubscribe_header:true,
+          custom_tags:              [],
+        })
+        .select("id")
+        .single();
+      campaign_id = newCampaign?.id ?? null;
+    }
+
+    // Upsert leads into outreach_leads using a "Discover Imports" staging list
     let listId: string | null = null;
     const { data: existingList } = await adminDb
       .from("outreach_lists")
@@ -183,7 +258,7 @@ export async function POST(req: NextRequest) {
 
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
-    // If campaign_id provided, create enrollments directly
+    // If campaign_id resolved, create enrollments
     if (campaign_id && insertedLeads?.length) {
       const { data: existing } = await adminDb
         .from("outreach_enrollments")

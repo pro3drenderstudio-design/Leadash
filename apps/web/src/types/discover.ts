@@ -148,9 +148,11 @@ export interface DiscoverCompanySearchResponse {
 
 export interface DiscoverExportRequest {
   ids:           string[];
-  format:        "csv" | "campaign";
-  campaign_id?:  string;
-  campaign_name?:string;
+  format:        "csv" | "campaign" | "list";
+  campaign_id?:  string | null;
+  campaign_name?:string | null;
+  list_id?:      string | null;
+  list_name?:    string | null;
 }
 
 export interface RevealResponse {
