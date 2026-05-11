@@ -25,22 +25,6 @@ function ComingSoonOverlay() {
           Step-by-step courses and live challenges designed to help Nigerian professionals land foreign clients and earn in dollars.
         </p>
 
-        {/* Feature preview pills */}
-        <div className="flex flex-wrap justify-center gap-2 mb-10">
-          {[
-            "5-Day Foreign Job Challenge",
-            "$10k Academy Sprint",
-            "Daily video lessons",
-            "WhatsApp reminders",
-            "Certificate of completion",
-            "Live cohorts",
-          ].map(f => (
-            <span key={f} className="text-xs text-white/40 border border-white/8 rounded-full px-3 py-1">
-              {f}
-            </span>
-          ))}
-        </div>
-
         <p className="text-white/25 text-sm">
           We're putting the finishing touches on this. Check back soon.
         </p>
