@@ -24,17 +24,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     type PersonRow = {
       id: string; company_id: string | null; first_name: string | null; last_name: string | null;
-      title: string | null; seniority: string | null; department: string | null;
+      title: string | null; seniority: string | null; department: string | null; sub_role: string | null;
       linkedin_url: string | null; email: string | null; email_status: string | null; phone: string | null;
       country: string | null; state: string | null; city: string | null;
       company_name: string | null; company_domain: string | null; company_industry: string | null;
       company_size: string | null; company_website: string | null; company_linkedin: string | null;
+      gender: string | null; birth_year: number | null; skills: string | null; summary: string | null;
+      job_summary: string | null; inferred_salary: string | null; years_experience: number | null;
+      linkedin_connections: number | null; facebook_url: string | null; twitter_url: string | null;
+      github_url: string | null; interests: string | null; start_date: string | null;
     };
 
     const rows = await leadsDb.unsafe<PersonRow[]>(`
-      SELECT p.id, p.company_id, p.first_name, p.last_name, p.title, p.seniority, p.department,
+      SELECT p.id, p.company_id, p.first_name, p.last_name, p.title, p.seniority, p.department, p.sub_role,
              p.linkedin_url, p.email, p.email_status, p.phone,
              p.country, p.state, p.city, p.company_name,
+             p.gender, p.birth_year, p.skills, p.summary, p.job_summary,
+             p.inferred_salary, p.years_experience, p.linkedin_connections,
+             p.facebook_url, p.twitter_url, p.github_url, p.interests, p.start_date,
              c.domain AS company_domain, c.industry AS company_industry, c.size_range AS company_size,
              c.website_url AS company_website, c.linkedin_url AS company_linkedin
       FROM discover_people p
