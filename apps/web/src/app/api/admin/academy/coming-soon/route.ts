@@ -34,18 +34,33 @@ export async function PATCH(req: NextRequest) {
     beta_workspaces: body.beta_workspaces ?? existing.beta_workspaces,
   };
 
-  const { data, error } = await db
+  const now = new Date().toISOString();
+
+  // Try UPDATE first (row already exists)
+  const { data: updated, error: updateErr } = await db
     .from("admin_settings")
-    .upsert(
-      { key: "academy_coming_soon", value: merged, updated_at: new Date().toISOString() },
-      { onConflict: "key" }
-    )
+    .update({ value: merged, updated_at: now })
+    .eq("key", "academy_coming_soon")
     .select("value")
     .single();
 
-  if (error) {
-    console.error("[coming-soon PATCH]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (updateErr?.code !== "PGRST116" && updateErr) {
+    console.error("[coming-soon UPDATE]", updateErr);
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
-  return NextResponse.json({ setting: data.value });
+
+  if (updated) return NextResponse.json({ setting: updated.value });
+
+  // Row doesn't exist yet — insert it
+  const { data: inserted, error: insertErr } = await db
+    .from("admin_settings")
+    .insert({ key: "academy_coming_soon", value: merged, updated_at: now })
+    .select("value")
+    .single();
+
+  if (insertErr) {
+    console.error("[coming-soon INSERT]", insertErr);
+    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+  }
+  return NextResponse.json({ setting: inserted.value });
 }
