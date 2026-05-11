@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
       const { data: newCampaign } = await adminDb
         .from("outreach_campaigns")
         .insert({
-          workspace_id,
+          workspace_id:             workspaceId,
           name:                     campaign_name,
           inbox_ids:                [],
           list_ids:                 [],
