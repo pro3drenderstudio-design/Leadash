@@ -177,11 +177,13 @@ function CampaignModal({ count, onClose, onConfirm }: {
 
 type DrawerTarget = { type: "person"; id: string } | { type: "company"; id: string };
 
-function PersonDrawer({ id, onClose, onReveal, onViewCompany }: {
+function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAddToSequence }: {
   id: string;
   onClose: () => void;
   onReveal: (id: string) => Promise<void>;
   onViewCompany: (companyId: string) => void;
+  onAddToList: (id: string) => void;
+  onAddToSequence: (id: string) => void;
 }) {
   const [data, setData]       = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,7 +310,7 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany }: {
 
       {/* Coworkers */}
       {coworkers.length > 0 && (
-        <div className="px-5 py-4">
+        <div className="px-5 py-4 border-b border-white/8">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">
             People at {data.company_name as string}
           </span>
@@ -326,6 +328,22 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany }: {
           </div>
         </div>
       )}
+
+      {/* CTAs */}
+      <div className="px-5 py-4 flex flex-col gap-2">
+        <button
+          onClick={() => onAddToSequence(id)}
+          className="w-full px-4 py-2 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-xl transition-colors"
+        >
+          Add to Sequence
+        </button>
+        <button
+          onClick={() => onAddToList(id)}
+          className="w-full px-4 py-2 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/10 text-white/70 rounded-xl transition-colors"
+        >
+          Add to List
+        </button>
+      </div>
     </div>
   );
 }
@@ -451,6 +469,7 @@ export default function DiscoverPage() {
   const [balance,       setBalance]       = useState<number | null>(null);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
   const [showCampaign,  setShowCampaign]  = useState(false);
+  const [campaignIds,   setCampaignIds]   = useState<string[] | null>(null); // null = use selected
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savingSearch,  setSavingSearch]  = useState(false);
   const [saveNameVal,   setSaveNameVal]   = useState("");
@@ -593,13 +612,14 @@ export default function DiscoverPage() {
   async function revealSelected() { await revealIds(Array.from(selected)); }
 
   // ── Export ────────────────────────────────────────────────────────────────
-  async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null) {
-    if (!selected.size) return;
-    setExporting(true); setExportMsg(null); setShowCampaign(false);
+  async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
+    const ids = overrideIds ?? Array.from(selected);
+    if (!ids.length) return;
+    setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null);
     try {
       const res = await wsFetch("/api/discover/export", {
         method: "POST",
-        body: JSON.stringify({ ids: Array.from(selected), format, campaign_id: campaignId, campaign_name: campaignName }),
+        body: JSON.stringify({ ids, format, campaign_id: campaignId, campaign_name: campaignName }),
       });
       if (format === "csv" && res.ok) {
         const blob = await res.blob();
@@ -808,9 +828,13 @@ export default function DiscoverPage() {
                   Verify
                 </button>
               )}
-              <button onClick={() => setShowCampaign(true)} disabled={exporting || revealing}
+              <button onClick={() => { setCampaignIds(null); setShowCampaign(true); }} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                {exporting ? "…" : "Add to Campaign"}
+                {exporting ? "…" : "Add to Sequence"}
+              </button>
+              <button onClick={() => handleExport("campaign", null, null)} disabled={exporting || revealing}
+                className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                {exporting ? "…" : "Add to List"}
               </button>
               <button onClick={() => handleExport("csv")} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
@@ -1054,6 +1078,8 @@ export default function DiscoverPage() {
                 onClose={() => setDrawer(null)}
                 onReveal={id => revealIds([id])}
                 onViewCompany={cid => setDrawer({ type: "company", id: cid })}
+                onAddToSequence={id => { setCampaignIds([id]); setShowCampaign(true); }}
+                onAddToList={id => handleExport("campaign", null, null, [id])}
               />
             ) : (
               <CompanyDrawer
@@ -1070,9 +1096,9 @@ export default function DiscoverPage() {
       {/* ── Campaign modal ── */}
       {showCampaign && (
         <CampaignModal
-          count={selected.size}
-          onClose={() => setShowCampaign(false)}
-          onConfirm={(cid, cname) => handleExport("campaign", cid, cname)}
+          count={campaignIds ? campaignIds.length : selected.size}
+          onClose={() => { setShowCampaign(false); setCampaignIds(null); }}
+          onConfirm={(cid, cname) => handleExport("campaign", cid, cname, campaignIds ?? undefined)}
         />
       )}
 
