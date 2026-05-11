@@ -89,7 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               trialEndsAt={workspace.trial_ends_at}
             />
           </div>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
             {children}
           </main>
         </div>
