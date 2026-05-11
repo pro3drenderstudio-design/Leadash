@@ -15,7 +15,8 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data } = await db.from("admin_settings").select("value").eq("key", "academy_coming_soon").maybeSingle();
-  return NextResponse.json({ setting: data?.value ?? { enabled: true, beta_workspaces: [] } });
+  const raw = (data?.value ?? {}) as { enabled?: boolean; beta_workspaces?: string[] };
+  return NextResponse.json({ setting: { enabled: raw.enabled ?? true, beta_workspaces: raw.beta_workspaces ?? [] } });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -30,8 +31,8 @@ export async function PATCH(req: NextRequest) {
   const existing = (current?.value ?? { enabled: true, beta_workspaces: [] }) as { enabled: boolean; beta_workspaces: string[] };
 
   const merged = {
-    enabled:         body.enabled         !== undefined ? body.enabled         : existing.enabled,
-    beta_workspaces: body.beta_workspaces !== undefined ? body.beta_workspaces : existing.beta_workspaces,
+    enabled:         body.enabled         !== undefined ? body.enabled         : (existing.enabled ?? true),
+    beta_workspaces: body.beta_workspaces !== undefined ? body.beta_workspaces : (existing.beta_workspaces ?? []),
   };
 
   const now = new Date().toISOString();
