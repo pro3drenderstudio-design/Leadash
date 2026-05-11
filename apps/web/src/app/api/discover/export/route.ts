@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
   // Fetch existing reveals
   const { data: revealRows } = await adminDb
     .from("discover_reveals")
-    .select("person_id, email, phone, email_status")
+    .select("person_id, email, email_alts, phone, email_status")
     .eq("workspace_id", workspaceId)
     .in("person_id", ids);
 
-  type RevealRow = { person_id: string; email: string | null; phone: string | null; email_status: string | null };
+  type RevealRow = { person_id: string; email: string | null; email_alts: string[] | null; phone: string | null; email_status: string | null };
   const revealMap = new Map<string, RevealRow>(
     ((revealRows ?? []) as RevealRow[]).map(r => [r.person_id, r])
   );
@@ -54,8 +54,9 @@ export async function POST(req: NextRequest) {
   type PersonRow = {
     id: string; first_name: string | null; last_name: string | null;
     title: string | null; seniority: string | null; department: string | null;
-    linkedin_url: string | null; email: string | null; email_status: string | null;
-    phone: string | null; country: string | null; state: string | null; city: string | null;
+    linkedin_url: string | null; email: string | null; email_alts: string[] | null;
+    email_status: string | null; phone: string | null;
+    country: string | null; state: string | null; city: string | null;
     company_name: string | null; company_domain: string | null;
     company_industry: string | null; company_size: string | null;
   };
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
   const people = await leadsDb.unsafe<PersonRow[]>(`
     SELECT
       p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
-      p.linkedin_url, p.email, p.email_status, p.phone,
+      p.linkedin_url, p.email, p.email_alts, p.email_status, p.phone,
       p.country, p.state, p.city,
       c.name AS company_name, c.domain AS company_domain,
       c.industry AS company_industry, c.size_range AS company_size
@@ -76,9 +77,15 @@ export async function POST(req: NextRequest) {
   // Merge reveal data (use revealed email/phone if available)
   const mergedPeople = people.map(p => {
     const rev = revealMap.get(p.id);
+    const allAlts = [...new Set([
+      ...(p.email_alts ?? []),
+      ...(rev?.email_alts ?? []),
+    ])].filter(e => e && e !== (rev?.email ?? p.email));
     return {
       ...p,
       email:        rev ? rev.email        : p.email,
+      email_alt1:   allAlts[0] ?? null,
+      email_alt2:   allAlts[1] ?? null,
       phone:        rev ? rev.phone        : p.phone,
       email_status: rev ? rev.email_status : p.email_status,
     };
@@ -121,8 +128,8 @@ export async function POST(req: NextRequest) {
     const rows = mergedPeople.map((p) =>
       [
         p.first_name ?? "", p.last_name  ?? "", p.title      ?? "",
-        p.seniority  ?? "", p.email      ?? "", p.email_status ?? "",
-        p.phone      ?? "", p.linkedin_url ?? "",
+        p.seniority  ?? "", p.email      ?? "", p.email_alt1 ?? "", p.email_alt2 ?? "",
+        p.email_status ?? "", p.phone    ?? "", p.linkedin_url ?? "",
         p.company_name ?? "", p.company_domain ?? "",
         p.company_industry ?? "", p.company_size ?? "",
         p.city ?? "", p.state ?? "", p.country ?? "",
@@ -130,7 +137,7 @@ export async function POST(req: NextRequest) {
     );
 
     const csv = [
-      "First Name,Last Name,Title,Seniority,Email,Email Status,Phone,LinkedIn URL,Company,Domain,Industry,Company Size,City,State,Country",
+      "First Name,Last Name,Title,Seniority,Email,Email Alt 1,Email Alt 2,Email Status,Phone,LinkedIn URL,Company,Domain,Industry,Company Size,City,State,Country",
       ...rows,
     ].join("\n");
 

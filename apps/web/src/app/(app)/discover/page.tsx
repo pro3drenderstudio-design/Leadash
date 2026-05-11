@@ -312,6 +312,7 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAdd
 
   const revealed = data.revealed as boolean;
   const email = data.email_preview as string | null;
+  const emailAlts = (data.email_alts as string[] | null) ?? [];
   const phone = data.phone_preview as string | null;
   const coworkers = (data.coworkers as DiscoverResult[]) ?? [];
   const skills = (data.skills as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
@@ -397,8 +398,16 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAdd
               <svg className="w-3.5 h-3.5 text-white/25 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
               </svg>
-              <span className={`text-xs ${revealed ? "text-white/80" : "text-white/30"} font-mono`}>{email ?? "—"}</span>
-              {!!data.email_status && <EmailPill status={data.email_status as string} />}
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs ${revealed ? "text-white/80" : "text-white/30"} font-mono`}>{email ?? "—"}</span>
+                {!!data.email_status && <EmailPill status={data.email_status as string} />}
+                {emailAlts.length > 0 && emailAlts.map((alt, i) => (
+                  <div key={i} className="flex items-center gap-1.5 mt-1">
+                    <span className={`text-[10px] ${revealed ? "text-white/55" : "text-white/20"} font-mono`}>{alt}</span>
+                    <span className="text-[8px] text-white/20 uppercase tracking-wider">alt {i + 1}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {(data.has_phone as boolean) && (

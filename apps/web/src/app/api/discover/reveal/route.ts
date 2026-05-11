@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
   // Check which are already revealed (free)
   const { data: existing } = await adminDb
     .from("discover_reveals")
-    .select("person_id, email, phone, email_status")
+    .select("person_id, email, email_alts, phone, email_status")
     .eq("workspace_id", workspaceId)
     .in("person_id", ids);
 
-  type RevealRow = { person_id: string; email: string | null; phone: string | null; email_status: string | null };
-  const alreadyRevealed = new Map<string, { email: string | null; phone: string | null; email_status: string | null }>(
+  type RevealRow = { person_id: string; email: string | null; email_alts: string[] | null; phone: string | null; email_status: string | null };
+  const alreadyRevealed = new Map<string, { email: string | null; email_alts: string[] | null; phone: string | null; email_status: string | null }>(
     (existing ?? []).map((r: RevealRow) =>
-      [r.person_id, { email: r.email, phone: r.phone, email_status: r.email_status }]
+      [r.person_id, { email: r.email, email_alts: r.email_alts, phone: r.phone, email_status: r.email_status }]
     )
   );
 
@@ -49,16 +49,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Fetch full data from VPS for new IDs
-  const reveals: Record<string, { email: string | null; phone: string | null; email_status: string | null }> = {};
+  const reveals: Record<string, { email: string | null; email_alts: string[] | null; phone: string | null; email_status: string | null }> = {};
 
   // Populate already-revealed ones first
   for (const [id, data] of alreadyRevealed) reveals[id] = data;
 
   if (newIds.length > 0) {
     const placeholders = newIds.map((_, i) => `$${i + 1}`).join(", ");
-    type Row = { id: string; email: string | null; phone: string | null; email_status: string | null };
+    type Row = { id: string; email: string | null; email_alts: string[] | null; phone: string | null; email_status: string | null };
     const rows = await leadsDb.unsafe<Row[]>(
-      `SELECT id, email, phone, email_status FROM discover_people WHERE id IN (${placeholders})`,
+      `SELECT id, email, email_alts, phone, email_status FROM discover_people WHERE id IN (${placeholders})`,
       newIds as never[]
     );
 
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       workspace_id: workspaceId,
       person_id:    r.id,
       email:        r.email ?? null,
+      email_alts:   r.email_alts ?? null,
       phone:        r.phone ?? null,
       email_status: r.email_status ?? null,
     }));
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     for (const r of rows) {
-      reveals[r.id] = { email: r.email, phone: r.phone, email_status: r.email_status };
+      reveals[r.id] = { email: r.email, email_alts: r.email_alts, phone: r.phone, email_status: r.email_status };
     }
 
     // Deduct credits and log

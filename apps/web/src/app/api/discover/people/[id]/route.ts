@@ -33,6 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       job_summary: string | null; inferred_salary: string | null; years_experience: number | null;
       linkedin_connections: number | null; facebook_url: string | null; twitter_url: string | null;
       github_url: string | null; interests: string | null; start_date: string | null;
+      email_alts: string[] | null;
     };
 
     const rows = await leadsDb.unsafe<PersonRow[]>(`
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
              p.country, p.state, p.city, p.company_name,
              p.gender, p.birth_year, p.skills, p.summary, p.job_summary,
              p.inferred_salary, p.years_experience, p.linkedin_connections,
-             p.facebook_url, p.twitter_url, p.github_url, p.interests, p.start_date,
+             p.facebook_url, p.twitter_url, p.github_url, p.interests, p.start_date, p.email_alts,
              c.domain AS company_domain, c.industry AS company_industry, c.size_range AS company_size,
              c.website_url AS company_website, c.linkedin_url AS company_linkedin
       FROM discover_people p
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const adminDb = createAdminClient();
     const { data: reveal } = await adminDb
       .from("discover_reveals")
-      .select("email, phone, email_status, exported_at")
+      .select("email, email_alts, phone, email_status, exported_at")
       .eq("workspace_id", workspaceId)
       .eq("person_id", id)
       .maybeSingle();
@@ -105,14 +106,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
+    // Merge email_alts: combine DB alts with reveal alts, deduplicate
+    const dbAlts    = person.email_alts ?? [];
+    const revAlts   = (reveal?.email_alts as string[] | null) ?? [];
+    const allAlts   = [...new Set([...dbAlts, ...revAlts])].filter(e => e && e !== person.email);
+    const revealedAlts = revealed ? allAlts : allAlts.map(maskEmail);
+
     return NextResponse.json({
       ...person,
       email:           revealed ? reveal!.email        : null,
+      email_alts:      revealedAlts,
       phone:           revealed ? reveal!.phone        : null,
       email_status:    revealed ? reveal!.email_status : person.email_status,
       email_preview:   revealed ? reveal!.email        : maskEmail(person.email),
       phone_preview:   revealed ? reveal!.phone        : maskPhone(person.phone),
       has_email:       !!(person.email),
+      has_email_alts:  allAlts.length > 0,
       has_phone:       !!(person.phone),
       revealed,
       exported:        !!reveal?.exported_at,
