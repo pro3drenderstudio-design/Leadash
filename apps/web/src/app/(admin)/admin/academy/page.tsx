@@ -73,7 +73,7 @@ export default function AdminAcademyPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Access / coming-soon state ─────────────────────────────────────────────
-  const [comingSoon, setComingSoon]         = useState<{ enabled: boolean; beta_workspaces: string[] }>({ enabled: true, beta_workspaces: [] });
+  const [comingSoon, setComingSoon]         = useState<{ enabled: boolean; beta_workspaces: string[] } | null>(null);
   const [allWorkspaces, setAllWorkspaces]   = useState<WorkspaceOption[]>([]);
   const [wsSearch,     setWsSearch]         = useState("");
   const [accessSaving, setAccessSaving]     = useState(false);
@@ -108,13 +108,13 @@ export default function AdminAcademyPage() {
     }
   }, [selectedProduct]);
 
-  // Coming-soon loaded separately so React StrictMode double-mount can't
-  // overwrite a just-saved value — the AbortController cancels the stale fetch.
+  // Coming-soon loaded separately with AbortController so StrictMode double-mount
+  // doesn't race against a just-saved value.
   useEffect(() => {
     const ac = new AbortController();
     fetch("/api/admin/academy/coming-soon", { signal: ac.signal })
       .then(r => r.json())
-      .then(d => { if (!ac.signal.aborted && d.setting) setComingSoon(d.setting); })
+      .then(d => { if (!ac.signal.aborted && typeof d.enabled === "boolean") setComingSoon(d); })
       .catch(() => {});
     return () => ac.abort();
   }, []);
@@ -127,29 +127,36 @@ export default function AdminAcademyPage() {
 
   // ── Access actions ─────────────────────────────────────────────────────────
 
-  async function saveComingSoon(patch: Partial<typeof comingSoon>) {
+  async function saveComingSoon(next: { enabled: boolean; beta_workspaces: string[] }) {
     setAccessSaving(true);
-    const next = { ...comingSoon, ...patch };
-    setComingSoon(next);
-    const res = await fetch("/api/admin/academy/coming-soon", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    }).then(r => r.json());
-    if (res.setting) { setComingSoon(res.setting); notify("Access settings saved"); }
-    else notify(res.error ?? "Error", false);
-    setAccessSaving(false);
+    try {
+      const res = await fetch("/api/admin/academy/coming-soon", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const data = await res.json();
+      if (!res.ok) { notify(data.error ?? "Save failed", false); return; }
+      setComingSoon(data);
+      notify("Saved");
+    } catch {
+      notify("Network error", false);
+    } finally {
+      setAccessSaving(false);
+    }
   }
 
   function addBetaWorkspace(id: string) {
-    const list = comingSoon.beta_workspaces ?? [];
-    if (!id || list.includes(id)) return;
-    saveComingSoon({ beta_workspaces: [...list, id] });
+    if (!id || !comingSoon) return;
+    const list = comingSoon.beta_workspaces;
+    if (list.includes(id)) return;
     setWsSearch("");
+    saveComingSoon({ ...comingSoon, beta_workspaces: [...list, id] });
   }
 
   function removeBetaWorkspace(id: string) {
-    saveComingSoon({ beta_workspaces: (comingSoon.beta_workspaces ?? []).filter(w => w !== id) });
+    if (!comingSoon) return;
+    saveComingSoon({ ...comingSoon, beta_workspaces: comingSoon.beta_workspaces.filter(w => w !== id) });
   }
 
   // Load sections+lessons when product changes
@@ -377,7 +384,7 @@ export default function AdminAcademyPage() {
     { key: "enrollments", label: "Enrollments" },
     { key: "codes",       label: "Discount Codes" },
     { key: "products",    label: "Product Settings" },
-    { key: "access",      label: comingSoon.enabled ? "🔒 Coming Soon ON" : "✅ Live" },
+    { key: "access",      label: comingSoon == null ? "Access" : comingSoon.enabled ? "🔒 Coming Soon ON" : "✅ Live" },
   ];
 
   return (
@@ -919,6 +926,10 @@ export default function AdminAcademyPage() {
         {tab === "access" && (
           <div className="max-w-xl space-y-6">
 
+            {comingSoon == null ? (
+              <div className="text-sm text-gray-500 py-8 text-center">Loading access settings…</div>
+            ) : <>
+
             {/* Global toggle */}
             <div className="bg-gray-900 rounded-xl p-5">
               <div className="flex items-center justify-between mb-1">
@@ -930,11 +941,11 @@ export default function AdminAcademyPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => saveComingSoon({ enabled: !comingSoon.enabled })}
+                  onClick={() => saveComingSoon({ ...comingSoon, enabled: !comingSoon.enabled })}
                   disabled={accessSaving}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                    comingSoon.enabled ? "bg-orange-500" : "bg-emerald-500"
-                  }`}>
+                    accessSaving ? "opacity-50" : ""
+                  } ${comingSoon.enabled ? "bg-orange-500" : "bg-emerald-500"}`}>
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                     comingSoon.enabled ? "translate-x-1" : "translate-x-6"
                   }`} />
@@ -956,9 +967,9 @@ export default function AdminAcademyPage() {
                 You can exempt multiple workspaces.
               </p>
 
-              {/* Workspace selector — shows all, filters as you type */}
+              {/* Workspace selector */}
               {(() => {
-                const betaList = comingSoon.beta_workspaces ?? [];
+                const betaList = comingSoon.beta_workspaces;
                 const filtered = allWorkspaces.filter(
                   w => !betaList.includes(w.id) &&
                     (!wsSearch ||
@@ -998,11 +1009,11 @@ export default function AdminAcademyPage() {
               })()}
 
               {/* Exempted list */}
-              {(comingSoon.beta_workspaces ?? []).length === 0 ? (
+              {comingSoon.beta_workspaces.length === 0 ? (
                 <p className="text-xs text-gray-600">No workspaces exempted yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {(comingSoon.beta_workspaces ?? []).map(id => {
+                  {comingSoon.beta_workspaces.map(id => {
                     const ws = allWorkspaces.find(w => w.id === id);
                     return (
                       <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2.5">
@@ -1022,6 +1033,7 @@ export default function AdminAcademyPage() {
               )}
             </div>
 
+            </>}
           </div>
         )}
 

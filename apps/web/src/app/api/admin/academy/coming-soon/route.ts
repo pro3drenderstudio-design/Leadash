@@ -10,60 +10,48 @@ async function requireAdmin() {
   return admin ? db : null;
 }
 
+type Setting = { enabled: boolean; beta_workspaces: string[] };
+
+function normalize(raw: unknown): Setting {
+  const v = (raw ?? {}) as Record<string, unknown>;
+  return {
+    enabled:         typeof v.enabled === "boolean" ? v.enabled : true,
+    beta_workspaces: Array.isArray(v.beta_workspaces) ? (v.beta_workspaces as string[]) : [],
+  };
+}
+
 export async function GET() {
   const db = await requireAdmin();
   if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data } = await db.from("admin_settings").select("value").eq("key", "academy_coming_soon").maybeSingle();
-  const raw = (data?.value ?? {}) as { enabled?: boolean; beta_workspaces?: string[] };
-  return NextResponse.json({ setting: { enabled: raw.enabled ?? true, beta_workspaces: raw.beta_workspaces ?? [] } });
+  const { data } = await db
+    .from("admin_settings")
+    .select("value")
+    .eq("key", "academy_coming_soon")
+    .maybeSingle();
+
+  return NextResponse.json(normalize(data?.value));
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const db = await requireAdmin();
   if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { enabled?: boolean; beta_workspaces?: string[] };
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
-
-  // Fetch current value and merge
-  const { data: current, error: fetchErr } = await db.from("admin_settings").select("value").eq("key", "academy_coming_soon").maybeSingle();
-  const existing = (current?.value ?? { enabled: true, beta_workspaces: [] }) as { enabled: boolean; beta_workspaces: string[] };
-
-  const merged = {
-    enabled:         body.enabled         !== undefined ? body.enabled         : (existing.enabled ?? true),
-    beta_workspaces: body.beta_workspaces !== undefined ? body.beta_workspaces : (existing.beta_workspaces ?? []),
-  };
-
-  const now = new Date().toISOString();
-
-  // Try UPDATE first (row already exists)
-  const { data: updated, error: updateErr } = await db
-    .from("admin_settings")
-    .update({ value: merged, updated_at: now })
-    .eq("key", "academy_coming_soon")
-    .select("value")
-    .single();
-
-  const debug = { body, existing, merged, fetchErr, updateErr, updated };
-
-  if (updateErr?.code !== "PGRST116" && updateErr) {
-    console.error("[coming-soon UPDATE]", updateErr);
-    return NextResponse.json({ error: updateErr.message, debug }, { status: 500 });
+  let body: unknown;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (updated) return NextResponse.json({ setting: updated.value, debug });
+  const value = normalize(body);
 
-  // Row doesn't exist yet — insert it
-  const { data: inserted, error: insertErr } = await db
+  const { error } = await db
     .from("admin_settings")
-    .insert({ key: "academy_coming_soon", value: merged, updated_at: now })
-    .select("value")
-    .single();
+    .upsert({ key: "academy_coming_soon", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
-  if (insertErr) {
-    console.error("[coming-soon INSERT]", insertErr);
-    return NextResponse.json({ error: insertErr.message, debug }, { status: 500 });
+  if (error) {
+    console.error("[coming-soon PUT]", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ setting: inserted.value, debug });
+
+  return NextResponse.json(value);
 }

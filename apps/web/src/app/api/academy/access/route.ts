@@ -17,7 +17,7 @@ export async function GET() {
   if (!settingRow) return NextResponse.json({ accessible: false });
 
   const setting  = settingRow.value as { enabled?: boolean; beta_workspaces?: string[] };
-  const enabled  = setting.enabled  ?? false;
+  const enabled  = setting.enabled  ?? true;   // default: coming soon is ON
   const betaList = setting.beta_workspaces ?? [];
 
   // Coming soon is off → everyone can access
