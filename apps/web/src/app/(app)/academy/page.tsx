@@ -172,24 +172,25 @@ export default function AcademyPage() {
     );
   }
 
-  if (accessible === false) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
-        <div className="w-20 h-20 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mb-6">
-          <svg className="w-9 h-9 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-white mb-3">Coming Soon</h1>
-        <p className="text-white/40 text-sm max-w-sm leading-relaxed">
-          Leadash Academy is launching soon. Stay tuned — we'll let you know the moment it opens.
-        </p>
-      </div>
-    );
-  }
-
   return (
+    <div className="relative w-full min-h-full">
+
+      {/* Coming Soon overlay — covers only the academy content area */}
+      {accessible === false && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm bg-[#0c0c0f]/80 px-6 text-center">
+          <div className="w-20 h-20 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mb-6">
+            <svg className="w-9 h-9 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Coming Soon</h2>
+          <p className="text-white/40 text-sm max-w-sm leading-relaxed">
+            Leadash Academy is launching soon. Stay tuned — we'll let you know the moment it opens.
+          </p>
+        </div>
+      )}
+
     <div className="px-6 py-8 max-w-5xl mx-auto">
       {/* Hero */}
       <AcademyHero featuredProduct={featured} />
@@ -224,6 +225,7 @@ export default function AcademyPage() {
         .badge-emerald { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(52,211,153,0.1); color:#34d399; border:1px solid rgba(52,211,153,0.2); }
         .badge-orange  { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(249,115,22,0.1); color:#fb923c; border:1px solid rgba(249,115,22,0.2); }
       `}</style>
+    </div>
     </div>
   );
 }
