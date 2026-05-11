@@ -26,12 +26,12 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   // Fetch current value and merge
-  const { data: current } = await db.from("admin_settings").select("value").eq("key", "academy_coming_soon").maybeSingle();
+  const { data: current, error: fetchErr } = await db.from("admin_settings").select("value").eq("key", "academy_coming_soon").maybeSingle();
   const existing = (current?.value ?? { enabled: true, beta_workspaces: [] }) as { enabled: boolean; beta_workspaces: string[] };
 
   const merged = {
-    enabled:         body.enabled         ?? existing.enabled,
-    beta_workspaces: body.beta_workspaces ?? existing.beta_workspaces,
+    enabled:         body.enabled         !== undefined ? body.enabled         : existing.enabled,
+    beta_workspaces: body.beta_workspaces !== undefined ? body.beta_workspaces : existing.beta_workspaces,
   };
 
   const now = new Date().toISOString();
@@ -44,12 +44,14 @@ export async function PATCH(req: NextRequest) {
     .select("value")
     .single();
 
+  const debug = { body, existing, merged, fetchErr, updateErr, updated };
+
   if (updateErr?.code !== "PGRST116" && updateErr) {
     console.error("[coming-soon UPDATE]", updateErr);
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    return NextResponse.json({ error: updateErr.message, debug }, { status: 500 });
   }
 
-  if (updated) return NextResponse.json({ setting: updated.value });
+  if (updated) return NextResponse.json({ setting: updated.value, debug });
 
   // Row doesn't exist yet — insert it
   const { data: inserted, error: insertErr } = await db
@@ -60,7 +62,7 @@ export async function PATCH(req: NextRequest) {
 
   if (insertErr) {
     console.error("[coming-soon INSERT]", insertErr);
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    return NextResponse.json({ error: insertErr.message, debug }, { status: 500 });
   }
-  return NextResponse.json({ setting: inserted.value });
+  return NextResponse.json({ setting: inserted.value, debug });
 }
