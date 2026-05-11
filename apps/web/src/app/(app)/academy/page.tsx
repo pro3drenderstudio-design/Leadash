@@ -147,13 +147,15 @@ function AcademyHero({ featuredProduct }: { featuredProduct: ProductWithEnrollme
 }
 
 export default function AcademyPage() {
-  const [products, setProducts] = useState<ProductWithEnrollment[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [products,    setProducts]    = useState<ProductWithEnrollment[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [accessible,  setAccessible]  = useState<boolean | null>(null);
 
   useEffect(() => {
-    wsGet<{ products: ProductWithEnrollment[] }>("/api/academy/products")
-      .then(d => setProducts(d.products ?? []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      wsGet<{ products: ProductWithEnrollment[] }>("/api/academy/products").then(d => setProducts(d.products ?? [])),
+      fetch("/api/academy/access").then(r => r.json()).then(d => setAccessible(d.accessible ?? false)),
+    ]).finally(() => setLoading(false));
   }, []);
 
   const enrolled  = products.filter(p => p.enrollment);
@@ -166,6 +168,23 @@ export default function AcademyPage() {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="text-white/30 text-sm">Loading…</div>
+      </div>
+    );
+  }
+
+  if (accessible === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mb-6">
+          <svg className="w-9 h-9 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-3">Coming Soon</h1>
+        <p className="text-white/40 text-sm max-w-sm leading-relaxed">
+          Leadash Academy is launching soon. Stay tuned — we'll let you know the moment it opens.
+        </p>
       </div>
     );
   }

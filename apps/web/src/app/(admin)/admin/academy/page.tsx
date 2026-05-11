@@ -85,31 +85,45 @@ export default function AdminAcademyPage() {
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const [adminRes, codesRes, accessRes, wsRes] = await Promise.all([
-        fetch("/api/admin/academy").then(r => r.json()),
-        fetch("/api/admin/academy/discount-codes").then(r => r.json()),
-        fetch("/api/admin/academy/coming-soon").then(r => r.json()),
-        fetch("/api/admin/workspaces?page=1&per_page=200").then(r => r.json()),
+      const [adminRes, codesRes, wsRes] = await Promise.all([
+        fetch("/api/admin/academy", { signal }).then(r => r.json()),
+        fetch("/api/admin/academy/discount-codes", { signal }).then(r => r.json()),
+        fetch("/api/admin/workspaces?page=1&per_page=200", { signal }).then(r => r.json()),
       ]);
+      if (signal?.aborted) return;
       setProducts(adminRes.products ?? []);
       setCohorts(adminRes.cohorts ?? []);
       setEnrollments(adminRes.enrollments ?? []);
       setCodes(codesRes.codes ?? []);
-      if (accessRes.setting) setComingSoon(accessRes.setting);
       if (wsRes.workspaces) setAllWorkspaces(wsRes.workspaces.map((w: WorkspaceOption) => ({ id: w.id, name: w.name })));
 
       if (!selectedProduct && adminRes.products?.length) {
         setSelectedProduct(adminRes.products[0].id);
       }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [selectedProduct]);
 
-  useEffect(() => { load(); }, []);
+  // Coming-soon loaded separately so React StrictMode double-mount can't
+  // overwrite a just-saved value — the AbortController cancels the stale fetch.
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch("/api/admin/academy/coming-soon", { signal: ac.signal })
+      .then(r => r.json())
+      .then(d => { if (!ac.signal.aborted && d.setting) setComingSoon(d.setting); })
+      .catch(() => {});
+    return () => ac.abort();
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, []);
 
   // ── Access actions ─────────────────────────────────────────────────────────
 
