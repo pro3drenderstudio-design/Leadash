@@ -220,6 +220,14 @@ async function ingestMessages(
 ): Promise<{ matched: number; unmatched: number; filtered: number }> {
   let matched = 0, unmatched = 0, filtered = 0;
 
+  // Fetch all inbox email addresses for this workspace once — any email received
+  // from one of these addresses is a warmup-to-warmup exchange, never real outreach.
+  const { data: wsInboxes } = await db
+    .from("outreach_inboxes")
+    .select("email_address")
+    .eq("workspace_id", workspaceId);
+  const wsInboxEmails = new Set((wsInboxes ?? []).map((i: { email_address: string }) => i.email_address.toLowerCase()));
+
   const msgIds = messages.map(m => m.messageId).filter(Boolean);
   const { data: existing } = msgIds.length
     ? await db.from("outreach_replies").select("id, message_id, body_text").in("message_id", msgIds)
@@ -244,6 +252,17 @@ async function ingestMessages(
     if (msg.messageId) {
       const { data: wu } = await db.from("outreach_warmup_sends").select("id").eq("thread_id", msg.messageId).limit(1).single();
       if (wu) continue;
+    }
+    // If sender is one of this workspace's own inboxes, it's warmup — headers may
+    // have been stripped by the receiving provider so we can't rely on X-LD-Ref.
+    if (wsInboxEmails.has(msg.fromEmail.toLowerCase())) {
+      await db.from("outreach_replies").insert({
+        workspace_id: workspaceId, inbox_id: inboxId,
+        from_email: msg.fromEmail, from_name: msg.fromName, subject: msg.subject,
+        body_text: msg.bodyText, message_id: msg.messageId || null, in_reply_to: msg.inReplyTo,
+        received_at: msg.receivedAt, is_warmup: true, is_filtered: false, attachments: [],
+      });
+      continue;
     }
     // Mirror the Postal inbound check: if In-Reply-To points to a warmup send's
     // message_id, store as warmup (not unmatched). Catches emails where the
