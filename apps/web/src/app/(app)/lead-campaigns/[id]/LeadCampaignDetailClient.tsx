@@ -80,6 +80,7 @@ export default function LeadCampaignDetailClient() {
   const [filter, setFilter]               = useState("all");
   const [search, setSearch]               = useState("");
   const [selected, setSelected]           = useState<Set<string>>(new Set());
+  const [selectAllMode, setSelectAllMode] = useState(false); // true = all leads across all pages
   const [loading, setLoading]             = useState(true);
   const [exporting, setExporting]         = useState(false);
   const [showExport, setShowExport]       = useState(false);
@@ -134,8 +135,9 @@ export default function LeadCampaignDetailClient() {
   async function handleExport() {
     setExporting(true);
     setExportResult(null);
+    // selectAllMode or no selection = export all; otherwise export selected IDs
     const body: Record<string, unknown> = {
-      lead_ids:   selected.size > 0 ? Array.from(selected) : undefined,
+      lead_ids:   (!selectAllMode && selected.size > 0) ? Array.from(selected) : undefined,
       valid_only: validOnly,
     };
     if (newListName) body.create_list_name = newListName;
@@ -143,7 +145,7 @@ export default function LeadCampaignDetailClient() {
     try {
       const data = await wsPost<{ exported: number; skipped_duplicate: number }>(`/api/lead-campaigns/${id}/export`, body);
       setExportResult(`Exported ${data.exported} leads (${data.skipped_duplicate} duplicates skipped)`);
-      loadLeads(); setSelected(new Set());
+      loadLeads(); setSelected(new Set()); setSelectAllMode(false);
     } catch (e) {
       setExportResult(`Error: ${e instanceof Error ? e.message : "Export failed"}`);
     }
@@ -176,6 +178,7 @@ export default function LeadCampaignDetailClient() {
 
   function toggleSelect(lid: string, e: React.MouseEvent) {
     e.stopPropagation();
+    setSelectAllMode(false);
     setSelected(s => { const n = new Set(s); n.has(lid) ? n.delete(lid) : n.add(lid); return n; });
   }
 
@@ -347,16 +350,27 @@ export default function LeadCampaignDetailClient() {
             )}
           </button>
 
-          {selected.size > 0 && (
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add {selected.size} to Pool
-            </button>
+          {(selected.size > 0 || selectAllMode) && (
+            <div className="flex items-center gap-2">
+              <span className="text-white/40 text-xs">
+                {selectAllMode ? `All ${total.toLocaleString()} selected` : `${selected.size} selected`}
+              </span>
+              <button
+                onClick={() => { setSelected(new Set()); setSelectAllMode(false); }}
+                className="text-white/30 hover:text-white/60 text-xs transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setShowExport(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add {selectAllMode ? total.toLocaleString() : selected.size} to Pool
+              </button>
+            </div>
           )}
 
           <span className="text-white/30 text-xs ml-1 whitespace-nowrap">{total.toLocaleString()} leads</span>
@@ -423,6 +437,29 @@ export default function LeadCampaignDetailClient() {
       ) : (
         <>
           <div className="border border-white/8 rounded-2xl overflow-hidden">
+            {/* Select-all-pages banner */}
+            {selected.size === leads.length && leads.length > 0 && total > leads.length && !selectAllMode && (
+              <div className="flex items-center justify-center gap-3 px-4 py-2.5 bg-orange-500/10 border-b border-orange-500/20 text-sm">
+                <span className="text-white/70">Page leads selected ({leads.length}).</span>
+                <button
+                  onClick={() => setSelectAllMode(true)}
+                  className="text-orange-400 font-semibold hover:text-orange-300 transition-colors"
+                >
+                  Select all {total.toLocaleString()} leads in this campaign
+                </button>
+              </div>
+            )}
+            {selectAllMode && (
+              <div className="flex items-center justify-center gap-3 px-4 py-2.5 bg-orange-500/10 border-b border-orange-500/20 text-sm">
+                <span className="text-orange-400 font-semibold">All {total.toLocaleString()} leads selected.</span>
+                <button
+                  onClick={() => { setSelectAllMode(false); setSelected(new Set()); }}
+                  className="text-white/50 hover:text-white/80 transition-colors"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/8 bg-white/2">
@@ -430,8 +467,11 @@ export default function LeadCampaignDetailClient() {
                     <input
                       type="checkbox"
                       className="accent-orange-500 cursor-pointer"
-                      checked={selected.size === leads.length && leads.length > 0}
-                      onChange={e => setSelected(e.target.checked ? new Set(leads.map(l => l.id)) : new Set())}
+                      checked={(selectAllMode || (selected.size === leads.length && leads.length > 0))}
+                      onChange={e => {
+                        setSelectAllMode(false);
+                        setSelected(e.target.checked ? new Set(leads.map(l => l.id)) : new Set());
+                      }}
                       onClick={e => e.stopPropagation()}
                     />
                   </th>
@@ -641,7 +681,12 @@ export default function LeadCampaignDetailClient() {
           <div className="relative w-full max-w-md bg-gray-950 border border-white/10 rounded-2xl p-6 shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-1">Export to Leads Pool</h3>
             <p className="text-white/40 text-sm mb-5">
-              {selected.size > 0 ? `${selected.size} selected leads` : "All unexported leads"} will be added to your chosen list
+              {selectAllMode
+                ? `All ${total.toLocaleString()} leads`
+                : selected.size > 0
+                ? `${selected.size} selected leads`
+                : "All unexported leads"
+              } will be added to your chosen list
             </p>
 
             {exportResult ? (

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .is("added_to_list_id", null);
 
   if (lead_ids?.length) query = query.in("id", lead_ids);
-  if (valid_only)       query = query.in("verification_status", ["valid", "catch_all"]);
+  if (valid_only)       query = query.in("verification_status", ["safe", "valid", "catch_all"]);
 
   const { data: campaignLeads } = await query;
   if (!campaignLeads?.length) return NextResponse.json({ exported: 0, skipped_duplicate: 0 });
