@@ -76,7 +76,7 @@ export interface OutreachLead {
   title?: string | null;
   website?: string | null;
   status: LeadStatus;
-  verification_status: LeadVerificationStatus;
+  verification_status?: LeadVerificationStatus;
   verification_score?: number | null;
   verification_data?: Record<string, unknown> | null;
   verified_at?: string | null;
