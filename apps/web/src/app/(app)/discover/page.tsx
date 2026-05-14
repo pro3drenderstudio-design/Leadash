@@ -892,6 +892,7 @@ function DiscoverContent() {
   const [results,        setResults]        = useState<DiscoverResult[]>([]);
   const [companyResults, setCompanyResults] = useState<DiscoverCompanyResult[]>([]);
   const [total,          setTotal]          = useState(0);
+  const [resultsCapped,  setResultsCapped]  = useState(false);
   const [page,           setPage]           = useState(1);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
@@ -913,9 +914,9 @@ function DiscoverContent() {
   const [showSaveInput, setShowSaveInput] = useState(false);
 
   const limit      = 25;
-  const isCapped   = total > 100000;
-  const totalPages = Math.max(1, Math.ceil((isCapped ? 100000 : total) / limit));
-  const totalLabel = isCapped ? "100,000+" : total.toLocaleString();
+  const SEARCH_CAP = 50_000;
+  const totalPages = Math.max(1, Math.ceil((resultsCapped ? SEARCH_CAP : total) / limit));
+  const totalLabel = resultsCapped ? "50,000+" : total.toLocaleString();
 
   const activePeopleFilterCount =
     (peopleFilters.keyword ? 1 : 0) +
@@ -974,7 +975,7 @@ function DiscoverContent() {
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
-      setResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
+      setResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p); setResultsCapped(!!data.message);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
   }, [peopleFilters, peopleSortBy, peopleSortDir]);
@@ -1003,7 +1004,7 @@ function DiscoverContent() {
       params.set("sort", coSortBy); params.set("order", coSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       const data = await wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`);
-      setCompanyResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p);
+      setCompanyResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p); setResultsCapped(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
   }, [companyFilters, coSortBy, coSortDir]);
@@ -1290,6 +1291,7 @@ function DiscoverContent() {
         <div className="flex-shrink-0 flex items-center justify-between gap-4 px-5 py-2.5 border-b border-white/8">
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-bold text-white/80">Discover</h1>
+            <span className="text-[10px] text-white/25 font-medium hidden sm:inline">400M+ contacts</span>
             <div className="flex items-center gap-0.5 bg-white/5 rounded-lg p-0.5">
               {(["people", "companies"] as const).map(m => (
                 <button key={m} onClick={() => { setMode(m); setSelected(new Set()); }}
@@ -1749,7 +1751,7 @@ function EmptyState({
         {/* Heading */}
         <div className="text-center mb-6">
           <h2 className="text-lg font-bold text-white/80">Find your ideal prospects</h2>
-          <p className="text-sm text-white/30 mt-1">Use AI or apply filters in the sidebar to search our database</p>
+          <p className="text-sm text-white/30 mt-1">Search our database of <span className="text-orange-400/70 font-semibold">400M+ contacts</span> — use AI or apply filters</p>
         </div>
 
         {/* AI search input */}
