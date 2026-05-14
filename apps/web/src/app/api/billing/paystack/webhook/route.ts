@@ -184,20 +184,19 @@ export async function POST(req: NextRequest) {
             }
           })().catch(() => {});
 
-          // Grant included monthly credits (initial activation — not a renewal)
-          // Guard against double-grant: verify route may have already run before this webhook arrived
+          // Grant included monthly credits — guarded by billing_invoices unique reference.
+          // The invoice was just inserted above; tie credit grant to the same reference.
           if (plan.included_credits > 0) {
-            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            const { data: alreadyGranted } = await db
-              .from("lead_credit_transactions")
-              .select("id")
-              .eq("workspace_id", workspaceId)
-              .eq("type", "grant")
-              .eq("description", `Monthly credits — ${plan.name} plan`)
-              .gte("created_at", since24h)
-              .maybeSingle();
-
-            if (!alreadyGranted) {
+            const grantRef = `grant:${data.reference}`;
+            const { error: grantTxErr } = await db.from("lead_credit_transactions").insert({
+              workspace_id:       workspaceId,
+              type:               "grant",
+              amount:             plan.included_credits,
+              description:        `Monthly credits — ${plan.name} plan`,
+              paystack_reference: grantRef,
+            });
+            // txErr = duplicate unique key → grant already done (verify route ran first)
+            if (!grantTxErr) {
               const { data: ws } = await db
                 .from("workspaces")
                 .select("lead_credits_balance, subscription_credits_balance")
@@ -211,12 +210,6 @@ export async function POST(req: NextRequest) {
                   })
                   .eq("id", workspaceId);
               }
-              await db.from("lead_credit_transactions").insert({
-                workspace_id: workspaceId,
-                type:         "grant",
-                amount:       plan.included_credits,
-                description:  `Monthly credits — ${plan.name} plan`,
-              });
             }
           }
         }

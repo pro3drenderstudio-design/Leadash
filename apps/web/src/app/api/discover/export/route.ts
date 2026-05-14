@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
       .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: false })
       .select("id, email");
 
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }
 
     return NextResponse.json({
       ok:           true,
@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
       .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: false })
       .select("id, email");
 
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }
 
     // If campaign_id resolved, create enrollments
     if (campaign_id && insertedLeads?.length) {

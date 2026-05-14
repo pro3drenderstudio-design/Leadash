@@ -178,7 +178,10 @@ export async function GET(req: NextRequest) {
       `, [...params, limit, offset] as never[]),
     ]);
 
-    const total = parseInt((countRows[0] as unknown as { total: string }).total, 10);
+    const rawTotal = parseInt((countRows[0] as unknown as { total: string }).total, 10);
+    const HARD_CAP = 50_000;
+    const capped   = rawTotal > HARD_CAP;
+    const total    = capped ? HARD_CAP : rawTotal;
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 
     const adminDb = createAdminClient();
@@ -232,10 +235,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       results, total, page, limit, credits_per_lead: CREDITS_PER_LEAD,
+      ...(capped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
     } satisfies DiscoverSearchResponse);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[discover/search]", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[discover/search]", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Search failed. Please try again." }, { status: 500 });
   }
 }

@@ -24,7 +24,8 @@ async function paystackFetch<T>(
       Authorization:  authHeader(),
       "Content-Type": "application/json",
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body:   body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10000),
   });
 
   const json = (await res.json()) as { status: boolean; message: string; data: T };

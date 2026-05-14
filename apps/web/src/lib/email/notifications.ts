@@ -19,6 +19,7 @@ async function sendEmail(opts: {
     const res = await fetch("https://api.resend.com/emails", {
       method:  "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+      signal:  AbortSignal.timeout(8000),
       body: JSON.stringify({
         from:     `Leadash <${FROM}>`,
         to:       [opts.to],
@@ -51,6 +52,7 @@ async function sendEmail(opts: {
     const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
       method:  "POST",
       headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
+      signal:  AbortSignal.timeout(8000),
       body: JSON.stringify(payload),
     });
     if (!res.ok) {

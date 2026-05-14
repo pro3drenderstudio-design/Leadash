@@ -27,14 +27,17 @@ export function interpolate(template: string, lead: OutreachLead): string {
 
 // ─── Unsubscribe Link ─────────────────────────────────────────────────────────
 
-export function generateUnsubscribeToken(email: string): string {
-  return createHmac("sha256", UNSUB_SECRET).update(email.toLowerCase()).digest("hex").slice(0, 32);
+export function generateUnsubscribeToken(workspaceId: string, email: string): string {
+  return createHmac("sha256", UNSUB_SECRET)
+    .update(`${workspaceId}:${email.toLowerCase()}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
-export function verifyUnsubscribeToken(email: string, token: string): boolean {
-  const expected = generateUnsubscribeToken(email);
-  // Timing-safe compare
+export function verifyUnsubscribeToken(workspaceId: string, email: string, token: string): boolean {
+  const expected = generateUnsubscribeToken(workspaceId, email);
   if (expected.length !== token.length) return false;
+  // Timing-safe compare
   let diff = 0;
   for (let i = 0; i < expected.length; i++) {
     diff |= expected.charCodeAt(i) ^ token.charCodeAt(i);
@@ -42,9 +45,9 @@ export function verifyUnsubscribeToken(email: string, token: string): boolean {
   return diff === 0;
 }
 
-function buildUnsubscribeUrl(email: string): string {
-  const token = generateUnsubscribeToken(email);
-  return `${APP_URL}/api/outreach/unsubscribe?email=${encodeURIComponent(email)}&token=${token}`;
+export function buildUnsubscribeUrl(workspaceId: string, email: string): string {
+  const token = generateUnsubscribeToken(workspaceId, email);
+  return `${APP_URL}/api/outreach/unsubscribe?w=${encodeURIComponent(workspaceId)}&email=${encodeURIComponent(email)}&token=${token}`;
 }
 
 // ─── Open Tracking Pixel ──────────────────────────────────────────────────────
@@ -94,6 +97,7 @@ export function renderEmail(opts: {
   bodyTemplate: string;
   lead: OutreachLead;
   sendId: string;
+  workspaceId?: string;
   signature?: string | null;
   trackOpens: boolean;
   trackClicks: boolean;
@@ -101,7 +105,7 @@ export function renderEmail(opts: {
   footerEnabled?: boolean;
   footerText?: string;
 }): RenderedEmail {
-  const { subjectTemplate, bodyTemplate, lead, sendId, signature, trackOpens, trackClicks, physicalAddress, footerEnabled = true, footerText } = opts;
+  const { subjectTemplate, bodyTemplate, lead, sendId, workspaceId, signature, trackOpens, trackClicks, physicalAddress, footerEnabled = true, footerText } = opts;
 
   const subject = interpolate(resolveSpintax(subjectTemplate), lead);
   let body = interpolate(resolveSpintax(bodyTemplate), lead);
@@ -120,7 +124,9 @@ export function renderEmail(opts: {
   }
 
   // Unsubscribe footer (CAN-SPAM required — always include unsubscribe link)
-  const unsubUrl = buildUnsubscribeUrl(lead.email);
+  const unsubUrl = workspaceId
+    ? buildUnsubscribeUrl(workspaceId, lead.email)
+    : `${APP_URL}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}`;
   const address = physicalAddress ?? "123 Main Street, New York, NY 10001";
   const footerBodyText = footerText ?? "You received this email because you or your company expressed interest in our services.";
   if (footerEnabled !== false) {

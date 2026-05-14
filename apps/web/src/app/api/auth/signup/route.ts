@@ -9,12 +9,21 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const FROM    = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.io";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.io";
 const API_KEY = process.env.RESEND_API_KEY;
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 10 signups per hour per IP
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const admin0 = createAdminClient();
+  const allowed = await checkRateLimit(admin0, `signup:ip:${ip}`, 10, 60 * 60 * 1000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
+
   const { email, password, full_name } = await req.json() as {
     email?: string;
     password?: string;

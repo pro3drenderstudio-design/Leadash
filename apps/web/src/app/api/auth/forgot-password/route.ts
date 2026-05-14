@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const FROM     = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.io";
 const APP_URL  = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.io";
@@ -22,6 +23,15 @@ export async function POST(req: NextRequest) {
 
   // Always return success to the client to prevent email enumeration
   const ok = NextResponse.json({ ok: true });
+
+  // Rate limit: 3 resets per hour per email, 20 per hour per IP
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const admin0 = createAdminClient();
+  const [emailOk, ipOk] = await Promise.all([
+    checkRateLimit(admin0, `forgot:email:${email.toLowerCase()}`, 3, 60 * 60 * 1000),
+    checkRateLimit(admin0, `forgot:ip:${ip}`, 20, 60 * 60 * 1000),
+  ]);
+  if (!emailOk || !ipOk) return ok; // Silently return ok — don't leak rate limit info
 
   if (!API_KEY) {
     console.error("[forgot-password] RESEND_API_KEY not set");

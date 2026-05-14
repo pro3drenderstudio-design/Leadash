@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { CREDIT_COSTS } from "@/types/lead-campaigns";
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+
 export async function POST(req: NextRequest) {
+  // Reject oversized uploads before reading the body
+  const contentLength = parseInt(req.headers.get("content-length") ?? "0", 10);
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "File too large. Maximum size is 20 MB." }, { status: 413 });
+  }
+
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
@@ -20,6 +28,11 @@ export async function POST(req: NextRequest) {
 
   if (!name || !file) {
     return NextResponse.json({ error: "name and file are required" }, { status: 400 });
+  }
+
+  // Double-check actual file size (content-length header can be absent or spoofed)
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "File too large. Maximum size is 20 MB." }, { status: 413 });
   }
 
   // Check credit balance — compute dynamically based on which operations are enabled

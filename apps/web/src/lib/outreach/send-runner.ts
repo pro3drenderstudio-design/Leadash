@@ -326,6 +326,7 @@ export async function runSendBatch(
         bodyTemplate:    seqStep.body_template ?? "",
         lead,
         sendId:          sendRecord.id,
+        workspaceId,
         signature:       slot.inbox.signature,
         trackOpens:      sendTextOnly ? false : campaign.track_opens,
         trackClicks:     sendTextOnly ? false : campaign.track_clicks,
@@ -335,8 +336,8 @@ export async function runSendBatch(
       });
 
       const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
-      const unsubToken = generateUnsubscribeToken(lead.email);
-      const unsubUrl   = `${APP_URL}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&token=${unsubToken}`;
+      const unsubToken = generateUnsubscribeToken(workspaceId, lead.email);
+      const unsubUrl   = `${APP_URL}/api/outreach/unsubscribe?w=${encodeURIComponent(workspaceId)}&email=${encodeURIComponent(lead.email)}&token=${unsubToken}`;
       const customHeaders: Record<string, string> | undefined =
         campaign.insert_unsubscribe_header !== false
           ? {

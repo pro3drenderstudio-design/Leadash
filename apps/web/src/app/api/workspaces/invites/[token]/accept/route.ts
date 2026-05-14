@@ -19,6 +19,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ to
   if (invite.accepted_at) return NextResponse.json({ error: "Already accepted" }, { status: 410 });
   if (new Date(invite.expires_at) < new Date()) return NextResponse.json({ error: "Expired" }, { status: 410 });
 
+  // Verify the authenticated user's email matches the invite
+  if (invite.email && user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+    return NextResponse.json(
+      { error: "This invite was sent to a different email address." },
+      { status: 403 },
+    );
+  }
+
   await db.from("workspace_members").upsert(
     { workspace_id: invite.workspace_id, user_id: user.id, role: invite.role, invited_by: invite.invited_by },
     { onConflict: "workspace_id,user_id" }

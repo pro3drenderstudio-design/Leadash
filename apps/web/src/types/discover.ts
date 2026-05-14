@@ -138,6 +138,7 @@ export interface DiscoverSearchResponse {
   page:             number;
   limit:            number;
   credits_per_lead: number;
+  message?:         string;
 }
 
 export interface DiscoverCompanySearchResponse {

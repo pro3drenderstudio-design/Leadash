@@ -84,6 +84,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
   }
 
   if (body.action === "delete") {
+    // Block deletion if user owns workspaces with active subscriptions
+    const { data: activeWs } = await ctx.adminClient
+      .from("workspaces")
+      .select("id, name, plan_status")
+      .eq("owner_id", userId)
+      .in("plan_status", ["active", "trial"]);
+    if (activeWs && activeWs.length > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete user with ${activeWs.length} active subscription(s). Cancel all subscriptions first.` },
+        { status: 409 },
+      );
+    }
     const { error } = await ctx.adminClient.auth.admin.deleteUser(userId);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true });
