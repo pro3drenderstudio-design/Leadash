@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!eids.length) return NextResponse.json({ rows: [], total: 0, page, limit });
     const { data: replyRows } = await db
       .from("outreach_replies").select("enrollment_id").in("enrollment_id", eids);
-    repliedEnrollmentIds = [...new Set((replyRows ?? []).map((r: { enrollment_id: string }) => r.enrollment_id))];
+    repliedEnrollmentIds = Array.from(new Set((replyRows ?? []).map((r: { enrollment_id: string }) => r.enrollment_id)));
     if (!repliedEnrollmentIds.length) return NextResponse.json({ rows: [], total: 0, page, limit });
   }
 
