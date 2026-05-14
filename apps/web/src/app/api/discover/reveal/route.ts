@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
 
 const CREDITS_PER_REVEAL = 0.25;
@@ -8,7 +9,26 @@ const CREDITS_PER_REVEAL = 0.25;
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
-  const { workspaceId } = auth;
+  const { workspaceId, db } = auth;
+
+  // Plan gate
+  const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
+  const planId = wsRow?.plan_id ?? "free";
+  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  if (!trialExpired) {
+    const plan = await getPlanById(planId);
+    if (!plan.can_scrape_leads) {
+      return NextResponse.json(
+        { error: "Discover reveal requires a paid plan. Upgrade to reveal lead details." },
+        { status: 403 },
+      );
+    }
+  } else {
+    return NextResponse.json(
+      { error: "Your free trial has expired. Upgrade to reveal lead details." },
+      { status: 403 },
+    );
+  }
 
   const { ids } = await req.json() as { ids: string[] };
   if (!Array.isArray(ids) || !ids.length)

@@ -11,7 +11,6 @@ export default async function InboxesPage() {
   } | null;
 
   const trialExpired =
-    ws?.plan_id === "free" &&
     !!ws?.trial_ends_at &&
     new Date(ws.trial_ends_at) < new Date();
 

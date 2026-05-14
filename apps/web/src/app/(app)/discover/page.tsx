@@ -1352,7 +1352,7 @@ function DiscoverContent() {
         )}
 
         {/* ── People / Companies table ── */}
-        <div className={`flex-1 overflow-auto ${!hasSearched ? "hidden" : ""}`}>
+        <div className={`flex-1 min-h-0 overflow-auto ${!hasSearched ? "hidden" : ""}`}>
           {mode === "people" ? (
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/billing/plans";
-import { getPlanById } from "@/lib/billing/getActivePlans";
+import { getPlanById, getActivePlans } from "@/lib/billing/getActivePlans";
 import { logActivity } from "@/lib/activity";
 
 export async function POST(req: NextRequest) {
@@ -26,8 +26,13 @@ export async function POST(req: NextRequest) {
       const item = sub.items.data[0];
       const priceId = item?.price.id;
 
-      const plan = Object.values(PLANS).find(p => p.stripePriceId === priceId);
-      if (!plan) break;
+      // Match against DB-authoritative plan configs first, fall back to hardcoded
+      const allPlans  = await getActivePlans().catch(() => null);
+      const dbPlan    = allPlans?.find(p => p.stripe_price_id === priceId);
+      const staticPlan = Object.values(PLANS).find(p => p.stripePriceId === priceId);
+      const planId    = dbPlan?.plan_id ?? staticPlan?.id;
+      if (!planId) break;
+      const plan = await getPlanById(planId);
 
       const { data: wsForLog } = await db
         .from("workspaces")
@@ -38,18 +43,19 @@ export async function POST(req: NextRequest) {
       await db
         .from("workspaces")
         .update({
-          plan_id:           plan.id,
+          plan_id:           planId,
           plan_status:       sub.status as string,
           stripe_sub_id:     sub.id,
-          max_inboxes:       plan.maxInboxes,
-          max_monthly_sends: plan.maxMonthlySends,
-          max_seats:         plan.maxSeats,
+          trial_ends_at:     null,
+          max_inboxes:       plan.max_inboxes,
+          max_monthly_sends: plan.max_monthly_sends,
+          max_seats:         plan.max_seats,
           updated_at:        new Date().toISOString(),
         })
         .eq("stripe_customer_id", sub.customer as string);
 
       if (wsForLog) {
-        const isUpgrade = wsForLog.plan_id && wsForLog.plan_id !== "free" && wsForLog.plan_id !== plan.id;
+        const isUpgrade = wsForLog.plan_id && wsForLog.plan_id !== "free" && wsForLog.plan_id !== plan.plan_id;
         const isNew     = !wsForLog.plan_id || wsForLog.plan_id === "free";
         await logActivity({
           workspace_id:   wsForLog.id,
@@ -57,7 +63,7 @@ export async function POST(req: NextRequest) {
           type:           isNew ? "subscription_started" : isUpgrade ? "subscription_upgraded" : "subscription_started",
           title:          `${isNew ? "Subscribed to" : "Plan changed to"} ${plan.name}`,
           description:    `${wsForLog.name} — ${plan.name} via Stripe`,
-          metadata:       { plan_id: plan.id, stripe_sub_id: sub.id },
+          metadata:       { plan_id: plan.plan_id, stripe_sub_id: sub.id },
         });
       }
       break;
@@ -113,15 +119,17 @@ export async function POST(req: NextRequest) {
         .eq("stripe_customer_id", sub.customer as string)
         .maybeSingle();
 
+      const freePlan = await getPlanById("free");
       await db
         .from("workspaces")
         .update({
-          plan_id:     "free",
-          plan_status: "canceled",
-          stripe_sub_id: null,
-          max_inboxes:       PLANS.free.maxInboxes,
-          max_monthly_sends: PLANS.free.maxMonthlySends,
-          max_seats:         PLANS.free.maxSeats,
+          plan_id:           "free",
+          plan_status:       "canceled",
+          stripe_sub_id:     null,
+          trial_ends_at:     null,
+          max_inboxes:       freePlan.max_inboxes,
+          max_monthly_sends: freePlan.max_monthly_sends,
+          max_seats:         freePlan.max_seats,
         })
         .eq("stripe_customer_id", sub.customer as string);
 

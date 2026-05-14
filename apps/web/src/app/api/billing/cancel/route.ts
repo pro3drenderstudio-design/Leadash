@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Mark as canceled in DB immediately — webhook will confirm it
-  await db.from("workspaces")
+  const { error: dbError } = await db.from("workspaces")
     .update({ plan_status: "canceled", updated_at: new Date().toISOString() })
     .eq("id", workspaceId);
+  if (dbError) console.error("[billing/cancel] DB update failed:", dbError);
 
   return NextResponse.json({ ok: true });
 }

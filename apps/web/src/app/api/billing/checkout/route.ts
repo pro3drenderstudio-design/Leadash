@@ -27,9 +27,14 @@ export async function POST(req: NextRequest) {
 
   const { data: workspace } = await db
     .from("workspaces")
-    .select("billing_email, name")
+    .select("billing_email, name, plan_id, plan_status")
     .eq("id", workspaceId)
     .single();
+
+  // Prevent duplicate checkout if already on this plan and active
+  if (workspace?.plan_id === plan_id && workspace?.plan_status === "active") {
+    return NextResponse.json({ error: "You are already subscribed to this plan." }, { status: 400 });
+  }
 
   if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 

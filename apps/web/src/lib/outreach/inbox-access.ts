@@ -25,31 +25,42 @@ export async function checkInboxAccess(
   // Load workspace limits + trial info
   const { data: ws } = await db
     .from("workspaces")
-    .select("plan_id, max_inboxes, trial_ends_at")
+    .select("plan_id, plan_status, max_inboxes, trial_ends_at")
     .eq("id", workspaceId)
     .single();
 
   if (!ws) return { ok: false, code: "inbox_limit", message: "Workspace not found." };
 
-  // ── 1. Trial check (free plan only) ────────────────────────────────────────
-  if (ws.plan_id === "free" && ws.trial_ends_at) {
+  // ── 1. Trial check (any plan with an uncleared trial_ends_at) ──────────────
+  if (ws.trial_ends_at) {
     const trialExpired = new Date(ws.trial_ends_at) < new Date();
     if (trialExpired) {
       return {
         ok: false,
         code: "trial_expired",
         message:
-          "Your 14-day free trial has expired. Upgrade your plan to add inboxes and re-enable warmup.",
+          "Your free trial has expired. Upgrade your plan to add inboxes and re-enable warmup.",
       };
     }
   }
 
-  // ── 2. Inbox count limit ────────────────────────────────────────────────────
+  // ── 1b. Past-due grace period — block new inbox adds ───────────────────────
+  if ((ws as Record<string, unknown>).plan_status === "past_due") {
+    return {
+      ok: false,
+      code: "inbox_limit",
+      message: "Your account has a past-due payment. Resolve your billing to add new inboxes.",
+    };
+  }
+
+  // ── 2. Inbox count limit (count only active + paused; errored inboxes don't
+  //        occupy a real sending slot so shouldn't block adding a working one) ──
   if (ws.max_inboxes !== -1) {
     const { count } = await db
       .from("outreach_inboxes")
       .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId);
+      .eq("workspace_id", workspaceId)
+      .in("status", ["active", "paused", "warming"]);
 
     const currentCount = count ?? 0;
     if (currentCount >= ws.max_inboxes) {
@@ -91,7 +102,7 @@ export function getTrialStatus(workspace: {
   plan_id: string;
   trial_ends_at: string | null;
 }): { onTrial: boolean; expired: boolean; daysLeft: number } {
-  if (workspace.plan_id !== "free" || !workspace.trial_ends_at) {
+  if (!workspace.trial_ends_at) {
     return { onTrial: false, expired: false, daysLeft: 0 };
   }
   const msLeft = new Date(workspace.trial_ends_at).getTime() - Date.now();

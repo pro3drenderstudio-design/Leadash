@@ -75,33 +75,43 @@ export async function POST(req: NextRequest) {
       const credits = meta.credits  as string | undefined;
       const amountKobo = meta.amount_kobo as number | undefined;
       if (packId && credits) {
-        const { paid } = await verifyPaystackPayment(data.reference);
-        if (paid) {
-          const creditsNum = parseInt(credits, 10);
-          const { error: txErr } = await db.from("lead_credit_transactions").insert({
-            workspace_id:       workspaceId,
-            type:               "purchase",
-            amount:             creditsNum,
-            description:        `Credit pack: ${packId}`,
-            paystack_reference: data.reference,
-          });
-          if (!txErr) {
-            const { data: ws } = await db.from("workspaces")
-              .select("lead_credits_balance").eq("id", workspaceId).single();
-            if (ws) {
-              await db.from("workspaces")
-                .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + creditsNum })
-                .eq("id", workspaceId);
+        // Idempotency — skip if this reference was already processed
+        const { data: existingInvoice } = await db
+          .from("billing_invoices")
+          .select("id")
+          .eq("paystack_reference", data.reference)
+          .maybeSingle();
+        if (!existingInvoice) {
+          const { paid } = await verifyPaystackPayment(data.reference);
+          if (paid) {
+            const creditsNum = parseInt(credits, 10);
+            if (!isNaN(creditsNum) && creditsNum > 0) {
+              // Insert transaction first (unique on paystack_reference prevents double-grant)
+              const { error: txErr } = await db.from("lead_credit_transactions").insert({
+                workspace_id:       workspaceId,
+                type:               "purchase",
+                amount:             creditsNum,
+                description:        `Credit pack: ${packId}`,
+                paystack_reference: data.reference,
+              });
+              if (!txErr) {
+                const { data: ws } = await db.from("workspaces")
+                  .select("lead_credits_balance").eq("id", workspaceId).single();
+                if (ws) {
+                  await db.from("workspaces")
+                    .update({ lead_credits_balance: (ws.lead_credits_balance ?? 0) + creditsNum })
+                    .eq("id", workspaceId);
+                }
+                await db.from("billing_invoices").insert({
+                  workspace_id:       workspaceId,
+                  type:               "credit_purchase",
+                  description:        `${creditsNum.toLocaleString()} lead credits`,
+                  amount_kobo:        amountKobo ?? 0,
+                  paystack_reference: data.reference,
+                  status:             "paid",
+                });
+              }
             }
-            // Record invoice
-            await db.from("billing_invoices").insert({
-              workspace_id:       workspaceId,
-              type:               "credit_purchase",
-              description:        `${creditsNum.toLocaleString()} lead credits`,
-              amount_kobo:        amountKobo ?? 0,
-              paystack_reference: data.reference,
-              status:             "paid",
-            });
           }
         }
       }
@@ -113,6 +123,14 @@ export async function POST(req: NextRequest) {
       const planId = meta.plan_id as string | undefined;
       const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
       if (planId) {
+        // Idempotency — skip if this reference was already processed
+        const { data: existingPlanInvoice } = await db
+          .from("billing_invoices")
+          .select("id")
+          .eq("paystack_reference", data.reference)
+          .maybeSingle();
+        if (existingPlanInvoice) return NextResponse.json({ received: true });
+
         const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const plan = await getPlanById(planId);
@@ -121,6 +139,7 @@ export async function POST(req: NextRequest) {
             .update({
               plan_id:              plan.plan_id,
               plan_status:          "active",
+              trial_ends_at:        null,
               max_inboxes:          plan.max_inboxes,
               max_monthly_sends:    plan.max_monthly_sends,
               max_seats:            plan.max_seats,
@@ -383,7 +402,7 @@ export async function POST(req: NextRequest) {
     const data = event.data as { subscription_code?: string };
     const subCode = data.subscription_code;
     if (subCode) {
-      const graceEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+      const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: ws } = await db
         .from("workspaces")
         .update({

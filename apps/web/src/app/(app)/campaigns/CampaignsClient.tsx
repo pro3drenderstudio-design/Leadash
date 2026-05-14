@@ -16,7 +16,49 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
 
 const ALL_STATUSES: Array<CampaignStatus | "all"> = ["all", "active", "paused", "draft", "completed"];
 
-export default function CampaignsClient() {
+function SequencesPaywall() {
+  return (
+    <div className="relative rounded-2xl overflow-hidden border border-white/8 min-h-[420px] flex items-center justify-center">
+      {/* Blurred background rows */}
+      <div className="absolute inset-0 pointer-events-none select-none blur-sm opacity-30">
+        {[1,2,3,4,5].map(i => (
+          <div key={i} className="h-16 border-b border-white/4 bg-white/2" />
+        ))}
+      </div>
+      {/* Paywall card */}
+      <div className="relative z-10 flex flex-col items-center gap-4 px-8 py-10 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-white/6 border border-white/10 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-white font-semibold text-lg">Sequences are a paid feature</h3>
+          <p className="text-white/45 text-sm mt-1.5 max-w-xs">
+            Upgrade your plan to create and run cold email sequences with advanced tracking and automation.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+          <Link
+            href="/settings?tab=billing"
+            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            Upgrade Plan
+          </Link>
+          <Link
+            href="/settings?tab=billing"
+            className="px-5 py-2.5 bg-white/6 hover:bg-white/10 text-white/70 hover:text-white rounded-xl text-sm font-medium transition-colors"
+          >
+            View Plans
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CampaignsClient({ canRunCampaigns = true }: { canRunCampaigns?: boolean }) {
   const params = useSearchParams();
   const [activeTab, setActiveTab] = useState<"sequences" | "templates">(() =>
     params.get("tab") === "templates" ? "templates" : "sequences"
@@ -76,7 +118,7 @@ export default function CampaignsClient() {
           <h1 className="text-xl font-bold text-white">Sequences</h1>
           <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
         </div>
-        {activeTab === "sequences" && (
+        {activeTab === "sequences" && canRunCampaigns && (
           <Link href="/campaigns/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
             + New Sequence
           </Link>
@@ -99,7 +141,9 @@ export default function CampaignsClient() {
       {/* ── TEMPLATES TAB ── */}
       {activeTab === "templates" && <TemplatesClient />}
 
-      {activeTab === "sequences" && <>
+      {activeTab === "sequences" && !canRunCampaigns && <SequencesPaywall />}
+
+      {activeTab === "sequences" && canRunCampaigns && <>
 
       {/* Clone error */}
       {cloneError && (

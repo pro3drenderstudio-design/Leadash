@@ -10,6 +10,7 @@ import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import PastDueBanner from "@/components/PastDueBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 
 async function claimBetaIfApproved(userId: string, email: string, workspaceId: string) {
   const db = createAdminClient();
@@ -22,11 +23,16 @@ async function claimBetaIfApproved(userId: string, email: string, workspaceId: s
     .maybeSingle();
   if (!enrollment) return;
 
+  const starterPlan = await getPlanById("starter");
   const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   await db.from("workspaces").update({
-    plan_id: "starter", plan_status: "active",
-    max_inboxes: 5, max_monthly_sends: 5000, max_seats: 3,
-    trial_ends_at: trialEnd, updated_at: new Date().toISOString(),
+    plan_id:           "starter",
+    plan_status:       "active",
+    max_inboxes:       starterPlan.max_inboxes,
+    max_monthly_sends: starterPlan.max_monthly_sends,
+    max_seats:         starterPlan.max_seats,
+    trial_ends_at:     trialEnd,
+    updated_at:        new Date().toISOString(),
   }).eq("id", workspaceId);
 
   const { data: ws } = await db.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
@@ -78,7 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {workspace.plan_status === "past_due" && workspace.grace_ends_at && (
               <PastDueBanner graceEndsAt={workspace.grace_ends_at} />
             )}
-            {workspace.plan_id === "free" && workspace.trial_ends_at && (
+            {workspace.trial_ends_at && (
               <TrialBanner trialEndsAt={workspace.trial_ends_at} />
             )}
             <AppHeader

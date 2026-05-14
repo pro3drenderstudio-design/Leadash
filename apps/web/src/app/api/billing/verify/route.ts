@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
   await db.from("workspaces").update({
     plan_id:           plan.plan_id,
     plan_status:       "active",
+    trial_ends_at:     null,
     max_inboxes:       plan.max_inboxes,
     max_monthly_sends: plan.max_monthly_sends,
     max_seats:         plan.max_seats,
@@ -42,42 +43,35 @@ export async function POST(req: NextRequest) {
     updated_at:        new Date().toISOString(),
   }).eq("id", workspaceId);
 
-  // Record invoice (ignore duplicate if webhook already wrote it)
-  await db.from("billing_invoices").upsert({
+  // Record invoice — upsert so webhook duplicate is silently ignored.
+  // Returns the row only when newly inserted; returns nothing on conflict.
+  const { data: newInvoice } = await db.from("billing_invoices").upsert({
     workspace_id:       workspaceId,
     type:               "plan_subscription",
     description:        `${plan.name} plan subscription`,
     amount_kobo:        plan.price_ngn * 100,
     paystack_reference: reference,
     status:             "paid",
-  }, { onConflict: "paystack_reference", ignoreDuplicates: true });
+  }, { onConflict: "paystack_reference", ignoreDuplicates: true }).select("id");
 
-  // Grant included credits if not already granted (check for existing grant transaction)
-  if (plan.included_credits > 0) {
-    const { data: existing } = await db.from("lead_credit_transactions")
-      .select("id").eq("workspace_id", workspaceId)
-      .eq("type", "grant")
-      .eq("description", `Monthly credits — ${plan.name} plan`)
-      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .maybeSingle();
-
-    if (!existing) {
-      const { data: ws } = await db.from("workspaces")
-        .select("lead_credits_balance, subscription_credits_balance")
-        .eq("id", workspaceId).single();
-      if (ws) {
-        await db.from("workspaces").update({
-          lead_credits_balance:         (ws.lead_credits_balance ?? 0) + plan.included_credits,
-          subscription_credits_balance: plan.included_credits,
-        }).eq("id", workspaceId);
-      }
-      await db.from("lead_credit_transactions").insert({
-        workspace_id: workspaceId,
-        type:         "grant",
-        amount:       plan.included_credits,
-        description:  `Monthly credits — ${plan.name} plan`,
-      });
+  // Grant included credits only when invoice was newly created here.
+  // If webhook already processed this reference, newInvoice will be empty.
+  if (plan.included_credits > 0 && newInvoice && newInvoice.length > 0) {
+    const { data: ws } = await db.from("workspaces")
+      .select("lead_credits_balance, subscription_credits_balance")
+      .eq("id", workspaceId).single();
+    if (ws) {
+      await db.from("workspaces").update({
+        lead_credits_balance:         (ws.lead_credits_balance ?? 0) + plan.included_credits,
+        subscription_credits_balance: plan.included_credits,
+      }).eq("id", workspaceId);
     }
+    await db.from("lead_credit_transactions").insert({
+      workspace_id: workspaceId,
+      type:         "grant",
+      amount:       plan.included_credits,
+      description:  `Monthly credits — ${plan.name} plan`,
+    });
   }
 
   return NextResponse.json({ ok: true, plan_id: plan.plan_id, plan_name: plan.name });

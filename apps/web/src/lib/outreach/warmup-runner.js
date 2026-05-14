@@ -58,7 +58,7 @@ async function runWarmupPool(workspaceId) {
         .select("plan_id, trial_ends_at")
         .eq("id", workspaceId)
         .single();
-    if (ws?.plan_id === "free" && ws.trial_ends_at && new Date(ws.trial_ends_at) < new Date()) {
+    if (ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date()) {
         // Disable warmup for all inboxes in this workspace so the flag is accurate
         await db
             .from("outreach_inboxes")

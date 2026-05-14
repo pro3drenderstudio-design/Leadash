@@ -37,6 +37,7 @@ export async function downgradeWorkspaceToFree(
     plan_status:                  "canceled",
     paystack_sub_code:            null,
     grace_ends_at:                null,
+    trial_ends_at:                null,
     max_inboxes:                  freePlan.max_inboxes,
     max_monthly_sends:            freePlan.max_monthly_sends,
     max_seats:                    freePlan.max_seats,

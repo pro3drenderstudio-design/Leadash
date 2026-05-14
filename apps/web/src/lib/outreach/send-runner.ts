@@ -140,12 +140,54 @@ export async function runSendBatch(
   minDelay = 2_000,
   maxDelay = 5_000,
 ): Promise<SendRunResult> {
+  const db = supabase();
+
+  // ── Plan gate: block sends for free-plan or expired-trial workspaces ─────────
+  const { data: wsRow } = await db
+    .from("workspaces")
+    .select("plan_id, trial_ends_at")
+    .eq("id", workspaceId)
+    .single();
+
+  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  if (trialExpired) {
+    // Auto-pause any active campaigns for this workspace
+    await db.from("outreach_campaigns")
+      .update({ status: "paused", pause_reason: "Trial expired — upgrade to resume", updated_at: new Date().toISOString() })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active");
+    console.log(`[send-runner] ws=${workspaceId} trial expired — sends blocked, campaigns paused`);
+    return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+  }
+
+  const planId = wsRow?.plan_id ?? "free";
+  if (planId !== "free") {
+    // Paid plan — check can_run_campaigns from DB config
+    const { getPlanById } = await import("@/lib/billing/getActivePlans");
+    const plan = await getPlanById(planId);
+    if (!plan.can_run_campaigns) {
+      await db.from("outreach_campaigns")
+        .update({ status: "paused", pause_reason: "Plan does not include campaigns — upgrade to resume", updated_at: new Date().toISOString() })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active");
+      console.log(`[send-runner] ws=${workspaceId} plan=${planId} cannot run campaigns — blocked`);
+      return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+    }
+  } else {
+    // Free plan always blocked
+    await db.from("outreach_campaigns")
+      .update({ status: "paused", pause_reason: "Free plan — upgrade to run campaigns", updated_at: new Date().toISOString() })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active");
+    console.log(`[send-runner] ws=${workspaceId} free plan — sends blocked, campaigns paused`);
+    return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const due    = await getDueEnrollments(workspaceId, limit);
   console.log(`[send-runner] due=${due.length} ws=${workspaceId}`);
   const result: SendRunResult = { processed: due.length, sent: 0, skipped: 0, errors: 0 };
   if (!due.length) return result;
-
-  const db = supabase();
 
   // Load workspace settings once
   const { data: wsSettings } = await db.from("workspace_settings").select("*").eq("workspace_id", workspaceId).single();

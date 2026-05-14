@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (existing) return NextResponse.json({ id: existing.workspace_id }, { status: 200 });
 
-  // Create workspace — free plan gets 3 inboxes and a 14-day warmup trial
+  // Create workspace — free plan, 14-day warmup trial, 3 inboxes to start
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data: workspace, error } = await db
     .from("workspaces")
@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
       name:          name.trim(),
       slug:          `${slug}-${Date.now().toString(36)}`,
       owner_id:      user.id,
+      plan_id:       "free",
+      plan_status:   "trialing",
       max_inboxes:   3,
       trial_ends_at: trialEndsAt,
     })

@@ -47,6 +47,7 @@ export async function enforceSeatLimit(workspaceId: string) {
 
 export async function enforceMonthlySendLimit(workspaceId: string, quantity = 1) {
   const ws = await getWorkspace(workspaceId);
+  if (ws.max_monthly_sends === -1) return; // unlimited
   if (ws.sends_this_month + quantity > ws.max_monthly_sends) {
     throw new LimitError("monthly_sends", ws.sends_this_month, ws.max_monthly_sends, ws.plan_id);
   }

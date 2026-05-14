@@ -62,6 +62,34 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "No valid keys provided" }, { status: 400 });
   }
 
+  // Validate numeric settings
+  for (const [key, value] of updates) {
+    if (key === "dedicated_ip_price_ngn") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 1_000 || n > 10_000_000) {
+        return NextResponse.json({ error: "dedicated_ip_price_ngn must be between ₦1,000 and ₦10,000,000" }, { status: 400 });
+      }
+    }
+    if (key === "dedicated_ip_price_usd") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 1 || n > 10_000) {
+        return NextResponse.json({ error: "dedicated_ip_price_usd must be between $1 and $10,000" }, { status: 400 });
+      }
+    }
+    if (key === "trial_days") {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 0 || n > 365) {
+        return NextResponse.json({ error: "trial_days must be an integer between 0 and 365" }, { status: 400 });
+      }
+    }
+    if (key === "lead_credits_on_signup") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
+        return NextResponse.json({ error: "lead_credits_on_signup must be between 0 and 1,000,000" }, { status: 400 });
+      }
+    }
+  }
+
   // Upsert each key
   const errors: string[] = [];
   for (const [key, value] of updates) {

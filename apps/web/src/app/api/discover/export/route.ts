@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
 import type { DiscoverExportRequest } from "@/types/discover";
 
@@ -9,7 +10,25 @@ const CREDITS_PER_LEAD = 0.25;
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
-  const { workspaceId } = auth;
+  const { workspaceId, db } = auth;
+
+  // Plan gate
+  const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
+  const planId = wsRow?.plan_id ?? "free";
+  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  if (trialExpired) {
+    return NextResponse.json(
+      { error: "Your free trial has expired. Upgrade to export leads." },
+      { status: 403 },
+    );
+  }
+  const plan = await getPlanById(planId);
+  if (!plan.can_scrape_leads) {
+    return NextResponse.json(
+      { error: "Discover export requires a paid plan. Upgrade to export leads." },
+      { status: 403 },
+    );
+  }
 
   const body: DiscoverExportRequest = await req.json();
   const { ids, format } = body;

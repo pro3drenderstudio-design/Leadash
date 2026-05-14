@@ -19,7 +19,7 @@ export default function TrialBanner({ trialEndsAt }: Props) {
     return (
       <div className="bg-red-600 text-white px-4 py-2 text-sm font-medium flex items-center justify-between gap-4 flex-wrap">
         <span>
-          Your 14-day trial expired on <strong>{formattedDate}</strong>. Outreach is paused — upgrade to re-enable inboxes and warmup. Lead campaigns still work with credits.
+          Your free trial expired on <strong>{formattedDate}</strong>. Outreach is paused — upgrade to re-enable inboxes and warmup. Lead campaigns still work with credits.
         </span>
         <Link
           href="/settings?tab=billing"
@@ -42,7 +42,7 @@ export default function TrialBanner({ trialEndsAt }: Props) {
     ? "Your free trial expires tomorrow"
     : daysLeft <= 7
     ? `Your free trial expires in ${daysLeft} days`
-    : `Free trial active`;
+    : "Free trial active";
 
   return (
     <div className={`${bg} text-white px-4 py-2 text-sm font-medium flex items-center justify-between gap-4 flex-wrap`}>

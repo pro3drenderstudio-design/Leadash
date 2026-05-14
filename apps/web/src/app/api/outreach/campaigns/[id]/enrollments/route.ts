@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
@@ -32,6 +33,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
   const { id: campaignId } = await params;
+
+  // Plan gate — free plan cannot run campaigns
+  const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
+  const planId = wsRow?.plan_id ?? "free";
+  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  if (trialExpired || planId === "free") {
+    return NextResponse.json(
+      { error: "Campaigns require a paid plan. Upgrade to enroll leads." },
+      { status: 403 },
+    );
+  }
+  const plan = await getPlanById(planId);
+  if (!plan.can_run_campaigns) {
+    return NextResponse.json(
+      { error: "Your current plan does not include campaigns. Upgrade to enroll leads." },
+      { status: 403 },
+    );
+  }
 
   const url     = new URL(req.url);
   const dryRun  = url.searchParams.get("dry_run") === "1";
