@@ -552,7 +552,7 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAd
             <button onClick={handleReveal} disabled={revealing}
               className="flex items-center gap-1.5 text-[10px] text-orange-400 hover:text-orange-300 font-semibold transition-colors disabled:opacity-50">
               {revealing ? <Spinner sm /> : <LockIcon />}
-              Unlock · 0.5 cr
+              Unlock · 0.25 cr
             </button>
           ) : (
             <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
@@ -1174,7 +1174,7 @@ function DiscoverContent() {
   }
 
   const unrevealed  = results.filter(r => selected.has(r.id) && !r.revealed);
-  const revealCost  = Math.ceil(unrevealed.length * 0.5 * 10) / 10;
+  const revealCost  = Math.ceil(unrevealed.length * 0.25 * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort }: {
     label: string; col: string | null;
