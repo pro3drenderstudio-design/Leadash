@@ -229,7 +229,7 @@ function LocationIncludeExclude({
             value={query}
             onChange={e => search(e.target.value)}
             onFocus={() => { if (results.length) setOpen(true); }}
-            placeholder="Search countries, states, cities…"
+            placeholder="Search states, cities…"
             className={`w-full bg-white/5 border rounded px-2.5 py-1.5 pr-7 text-[11px] text-white/70 placeholder-white/20 focus:outline-none transition-colors ${
               mode === "include" ? "border-white/10 focus:border-orange-500/40" : "border-white/10 focus:border-rose-500/40"
             }`}
@@ -353,6 +353,137 @@ function SearchableIncludeExclude({
   );
 }
 
+// ── Country multi-select (searchable dropdown w/ checkboxes) ─────────────────
+
+export const COUNTRY_OPTIONS = [
+  "United States", "India", "Brazil", "United Kingdom", "France", "Canada",
+  "Italy", "Spain", "Mexico", "Australia", "Netherlands", "Germany", "Indonesia",
+  "Turkey", "China", "Argentina", "Colombia", "South Africa", "Philippines",
+  "Chile", "Belgium", "Malaysia", "Sweden", "Nigeria", "Peru", "Pakistan",
+  "United Arab Emirates", "Poland", "Switzerland", "Denmark", "Portugal",
+  "Venezuela", "Iran", "Romania", "Saudi Arabia", "Russia", "Egypt", "Singapore",
+  "Norway", "New Zealand", "Ireland", "Ecuador", "Czechia", "Kenya", "Morocco",
+  "Algeria", "Thailand", "Japan", "Israel", "Hong Kong", "Bangladesh", "Vietnam",
+  "Greece", "Austria", "Finland", "Taiwan", "Ukraine", "Ghana", "Hungary",
+  "Serbia", "Sri Lanka", "Tunisia", "Costa Rica", "Dominican Republic", "Croatia",
+  "Uruguay", "Guatemala", "Bulgaria", "Qatar", "Puerto Rico", "Bolivia", "Jordan",
+] as const;
+
+function CountryIncludeExclude({
+  includes, excludes,
+  onAddInclude, onAddExclude, onRemoveInclude, onRemoveExclude,
+}: {
+  includes: string[]; excludes: string[];
+  onAddInclude: (v: string) => void; onAddExclude: (v: string) => void;
+  onRemoveInclude: (v: string) => void; onRemoveExclude: (v: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen]   = useState(false);
+  const [mode, setMode]   = useState<"include" | "exclude">("include");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  const filtered = COUNTRY_OPTIONS.filter(c =>
+    c.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 30);
+
+  function toggle(country: string) {
+    if (mode === "include") {
+      if (includes.includes(country)) onRemoveInclude(country);
+      else { onAddInclude(country); if (excludes.includes(country)) onRemoveExclude(country); }
+    } else {
+      if (excludes.includes(country)) onRemoveExclude(country);
+      else { onAddExclude(country); if (includes.includes(country)) onRemoveInclude(country); }
+    }
+  }
+
+  function isChecked(country: string) {
+    return mode === "include" ? includes.includes(country) : excludes.includes(country);
+  }
+
+  const allSelected = includes.concat(excludes);
+
+  return (
+    <div className="space-y-2">
+      {/* Include / Exclude toggle */}
+      <div className="flex rounded overflow-hidden border border-white/10 text-[10px] font-semibold">
+        <button onClick={() => setMode("include")} className={`flex-1 py-1 transition-colors ${mode === "include" ? "bg-orange-500/20 text-orange-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><PlusIcon /> Include</span>
+        </button>
+        <button onClick={() => setMode("exclude")} className={`flex-1 py-1 transition-colors border-l border-white/10 ${mode === "exclude" ? "bg-rose-500/20 text-rose-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><MinusIcon /> Exclude</span>
+        </button>
+      </div>
+
+      {/* Search + dropdown */}
+      <div ref={ref} className="relative">
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search countries…"
+          className={`w-full bg-white/5 border rounded px-2.5 py-1.5 text-[11px] text-white/70 placeholder-white/20 focus:outline-none transition-colors ${
+            mode === "include" ? "border-white/10 focus:border-orange-500/40" : "border-white/10 focus:border-rose-500/40"
+          }`}
+        />
+        {open && (
+          <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-[#1a1a1a] border border-white/10 rounded shadow-xl max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-white/25 text-center">No countries found</p>
+            ) : filtered.map(country => {
+              const checked = isChecked(country);
+              const otherMode = mode === "include" ? excludes.includes(country) : includes.includes(country);
+              return (
+                <button
+                  key={country}
+                  onClick={() => toggle(country)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] hover:bg-white/6 transition-colors text-left ${
+                    checked
+                      ? mode === "include" ? "text-orange-300" : "text-rose-300"
+                      : otherMode ? "text-white/30" : "text-white/60"
+                  }`}
+                >
+                  <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                    checked
+                      ? mode === "include" ? "bg-orange-500 border-orange-500" : "bg-rose-500 border-rose-500"
+                      : "border-white/20"
+                  }`}>
+                    {checked && (
+                      <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="flex-1 truncate">{country}</span>
+                  {otherMode && (
+                    <span className={`text-[9px] flex-shrink-0 ${mode === "include" ? "text-rose-400/60" : "text-orange-400/60"}`}>
+                      {mode === "include" ? "excluded" : "included"}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {allSelected.length > 0 && (
+        <TagArea
+          includes={includes} excludes={excludes}
+          onRemoveInclude={onRemoveInclude} onRemoveExclude={onRemoveExclude}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Checkbox group ────────────────────────────────────────────────────────────
 
 function CheckboxGroup({
@@ -403,6 +534,8 @@ export interface PeopleFilters {
   titleExcludes:        string[];
   seniorities:          string[];
   departments:          string[];
+  countryIncludes:      string[];
+  countryExcludes:      string[];
   locationIncludes:     string[];
   locationExcludes:     string[];
   companyIncludes:      string[];
@@ -416,30 +549,34 @@ export interface PeopleFilters {
 }
 
 export interface CompanyFilters {
-  coKeyword:          string;
-  coLocationIncludes: string[];
-  coLocationExcludes: string[];
-  coIndustryIncludes: string[];
-  coIndustryExcludes: string[];
-  coSizes:            string[];
-  coFundingStages:    string[];
-  coEmployeeRange:    { min: number; max: number } | null;
-  coRevenueRange:     { min: number; max: number } | null;
-  coHasPeople:        boolean;
-  coKeywordIncludes:  string[];
-  coKeywordExcludes:  string[];
+  coKeyword:            string;
+  coCountryIncludes:    string[];
+  coCountryExcludes:    string[];
+  coLocationIncludes:   string[];
+  coLocationExcludes:   string[];
+  coIndustryIncludes:   string[];
+  coIndustryExcludes:   string[];
+  coSizes:              string[];
+  coFundingStages:      string[];
+  coEmployeeRange:      { min: number; max: number } | null;
+  coRevenueRange:       { min: number; max: number } | null;
+  coHasPeople:          boolean;
+  coKeywordIncludes:    string[];
+  coKeywordExcludes:    string[];
 }
 
 export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   keyword: "", titleIncludes: [], titleExcludes: [], seniorities: [],
-  departments: [], locationIncludes: [], locationExcludes: [],
+  departments: [], countryIncludes: [], countryExcludes: [],
+  locationIncludes: [], locationExcludes: [],
   companyIncludes: [], companyExcludes: [], industryIncludes: [],
   industryExcludes: [], companySizes: [], emailStatus: "any",
   companyKeywordIncludes: [], companyKeywordExcludes: [],
 };
 
 export const DEFAULT_COMPANY_FILTERS: CompanyFilters = {
-  coKeyword: "", coLocationIncludes: [], coLocationExcludes: [],
+  coKeyword: "", coCountryIncludes: [], coCountryExcludes: [],
+  coLocationIncludes: [], coLocationExcludes: [],
   coIndustryIncludes: [], coIndustryExcludes: [], coSizes: [],
   coFundingStages: [], coEmployeeRange: null, coRevenueRange: null, coHasPeople: false,
   coKeywordIncludes: [], coKeywordExcludes: [],
@@ -484,6 +621,7 @@ export function PeopleSidebar({
   const titleCount    = filters.titleIncludes.length    + filters.titleExcludes.length;
   const senCount      = filters.seniorities.length;
   const deptCount     = filters.departments.length;
+  const countryCount  = filters.countryIncludes.length  + filters.countryExcludes.length;
   const locCount      = filters.locationIncludes.length + filters.locationExcludes.length;
   const coCount       = filters.companyIncludes.length  + filters.companyExcludes.length;
   const indCount      = filters.industryIncludes.length + filters.industryExcludes.length;
@@ -562,8 +700,20 @@ export function PeopleSidebar({
         />
       </FilterSection>
 
-      {/* Location */}
-      <FilterSection title="Location" activeCount={locCount}>
+      {/* Country */}
+      <FilterSection title="Country" activeCount={countryCount}>
+        <CountryIncludeExclude
+          includes={filters.countryIncludes}
+          excludes={filters.countryExcludes}
+          onAddInclude={v => addInc("countryIncludes", v)}
+          onAddExclude={v => addInc("countryExcludes", v)}
+          onRemoveInclude={v => rmInc("countryIncludes", v)}
+          onRemoveExclude={v => rmInc("countryExcludes", v)}
+        />
+      </FilterSection>
+
+      {/* City / State */}
+      <FilterSection title="City / State" activeCount={locCount}>
         <LocationIncludeExclude
           includes={filters.locationIncludes}
           excludes={filters.locationExcludes}
@@ -637,6 +787,7 @@ export function CompanySidebar({
     set(key, (filters[key] as string[]).filter(x => x !== val) as CompanyFilters[typeof key]);
   }
 
+  const coCountryCount = filters.coCountryIncludes.length + filters.coCountryExcludes.length;
   const locCount    = filters.coLocationIncludes.length + filters.coLocationExcludes.length;
   const indCount    = filters.coIndustryIncludes.length + filters.coIndustryExcludes.length;
   const sizeCount   = filters.coSizes.length;
@@ -649,8 +800,20 @@ export function CompanySidebar({
     <div className="flex-1 overflow-y-auto">
       <AiFilterBar mode="companies" onApply={onAiApply} />
 
-      {/* Account Location */}
-      <FilterSection title="Account Location" activeCount={locCount}>
+      {/* Country */}
+      <FilterSection title="Country" activeCount={coCountryCount}>
+        <CountryIncludeExclude
+          includes={filters.coCountryIncludes}
+          excludes={filters.coCountryExcludes}
+          onAddInclude={v => addInc("coCountryIncludes", v)}
+          onAddExclude={v => addInc("coCountryExcludes", v)}
+          onRemoveInclude={v => rmInc("coCountryIncludes", v)}
+          onRemoveExclude={v => rmInc("coCountryExcludes", v)}
+        />
+      </FilterSection>
+
+      {/* City / State */}
+      <FilterSection title="City / State" activeCount={locCount}>
         <LocationIncludeExclude
           includes={filters.coLocationIncludes}
           excludes={filters.coLocationExcludes}
@@ -757,19 +920,19 @@ export function CompanySidebar({
 
 // ── AI filter bar ─────────────────────────────────────────────────────────────
 
-const PEOPLE_QUICK_FILTERS = [
-  { label: "CTOs in the US",        filters: { titleIncludes: ["CTO", "Chief Technology Officer"], locationIncludes: ["United States"] } },
+export const PEOPLE_QUICK_FILTERS = [
+  { label: "CTOs in the US",        filters: { titleIncludes: ["CTO", "Chief Technology Officer"], countryIncludes: ["United States"] } },
   { label: "Sales VPs",             filters: { titleIncludes: ["VP Sales", "Vice President Sales"], seniorities: ["vp"] } },
   { label: "Founders & CEOs",       filters: { seniorities: ["founder", "owner", "c_suite"], titleIncludes: ["CEO", "Founder"] } },
   { label: "Tech leads",            filters: { industryIncludes: ["Information Technology & Services", "Computer Software"] } },
   { label: "Marketing Directors",   filters: { titleIncludes: ["Marketing Director", "Director of Marketing"], departments: ["marketing"] } },
 ];
 
-const COMPANY_QUICK_FILTERS = [
+export const COMPANY_QUICK_FILTERS = [
   { label: "Software companies",    filters: { coIndustryIncludes: ["Computer Software", "Internet"] } },
   { label: "Series A+",             filters: { coFundingStages: ["Series A", "Series B", "Series C"] } },
   { label: "Mid-size (51–500)",     filters: { coSizes: ["51-200", "201-500"] } },
-  { label: "US companies",          filters: { coLocationIncludes: ["United States"] } },
+  { label: "US companies",          filters: { coCountryIncludes: ["United States"] } },
   { label: "Finance & Banking",     filters: { coIndustryIncludes: ["Financial Services", "Banking"] } },
 ];
 

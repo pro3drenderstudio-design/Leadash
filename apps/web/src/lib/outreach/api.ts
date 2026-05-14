@@ -130,8 +130,9 @@ export const getCrmThreads    = (page = 0, status?: string) =>
   get<{ threads: CrmThread[]; total: number }>(`${base}/crm?page=${page}${status ? `&status=${status}` : ""}`);
 export const updateCrmStatus  = (enrollmentId: string, crm_status: string) =>
   patch(`${base}/crm/${enrollmentId}`, { crm_status });
-export const getCrmUnmatched  = () =>
-  get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/unmatched`);
+export type CrmUnmatchedRow = OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null };
+export const getCrmUnmatched  = (page = 1, limit = 50) =>
+  get<{ data: CrmUnmatchedRow[]; total: number; page: number; limit: number }>(`${base}/crm/unmatched?page=${page}&limit=${limit}`);
 export const getCrmWarmup     = () =>
   get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/warmup`);
 export const getCrmFilters    = ()                                         => get<OutreachCrmFilter[]>(`${base}/crm/filters`);
@@ -149,6 +150,31 @@ export const getWarmupActivity = (limit = 100) => get<unknown[]>(`${base}/warmup
 // ─── Analytics & Triggers ─────────────────────────────────────────────────────
 export const getCampaignAnalytics = (campaignId: string) =>
   get<CampaignAnalytics>(`${base}/campaigns/${campaignId}/analytics`);
+
+export interface CampaignActivityRow {
+  send_id:    string;
+  status:     string;
+  opened_at:  string | null;
+  replied_at: string | null;
+  sent_at:    string;
+  step_order: number;
+  subject:    string | null;
+  lead_name:  string;
+  lead_email: string;
+  company:    string | null;
+}
+
+export interface CampaignActivityResponse {
+  rows:  CampaignActivityRow[];
+  total: number;
+  page:  number;
+  limit: number;
+}
+
+export const getCampaignActivity = (campaignId: string, page = 1, limit = 50, status = "all") =>
+  get<CampaignActivityResponse>(
+    `${base}/campaigns/${campaignId}/activity?page=${page}&limit=${limit}&status=${status}`
+  );
 
 export const triggerSendBatch = (campaignId?: string) =>
   post<{

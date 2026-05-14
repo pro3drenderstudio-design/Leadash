@@ -30,6 +30,7 @@ export interface DiscoverPerson {
   company_domain:  string | null;
   company_industry:string | null;
   company_size:    string | null;
+  company_keywords:string | null;
 }
 
 export interface DiscoverResult extends Omit<DiscoverPerson, "email" | "phone"> {

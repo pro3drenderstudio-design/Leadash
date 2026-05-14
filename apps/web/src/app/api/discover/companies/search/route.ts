@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
   const industryIncludes = csv(p.get("industry_include"));
   const industryExcludes = csv(p.get("industry_exclude"));
   const companySizes     = csv(p.get("company_size"));
+  const countryIncludes  = csv(p.get("country_include"));
+  const countryExcludes  = csv(p.get("country_exclude"));
   const locationIncludes = csv(p.get("location_include"));
   const locationExcludes = csv(p.get("location_exclude"));
   const fundingStages    = csv(p.get("funding_stage"));
@@ -69,6 +71,22 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
+    function addOrLower(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`(${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
+    function addNoneLower(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
     function addLocationOr(values: string[]) {
       if (!values.length) return;
       const perVal = values.map((_, j) =>
@@ -98,6 +116,8 @@ export async function GET(req: NextRequest) {
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
     addOr("c.size_range",    companySizes,     false);
+    addOrLower("c.country",   countryIncludes);
+    addNoneLower("c.country", countryExcludes);
     addLocationOr(locationIncludes);
     addLocationNone(locationExcludes);
     addOr("c.funding_stage", fundingStages,    true);
@@ -127,7 +147,11 @@ export async function GET(req: NextRequest) {
 
     const [countRows, rows] = await Promise.all([
       leadsDb.unsafe(`
-        SELECT COUNT(*) AS total FROM discover_companies c ${where}
+        SELECT count(*) AS total
+        FROM (
+          SELECT 1 FROM discover_companies c ${where}
+          LIMIT 100001
+        ) cnt
       `, params as never[]),
       leadsDb.unsafe(`
         SELECT

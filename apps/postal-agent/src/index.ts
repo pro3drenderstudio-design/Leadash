@@ -379,9 +379,15 @@ app.post("/routes", async (req: Request, res: Response) => {
 
       if (!routeRows.length) {
         await conn.execute(
-          `INSERT INTO routes (server_id, uuid, token, domain_id, endpoint_type, endpoint_id, spam_mode, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'HTTPEndpoint', ?, 'Mark', ?, ?)`,
+          `INSERT INTO routes (server_id, uuid, name, token, domain_id, endpoint_type, endpoint_id, spam_mode, created_at, updated_at)
+           VALUES (?, ?, '*', ?, ?, 'HTTPEndpoint', ?, 'Mark', ?, ?)`,
           [sid, genUuid(), genKey(8), domainId, endpointId, now, now],
+        );
+      } else {
+        // Ensure existing routes have the wildcard name set
+        await conn.execute(
+          "UPDATE routes SET name = '*' WHERE server_id = ? AND domain_id = ? AND endpoint_type = 'HTTPEndpoint' AND endpoint_id = ? AND (name IS NULL OR name = '')",
+          [sid, domainId, endpointId],
         );
       }
 

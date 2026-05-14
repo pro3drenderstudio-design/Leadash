@@ -123,10 +123,12 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
           messageId = r.messageId;
         }
 
+        const cleanMsgId = messageId.replace(/^<|>$/g, "");
         await db.from("outreach_warmup_sends").insert({
           id: warmupId, workspace_id: workspaceId,
           from_inbox_id: sender.id, to_inbox_id: recipient.id,
-          message_id: messageId, thread_id: threadId || messageId,
+          message_id: cleanMsgId,
+          thread_id: (threadId || messageId).replace(/^<|>$/g, ""),
           subject: template.subject, sent_at: new Date().toISOString(),
         });
         result.sent++;

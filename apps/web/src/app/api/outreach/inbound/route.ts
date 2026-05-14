@@ -29,6 +29,8 @@ const DSN_FROM_PATTERNS = [
   /^postmaster@/i,
   /^mail-daemon@/i,
   /^noreply@/i,
+  /^bounce\d*@rp\./i,       // Postal return-path bounce addresses (bounce1@rp.postal.*)
+  /^bounce\d*@/i,            // Generic bounce return-paths
 ];
 const DSN_SUBJECT_PATTERNS = [
   /delivery.status.notification/i,
@@ -201,12 +203,14 @@ export async function POST(req: NextRequest) {
   // ── Campaign reply: match via In-Reply-To / References ────────────────────────
   const isFiltered = detectOoo(subject, text);
 
-  // Collect all message-ids from In-Reply-To and References headers
+  // Collect all message-ids from In-Reply-To and References headers.
+  // Always strip angle brackets so IDs match outreach_sends.message_id storage format.
+  const stripBrackets = (id: string) => id.replace(/^<|>$/g, "").trim();
   const referencedIds: string[] = [];
-  if (inReplyTo) referencedIds.push(inReplyTo);
+  if (inReplyTo) referencedIds.push(stripBrackets(inReplyTo));
   if (references) {
     const refs = references.match(/<[^>]+>/g) ?? [];
-    referencedIds.push(...refs);
+    referencedIds.push(...refs.map(stripBrackets));
   }
 
   let enrollmentId: string | null = null;
@@ -232,11 +236,12 @@ export async function POST(req: NextRequest) {
   let isWarmup = false;
 
   if (!enrollmentId) {
-    // If the sender is one of this workspace's own inboxes, it's always warmup.
+    // If the sender is any warmup-enabled inbox (any workspace), it's warmup.
+    // Do not scope to workspaceId — the global warmup pool spans all workspaces.
     const { data: senderInbox } = await db
       .from("outreach_inboxes")
       .select("id")
-      .eq("workspace_id", workspaceId)
+      .eq("warmup_enabled", true)
       .ilike("email_address", from)
       .limit(1)
       .maybeSingle();

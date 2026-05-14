@@ -17,7 +17,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .single();
 
   if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(data);
+
+  const [enrolled, sent, opened, replied] = await Promise.all([
+    db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", id),
+    db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("campaign_id", id),
+    db.from("outreach_sends").select("id", { count: "exact", head: true }).eq("campaign_id", id).not("opened_at", "is", null),
+    db.from("outreach_enrollments").select("id", { count: "exact", head: true }).eq("campaign_id", id).or("crm_status.eq.replied,status.eq.replied"),
+  ]);
+
+  return NextResponse.json({
+    ...data,
+    total_enrolled: enrolled.count ?? 0,
+    total_sent:     sent.count     ?? 0,
+    total_opened:   opened.count   ?? 0,
+    total_replied:  replied.count  ?? 0,
+  });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

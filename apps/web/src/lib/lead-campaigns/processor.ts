@@ -3,7 +3,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { startLeadScraperRun, getApifyRunStatus, fetchApifyDataset, mapApifyRecord } from "./apify";
 import { verifyEmails as verifyEmailsReoon } from "./reoon";
-import { verifyEmails as verifyEmailsSelfHosted } from "./verifier";
 import { personalizeLeads } from "./gemini";
 import type { ApifyLeadScraperInput } from "@/types/lead-campaigns";
 
@@ -177,17 +176,12 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
         const typedPending = pending as PendingLead[];
         const emails = typedPending.map(l => l.email);
 
-        // Prefer self-hosted verifier if configured, fall back to Reoon
+        const reoonKey = process.env.REOON_API_KEY;
         let results: { email: string; status: string; score: number }[];
-        if (process.env.VERIFIER_URL && process.env.VERIFIER_SECRET) {
-          results = await verifyEmailsSelfHosted(emails);
+        if (!reoonKey) {
+          results = emails.map(email => ({ email, status: "unknown", score: 0 }));
         } else {
-          const reoonKey = process.env.REOON_API_KEY;
-          if (!reoonKey) {
-            results = emails.map(email => ({ email, status: "unknown", score: 0 }));
-          } else {
-            results = await verifyEmailsReoon(reoonKey, emails);
-          }
+          results = await verifyEmailsReoon(reoonKey, emails);
         }
 
         for (const result of results) {

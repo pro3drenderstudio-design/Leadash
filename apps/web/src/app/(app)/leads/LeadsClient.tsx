@@ -13,6 +13,16 @@ interface Campaign {
   verified_count?: number;
 }
 
+interface ImportPreview {
+  total: number;
+  by_status: Record<string, number>;
+  valid_count: number;
+  duplicates: number;
+  duplicate_lists: { name: string; count: number }[];
+  already_in_target: number;
+  new_leads: number;
+}
+
 type ImportMode = "csv" | "campaign";
 
 const DB_FIELDS = ["email", "first_name", "last_name", "company", "title", "website"] as const;
@@ -131,6 +141,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [validOnly, setValidOnly]     = useState(true);
   const [campImporting, setCampImporting] = useState(false);
+  const [preview, setPreview]         = useState<ImportPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -150,8 +162,24 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   function openImport(listId: string) {
     setImporting(importing === listId ? null : listId);
     setImportMode("csv");
-    setCsvFile(null); setCsvHeaders([]); setImportResult(null); setSelectedCampaignId("");
+    setCsvFile(null); setCsvHeaders([]); setImportResult(null); setSelectedCampaignId(""); setPreview(null);
     if (campaigns.length === 0) loadCampaigns();
+  }
+
+  async function handlePreview(listId: string) {
+    if (!selectedCampaignId || !listId) return;
+    setPreviewLoading(true);
+    setPreview(null);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res = await fetch(`/api/lead-campaigns/${selectedCampaignId}/export/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body: JSON.stringify({ list_id: listId }),
+      });
+      const data = await res.json() as ImportPreview;
+      setPreview(data);
+    } catch { /* silent */ } finally { setPreviewLoading(false); }
   }
 
   async function handleCampaignImport(listId: string) {
@@ -165,13 +193,21 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
         headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
         body: JSON.stringify({ list_id: listId, valid_only: validOnly }),
       });
-      const data = await res.json() as { exported?: number; skipped_duplicate?: number; error?: string };
+      const data = await res.json() as { exported?: number; skipped_duplicate?: number; error?: string; pool_limit_message?: string };
       if (!res.ok) throw new Error(data.error ?? "Export failed");
-      setImportResult({ ok: true, msg: `Added ${data.exported} leads (${data.skipped_duplicate ?? 0} duplicates skipped)` });
-      setSelectedCampaignId(""); setImporting(null);
+      const parts = [`Added ${data.exported} leads.`];
+      if (data.skipped_duplicate) parts.push(`${data.skipped_duplicate} duplicates skipped.`);
+      if (data.pool_limit_message) parts.push(data.pool_limit_message);
+      setImportResult({ ok: true, msg: parts.join(" ") });
+      setSelectedCampaignId(""); setPreview(null); setImporting(null);
       load();
     } catch (err) {
-      setImportResult({ ok: false, msg: `Error: ${err instanceof Error ? err.message : "Failed"}` });
+      const msg = err instanceof Error ? err.message : "Failed";
+      if (msg.toLowerCase().includes("paid plan") || msg.toLowerCase().includes("pool full") || msg.toLowerCase().includes("upgrade")) {
+        setUpgradeModal({ title: msg.includes("pool full") ? "Leads pool full" : "Paid plan required", message: msg });
+      } else {
+        setImportResult({ ok: false, msg: `Error: ${msg}` });
+      }
     } finally { setCampImporting(false); }
   }
 
@@ -513,8 +549,11 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                       ) : campaigns.length === 0 ? (
                         <p className="text-white/30 text-xs">No campaigns found. <Link href="/lead-campaigns" className="text-orange-400 underline">Create one first.</Link></p>
                       ) : (
-                        <select value={selectedCampaignId} onChange={e => setSelectedCampaignId(e.target.value)}
-                          className="w-full bg-white/6 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50">
+                        <select
+                          value={selectedCampaignId}
+                          onChange={e => { setSelectedCampaignId(e.target.value); setPreview(null); }}
+                          className="w-full bg-white/6 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50"
+                        >
                           <option value="">— Choose a campaign —</option>
                           {campaigns.map(c => (
                             <option key={c.id} value={c.id}>
@@ -524,21 +563,113 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                         </select>
                       )}
 
+                      {/* Preview panel */}
+                      {preview && (
+                        <div className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-white/50 text-xs font-semibold uppercase tracking-wider">Import Preview</span>
+                            <span className="text-white/30 text-xs">{preview.total.toLocaleString()} total unexported</span>
+                          </div>
+
+                          {/* Status breakdown chips */}
+                          {Object.keys(preview.by_status).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {Object.entries(preview.by_status)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([status, count]) => (
+                                <span key={status} className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${
+                                  ["safe", "valid", "catch_all"].includes(status)
+                                    ? "bg-emerald-500/12 text-emerald-400 border-emerald-500/20"
+                                    : status === "risky"
+                                    ? "bg-amber-500/12 text-amber-400 border-amber-500/20"
+                                    : ["invalid", "undeliverable"].includes(status)
+                                    ? "bg-red-500/12 text-red-400 border-red-500/20"
+                                    : "bg-white/6 text-white/35 border-white/10"
+                                }`}>
+                                  {status}: {count.toLocaleString()}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Key metrics */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-white/4 rounded-lg p-2 text-center">
+                              <p className="text-emerald-400 font-bold text-sm tabular-nums">{preview.valid_count.toLocaleString()}</p>
+                              <p className="text-white/30 text-xs">valid</p>
+                            </div>
+                            <div className="bg-white/4 rounded-lg p-2 text-center">
+                              <p className="text-amber-400 font-bold text-sm tabular-nums">{preview.duplicates.toLocaleString()}</p>
+                              <p className="text-white/30 text-xs">dupes (all lists)</p>
+                            </div>
+                            <div className="bg-white/4 rounded-lg p-2 text-center">
+                              <p className="text-orange-400 font-bold text-sm tabular-nums">{preview.new_leads.toLocaleString()}</p>
+                              <p className="text-white/30 text-xs">new to list</p>
+                            </div>
+                          </div>
+
+                          {/* Duplicate list breakdown */}
+                          {preview.duplicate_lists.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">Duplicates found in:</p>
+                              <div className="space-y-1 max-h-28 overflow-y-auto">
+                                {preview.duplicate_lists.map(dl => (
+                                  <div key={dl.name} className="flex items-center justify-between bg-white/3 rounded-lg px-2.5 py-1.5">
+                                    <span className="text-white/55 text-xs truncate">{dl.name}</span>
+                                    <span className="text-amber-400 text-xs font-semibold ml-2 flex-shrink-0 tabular-nums">{dl.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {preview.already_in_target > 0 && (
+                            <p className="text-white/30 text-xs">{preview.already_in_target.toLocaleString()} already in this list — will be skipped</p>
+                          )}
+
+                          {preview.new_leads === 0 && (
+                            <p className="text-amber-400 text-xs font-semibold">All leads are already in this list.</p>
+                          )}
+                        </div>
+                      )}
+
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <div onClick={() => setValidOnly(v => !v)}
-                          className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 flex-shrink-0 ${validOnly ? "bg-orange-500" : "bg-white/15"}`}>
+                        <div
+                          onClick={() => { setValidOnly(v => !v); setPreview(null); }}
+                          className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 flex-shrink-0 ${validOnly ? "bg-orange-500" : "bg-white/15"}`}
+                        >
                           <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${validOnly ? "translate-x-4" : "translate-x-0"}`} />
                         </div>
-                        <span className="text-white/60 text-xs">Valid emails only (recommended)</span>
+                        <span className="text-white/60 text-xs">Valid emails only (safe · valid · catch_all)</span>
                       </label>
 
-                      <button
-                        onClick={() => handleCampaignImport(list.id)}
-                        disabled={!selectedCampaignId || campImporting}
-                        className="w-full py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
-                      >
-                        {campImporting ? "Adding leads…" : "Add to this list"}
-                      </button>
+                      {!preview ? (
+                        <button
+                          onClick={() => handlePreview(list.id)}
+                          disabled={!selectedCampaignId || previewLoading}
+                          className="w-full py-2 bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                        >
+                          {previewLoading ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                              </svg>
+                              Loading preview…
+                            </span>
+                          ) : "Preview Import"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleCampaignImport(list.id)}
+                          disabled={campImporting || preview.new_leads === 0}
+                          className="w-full py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                        >
+                          {campImporting
+                            ? "Adding leads…"
+                            : `Confirm — Add ${(validOnly ? Math.min(preview.valid_count, preview.new_leads) : preview.new_leads).toLocaleString()} leads`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

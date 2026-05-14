@@ -39,6 +39,8 @@ export async function GET(req: NextRequest) {
   const titleExcludes   = csv(p.get("title_exclude"));
   const seniorities     = csv(p.get("seniority"));
   const departments     = csv(p.get("department"));
+  const countryIncludes  = csv(p.get("country_include"));
+  const countryExcludes  = csv(p.get("country_exclude"));
   const locationIncludes = csv(p.get("location_include"));
   const locationExcludes = csv(p.get("location_exclude"));
   const companyIncludes = csv(p.get("company_include"));
@@ -86,6 +88,22 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
+    function addOrLower(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`(${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
+    function addNoneLower(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
     function addLocationOr(values: string[]) {
       if (!values.length) return;
       const perVal = values.map((_, j) =>
@@ -114,6 +132,8 @@ export async function GET(req: NextRequest) {
     addNone("p.title",    titleExcludes,   true);
     addOr("p.seniority",  seniorities,     false);
     addOr("p.department", departments,     true);
+    addOrLower("p.country",   countryIncludes);
+    addNoneLower("p.country", countryExcludes);
     addLocationOr(locationIncludes);
     addLocationNone(locationExcludes);
     addOr("p.company_name",  companyIncludes,  true);
@@ -134,10 +154,13 @@ export async function GET(req: NextRequest) {
 
     const [countRows, rows] = await Promise.all([
       leadsDb.unsafe(`
-        SELECT COUNT(*) AS total
-        FROM discover_people p
-        LEFT JOIN discover_companies c ON c.id = p.company_id
-        ${where}
+        SELECT count(*) AS total
+        FROM (
+          SELECT 1 FROM discover_people p
+          LEFT JOIN discover_companies c ON c.id = p.company_id
+          ${where}
+          LIMIT 100001
+        ) cnt
       `, params as never[]),
       leadsDb.unsafe(`
         SELECT
@@ -145,7 +168,8 @@ export async function GET(req: NextRequest) {
           p.linkedin_url, p.email, p.email_status, p.phone,
           p.country, p.state, p.city, p.company_name, p.company_id,
           c.domain AS company_domain,
-          c.industry AS company_industry, c.size_range AS company_size
+          c.industry AS company_industry, c.size_range AS company_size,
+          c.keywords AS company_keywords
         FROM discover_people p
         LEFT JOIN discover_companies c ON c.id = p.company_id
         ${where}
@@ -196,6 +220,7 @@ export async function GET(req: NextRequest) {
         company_domain:   r.company_domain   as string | null,
         company_industry: r.company_industry as string | null,
         company_size:     r.company_size     as string | null,
+        company_keywords: r.company_keywords as string | null,
         email_preview:    revealed ? rev!.email : maskEmail(r.email as string | null),
         phone_preview:    revealed ? rev!.phone : maskPhone(r.phone as string | null),
         has_email:        !!(r.email),

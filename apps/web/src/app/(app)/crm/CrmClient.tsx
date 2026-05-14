@@ -7,6 +7,7 @@ import {
   triggerSendBatch, sendCrmReply, getConversation,
 } from "@/lib/outreach/api";
 import type { ConversationMessage } from "@/lib/outreach/api";
+import type { CrmUnmatchedRow } from "@/lib/outreach/api";
 import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter, CrmNote } from "@/types/outreach";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -257,9 +258,10 @@ export default function CrmClient() {
   }, [notifications]);
 
   // ── Unmatched state ────────────────────────────────────────────────────────
-  const [unmatched, setUnmatched]         = useState<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>([]);
+  const [unmatched, setUnmatched]         = useState<CrmUnmatchedRow[]>([]);
+  const [unmatchedTotal, setUnmatchedTotal] = useState(0);
   const [unmatchedLoading, setUnmatchedLoading] = useState(false);
-  const [selectedUnmatched, setSelectedUnmatched] = useState<typeof unmatched[0] | null>(null);
+  const [selectedUnmatched, setSelectedUnmatched] = useState<CrmUnmatchedRow | null>(null);
   const [matchSearch, setMatchSearch]     = useState("");
   const [matchResults, setMatchResults]   = useState<CrmThread[]>([]);
   const [showMatchModal, setShowMatchModal] = useState(false);
@@ -360,7 +362,7 @@ export default function CrmClient() {
   useEffect(() => {
     if (mainTab === "unmatched" && unmatched.length === 0) {
       setUnmatchedLoading(true);
-      getCrmUnmatched().then((d) => { setUnmatched(d); setUnmatchedLoading(false); });
+      getCrmUnmatched().then((r) => { setUnmatched(r.data ?? []); setUnmatchedTotal(r.total ?? 0); setUnmatchedLoading(false); });
     }
     if (mainTab === "warmup" && warmup.length === 0) {
       setWarmupLoading(true);
@@ -506,7 +508,7 @@ export default function CrmClient() {
     setTriggering(false);
     loadThreads(true);
     if (mainTab === "unmatched") {
-      getCrmUnmatched().then(setUnmatched);
+      getCrmUnmatched().then((r) => { setUnmatched(r.data ?? []); setUnmatchedTotal(r.total ?? 0); });
     }
   }
 
@@ -514,6 +516,7 @@ export default function CrmClient() {
   async function handleIgnore(id: string) {
     await ignoreCrmUnmatched(id);
     setUnmatched((prev) => prev.filter((u) => u.id !== id));
+    setUnmatchedTotal((n) => Math.max(0, n - 1));
     if (selectedUnmatched?.id === id) setSelectedUnmatched(null);
   }
 
@@ -523,6 +526,7 @@ export default function CrmClient() {
     setPromoting(false);
     if (result.error) { alert(`Failed to promote: ${result.error}`); return; }
     setUnmatched((prev) => prev.filter((u) => u.id !== replyId));
+    setUnmatchedTotal((n) => Math.max(0, n - 1));
     setSelectedUnmatched(null);
     setUnmatchedCompose("");
     setUnmatchedSendErr(null);
@@ -552,6 +556,7 @@ export default function CrmClient() {
     setUnmatchedSendOk(true);
     setUnmatchedCompose("");
     setUnmatched((prev) => prev.filter((u) => u.id !== selectedUnmatched.id));
+    setUnmatchedTotal((n) => Math.max(0, n - 1));
     setSelectedUnmatched(null);
     setUnmatchedSending(false);
     await loadThreads();
@@ -562,6 +567,7 @@ export default function CrmClient() {
     setMatching(true);
     await matchReply(replyId, enrollmentId);
     setUnmatched((prev) => prev.filter((u) => u.id !== replyId));
+    setUnmatchedTotal((n) => Math.max(0, n - 1));
     setSelectedUnmatched(null);
     setShowMatchModal(false);
     setMatching(false);
@@ -615,8 +621,8 @@ export default function CrmClient() {
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${mainTab === t ? "bg-white/12 text-white" : "text-white/40 hover:text-white/60"}`}
             >
               {t}
-              {t === "unmatched" && unmatched.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 text-[9px] rounded-full">{unmatched.length}</span>
+              {t === "unmatched" && unmatchedTotal > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-300 text-[9px] rounded-full">{unmatchedTotal}</span>
               )}
               {t === "warmup" && warmup.length > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[9px] rounded-full">{warmup.length}</span>

@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsFetch } from "@/lib/workspace/client";
 import {
   type DiscoverResult, type DiscoverSearchResponse,
@@ -9,8 +10,149 @@ import {
 import {
   PeopleSidebar, CompanySidebar,
   DEFAULT_PEOPLE_FILTERS, DEFAULT_COMPANY_FILTERS,
+  PEOPLE_QUICK_FILTERS, COMPANY_QUICK_FILTERS,
   type PeopleFilters, type CompanyFilters,
 } from "./DiscoverFilters";
+
+// ── URL helpers ───────────────────────────────────────────────────────────────
+
+function normalizeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const s = url.trim();
+  if (!s) return null;
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  return `https://${s}`;
+}
+
+// ── URL / localStorage helpers ───────────────────────────────────────────────
+
+type RecentSearch = { id: string; label: string; paramsStr: string; ts: number };
+const RECENT_KEY = "ld_discover_recent";
+
+function loadRecent(): RecentSearch[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as RecentSearch[]; }
+  catch { return []; }
+}
+
+function pushRecent(item: RecentSearch) {
+  const list = loadRecent().filter(r => r.paramsStr !== item.paramsStr).slice(0, 7);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify([item, ...list])); } catch { /* quota */ }
+}
+
+function timeAgo(ts: number): string {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1)  return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function filtersToParams(
+  mode: "people" | "companies",
+  pf: PeopleFilters,
+  cf: CompanyFilters,
+): URLSearchParams {
+  const p = new URLSearchParams();
+  if (mode !== "people")                p.set("mode",  mode);
+  if (pf.keyword)                       p.set("q",     pf.keyword);
+  if (pf.titleIncludes.length)          p.set("ti",    pf.titleIncludes.join(","));
+  if (pf.titleExcludes.length)          p.set("te",    pf.titleExcludes.join(","));
+  if (pf.seniorities.length)            p.set("sen",   pf.seniorities.join(","));
+  if (pf.departments.length)            p.set("dept",  pf.departments.join(","));
+  if (pf.countryIncludes.length)        p.set("ctry",  pf.countryIncludes.join(","));
+  if (pf.countryExcludes.length)        p.set("ctrye", pf.countryExcludes.join(","));
+  if (pf.locationIncludes.length)       p.set("loc",   pf.locationIncludes.join(","));
+  if (pf.locationExcludes.length)       p.set("loce",  pf.locationExcludes.join(","));
+  if (pf.companyIncludes.length)        p.set("co",    pf.companyIncludes.join(","));
+  if (pf.companyExcludes.length)        p.set("coe",   pf.companyExcludes.join(","));
+  if (pf.industryIncludes.length)       p.set("ind",   pf.industryIncludes.join(","));
+  if (pf.industryExcludes.length)       p.set("inde",  pf.industryExcludes.join(","));
+  if (pf.companySizes.length)           p.set("sz",    pf.companySizes.join(","));
+  if (pf.emailStatus !== "has_email")   p.set("em",    pf.emailStatus);
+  if (pf.companyKeywordIncludes.length) p.set("cokw",  pf.companyKeywordIncludes.join(","));
+  if (pf.companyKeywordExcludes.length) p.set("cokwe", pf.companyKeywordExcludes.join(","));
+  if (cf.coKeyword)                     p.set("cq",    cf.coKeyword);
+  if (cf.coCountryIncludes.length)      p.set("cctry", cf.coCountryIncludes.join(","));
+  if (cf.coCountryExcludes.length)      p.set("cctrye",cf.coCountryExcludes.join(","));
+  if (cf.coLocationIncludes.length)     p.set("cloc",  cf.coLocationIncludes.join(","));
+  if (cf.coLocationExcludes.length)     p.set("cloce", cf.coLocationExcludes.join(","));
+  if (cf.coIndustryIncludes.length)     p.set("cind",  cf.coIndustryIncludes.join(","));
+  if (cf.coIndustryExcludes.length)     p.set("cinde", cf.coIndustryExcludes.join(","));
+  if (cf.coSizes.length)                p.set("csz",   cf.coSizes.join(","));
+  if (cf.coFundingStages.length)        p.set("fund",  cf.coFundingStages.join(","));
+  if (cf.coEmployeeRange)             { p.set("emin",  String(cf.coEmployeeRange.min)); p.set("emax", String(cf.coEmployeeRange.max)); }
+  if (cf.coRevenueRange)              { p.set("rmin",  String(cf.coRevenueRange.min));  p.set("rmax", String(cf.coRevenueRange.max)); }
+  if (cf.coHasPeople)                   p.set("hp",    "1");
+  if (cf.coKeywordIncludes.length)      p.set("ckw",   cf.coKeywordIncludes.join(","));
+  if (cf.coKeywordExcludes.length)      p.set("ckwe",  cf.coKeywordExcludes.join(","));
+  return p;
+}
+
+function filtersFromParams(p: { get(key: string): string | null }): {
+  mode: "people" | "companies"; pf: PeopleFilters; cf: CompanyFilters;
+} {
+  function csv(k: string) { return p.get(k)?.split(",").filter(Boolean) ?? []; }
+  const mode = (p.get("mode") === "companies" ? "companies" : "people") as "people" | "companies";
+  return {
+    mode,
+    pf: {
+      keyword:              p.get("q")   ?? "",
+      titleIncludes:        csv("ti"),
+      titleExcludes:        csv("te"),
+      seniorities:          csv("sen"),
+      departments:          csv("dept"),
+      countryIncludes:      csv("ctry"),
+      countryExcludes:      csv("ctrye"),
+      locationIncludes:     csv("loc"),
+      locationExcludes:     csv("loce"),
+      companyIncludes:      csv("co"),
+      companyExcludes:      csv("coe"),
+      industryIncludes:     csv("ind"),
+      industryExcludes:     csv("inde"),
+      companySizes:         csv("sz"),
+      emailStatus:          (p.get("em") as PeopleFilters["emailStatus"]) ?? "has_email",
+      companyKeywordIncludes: csv("cokw"),
+      companyKeywordExcludes: csv("cokwe"),
+    },
+    cf: {
+      coKeyword:          p.get("cq")   ?? "",
+      coCountryIncludes:  csv("cctry"),
+      coCountryExcludes:  csv("cctrye"),
+      coLocationIncludes: csv("cloc"),
+      coLocationExcludes: csv("cloce"),
+      coIndustryIncludes: csv("cind"),
+      coIndustryExcludes: csv("cinde"),
+      coSizes:            csv("csz"),
+      coFundingStages:    csv("fund"),
+      coEmployeeRange:    p.get("emin") ? { min: +(p.get("emin")!), max: +(p.get("emax") ?? "0") } : null,
+      coRevenueRange:     p.get("rmin") ? { min: +(p.get("rmin")!), max: +(p.get("rmax") ?? "0") } : null,
+      coHasPeople:        p.get("hp") === "1",
+      coKeywordIncludes:  csv("ckw"),
+      coKeywordExcludes:  csv("ckwe"),
+    },
+  };
+}
+
+function makeSearchLabel(mode: "people" | "companies", pf: PeopleFilters, cf: CompanyFilters): string {
+  const parts: string[] = [];
+  if (mode === "people") {
+    if (pf.countryIncludes.length)  parts.push(pf.countryIncludes.slice(0, 2).join(", "));
+    if (pf.titleIncludes.length)    parts.push(pf.titleIncludes.slice(0, 2).join(", "));
+    if (pf.seniorities.length)      parts.push(pf.seniorities[0]);
+    if (pf.departments.length)      parts.push(pf.departments[0]);
+    if (pf.industryIncludes.length) parts.push(pf.industryIncludes[0]);
+    if (pf.emailStatus === "verified") parts.push("verified email");
+    if (pf.companyIncludes.length)  parts.push(pf.companyIncludes[0]);
+  } else {
+    if (cf.coCountryIncludes.length)  parts.push(cf.coCountryIncludes.slice(0, 2).join(", "));
+    if (cf.coIndustryIncludes.length) parts.push(cf.coIndustryIncludes[0]);
+    if (cf.coSizes.length)            parts.push(cf.coSizes[0]);
+    if (cf.coFundingStages.length)    parts.push(cf.coFundingStages.slice(0, 2).join(", "));
+  }
+  return parts.filter(Boolean).join(" · ") || (mode === "people" ? "All people" : "All companies");
+}
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -23,9 +165,10 @@ function Spinner({ sm }: { sm?: boolean }) {
   );
 }
 
-function LinkedInIcon() {
+function LinkedInIcon({ size = "sm" }: { size?: "sm" | "xs" }) {
+  const cls = size === "xs" ? "w-2.5 h-2.5" : "w-3 h-3";
   return (
-    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+    <svg className={cls} viewBox="0 0 24 24" fill="currentColor">
       <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
     </svg>
   );
@@ -53,6 +196,22 @@ function XIcon({ sm }: { sm?: boolean }) {
   );
 }
 
+function ChevronRightIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+    </svg>
+  );
+}
+
+function ExternalLinkIcon() {
+  return (
+    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+    </svg>
+  );
+}
+
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
 function EmailPill({ status }: { status: string }) {
@@ -62,19 +221,29 @@ function EmailPill({ status }: { status: string }) {
     status === "invalid"      ? "bg-red-500/15 text-red-400 border-red-500/25" :
     status === "risky"        ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
                                 "bg-white/8 text-white/25 border-white/10";
+  const label = status === "extrapolated" ? "guessed" : status;
   return (
     <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${cls}`}>
-      {status === "extrapolated" ? "guessed" : status}
+      {label}
     </span>
   );
 }
 
-function Avatar({ first, last, size = "md" }: { first: string | null; last: string | null; size?: "sm" | "md" }) {
+function Avatar({ first, last, size = "md" }: { first: string | null; last: string | null; size?: "sm" | "md" | "lg" }) {
   const initials = `${(first ?? "?")[0]}${(last ?? "")[0] ?? ""}`.toUpperCase();
   const colors = ["bg-orange-500/25 text-orange-300", "bg-blue-500/25 text-blue-300", "bg-purple-500/25 text-purple-300", "bg-green-500/25 text-green-300", "bg-pink-500/25 text-pink-300"];
   const color  = colors[(first?.charCodeAt(0) ?? 0) % colors.length];
-  const sz = size === "sm" ? "w-6 h-6 text-[9px]" : "w-8 h-8 text-[11px]";
+  const sz = size === "lg" ? "w-10 h-10 text-sm" : size === "sm" ? "w-6 h-6 text-[9px]" : "w-8 h-8 text-[11px]";
   return <div className={`${sz} rounded-full ${color} flex items-center justify-center font-bold flex-shrink-0`}>{initials}</div>;
+}
+
+function CompanyLogo({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
+  const sz = size === "md" ? "w-8 h-8 text-xs" : "w-6 h-6 text-[9px]";
+  return (
+    <div className={`${sz} rounded bg-white/8 border border-white/6 flex items-center justify-center font-bold text-white/40 flex-shrink-0`}>
+      {(name[0] ?? "?").toUpperCase()}
+    </div>
+  );
 }
 
 // ── Sequence picker modal ─────────────────────────────────────────────────────
@@ -103,11 +272,8 @@ function SequenceModal({ count, onClose, onConfirm }: {
   const filtered = campaigns.filter(c => c.name.toLowerCase().includes(q.toLowerCase()));
 
   function handleConfirm() {
-    if (creating && newName.trim()) {
-      onConfirm(null, newName.trim());
-    } else if (selected) {
-      onConfirm(selected, null);
-    }
+    if (creating && newName.trim()) onConfirm(null, newName.trim());
+    else if (selected) onConfirm(selected, null);
   }
 
   return (
@@ -120,7 +286,6 @@ function SequenceModal({ count, onClose, onConfirm }: {
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
         </div>
-
         <div className="px-5 py-3 border-b border-white/8">
           {!creating ? (
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search sequences…"
@@ -130,7 +295,6 @@ function SequenceModal({ count, onClose, onConfirm }: {
               className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
           )}
         </div>
-
         <div className="flex-1 overflow-y-auto py-2">
           {!creating && (
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
@@ -160,7 +324,6 @@ function SequenceModal({ count, onClose, onConfirm }: {
             ))
           ))}
         </div>
-
         <div className="px-5 py-3 border-t border-white/8 flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
           <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
@@ -199,11 +362,8 @@ function ListModal({ count, onClose, onConfirm }: {
   const filtered = lists.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
 
   function handleConfirm() {
-    if (creating && newName.trim()) {
-      onConfirm(null, newName.trim());
-    } else if (selected) {
-      onConfirm(selected, null);
-    }
+    if (creating && newName.trim()) onConfirm(null, newName.trim());
+    else if (selected) onConfirm(selected, null);
   }
 
   return (
@@ -216,7 +376,6 @@ function ListModal({ count, onClose, onConfirm }: {
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
         </div>
-
         <div className="px-5 py-3 border-b border-white/8">
           {!creating ? (
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lists…"
@@ -226,7 +385,6 @@ function ListModal({ count, onClose, onConfirm }: {
               className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
           )}
         </div>
-
         <div className="flex-1 overflow-y-auto py-2">
           {!creating && (
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
@@ -256,7 +414,6 @@ function ListModal({ count, onClose, onConfirm }: {
             ))
           ))}
         </div>
-
         <div className="px-5 py-3 border-t border-white/8 flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
           <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
@@ -269,28 +426,27 @@ function ListModal({ count, onClose, onConfirm }: {
   );
 }
 
-// ── Detail drawer ─────────────────────────────────────────────────────────────
+// ── Person drawer ─────────────────────────────────────────────────────────────
 
 type DrawerTarget = { type: "person"; id: string } | { type: "company"; id: string };
 
-function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAddToSequence }: {
+function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAddToList, onAddToSequence }: {
   id: string;
   onClose: () => void;
   onReveal: (id: string) => Promise<void>;
   onViewCompany: (companyId: string) => void;
+  onViewPerson: (id: string) => void;
   onAddToList: (id: string) => void;
   onAddToSequence: (id: string) => void;
 }) {
-  const [data, setData]       = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading]   = useState(true);
   const [revealing, setRevealing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const d = await wsGet<Record<string, unknown>>(`/api/discover/people/${id}`);
-      setData(d);
-    } catch { /* ignore */ }
+    try { setData(await wsGet<Record<string, unknown>>(`/api/discover/people/${id}`)); }
+    catch { /* ignore */ }
     setLoading(false);
   }, [id]);
 
@@ -303,107 +459,122 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAdd
     setRevealing(false);
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-40"><Spinner /></div>
-  );
-  if (!data) return (
-    <div className="px-5 py-4 text-xs text-white/30">Could not load profile</div>
-  );
+  if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>;
+  if (!data)   return <div className="px-5 py-4 text-xs text-white/30">Could not load profile</div>;
 
-  const revealed = data.revealed as boolean;
-  const email = data.email_preview as string | null;
-  const emailAlts = (data.email_alts as string[] | null) ?? [];
-  const phone = data.phone_preview as string | null;
-  const coworkers = (data.coworkers as DiscoverResult[]) ?? [];
-  const skills = (data.skills as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
-  const interests = (data.interests as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+  const revealed    = data.revealed as boolean;
+  const email       = data.email_preview as string | null;
+  const emailAlts   = (data.email_alts as string[] | null) ?? [];
+  const phone       = data.phone_preview as string | null;
+  const coworkers   = (data.coworkers as DiscoverResult[]) ?? [];
+  const skills      = (data.skills as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+  const interests   = (data.interests as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+  const fullName    = [data.first_name as string | null, data.last_name as string | null].filter(Boolean).join(" ") || "Unknown";
+
+  const liUrl  = normalizeUrl(data.linkedin_url as string | null);
+  const fbUrl  = normalizeUrl(data.facebook_url as string | null);
+  const twUrl  = normalizeUrl(data.twitter_url as string | null);
+  const ghUrl  = normalizeUrl(data.github_url as string | null);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="px-5 pt-5 pb-4 border-b border-white/8">
         <div className="flex items-start gap-3">
-          <Avatar first={data.first_name as string | null} last={data.last_name as string | null} size="md" />
+          <Avatar first={data.first_name as string | null} last={data.last_name as string | null} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-white truncate">
-                {([data.first_name as string | null, data.last_name as string | null]).filter(Boolean).join(" ") || "Unknown"}
-              </h3>
-              {!!data.gender && (
-                <span className="text-[9px] text-white/30 uppercase tracking-wider">{data.gender as string}</span>
+              <h3 className="text-sm font-bold text-white">{fullName}</h3>
+              {!!data.gender && <span className="text-[9px] text-white/30 uppercase tracking-wider">{data.gender as string}</span>}
+            </div>
+            <p className="text-xs text-white/50 mt-0.5">
+              {[data.title as string | null, data.sub_role as string | null].filter(Boolean).join(" · ") || "—"}
+            </p>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {!!data.seniority && (
+                <span className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[9px] text-white/40 uppercase tracking-wider">
+                  {data.seniority as string}
+                </span>
               )}
-              {!!data.linkedin_url && (
-                <a href={`https://${data.linkedin_url as string}`} target="_blank" rel="noreferrer"
-                  className="text-blue-400/60 hover:text-blue-400 transition-colors flex-shrink-0"><LinkedInIcon /></a>
+              {!!data.department && (
+                <span className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[9px] text-white/40">
+                  {data.department as string}
+                </span>
               )}
-              {!!data.facebook_url && (
-                <a href={data.facebook_url as string} target="_blank" rel="noreferrer"
-                  className="text-blue-600/60 hover:text-blue-400 transition-colors flex-shrink-0" title="Facebook">
+              {(data.years_experience as number | null) != null && (
+                <span className="text-[10px] text-white/30">{data.years_experience as number} yrs exp</span>
+              )}
+              {(data.linkedin_connections as number | null) != null && (
+                <span className="text-[10px] text-white/25">{(data.linkedin_connections as number).toLocaleString()} connections</span>
+              )}
+            </div>
+            {/* Social links */}
+            <div className="flex items-center gap-2.5 mt-2">
+              {liUrl && (
+                <a href={liUrl} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-1 text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors">
+                  <LinkedInIcon /> LinkedIn
+                </a>
+              )}
+              {fbUrl && (
+                <a href={fbUrl} target="_blank" rel="noreferrer"
+                  className="text-blue-600/60 hover:text-blue-400 transition-colors" title="Facebook">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
               )}
-              {!!data.twitter_url && (
-                <a href={data.twitter_url as string} target="_blank" rel="noreferrer"
-                  className="text-sky-400/60 hover:text-sky-400 transition-colors flex-shrink-0" title="Twitter/X">
+              {twUrl && (
+                <a href={twUrl} target="_blank" rel="noreferrer"
+                  className="text-sky-400/60 hover:text-sky-400 transition-colors" title="Twitter/X">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                 </a>
               )}
-              {!!data.github_url && (
-                <a href={data.github_url as string} target="_blank" rel="noreferrer"
-                  className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0" title="GitHub">
+              {ghUrl && (
+                <a href={ghUrl} target="_blank" rel="noreferrer"
+                  className="text-white/40 hover:text-white/70 transition-colors" title="GitHub">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                 </a>
               )}
             </div>
-            <p className="text-xs text-white/50 truncate mt-0.5">
-              {[data.title as string | null, data.sub_role as string | null].filter(Boolean).join(" · ") || "—"}
-            </p>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {!!data.seniority && <span className="text-[9px] text-white/30 uppercase tracking-wider">{data.seniority as string}</span>}
-              {!!data.department && <span className="text-[9px] text-white/20 uppercase tracking-wider">{data.department as string}</span>}
-              {(data.years_experience as number | null) != null && (
-                <span className="text-[9px] text-white/30">{data.years_experience as number} yrs exp</span>
-              )}
-              {(data.linkedin_connections as number | null) != null && (
-                <span className="text-[9px] text-white/25">{(data.linkedin_connections as number).toLocaleString()} connections</span>
-              )}
-            </div>
           </div>
         </div>
-
-        {/* Bio/Summary */}
         {!!(data.summary as string | null) && (
           <p className="mt-3 text-[11px] text-white/45 leading-relaxed line-clamp-4 italic">
-            {data.summary as string}
+            "{data.summary as string}"
           </p>
         )}
       </div>
 
-      {/* Contact */}
-      <div className="px-5 py-4 border-b border-white/8 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">Contact</span>
-          {!revealed && (
+      {/* ── Contact info ── */}
+      <div className="px-5 py-4 border-b border-white/8">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">Contact Info</span>
+          {!revealed ? (
             <button onClick={handleReveal} disabled={revealing}
               className="flex items-center gap-1.5 text-[10px] text-orange-400 hover:text-orange-300 font-semibold transition-colors disabled:opacity-50">
               {revealing ? <Spinner sm /> : <LockIcon />}
-              Unlock (0.5 cr)
+              Unlock · 0.5 cr
             </button>
+          ) : (
+            <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+              Unlocked
+            </span>
           )}
-          {revealed && <span className="text-[10px] text-green-400 font-semibold">Unlocked</span>}
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {(data.has_email as boolean) && (
-            <div className="flex items-center gap-2.5">
-              <svg className="w-3.5 h-3.5 text-white/25 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="flex items-start gap-2.5">
+              <svg className="w-3.5 h-3.5 text-white/25 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
               </svg>
               <div className="min-w-0 flex-1">
-                <span className={`text-xs ${revealed ? "text-white/80" : "text-white/30"} font-mono`}>{email ?? "—"}</span>
-                {!!data.email_status && <EmailPill status={data.email_status as string} />}
-                {emailAlts.length > 0 && emailAlts.map((alt, i) => (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs font-mono ${revealed ? "text-white/80" : "text-white/30"}`}>{email ?? "—"}</span>
+                  {!!data.email_status && <EmailPill status={data.email_status as string} />}
+                </div>
+                {emailAlts.map((alt, i) => (
                   <div key={i} className="flex items-center gap-1.5 mt-1">
-                    <span className={`text-[10px] ${revealed ? "text-white/55" : "text-white/20"} font-mono`}>{alt}</span>
+                    <span className={`text-[10px] font-mono ${revealed ? "text-white/55" : "text-white/20"}`}>{alt}</span>
                     <span className="text-[8px] text-white/20 uppercase tracking-wider">alt {i + 1}</span>
                   </div>
                 ))}
@@ -415,153 +586,152 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onAddToList, onAdd
               <svg className="w-3.5 h-3.5 text-white/25 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
               </svg>
-              <span className={`text-xs ${revealed ? "text-white/80" : "text-white/30"} font-mono`}>{phone ?? "—"}</span>
+              <span className={`text-xs font-mono ${revealed ? "text-white/80" : "text-white/30"}`}>{phone ?? "—"}</span>
             </div>
+          )}
+          {!data.has_email && !data.has_phone && (
+            <p className="text-xs text-white/20">No contact data available</p>
           )}
         </div>
       </div>
 
-      {/* Current role detail */}
-      {!!(data.job_summary as string | null) && (
-        <div className="px-5 py-3 border-b border-white/8">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-1">Current Role</span>
-          <p className="text-[11px] text-white/45 leading-relaxed line-clamp-3">{data.job_summary as string}</p>
-          {!!(data.start_date as string | null) && (
-            <p className="text-[10px] text-white/25 mt-1">Since {data.start_date as string}</p>
-          )}
-        </div>
-      )}
-
-      {/* Career stats */}
-      {((data.inferred_salary as string | null) || (data.years_experience as number | null) != null) && (
-        <div className="px-5 py-3 border-b border-white/8">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">Career</span>
-          <div className="flex gap-4">
-            {!!(data.inferred_salary as string | null) && (
-              <div>
-                <p className="text-[9px] text-white/25 uppercase tracking-wider">Est. Salary</p>
-                <p className="text-xs text-white/60 font-semibold">${data.inferred_salary as string}</p>
-              </div>
-            )}
-            {(data.years_experience as number | null) != null && (
-              <div>
-                <p className="text-[9px] text-white/25 uppercase tracking-wider">Experience</p>
-                <p className="text-xs text-white/60 font-semibold">{data.years_experience as number} years</p>
-              </div>
-            )}
-            {(data.birth_year as number | null) != null && (
-              <div>
-                <p className="text-[9px] text-white/25 uppercase tracking-wider">Birth Year</p>
-                <p className="text-xs text-white/60 font-semibold">{data.birth_year as number}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Company */}
+      {/* ── Current company ── */}
       {!!data.company_name && (
         <div className="px-5 py-4 border-b border-white/8">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">Company</span>
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2.5">Current Company</span>
           <button onClick={() => data.company_id && onViewCompany(data.company_id as string)}
-            className="flex items-center gap-2 hover:bg-white/4 rounded-lg px-2 py-1.5 -mx-2 transition-colors w-full text-left">
-            <div className="w-7 h-7 rounded bg-white/8 flex items-center justify-center text-[10px] font-bold text-white/40 flex-shrink-0">
-              {((data.company_name as string)[0] ?? "?").toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-white/80 truncate">{data.company_name as string}</p>
+            className="flex items-center gap-2.5 hover:bg-white/4 rounded-xl px-3 py-2.5 -mx-3 transition-colors w-full text-left group">
+            <CompanyLogo name={data.company_name as string} size="md" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-white/80 truncate">{data.company_name as string}</p>
+                {!!data.company_id && <ChevronRightIcon />}
+              </div>
               <p className="text-[10px] text-white/35 truncate">
-                {([data.company_industry as string | null, data.company_size as string | null]).filter(Boolean).join(" · ")}
+                {[data.company_industry as string | null, data.company_size as string | null].filter(Boolean).join(" · ")}
               </p>
             </div>
+            {!!(data.company_domain ?? data.company_website) && (
+              <a href={normalizeUrl((data.company_domain ?? data.company_website) as string) ?? "#"}
+                target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                className="text-[10px] text-blue-400/50 hover:text-blue-400 transition-colors flex-shrink-0 flex items-center gap-0.5">
+                <ExternalLinkIcon />
+              </a>
+            )}
           </button>
-          {!!(data.company_domain ?? data.company_website) && (
-            <a href={`https://${(data.company_domain ?? data.company_website) as string}`} target="_blank" rel="noreferrer"
-              className="text-[10px] text-blue-400/60 hover:text-blue-400 mt-1.5 block transition-colors">
-              {(data.company_domain ?? data.company_website) as string}
-            </a>
+          {!!(data.job_summary as string | null) && (
+            <p className="text-[11px] text-white/35 leading-relaxed line-clamp-2 mt-2 px-1">{data.job_summary as string}</p>
+          )}
+          {!!(data.start_date as string | null) && (
+            <p className="text-[10px] text-white/20 mt-1 px-1">Since {data.start_date as string}</p>
           )}
         </div>
       )}
 
-      {/* Location */}
+      {/* ── Location ── */}
       {!!(data.city || data.country) && (
         <div className="px-5 py-3 border-b border-white/8">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-1">Location</span>
-          <p className="text-xs text-white/50">{([data.city as string | null, data.state as string | null, data.country as string | null]).filter(Boolean).join(", ")}</p>
+          <div className="flex items-center gap-1.5 text-xs text-white/50">
+            <svg className="w-3.5 h-3.5 text-white/20 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            {[data.city as string | null, data.state as string | null, data.country as string | null].filter(Boolean).join(", ")}
+          </div>
         </div>
       )}
 
-      {/* Skills */}
-      {skills.length > 0 && (
-        <div className="px-5 py-3 border-b border-white/8">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">Skills</span>
-          <div className="flex flex-wrap gap-1">
-            {skills.slice(0, 20).map(skill => (
-              <span key={skill} className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[9px] text-white/50">
-                {skill}
-              </span>
-            ))}
-            {skills.length > 20 && (
-              <span className="text-[9px] text-white/25">+{skills.length - 20} more</span>
+      {/* ── Career stats ── */}
+      {((data.inferred_salary as string | null) || (data.years_experience as number | null) != null || (data.birth_year as number | null) != null) && (
+        <div className="px-5 py-4 border-b border-white/8">
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-3">Career</span>
+          <div className="grid grid-cols-3 gap-3">
+            {!!(data.inferred_salary as string | null) && (
+              <div className="bg-white/4 rounded-lg px-3 py-2 text-center">
+                <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Est. Salary</p>
+                <p className="text-xs text-white/70 font-semibold">${data.inferred_salary as string}</p>
+              </div>
+            )}
+            {(data.years_experience as number | null) != null && (
+              <div className="bg-white/4 rounded-lg px-3 py-2 text-center">
+                <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Experience</p>
+                <p className="text-xs text-white/70 font-semibold">{data.years_experience as number} yrs</p>
+              </div>
+            )}
+            {(data.birth_year as number | null) != null && (
+              <div className="bg-white/4 rounded-lg px-3 py-2 text-center">
+                <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Birth Year</p>
+                <p className="text-xs text-white/70 font-semibold">{data.birth_year as number}</p>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Interests */}
+      {/* ── Skills ── */}
+      {skills.length > 0 && (
+        <div className="px-5 py-4 border-b border-white/8">
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">Skills</span>
+          <div className="flex flex-wrap gap-1">
+            {skills.slice(0, 20).map(skill => (
+              <span key={skill} className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[9px] text-white/50">{skill}</span>
+            ))}
+            {skills.length > 20 && <span className="text-[9px] text-white/25">+{skills.length - 20} more</span>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Interests ── */}
       {interests.length > 0 && (
-        <div className="px-5 py-3 border-b border-white/8">
+        <div className="px-5 py-4 border-b border-white/8">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">Interests</span>
           <div className="flex flex-wrap gap-1">
             {interests.slice(0, 12).map(interest => (
-              <span key={interest} className="px-1.5 py-0.5 rounded bg-blue-500/8 border border-blue-500/15 text-[9px] text-blue-300/60">
-                {interest}
-              </span>
+              <span key={interest} className="px-1.5 py-0.5 rounded bg-blue-500/8 border border-blue-500/15 text-[9px] text-blue-300/60">{interest}</span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Coworkers */}
+      {/* ── Coworkers ── */}
       {coworkers.length > 0 && (
         <div className="px-5 py-4 border-b border-white/8">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">
             People at {data.company_name as string}
           </span>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {coworkers.map(cw => (
-              <div key={cw.id} className="flex items-center gap-2.5 py-1">
+              <button key={cw.id} onClick={() => onViewPerson(cw.id)}
+                className="w-full flex items-center gap-2.5 py-1 rounded-lg hover:bg-white/5 px-2 -mx-2 transition-colors text-left cursor-pointer">
                 <Avatar first={cw.first_name} last={cw.last_name} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-white/70 truncate">{[cw.first_name, cw.last_name].filter(Boolean).join(" ")}</p>
+                  <p className="text-xs text-white/70 truncate hover:text-orange-300 transition-colors">{[cw.first_name, cw.last_name].filter(Boolean).join(" ")}</p>
                   <p className="text-[10px] text-white/35 truncate">{cw.title ?? "—"}</p>
                 </div>
-                {cw.has_email && <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cw.revealed ? "bg-green-400" : "bg-white/20"}`} />}
-              </div>
+                {cw.has_email && <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cw.revealed ? "bg-green-400" : "bg-white/15"}`} />}
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* CTAs */}
+      {/* ── Actions ── */}
       <div className="px-5 py-4 flex flex-col gap-2">
-        <button
-          onClick={() => onAddToSequence(id)}
-          className="w-full px-4 py-2 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-xl transition-colors"
-        >
+        <button onClick={() => onAddToSequence(id)}
+          className="w-full px-4 py-2 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-xl transition-colors">
           Add to Sequence
         </button>
-        <button
-          onClick={() => onAddToList(id)}
-          className="w-full px-4 py-2 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/10 text-white/70 rounded-xl transition-colors"
-        >
+        <button onClick={() => onAddToList(id)}
+          className="w-full px-4 py-2 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/10 text-white/70 rounded-xl transition-colors">
           Add to List
         </button>
       </div>
     </div>
   );
 }
+
+// ── Company drawer ────────────────────────────────────────────────────────────
 
 function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
   id: string;
@@ -574,70 +744,118 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const d = await wsGet<Record<string, unknown>>(`/api/discover/companies/${id}`);
-      setData(d);
-    } catch { /* ignore */ }
+    try { setData(await wsGet<Record<string, unknown>>(`/api/discover/companies/${id}`)); }
+    catch { /* ignore */ }
     setLoading(false);
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>;
-  if (!data) return <div className="px-5 py-4 text-xs text-white/30">Could not load company</div>;
+  if (!data)   return <div className="px-5 py-4 text-xs text-white/30">Could not load company</div>;
 
-  const people = (data.people as DiscoverResult[]) ?? [];
+  const people   = (data.people as DiscoverResult[]) ?? [];
+  const liUrl    = normalizeUrl(data.linkedin_url as string | null);
+  const website  = normalizeUrl((data.website_url ?? data.domain) as string | null);
+  const keywords = (data.keywords as string | null)?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
+      {/* ── Header ── */}
       <div className="px-5 pt-5 pb-4 border-b border-white/8">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-white/8 flex items-center justify-center text-sm font-bold text-white/50 flex-shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-white/8 border border-white/8 flex items-center justify-center text-sm font-bold text-white/50 flex-shrink-0">
             {((data.name as string)?.[0] ?? "?").toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white truncate">{data.name as string}</h3>
-              {!!data.linkedin_url && (
-                <a href={data.linkedin_url as string} target="_blank" rel="noreferrer" className="text-blue-400/60 hover:text-blue-400 transition-colors"><LinkedInIcon /></a>
+            <h3 className="text-sm font-bold text-white">{data.name as string}</h3>
+            <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+              {website && (
+                <a href={website} target="_blank" rel="noreferrer"
+                  className="text-[11px] text-blue-400/60 hover:text-blue-400 transition-colors flex items-center gap-1">
+                  {(data.domain as string) ?? website}
+                  <ExternalLinkIcon />
+                </a>
+              )}
+              {liUrl && (
+                <a href={liUrl} target="_blank" rel="noreferrer"
+                  className="text-[11px] text-blue-400/60 hover:text-blue-400 transition-colors flex items-center gap-1">
+                  <LinkedInIcon size="xs" /> LinkedIn
+                </a>
               )}
             </div>
-            {!!data.domain && <a href={`https://${data.domain as string}`} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400/60 hover:text-blue-400 transition-colors">{data.domain as string}</a>}
           </div>
         </div>
-        <div className="flex flex-wrap gap-3 mt-3">
-          {!!data.industry && <span className="text-[10px] text-white/40">{data.industry as string}</span>}
-          {!!data.size_range && <span className="text-[10px] text-white/40">{data.size_range as string} employees</span>}
-          {!!data.country && <span className="text-[10px] text-white/40">{([data.city as string | null, data.country as string | null]).filter(Boolean).join(", ")}</span>}
+
+        {/* Meta pills */}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {!!data.industry && (
+            <span className="px-2 py-1 rounded-lg bg-white/6 border border-white/8 text-[10px] text-white/50">{data.industry as string}</span>
+          )}
+          {!!data.size_range && (
+            <span className="px-2 py-1 rounded-lg bg-white/6 border border-white/8 text-[10px] text-white/50">{data.size_range as string} employees</span>
+          )}
+          {!!(data.funding_stage as string | null) && (
+            <span className="px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/15 text-[10px] text-purple-300/70">{data.funding_stage as string}</span>
+          )}
+          {!!(data.country as string | null) && (
+            <span className="px-2 py-1 rounded-lg bg-white/6 border border-white/8 text-[10px] text-white/50">
+              {[data.city as string | null, data.country as string | null].filter(Boolean).join(", ")}
+            </span>
+          )}
         </div>
+
         {!!(data.description as string | null) && (
           <p className="mt-3 text-[11px] text-white/45 leading-relaxed line-clamp-4">{data.description as string}</p>
         )}
-        {!!(data.keywords as string | null) && (
+
+        {/* Funding */}
+        {((data.funding_total as number | null) != null || (data.revenue_usd as number | null) != null) && (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {(data.funding_total as number | null) != null && (
+              <div className="bg-white/4 rounded-lg px-3 py-2">
+                <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Total Funding</p>
+                <p className="text-xs text-white/70 font-semibold">${((data.funding_total as number) / 1e6).toFixed(1)}M</p>
+              </div>
+            )}
+            {(data.revenue_usd as number | null) != null && (
+              <div className="bg-white/4 rounded-lg px-3 py-2">
+                <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Revenue</p>
+                <p className="text-xs text-white/70 font-semibold">${((data.revenue_usd as number) / 1e6).toFixed(1)}M</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Keywords */}
+        {keywords.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-3">
-            {(data.keywords as string).split(",").slice(0, 16).map(kw => kw.trim()).filter(Boolean).map(kw => (
-              <span key={kw} className="px-1.5 py-0.5 rounded bg-white/6 border border-white/10 text-[9px] text-white/40">
-                {kw}
-              </span>
+            {keywords.slice(0, 16).map(kw => (
+              <span key={kw} className="px-1.5 py-0.5 rounded bg-white/6 border border-white/10 text-[9px] text-white/40">{kw}</span>
             ))}
           </div>
         )}
       </div>
 
-      <div className="px-5 py-3">
-        <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider block mb-2">
-          People ({data.people_total as number})
-        </span>
-        <div className="space-y-1">
+      {/* ── People ── */}
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">
+            Contacts ({(data.people_total as number).toLocaleString()})
+          </span>
+        </div>
+        <div className="space-y-0.5">
           {people.map(p => (
-            <div key={p.id} className="flex items-center gap-2.5 py-1.5 rounded-lg hover:bg-white/3 px-2 -mx-2 transition-colors cursor-pointer"
+            <div key={p.id}
+              className="flex items-center gap-2.5 py-2 px-2 -mx-2 rounded-lg hover:bg-white/3 transition-colors cursor-pointer"
               onClick={() => onViewPerson(p.id)}>
               <Avatar first={p.first_name} last={p.last_name} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-white/70 truncate">{[p.first_name, p.last_name].filter(Boolean).join(" ") || "—"}</p>
+                <p className="text-xs text-white/75 truncate">{[p.first_name, p.last_name].filter(Boolean).join(" ") || "—"}</p>
                 <p className="text-[10px] text-white/35 truncate">{p.title ?? "—"}</p>
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                {p.email_status && <EmailPill status={p.email_status} />}
                 {p.has_email && !p.revealed && (
                   <button onClick={() => onRevealPerson(p.id)} className="text-[9px] text-orange-400/70 hover:text-orange-400 transition-colors">
                     <LockIcon />
@@ -655,20 +873,22 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function DiscoverPage() {
-  const [mode, setMode] = useState<"people" | "companies">("people");
+function DiscoverContent() {
+  const router      = useRouter();
+  const searchParams = useSearchParams();
+  const [initState] = useState(() => filtersFromParams(searchParams));
 
-  // ── Filter state ──────────────────────────────────────────────────────────
-  const [peopleFilters,  setPeopleFilters]  = useState<PeopleFilters>(DEFAULT_PEOPLE_FILTERS);
-  const [companyFilters, setCompanyFilters] = useState<CompanyFilters>(DEFAULT_COMPANY_FILTERS);
+  const [mode, setMode] = useState<"people" | "companies">(initState.mode);
+  const [peopleFilters,  setPeopleFilters]  = useState<PeopleFilters>(initState.pf);
+  const [companyFilters, setCompanyFilters] = useState<CompanyFilters>(initState.cf);
+  const [hasSearched,   setHasSearched]   = useState(() => searchParams.toString().length > 0);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
 
-  // ── Sort state ────────────────────────────────────────────────────────────
   const [peopleSortBy,  setPeopleSortBy]  = useState("created_at");
   const [peopleSortDir, setPeopleSortDir] = useState<"asc" | "desc">("desc");
   const [coSortBy,      setCoSortBy]      = useState("people_count");
   const [coSortDir,     setCoSortDir]     = useState<"asc" | "desc">("desc");
 
-  // ── Result state ──────────────────────────────────────────────────────────
   const [results,        setResults]        = useState<DiscoverResult[]>([]);
   const [companyResults, setCompanyResults] = useState<DiscoverCompanyResult[]>([]);
   const [total,          setTotal]          = useState(0);
@@ -676,29 +896,32 @@ export default function DiscoverPage() {
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
 
-  // ── UI state ──────────────────────────────────────────────────────────────
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [hoveredRow,    setHoveredRow]    = useState<string | null>(null);
   const [exporting,     setExporting]     = useState(false);
   const [revealing,     setRevealing]     = useState(false);
   const [exportMsg,     setExportMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [balance,       setBalance]       = useState<number | null>(null);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
   const [showCampaign,  setShowCampaign]  = useState(false);
-  const [campaignIds,   setCampaignIds]   = useState<string[] | null>(null); // null = use selected
+  const [campaignIds,   setCampaignIds]   = useState<string[] | null>(null);
   const [showList,      setShowList]      = useState(false);
-  const [listIds,       setListIds]       = useState<string[] | null>(null); // null = use selected
+  const [listIds,       setListIds]       = useState<string[] | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savingSearch,  setSavingSearch]  = useState(false);
   const [saveNameVal,   setSaveNameVal]   = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
 
   const limit      = 25;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const isCapped   = total > 100000;
+  const totalPages = Math.max(1, Math.ceil((isCapped ? 100000 : total) / limit));
+  const totalLabel = isCapped ? "100,000+" : total.toLocaleString();
 
   const activePeopleFilterCount =
     (peopleFilters.keyword ? 1 : 0) +
     peopleFilters.titleIncludes.length + peopleFilters.titleExcludes.length +
     peopleFilters.seniorities.length + peopleFilters.departments.length +
+    peopleFilters.countryIncludes.length + peopleFilters.countryExcludes.length +
     peopleFilters.locationIncludes.length + peopleFilters.locationExcludes.length +
     peopleFilters.companyIncludes.length + peopleFilters.companyExcludes.length +
     peopleFilters.industryIncludes.length + peopleFilters.industryExcludes.length +
@@ -708,6 +931,7 @@ export default function DiscoverPage() {
 
   const activeCoFilterCount =
     (companyFilters.coKeyword ? 1 : 0) +
+    companyFilters.coCountryIncludes.length + companyFilters.coCountryExcludes.length +
     companyFilters.coLocationIncludes.length + companyFilters.coLocationExcludes.length +
     companyFilters.coIndustryIncludes.length + companyFilters.coIndustryExcludes.length +
     companyFilters.coSizes.length + companyFilters.coFundingStages.length +
@@ -717,34 +941,35 @@ export default function DiscoverPage() {
 
   const activeFilterCount = mode === "people" ? activePeopleFilterCount : activeCoFilterCount;
 
-  // Fetch balance + saved searches on mount
   useEffect(() => {
     wsGet<{ lead_credits_balance: number }>("/api/settings/workspace")
       .then(d => setBalance(d.lead_credits_balance ?? 0)).catch(() => {});
     wsGet<SavedSearch[]>("/api/discover/saved-searches")
       .then(d => setSavedSearches(d ?? [])).catch(() => {});
+    setRecentSearches(loadRecent());
   }, []);
 
-  // ── Search ────────────────────────────────────────────────────────────────
   const searchPeople = useCallback(async (p = 1) => {
     setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
     try {
       const f = peopleFilters;
       const params = new URLSearchParams();
-      if (f.keyword)                 params.set("q",               f.keyword);
-      if (f.titleIncludes.length)    params.set("title_include",   f.titleIncludes.join(","));
-      if (f.titleExcludes.length)    params.set("title_exclude",   f.titleExcludes.join(","));
-      if (f.seniorities.length)      params.set("seniority",       f.seniorities.join(","));
-      if (f.departments.length)      params.set("department",      f.departments.join(","));
-      if (f.locationIncludes.length) params.set("location_include", f.locationIncludes.join(","));
-      if (f.locationExcludes.length) params.set("location_exclude", f.locationExcludes.join(","));
-      if (f.companyIncludes.length)  params.set("company_include",  f.companyIncludes.join(","));
-      if (f.companyExcludes.length)  params.set("company_exclude",  f.companyExcludes.join(","));
-      if (f.industryIncludes.length) params.set("industry_include", f.industryIncludes.join(","));
-      if (f.industryExcludes.length) params.set("industry_exclude", f.industryExcludes.join(","));
-      if (f.companySizes.length)             params.set("company_size",       f.companySizes.join(","));
-      if (f.companyKeywordIncludes.length)   params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
-      if (f.companyKeywordExcludes.length)   params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
+      if (f.keyword)                       params.set("q",               f.keyword);
+      if (f.titleIncludes.length)          params.set("title_include",    f.titleIncludes.join(","));
+      if (f.titleExcludes.length)          params.set("title_exclude",    f.titleExcludes.join(","));
+      if (f.seniorities.length)            params.set("seniority",        f.seniorities.join(","));
+      if (f.departments.length)            params.set("department",       f.departments.join(","));
+      if (f.countryIncludes.length)        params.set("country_include",  f.countryIncludes.join(","));
+      if (f.countryExcludes.length)        params.set("country_exclude",  f.countryExcludes.join(","));
+      if (f.locationIncludes.length)       params.set("location_include", f.locationIncludes.join(","));
+      if (f.locationExcludes.length)       params.set("location_exclude", f.locationExcludes.join(","));
+      if (f.companyIncludes.length)        params.set("company_include",  f.companyIncludes.join(","));
+      if (f.companyExcludes.length)        params.set("company_exclude",  f.companyExcludes.join(","));
+      if (f.industryIncludes.length)       params.set("industry_include", f.industryIncludes.join(","));
+      if (f.industryExcludes.length)       params.set("industry_exclude", f.industryExcludes.join(","));
+      if (f.companySizes.length)           params.set("company_size",       f.companySizes.join(","));
+      if (f.companyKeywordIncludes.length) params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
+      if (f.companyKeywordExcludes.length) params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
       params.set("email_status", f.emailStatus);
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
@@ -760,6 +985,8 @@ export default function DiscoverPage() {
       const f = companyFilters;
       const params = new URLSearchParams();
       if (f.coKeyword)                 params.set("q",               f.coKeyword);
+      if (f.coCountryIncludes.length)  params.set("country_include",  f.coCountryIncludes.join(","));
+      if (f.coCountryExcludes.length)  params.set("country_exclude",  f.coCountryExcludes.join(","));
       if (f.coLocationIncludes.length) params.set("location_include", f.coLocationIncludes.join(","));
       if (f.coLocationExcludes.length) params.set("location_exclude", f.coLocationExcludes.join(","));
       if (f.coIndustryIncludes.length) params.set("industry_include", f.coIndustryIncludes.join(","));
@@ -785,29 +1012,65 @@ export default function DiscoverPage() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!hasSearched) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(1), 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters, coSortBy, coSortDir, mode]);
+  }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters, coSortBy, coSortDir, mode, hasSearched]);
+
+  // Sync active filters → URL (write-only, won't loop back into state)
+  const urlSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hasSearched) return;
+    if (urlSyncRef.current) clearTimeout(urlSyncRef.current);
+    urlSyncRef.current = setTimeout(() => {
+      const params = filtersToParams(mode, peopleFilters, companyFilters);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }, 400);
+    return () => { if (urlSyncRef.current) clearTimeout(urlSyncRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, peopleFilters, companyFilters, hasSearched]);
 
   function clearAll() {
     if (mode === "people") setPeopleFilters(DEFAULT_PEOPLE_FILTERS);
     else setCompanyFilters(DEFAULT_COMPANY_FILTERS);
+    setHasSearched(false);
+    setResults([]); setCompanyResults([]); setTotal(0); setPage(1);
+    router.replace("?", { scroll: false });
   }
 
-  // ── Selection ─────────────────────────────────────────────────────────────
+  function triggerSearch(overrideFilters?: Partial<PeopleFilters & CompanyFilters>) {
+    const pf = overrideFilters ? { ...peopleFilters, ...(overrideFilters as Partial<PeopleFilters>) } : peopleFilters;
+    const cf = overrideFilters ? { ...companyFilters, ...(overrideFilters as Partial<CompanyFilters>) } : companyFilters;
+    if (overrideFilters) {
+      if (mode === "people") setPeopleFilters(pf);
+      else setCompanyFilters(cf);
+    }
+    const label = makeSearchLabel(mode, pf, cf);
+    const paramsStr = filtersToParams(mode, pf, cf).toString();
+    if (paramsStr) pushRecent({ id: crypto.randomUUID(), label, paramsStr, ts: Date.now() });
+    setRecentSearches(loadRecent());
+    setHasSearched(true);
+  }
+
+  function applyRecentSearch(r: RecentSearch) {
+    const parsed = new URLSearchParams(r.paramsStr);
+    const { mode: m, pf, cf } = filtersFromParams(parsed);
+    setMode(m);
+    setPeopleFilters(pf);
+    setCompanyFilters(cf);
+    setHasSearched(true);
+  }
+
   const visibleResults = mode === "people" ? results : companyResults;
   function toggleSelect(id: string) { setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
   function toggleAll() { setSelected(selected.size === visibleResults.length ? new Set() : new Set(visibleResults.map(r => r.id))); }
 
-  // ── Reveal ────────────────────────────────────────────────────────────────
   async function revealIds(ids: string[]) {
     setRevealing(true);
     try {
-      const res = await wsFetch("/api/discover/reveal", {
-        method: "POST", body: JSON.stringify({ ids }),
-      });
+      const res = await wsFetch("/api/discover/reveal", { method: "POST", body: JSON.stringify({ ids }) });
       if (!res.ok) {
         const j = await res.json().catch(() => ({ error: res.statusText }));
         setExportMsg({ ok: false, text: j.error ?? "Reveal failed" });
@@ -828,7 +1091,6 @@ export default function DiscoverPage() {
 
   async function revealSelected() { await revealIds(Array.from(selected)); }
 
-  // ── Export ────────────────────────────────────────────────────────────────
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
     const ids = overrideIds ?? Array.from(selected);
     if (!ids.length) return;
@@ -843,7 +1105,7 @@ export default function DiscoverPage() {
         const url  = URL.createObjectURL(blob);
         Object.assign(document.createElement("a"), { href: url, download: `leadash-discover-${Date.now()}.csv` }).click();
         URL.revokeObjectURL(url);
-        setExportMsg({ ok: true, text: `${selected.size} leads exported` });
+        setExportMsg({ ok: true, text: `${ids.length} leads exported` });
         setSelected(new Set());
       } else if (res.ok) {
         const j = await res.json();
@@ -882,34 +1144,14 @@ export default function DiscoverPage() {
     } finally { setExporting(false); }
   }
 
-  // ── Verify ────────────────────────────────────────────────────────────────
-  async function handleVerify() {
-    if (!selected.size) return;
-    setExporting(true); setExportMsg(null);
-    try {
-      const res = await fetch("/api/discover/export", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids: Array.from(selected), format: "campaign" }),
-      });
-      const j = await res.json();
-      if (!res.ok) { setExportMsg({ ok: false, text: j.error ?? "Failed" }); return; }
-      setExportMsg({ ok: true, text: `${j.leads_added} leads added to pool for verification` });
-      setSelected(new Set());
-    } catch (e) {
-      setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed" });
-    } finally { setExporting(false); }
-  }
-
-  // ── Saved searches ────────────────────────────────────────────────────────
   async function saveSearch() {
     if (!saveNameVal.trim()) return;
     setSavingSearch(true);
     try {
       const filters = mode === "people" ? peopleFilters : companyFilters;
-      const res = await fetch("/api/discover/saved-searches", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        credentials: "include", body: JSON.stringify({ name: saveNameVal.trim(), mode, filters }),
+      const res = await wsFetch("/api/discover/saved-searches", {
+        method: "POST",
+        body: JSON.stringify({ name: saveNameVal.trim(), mode, filters }),
       });
       if (res.ok) {
         const s = await res.json() as SavedSearch;
@@ -921,29 +1163,52 @@ export default function DiscoverPage() {
 
   function applySavedSearch(s: SavedSearch) {
     setMode(s.mode);
-    if (s.mode === "people") {
-      setPeopleFilters({ ...DEFAULT_PEOPLE_FILTERS, ...(s.filters as Partial<PeopleFilters>) });
-    } else {
-      setCompanyFilters({ ...DEFAULT_COMPANY_FILTERS, ...(s.filters as Partial<CompanyFilters>) });
-    }
+    if (s.mode === "people") setPeopleFilters({ ...DEFAULT_PEOPLE_FILTERS, ...(s.filters as Partial<PeopleFilters>) });
+    else setCompanyFilters({ ...DEFAULT_COMPANY_FILTERS, ...(s.filters as Partial<CompanyFilters>) });
+    setHasSearched(true);
   }
 
   async function deleteSavedSearch(id: string) {
-    await fetch(`/api/discover/saved-searches/${id}`, { method: "DELETE", credentials: "include" });
+    await wsFetch(`/api/discover/saved-searches/${id}`, { method: "DELETE" });
     setSavedSearches(prev => prev.filter(s => s.id !== id));
   }
 
-  const unrevealed = results.filter(r => selected.has(r.id) && !r.revealed);
+  const unrevealed  = results.filter(r => selected.has(r.id) && !r.revealed);
   const revealCost  = Math.ceil(unrevealed.length * 0.5 * 10) / 10;
 
-  // ── Layout ────────────────────────────────────────────────────────────────
+  function SortTh({ label, col, sortBy, sortDir, onSort }: {
+    label: string; col: string | null;
+    sortBy: string; sortDir: "asc" | "desc";
+    onSort: (col: string) => void;
+  }) {
+    return (
+      <th className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
+        {col ? (
+          <button onClick={() => onSort(col)} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
+            {label}
+            <span className="text-[9px] opacity-50 group-hover:opacity-100">
+              {sortBy === col ? (sortDir === "asc" ? "▲" : "▼") : "⇅"}
+            </span>
+          </button>
+        ) : label}
+      </th>
+    );
+  }
+
+  function handlePeopleSort(col: string) {
+    if (peopleSortBy === col) setPeopleSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setPeopleSortBy(col); setPeopleSortDir("asc"); }
+  }
+  function handleCoSort(col: string) {
+    if (coSortBy === col) setCoSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setCoSortBy(col); setCoSortDir("desc"); }
+  }
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
 
-      {/* ── Sidebar ── */}
+      {/* ── Left sidebar ── */}
       <div className="w-[240px] flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
-
-        {/* Sidebar header */}
         <div className="flex-shrink-0 px-4 py-3 border-b border-white/8">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-bold text-white/70">Filters</span>
@@ -956,7 +1221,6 @@ export default function DiscoverPage() {
               )}
             </div>
           </div>
-          {/* Keyword search */}
           <div className="relative">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
@@ -973,23 +1237,15 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* Filters — scrollable */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
           {mode === "people" ? (
-            <PeopleSidebar
-              filters={peopleFilters}
-              onChange={setPeopleFilters}
-              onAiApply={(partial) => setPeopleFilters(f => ({ ...f, ...partial }))}
-            />
+            <PeopleSidebar filters={peopleFilters} onChange={setPeopleFilters}
+              onAiApply={(partial) => setPeopleFilters(f => ({ ...f, ...partial }))} />
           ) : (
-            <CompanySidebar
-              filters={companyFilters}
-              onChange={setCompanyFilters}
-              onAiApply={(partial) => setCompanyFilters(f => ({ ...f, ...partial }))}
-            />
+            <CompanySidebar filters={companyFilters} onChange={setCompanyFilters}
+              onAiApply={(partial) => setCompanyFilters(f => ({ ...f, ...partial }))} />
           )}
 
-          {/* Saved searches */}
           <div className="border-b border-white/6">
             <div className="flex items-center justify-between px-4 py-2.5">
               <span className="text-[11px] font-semibold text-white/45 uppercase tracking-wider">Saved Searches</span>
@@ -1028,14 +1284,12 @@ export default function DiscoverPage() {
       </div>
 
       {/* ── Main content ── */}
-      <div className={`flex-1 flex flex-col min-h-0 min-w-0 transition-all duration-200 ${drawer ? "mr-[360px]" : ""}`}>
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
 
         {/* Toolbar */}
         <div className="flex-shrink-0 flex items-center justify-between gap-4 px-5 py-2.5 border-b border-white/8">
-          {/* Left: title + tabs + count */}
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-bold text-white/80">Discover</h1>
-            {/* Tabs */}
             <div className="flex items-center gap-0.5 bg-white/5 rounded-lg p-0.5">
               {(["people", "companies"] as const).map(m => (
                 <button key={m} onClick={() => { setMode(m); setSelected(new Set()); }}
@@ -1045,16 +1299,13 @@ export default function DiscoverPage() {
               ))}
             </div>
             {loading ? <Spinner sm /> : (
-              <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${total.toLocaleString()} ${mode}` : ""}</span>
+              <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
             )}
           </div>
 
-          {/* Right: bulk actions */}
           {selected.size > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-orange-300 font-medium whitespace-nowrap">
-                {selected.size} selected
-              </span>
+              <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selected.size} selected</span>
               {mode === "people" && unrevealed.length > 0 && (
                 <button onClick={revealSelected} disabled={revealing || exporting}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
@@ -1062,19 +1313,13 @@ export default function DiscoverPage() {
                   Unlock {unrevealed.length} · {revealCost} cr
                 </button>
               )}
-              {mode === "people" && (
-                <button onClick={handleVerify} disabled={exporting || revealing}
-                  className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/60 rounded-lg transition-colors disabled:opacity-50">
-                  Verify
-                </button>
-              )}
               <button onClick={() => { setCampaignIds(null); setShowCampaign(true); }} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                {exporting ? "…" : "Add to Sequence"}
+                Add to Sequence
               </button>
               <button onClick={() => { setListIds(null); setShowList(true); }} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                {exporting ? "…" : "Add to List"}
+                Add to List
               </button>
               <button onClick={() => handleExport("csv")} disabled={exporting || revealing}
                 className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
@@ -1084,19 +1329,30 @@ export default function DiscoverPage() {
           )}
         </div>
 
-        {/* Status message */}
         {exportMsg && (
           <div className={`flex-shrink-0 flex items-center justify-between px-5 py-2 text-xs ${exportMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
             <span>{exportMsg.text}</span>
             <button onClick={() => setExportMsg(null)} className="opacity-60 hover:opacity-100"><XIcon sm /></button>
           </div>
         )}
-        {error && (
-          <div className="flex-shrink-0 px-5 py-2 bg-red-500/10 text-red-400 text-xs">{error}</div>
+        {error && <div className="flex-shrink-0 px-5 py-2 bg-red-500/10 text-red-400 text-xs">{error}</div>}
+
+        {/* ── Empty state ── */}
+        {!hasSearched && (
+          <EmptyState
+            mode={mode}
+            activeFilterCount={activeFilterCount}
+            recentSearches={recentSearches}
+            savedSearches={savedSearches}
+            onTriggerSearch={triggerSearch}
+            onApplyRecent={applyRecentSearch}
+            onApplySaved={applySavedSearch}
+            onSetMode={m => { setMode(m); setSelected(new Set()); }}
+          />
         )}
 
-        {/* Table / grid */}
-        <div className="flex-1 overflow-auto">
+        {/* ── People / Companies table ── */}
+        <div className={`flex-1 overflow-auto ${!hasSearched ? "hidden" : ""}`}>
           {mode === "people" ? (
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
@@ -1105,96 +1361,146 @@ export default function DiscoverPage() {
                     <input type="checkbox" checked={results.length > 0 && selected.size === results.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  {([
-                    { label: "Person",   col: "name" },
-                    { label: "Company",  col: "company_name" },
-                    { label: "Location", col: "location" },
-                    { label: "Email",    col: null },
-                    { label: "Phone",    col: null },
-                  ] as { label: string; col: string | null }[]).map(({ label, col }) => (
-                    <th key={label} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
-                      {col ? (
-                        <button onClick={() => {
-                          if (peopleSortBy === col) setPeopleSortDir(d => d === "asc" ? "desc" : "asc");
-                          else { setPeopleSortBy(col); setPeopleSortDir("asc"); }
-                        }} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
-                          {label}
-                          <span className="text-[9px] opacity-50 group-hover:opacity-100">
-                            {peopleSortBy === col ? (peopleSortDir === "asc" ? "▲" : "▼") : "⇅"}
-                          </span>
-                        </button>
-                      ) : label}
-                    </th>
-                  ))}
+                  <SortTh label="Name"     col="name"         sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
+                  <SortTh label="Title"    col="title"        sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
+                  <SortTh label="Company"  col="company_name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
+                  <SortTh label="Location" col="location"     sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
+                  <th className="px-3 py-2.5 text-left font-semibold text-white/30">Keywords</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-white/30">Email</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-white/30">Size</th>
+                  <th className="w-28 px-3 py-2.5 text-left font-semibold text-white/30">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {results.length === 0 && !loading && (
-                  <tr><td colSpan={6} className="px-5 py-16 text-center text-white/20 text-sm">
+                  <tr><td colSpan={9} className="px-5 py-16 text-center text-white/20 text-sm">
                     {activeFilterCount > 0 ? "No results for these filters" : "Search or apply filters to find leads"}
                   </td></tr>
                 )}
-                {results.map(r => (
-                  <tr key={r.id} onClick={() => setDrawer({ type: "person", id: r.id })}
-                    className={`border-b border-white/4 hover:bg-white/3 transition-colors cursor-pointer ${selected.has(r.id) ? "bg-orange-500/5" : ""}`}>
-                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="accent-orange-500 w-3.5 h-3.5" />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar first={r.first_name} last={r.last_name} size="sm" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-white/85 truncate max-w-[120px]">
-                              {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
-                            </span>
-                            {r.linkedin_url && (
-                              <a href={r.linkedin_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-blue-400/50 hover:text-blue-400 transition-colors flex-shrink-0"><LinkedInIcon /></a>
-                            )}
-                            {r.exported && <span className="text-[8px] text-green-400/60 font-bold uppercase tracking-wide">exported</span>}
-                          </div>
-                          <span className="text-white/35 truncate block max-w-[140px]">{r.title ?? "—"}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="min-w-0">
-                        <span className="text-white/65 truncate block max-w-[130px]">{r.company_name ?? "—"}</span>
-                        {r.company_industry && <span className="text-white/30 truncate block max-w-[130px]">{r.company_industry}</span>}
-                        {r.company_size && <span className="text-white/20 text-[10px]">{r.company_size}</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">
-                      {[r.city, r.country].filter(Boolean).join(", ") || "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {r.has_email ? (
-                        <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                          {!r.revealed ? (
-                            <button onClick={() => revealIds([r.id])} disabled={revealing}
-                              className="flex items-center gap-1 text-white/20 hover:text-orange-400 transition-colors">
-                              <LockIcon />
-                              <span className="font-mono text-[10px]">{r.email_preview}</span>
-                            </button>
-                          ) : (
-                            <span className="font-mono text-white/75 text-[11px]">{r.email_preview}</span>
+                {results.map(r => {
+                  const liUrl = normalizeUrl(r.linkedin_url);
+                  const isHovered = hoveredRow === r.id;
+                  const isSelected = selected.has(r.id);
+                  const isActive = drawer?.type === "person" && drawer.id === r.id;
+                  return (
+                    <tr key={r.id}
+                      onMouseEnter={() => setHoveredRow(r.id)}
+                      onMouseLeave={() => setHoveredRow(null)}
+                      className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
+                      <td className="px-3 py-2.5">
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)} className="accent-orange-500 w-3.5 h-3.5" />
+                      </td>
+
+                      {/* Name */}
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Avatar first={r.first_name} last={r.last_name} size="sm" />
+                          <button
+                            onClick={() => setDrawer({ type: "person", id: r.id })}
+                            className="font-medium text-white/85 hover:text-orange-300 transition-colors truncate max-w-[120px] text-left"
+                          >
+                            {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
+                          </button>
+                          {liUrl && (
+                            <a href={liUrl} target="_blank" rel="noreferrer"
+                              className="text-blue-400/40 hover:text-blue-400 transition-colors flex-shrink-0">
+                              <LinkedInIcon />
+                            </a>
                           )}
-                          <EmailPill status={r.email_status} />
+                          {r.exported && (
+                            <span className="text-[8px] text-green-400/60 font-bold uppercase tracking-wide flex-shrink-0">✓</span>
+                          )}
                         </div>
-                      ) : <span className="text-white/15">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {r.has_phone ? (
-                        r.revealed
-                          ? <span className="font-mono text-white/60 text-[11px]">{r.phone_preview}</span>
-                          : <span className="font-mono text-white/20 text-[11px]">{r.phone_preview}</span>
-                      ) : <span className="text-white/15">—</span>}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      {/* Title */}
+                      <td className="px-3 py-2.5">
+                        <span className="text-white/50 truncate block max-w-[160px]">{r.title ?? "—"}</span>
+                        {r.seniority && (
+                          <span className="text-white/25 text-[9px] uppercase tracking-wider">{r.seniority}</span>
+                        )}
+                      </td>
+
+                      {/* Company */}
+                      <td className="px-3 py-2.5">
+                        {r.company_name ? (
+                          <div className="flex items-center gap-1.5">
+                            <CompanyLogo name={r.company_name} />
+                            <div className="min-w-0">
+                              <button
+                                onClick={() => r.company_id && setDrawer({ type: "company", id: r.company_id })}
+                                className={`text-white/65 truncate block max-w-[120px] text-left transition-colors ${r.company_id ? "hover:text-orange-300 cursor-pointer" : "cursor-default"}`}
+                              >
+                                {r.company_name}
+                              </button>
+                              {r.company_industry && (
+                                <span className="text-white/25 text-[9px] truncate block max-w-[120px]">{r.company_industry}</span>
+                              )}
+                            </div>
+                          </div>
+                        ) : <span className="text-white/20">—</span>}
+                      </td>
+
+                      {/* Location */}
+                      <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">
+                        {[r.city, r.country].filter(Boolean).join(", ") || "—"}
+                      </td>
+
+                      {/* Keywords */}
+                      <td className="px-3 py-2.5 max-w-[160px]">
+                        {r.company_keywords
+                          ? <span className="text-white/35 text-[10px] truncate block" title={r.company_keywords}>{r.company_keywords}</span>
+                          : <span className="text-white/15">—</span>}
+                      </td>
+
+                      {/* Email */}
+                      <td className="px-3 py-2.5">
+                        {r.has_email ? (
+                          <div className="flex items-center gap-1.5">
+                            {!r.revealed ? (
+                              <button onClick={() => revealIds([r.id])} disabled={revealing}
+                                className="flex items-center gap-1 text-white/20 hover:text-orange-400 transition-colors">
+                                <LockIcon />
+                                <span className="font-mono text-[10px]">{r.email_preview}</span>
+                              </button>
+                            ) : (
+                              <span className="font-mono text-white/75 text-[11px]">{r.email_preview}</span>
+                            )}
+                          </div>
+                        ) : <span className="text-white/15">—</span>}
+                      </td>
+
+                      {/* Company size */}
+                      <td className="px-3 py-2.5">
+                        {r.company_size
+                          ? <span className="text-white/40 text-xs">{r.company_size}</span>
+                          : <span className="text-white/15">—</span>}
+                      </td>
+
+                      {/* Actions — visible on hover */}
+                      <td className="px-3 py-2.5">
+                        <div className={`flex items-center gap-1 transition-opacity ${isHovered || isSelected ? "opacity-100" : "opacity-0"}`}>
+                          <button
+                            onClick={() => { setCampaignIds([r.id]); setShowCampaign(true); }}
+                            title="Add to sequence"
+                            className="px-2 py-1 text-[9px] font-semibold bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/20 text-orange-400 rounded transition-colors whitespace-nowrap">
+                            + Sequence
+                          </button>
+                          <button
+                            onClick={() => { setListIds([r.id]); setShowList(true); }}
+                            title="Add to list"
+                            className="px-2 py-1 text-[9px] font-semibold bg-white/6 hover:bg-white/10 border border-white/10 text-white/50 rounded transition-colors whitespace-nowrap">
+                            + List
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
+            /* ── Companies table ── */
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
                 <tr>
@@ -1202,80 +1508,105 @@ export default function DiscoverPage() {
                     <input type="checkbox" checked={companyResults.length > 0 && selected.size === companyResults.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  {([
-                    { label: "Company",  col: "name" },
-                    { label: "Industry", col: "industry" },
-                    { label: "Size",     col: "size" },
-                    { label: "Location", col: "location" },
-                    { label: "Contacts", col: "people_count" },
-                  ] as { label: string; col: string }[]).map(({ label, col }) => (
-                    <th key={label} className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
-                      <button onClick={() => {
-                        if (coSortBy === col) setCoSortDir(d => d === "asc" ? "desc" : "asc");
-                        else { setCoSortBy(col); setCoSortDir("desc"); }
-                      }} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
-                        {label}
-                        <span className="text-[9px] opacity-50 group-hover:opacity-100">
-                          {coSortBy === col ? (coSortDir === "asc" ? "▲" : "▼") : "⇅"}
-                        </span>
-                      </button>
-                    </th>
-                  ))}
+                  <SortTh label="Company"  col="name"         sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Industry" col="industry"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Size"     col="size"         sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Location" col="location"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Funding"  col="funding"      sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Contacts" col="people_count" sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <th className="w-24 px-3 py-2.5 text-left font-semibold text-white/30">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {companyResults.length === 0 && !loading && (
-                  <tr><td colSpan={6} className="px-5 py-16 text-center text-white/20 text-sm">
+                  <tr><td colSpan={8} className="px-5 py-16 text-center text-white/20 text-sm">
                     {activeFilterCount > 0 ? "No companies for these filters" : "Search or apply filters to find companies"}
                   </td></tr>
                 )}
-                {companyResults.map(c => (
-                  <tr key={c.id} onClick={() => setDrawer({ type: "company", id: c.id })}
-                    className={`border-b border-white/4 hover:bg-white/3 transition-colors cursor-pointer ${selected.has(c.id) ? "bg-orange-500/5" : ""}`}>
-                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} className="accent-orange-500 w-3.5 h-3.5" />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded bg-white/8 flex items-center justify-center text-[10px] font-bold text-white/40 flex-shrink-0">
-                          {(c.name[0] ?? "?").toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-white/85 truncate max-w-[150px]">{c.name}</span>
-                            {c.linkedin_url && (
-                              <a href={c.linkedin_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-blue-400/50 hover:text-blue-400 transition-colors flex-shrink-0"><LinkedInIcon /></a>
-                            )}
+                {companyResults.map(c => {
+                  const liUrl = normalizeUrl(c.linkedin_url);
+                  const isHovered  = hoveredRow === c.id;
+                  const isSelected = selected.has(c.id);
+                  const isActive   = drawer?.type === "company" && drawer.id === c.id;
+                  return (
+                    <tr key={c.id}
+                      onMouseEnter={() => setHoveredRow(c.id)}
+                      onMouseLeave={() => setHoveredRow(null)}
+                      className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
+                      <td className="px-3 py-2.5">
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)} className="accent-orange-500 w-3.5 h-3.5" />
+                      </td>
+
+                      {/* Company name */}
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <CompanyLogo name={c.name} />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setDrawer({ type: "company", id: c.id })}
+                                className="font-medium text-white/85 hover:text-orange-300 transition-colors truncate max-w-[140px] text-left">
+                                {c.name}
+                              </button>
+                              {liUrl && (
+                                <a href={liUrl} target="_blank" rel="noreferrer"
+                                  className="text-blue-400/40 hover:text-blue-400 transition-colors flex-shrink-0">
+                                  <LinkedInIcon />
+                                </a>
+                              )}
+                            </div>
+                            {c.domain && <span className="text-white/25 text-[10px] truncate block">{c.domain}</span>}
                           </div>
-                          {c.domain && <span className="text-white/30 text-[10px] truncate block">{c.domain}</span>}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-white/50 max-w-[160px] truncate">{c.industry ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{c.size_range ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
-                    <td className="px-3 py-2.5">
-                      <button onClick={e => {
-                        e.stopPropagation();
-                        setMode("people");
-                        setPeopleFilters(f => ({ ...f, companyIncludes: [c.name] }));
-                      }} className="flex items-center gap-1.5 text-orange-400/70 hover:text-orange-400 transition-colors">
-                        <span className="font-semibold">{c.people_count}</span>
-                        <span className="text-white/25">contacts</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      <td className="px-3 py-2.5 text-white/50 max-w-[160px] truncate">{c.industry ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{c.size_range ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
+
+                      {/* Funding */}
+                      <td className="px-3 py-2.5">
+                        {c.funding_stage ? (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/15 text-[9px] text-purple-300/70">
+                            {c.funding_stage}
+                          </span>
+                        ) : <span className="text-white/20">—</span>}
+                      </td>
+
+                      {/* Contacts */}
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => {
+                          setMode("people");
+                          setPeopleFilters(f => ({ ...f, companyIncludes: [c.name] }));
+                        }} className="flex items-center gap-1 text-orange-400/70 hover:text-orange-400 transition-colors">
+                          <span className="font-semibold">{c.people_count.toLocaleString()}</span>
+                          <span className="text-white/25 text-[10px]">contacts</span>
+                        </button>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-3 py-2.5">
+                        <div className={`flex items-center gap-1 transition-opacity ${isHovered || isSelected ? "opacity-100" : "opacity-0"}`}>
+                          <button
+                            onClick={() => setDrawer({ type: "company", id: c.id })}
+                            className="px-2 py-1 text-[9px] font-semibold bg-white/6 hover:bg-white/10 border border-white/10 text-white/50 rounded transition-colors">
+                            View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {hasSearched && totalPages > 1 && (
           <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-t border-white/8 bg-[#111]">
             <span className="text-xs text-white/25">
-              Page {page} of {totalPages.toLocaleString()} · {total.toLocaleString()} total
+              Page {page} of {totalPages.toLocaleString()} · {totalLabel} total
             </span>
             <div className="flex items-center gap-1">
               <button disabled={page <= 1 || loading} onClick={() => search(1)}
@@ -1299,41 +1630,49 @@ export default function DiscoverPage() {
             </div>
           </div>
         )}
-
       </div>
 
       {/* ── Right drawer ── */}
-      {drawer && (
-        <div className="fixed right-0 top-0 h-full w-[360px] border-l border-white/8 bg-[#111] flex flex-col z-40 shadow-2xl">
+      <div className="fixed inset-0 z-40 pointer-events-none">
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 backdrop-blur-[2px] bg-black/30 transition-opacity duration-200 ${drawer ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+          onClick={() => setDrawer(null)}
+        />
+        {/* Panel */}
+        <div className={`absolute right-0 top-0 h-full w-[400px] border-l border-white/10 bg-[#0e0e0e]/90 backdrop-blur-xl flex flex-col shadow-2xl transition-transform duration-200 ease-out ${drawer ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none"}`}>
           <div className="flex items-center justify-between px-5 py-3 border-b border-white/8 flex-shrink-0">
-            <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-              {drawer.type === "person" ? "Contact" : "Company"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                {drawer?.type === "person" ? "Contact" : "Company"}
+              </span>
+            </div>
             <button onClick={() => setDrawer(null)} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {drawer.type === "person" ? (
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {drawer?.type === "person" ? (
               <PersonDrawer
                 id={drawer.id}
                 onClose={() => setDrawer(null)}
                 onReveal={id => revealIds([id])}
                 onViewCompany={cid => setDrawer({ type: "company", id: cid })}
+                onViewPerson={pid => setDrawer({ type: "person", id: pid })}
                 onAddToSequence={id => { setCampaignIds([id]); setShowCampaign(true); }}
                 onAddToList={id => { setListIds([id]); setShowList(true); }}
               />
-            ) : (
+            ) : drawer?.type === "company" ? (
               <CompanyDrawer
                 id={drawer.id}
                 onClose={() => setDrawer(null)}
                 onRevealPerson={id => revealIds([id])}
                 onViewPerson={id => setDrawer({ type: "person", id })}
               />
-            )}
+            ) : null}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ── Sequence modal ── */}
+      {/* ── Modals ── */}
       {showCampaign && (
         <SequenceModal
           count={campaignIds ? campaignIds.length : selected.size}
@@ -1341,8 +1680,6 @@ export default function DiscoverPage() {
           onConfirm={(cid, cname) => handleExport("campaign", cid, cname, campaignIds ?? undefined)}
         />
       )}
-
-      {/* ── List modal ── */}
       {showList && (
         <ListModal
           count={listIds ? listIds.length : selected.size}
@@ -1350,7 +1687,156 @@ export default function DiscoverPage() {
           onConfirm={(lid, lname) => handleAddToList(lid, lname, listIds ?? undefined)}
         />
       )}
-
     </div>
+  );
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({
+  mode, activeFilterCount, recentSearches, savedSearches,
+  onTriggerSearch, onApplyRecent, onApplySaved, onSetMode,
+}: {
+  mode: "people" | "companies";
+  activeFilterCount: number;
+  recentSearches: RecentSearch[];
+  savedSearches: SavedSearch[];
+  onTriggerSearch: (f?: Partial<PeopleFilters & CompanyFilters>) => void;
+  onApplyRecent: (r: RecentSearch) => void;
+  onApplySaved: (s: SavedSearch) => void;
+  onSetMode: (m: "people" | "companies") => void;
+}) {
+  const [aiQuery, setAiQuery]     = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError]     = useState<string | null>(null);
+
+  const quickFilters = mode === "people" ? PEOPLE_QUICK_FILTERS : COMPANY_QUICK_FILTERS;
+
+  async function handleAiSearch() {
+    if (!aiQuery.trim()) return;
+    setAiLoading(true); setAiError(null);
+    try {
+      const res = await wsFetch("/api/discover/ai-filter", {
+        method: "POST", body: JSON.stringify({ query: aiQuery, mode }),
+      });
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok) { setAiError((data.error as string) ?? "AI filter failed"); return; }
+      if (data.filters && typeof data.filters === "object") {
+        onTriggerSearch(data.filters as Partial<PeopleFilters & CompanyFilters>);
+        setAiQuery("");
+      } else { setAiError("No filters returned"); }
+    } catch (e) { setAiError(e instanceof Error ? e.message : "Network error"); }
+    finally { setAiLoading(false); }
+  }
+
+  const hasRecent = recentSearches.length > 0;
+  const hasSaved  = savedSearches.length > 0;
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-start pt-12 pb-8 px-6 overflow-y-auto">
+      <div className="w-full max-w-[620px]">
+
+        {/* Mode toggle */}
+        <div className="flex items-center justify-center gap-0.5 bg-white/5 rounded-lg p-0.5 w-fit mx-auto mb-8">
+          {(["people", "companies"] as const).map(m => (
+            <button key={m} onClick={() => onSetMode(m)}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors capitalize ${mode === m ? "bg-white/10 text-white" : "text-white/35 hover:text-white/60"}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+
+        {/* Heading */}
+        <div className="text-center mb-6">
+          <h2 className="text-lg font-bold text-white/80">Find your ideal prospects</h2>
+          <p className="text-sm text-white/30 mt-1">Use AI or apply filters in the sidebar to search our database</p>
+        </div>
+
+        {/* AI search input */}
+        <div className="relative mb-4">
+          <div className={`flex items-center gap-3 bg-white/5 border rounded-xl px-4 py-3 focus-within:border-orange-500/40 transition-colors ${aiError ? "border-red-500/30" : "border-white/12"}`}>
+            <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+            </svg>
+            <input
+              value={aiQuery} onChange={e => { setAiQuery(e.target.value); setAiError(null); }}
+              onKeyDown={e => e.key === "Enter" && handleAiSearch()}
+              placeholder={mode === "people"
+                ? "e.g. CTOs at fintech startups in Nigeria with verified email"
+                : "e.g. B2B SaaS companies in the UK with 50-200 employees, Series A+"}
+              className="flex-1 bg-transparent text-sm text-white/70 placeholder-white/25 focus:outline-none"
+            />
+            <button onClick={handleAiSearch} disabled={aiLoading || !aiQuery.trim()}
+              className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0">
+              {aiLoading ? "…" : "Search"}
+            </button>
+          </div>
+          {aiError && <p className="text-[11px] text-rose-400 mt-1.5 px-1">{aiError}</p>}
+        </div>
+
+        {/* Active sidebar filters → search button */}
+        {activeFilterCount > 0 && (
+          <div className="text-center mb-5">
+            <button onClick={() => onTriggerSearch()}
+              className="px-5 py-2 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/25 text-orange-300 text-sm font-semibold rounded-lg transition-colors">
+              Search with {activeFilterCount} active filter{activeFilterCount !== 1 ? "s" : ""} →
+            </button>
+          </div>
+        )}
+
+        {/* Quick filter chips */}
+        <div className="flex flex-wrap gap-1.5 justify-center mb-10">
+          {quickFilters.map(qf => (
+            <button key={qf.label}
+              onClick={() => onTriggerSearch(qf.filters as Partial<PeopleFilters & CompanyFilters>)}
+              className="px-3 py-1.5 rounded-full bg-white/6 hover:bg-white/10 text-xs text-white/45 hover:text-white/75 transition-colors border border-white/8">
+              {qf.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Recently searched + saved */}
+        {(hasRecent || hasSaved) && (
+          <div className={`grid gap-5 ${hasRecent && hasSaved ? "grid-cols-2" : "grid-cols-1"}`}>
+            {hasRecent && (
+              <div>
+                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2.5">Recently searched</h3>
+                <div className="space-y-1.5">
+                  {recentSearches.slice(0, 5).map(r => (
+                    <button key={r.id} onClick={() => onApplyRecent(r)}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl bg-white/4 hover:bg-white/7 border border-white/6 transition-colors group">
+                      <p className="text-xs text-white/65 group-hover:text-white/85 truncate">{r.label}</p>
+                      <p className="text-[10px] text-white/25 mt-0.5">{timeAgo(r.ts)}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasSaved && (
+              <div>
+                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2.5">Saved searches</h3>
+                <div className="space-y-1.5">
+                  {savedSearches.slice(0, 5).map(s => (
+                    <button key={s.id} onClick={() => onApplySaved(s)}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl bg-white/4 hover:bg-white/7 border border-white/6 transition-colors group">
+                      <p className="text-xs text-white/65 group-hover:text-white/85 truncate">{s.name}</p>
+                      <p className="text-[10px] text-white/25 mt-0.5 capitalize">{s.mode}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function DiscoverPage() {
+  return (
+    <Suspense>
+      <DiscoverContent />
+    </Suspense>
   );
 }
