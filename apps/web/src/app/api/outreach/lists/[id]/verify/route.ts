@@ -42,10 +42,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("verification_status", "pending");
   }
 
+  type LeadRow = { id: string; email: string; verification_status: string };
   const { data: leads } = await query;
-  if (!leads?.length) return NextResponse.json({ verified: 0, safe: 0, invalid: 0, credits_used: 0 });
+  const typedLeads = (leads ?? []) as LeadRow[];
+  if (!typedLeads.length) return NextResponse.json({ verified: 0, safe: 0, invalid: 0, credits_used: 0 });
 
-  const totalCost = Math.round(leads.length * CREDITS_PER_VERIFY * 10) / 10;
+  const totalCost = Math.round(typedLeads.length * CREDITS_PER_VERIFY * 10) / 10;
 
   // Credit check
   const { data: ws } = await adminDb
@@ -68,17 +70,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       workspace_id: workspaceId,
       type:         "debit",
       amount:       totalCost,
-      description:  `Email verification — ${leads.length} lead${leads.length !== 1 ? "s" : ""} in list`,
+      description:  `Email verification — ${typedLeads.length} lead${typedLeads.length !== 1 ? "s" : ""} in list`,
     }),
   ]);
 
   // Run Reoon verification
   const apiKey = process.env.REOON_API_KEY ?? "";
-  const emails = leads.map(l => l.email);
+  const emails = typedLeads.map(l => l.email);
   const results = await verifyEmails(apiKey, emails);
 
   // Map results back to lead IDs
-  const emailToId = new Map(leads.map(l => [l.email, l.id]));
+  const emailToId = new Map(typedLeads.map(l => [l.email, l.id]));
   const now = new Date().toISOString();
 
   let safeCount   = 0;
