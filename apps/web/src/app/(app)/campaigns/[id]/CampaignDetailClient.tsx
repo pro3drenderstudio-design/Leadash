@@ -13,13 +13,14 @@ import {
   getInboxes, getTemplates, sendTestEmail, generateSequence, generateSpintax, generateFollowups,
   getCampaignAnalytics, triggerSendBatch,
   getCampaignEnrollments, unenrollLead, enrollLeads, checkEnrollmentDuplicates, getLists,
-  checkInboxDns,
+  checkInboxDns, getCampaignActivity,
 } from "@/lib/outreach/api";
 import type {
   OutreachCampaign, OutreachSequenceStep, CampaignStatus,
   OutreachInboxSafe, OutreachTemplate, CampaignAnalytics,
   CampaignEnrollmentRow, OutreachList,
 } from "@/types/outreach";
+import type { CampaignActivityRow } from "@/lib/outreach/api";
 
 const STATUS_COLORS: Record<CampaignStatus, string> = {
   draft:     "text-white/40 bg-white/8",
@@ -132,8 +133,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editing, setEditing]     = useState(false);
   const [toast, setToast]         = useState<string | null>(enrolled ? "Campaign created and leads enrolled!" : null);
 
-  // Activity filter
+  // Activity tab
   const [activityFilter, setActivityFilter] = useState<string>("all");
+  const [activityRows,   setActivityRows]   = useState<CampaignActivityRow[]>([]);
+  const [activityTotal,  setActivityTotal]  = useState(0);
+  const [activityPage,   setActivityPage]   = useState(1);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const ACTIVITY_LIMIT = 50;
 
   // Leads tab
   const [leadsData, setLeadsData]           = useState<{ enrollments: CampaignEnrollmentRow[]; total: number } | null>(null);
@@ -245,15 +251,24 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       });
   }, [campaignId]);
 
-  // Load analytics when tab changes to analytics/activity/queue
+  // Load analytics when tab changes to analytics/queue
   useEffect(() => {
-    if ((tab === "analytics" || tab === "activity" || tab === "queue") && !analytics && !analyticsError) {
+    if ((tab === "analytics" || tab === "queue") && !analytics && !analyticsError) {
       setAnalyticsLoading(true);
       getCampaignAnalytics(campaignId)
         .then(a => { setAnalytics(a); setAnalyticsLoading(false); })
         .catch(e => { setAnalyticsError(e instanceof Error ? e.message : String(e)); setAnalyticsLoading(false); });
     }
   }, [tab, analytics, analyticsError, campaignId]);
+
+  // Load paginated activity
+  useEffect(() => {
+    if (tab !== "activity") return;
+    setActivityLoading(true);
+    getCampaignActivity(campaignId, activityPage, ACTIVITY_LIMIT, activityFilter)
+      .then(d => { setActivityRows(d.rows); setActivityTotal(d.total); setActivityLoading(false); })
+      .catch(() => setActivityLoading(false));
+  }, [tab, campaignId, activityPage, activityFilter]);
 
   // Load leads tab
   useEffect(() => {
@@ -488,6 +503,11 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const openRate  = campaign.total_sent ? ((campaign.total_opened ?? 0) / campaign.total_sent * 100).toFixed(1) : "0";
   const replyRate = campaign.total_sent ? ((campaign.total_replied ?? 0) / campaign.total_sent * 100).toFixed(1) : "0";
   const emailSteps = steps.filter(s => s.type === "email");
+  // Maps step_order → "Email N" label (skips wait steps in numbering)
+  const emailStepLabel = (stepOrder: number) => {
+    const idx = emailSteps.findIndex(s => s.step_order === stepOrder);
+    return idx >= 0 ? `Email ${idx + 1}` : `Email`;
+  };
 
   // ── EDIT MODE ──────────────────────────────────────────────────────────────
   if (editing) {
@@ -1350,55 +1370,69 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
       {/* ── TAB: ACTIVITY ───────────────────────────────────────────────────── */}
       {tab === "activity" && (
-        analyticsLoading ? <AnalyticsSpinner /> : analyticsError ? <div className="py-12 text-center text-red-400 text-sm">{analyticsError}</div> : !analytics ? <AnalyticsSpinner /> : (
-          <div className="space-y-4">
-            {/* Status filter */}
+        <div className="space-y-4">
+          {/* Status filter */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex gap-2 flex-wrap">
               {["all","sent","opened","replied","bounced"].map(f => (
-                <button key={f} onClick={() => setActivityFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${activityFilter === f ? "bg-white/15 text-white" : "bg-white/5 text-white/40 hover:text-white/60"}`}>{f}</button>
+                <button key={f} onClick={() => { setActivityFilter(f); setActivityPage(1); }} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${activityFilter === f ? "bg-white/15 text-white" : "bg-white/5 text-white/40 hover:text-white/60"}`}>{f}</button>
               ))}
             </div>
+            {activityTotal > 0 && (
+              <span className="text-white/30 text-xs">{activityTotal.toLocaleString()} total</span>
+            )}
+          </div>
 
-            {/* Activity feed */}
+          {/* Activity feed */}
+          {activityLoading ? (
+            <AnalyticsSpinner />
+          ) : (
             <div className="space-y-1">
-              {analytics.recent_activity
-                .filter(a => {
-                  if (activityFilter === "all")     return true;
-                  if (activityFilter === "replied")  return a.replied_at;
-                  if (activityFilter === "opened")   return a.opened_at;
-                  return a.status === activityFilter;
-                })
-                .map(a => {
-                  const displayStatus = a.replied_at ? "replied" : a.opened_at ? "opened" : a.status;
-                  return (
-                    <div key={a.send_id} className="flex items-center gap-3 px-4 py-3 bg-white/3 hover:bg-white/5 rounded-xl transition-colors">
-                      <Initials name={a.lead_name} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white/80 text-sm font-medium truncate">{a.lead_name}</span>
-                          {a.company && <span className="text-white/30 text-xs truncate">· {a.company}</span>}
-                        </div>
-                        <p className="text-white/40 text-xs truncate">{a.subject}</p>
+              {activityRows.map(a => {
+                const displayStatus = a.replied_at ? "replied" : a.opened_at ? "opened" : a.status;
+                return (
+                  <div key={a.send_id} className="flex items-center gap-3 px-4 py-3 bg-white/3 hover:bg-white/5 rounded-xl transition-colors">
+                    <Initials name={a.lead_name} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white/80 text-sm font-medium truncate">{a.lead_name}</span>
+                        {a.company && <span className="text-white/30 text-xs truncate">· {a.company}</span>}
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] font-semibold text-orange-400/60 bg-orange-500/10 px-1.5 py-0.5 rounded">Step {a.step_order + 1}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEND_STATUS_COLORS[displayStatus] ?? "text-white/30 bg-white/6"}`}>{displayStatus}</span>
-                        <span className="text-white/25 text-xs w-16 text-right">{timeAgo(a.replied_at ?? a.opened_at ?? a.sent_at)}</span>
-                      </div>
+                      <p className="text-white/40 text-xs truncate">{a.subject}</p>
                     </div>
-                  );
-                })}
-              {analytics.recent_activity.filter(a => {
-                if (activityFilter === "all")    return true;
-                if (activityFilter === "replied") return a.replied_at;
-                if (activityFilter === "opened")  return a.opened_at;
-                return a.status === activityFilter;
-              }).length === 0 && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] font-semibold text-orange-400/60 bg-orange-500/10 px-1.5 py-0.5 rounded">{emailStepLabel(a.step_order ?? 0)}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEND_STATUS_COLORS[displayStatus] ?? "text-white/30 bg-white/6"}`}>{displayStatus}</span>
+                      <span className="text-white/25 text-xs w-16 text-right">{timeAgo(a.replied_at ?? a.opened_at ?? a.sent_at)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {!activityLoading && activityRows.length === 0 && (
                 <div className="text-center py-12 text-white/25 text-sm">No activity for this filter.</div>
               )}
             </div>
-          </div>
-        )
+          )}
+
+          {/* Pagination */}
+          {activityTotal > ACTIVITY_LIMIT && (
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                disabled={activityPage === 1 || activityLoading}
+                className="px-4 py-2 rounded-lg bg-white/5 text-white/50 text-xs hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >← Prev</button>
+              <span className="text-white/30 text-xs">
+                Page {activityPage} of {Math.ceil(activityTotal / ACTIVITY_LIMIT)}
+              </span>
+              <button
+                onClick={() => setActivityPage(p => p + 1)}
+                disabled={activityPage >= Math.ceil(activityTotal / ACTIVITY_LIMIT) || activityLoading}
+                className="px-4 py-2 rounded-lg bg-white/5 text-white/50 text-xs hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >Next →</button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── TAB: QUEUE ──────────────────────────────────────────────────────── */}
@@ -1421,7 +1455,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     setTriggerResult(null);
                     try {
                       const r = await triggerSendBatch();
-                      setTriggerResult(`Sent ${r.sends.sent} · Replies found ${r.replies.matched}`);
+                      const s = r.sends as { sent?: number; skipped?: number; errors?: number; processed?: number };
+                      const detail = [
+                        `Sent ${s.sent ?? 0}`,
+                        s.skipped ? `Skipped ${s.skipped}` : null,
+                        s.errors  ? `Errors ${s.errors}`  : null,
+                      ].filter(Boolean).join(' · ');
+                      setTriggerResult(`${detail} · Replies ${r.replies.matched}`);
                       // Reload analytics to reflect new sends
                       const fresh = await getCampaignAnalytics(campaignId);
                       setAnalytics(fresh);
@@ -1453,7 +1493,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         <p className="text-white/30 text-xs">{q.lead_email}</p>
                       </div>
                       <div className="text-white/50 text-sm truncate">{q.company ?? "—"}</div>
-                      <div className="text-orange-300/70 text-xs font-semibold">Step {q.current_step + 1}</div>
+                      <div className="text-orange-300/70 text-xs font-semibold">{emailStepLabel(q.current_step)}</div>
                       <div>
                         {isDue ? (
                           <span className="px-2 py-0.5 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full">Due now</span>

@@ -24,13 +24,26 @@ export async function getDueEnrollments(workspaceId: string, limit = 500): Promi
     .or(`next_send_at.is.null,next_send_at.lte.${now}`)
     .limit(limit);
 
-  if (error || !enrollments) return [];
+  if (error || !enrollments) { console.log(`[scheduler] getDueEnrollments error:`, error?.message); return []; }
 
+  console.log(`[scheduler] getDueEnrollments raw=${enrollments.length} ws=${workspaceId}`);
   const results: DueEnrollment[] = [];
   for (const enrollment of enrollments) {
     const campaign = enrollment.campaign as OutreachCampaign;
-    if (!campaign || campaign.status !== "active") continue;
-    if (!isWithinSendWindow(campaign)) continue;
+    if (!campaign || campaign.status !== "active") {
+      console.log(`[scheduler] skip enrollment=${enrollment.id} campaign_status=${campaign?.status}`);
+      continue;
+    }
+
+    // Enforce send window unless the enrollment is overdue by more than 2 hours
+    // (handles missed cron runs without permanently skipping scheduled sends)
+    const overdueMs = enrollment.next_send_at
+      ? Date.now() - new Date(enrollment.next_send_at).getTime()
+      : Infinity;
+    if (overdueMs < 2 * 60 * 60 * 1000 && !isWithinSendWindow(campaign)) {
+      console.log(`[scheduler] skip enrollment=${enrollment.id} outside send window overdueMs=${overdueMs}`);
+      continue;
+    }
 
     const { data: step } = await supabase
       .from("outreach_sequences")
@@ -39,7 +52,10 @@ export async function getDueEnrollments(workspaceId: string, limit = 500): Promi
       .eq("step_order", enrollment.current_step)
       .single();
 
-    if (!step) continue;
+    if (!step) {
+      console.log(`[scheduler] skip enrollment=${enrollment.id} no step at step_order=${enrollment.current_step}`);
+      continue;
+    }
     results.push({ enrollment, campaign, step });
   }
   return results;
@@ -63,7 +79,11 @@ function isWithinSendWindow(campaign: OutreachCampaign): boolean {
 
   const [sh, sm] = (campaign.send_start_time ?? "09:00").split(":").map(Number);
   const [eh, em] = (campaign.send_end_time   ?? "17:00").split(":").map(Number);
-  return current >= sh * 60 + sm && current < eh * 60 + em;
+  const start = sh * 60 + sm;
+  const end   = eh * 60 + em;
+  // Handle midnight-wrap windows (e.g. 23:00–00:00 means 23:00–00:00 next day)
+  if (end <= start) return current >= start || current < end;
+  return current >= start && current < end;
 }
 
 export function computeNextSendAt(waitDays: number, campaign: OutreachCampaign): Date {
@@ -75,16 +95,37 @@ export function computeNextSendAt(waitDays: number, campaign: OutreachCampaign):
   base.setDate(base.getDate() + waitDays);
 
   for (let i = 0; i < 14; i++) {
-    const candidate = new Date(base);
-    candidate.setDate(base.getDate() + i);
-    const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" })
-      .format(candidate).toLowerCase().slice(0, 3);
-    if (sendDays.includes(day)) {
-      candidate.setHours(sh, sm + Math.floor(Math.random() * 60), 0, 0);
-      return candidate;
-    }
+    const probe = new Date(base);
+    probe.setDate(base.getDate() + i);
+
+    const tzParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, weekday: "short", year: "numeric", month: "numeric", day: "numeric",
+    }).formatToParts(probe);
+
+    const weekday = (tzParts.find(p => p.type === "weekday")?.value ?? "").toLowerCase().slice(0, 3);
+    if (!sendDays.includes(weekday)) continue;
+
+    const year  = parseInt(tzParts.find(p => p.type === "year")!.value);
+    const month = parseInt(tzParts.find(p => p.type === "month")!.value) - 1;
+    const day   = parseInt(tzParts.find(p => p.type === "day")!.value);
+
+    const targetH = sh;
+    const targetM = sm + Math.floor(Math.random() * 60);
+
+    // Build a UTC timestamp that equals targetH:targetM in the campaign timezone.
+    // Start with a naïve UTC value for that date+time, then correct by the tz offset.
+    const naive = new Date(Date.UTC(year, month, day, targetH, targetM, 0));
+    const inTz  = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(naive);
+    const localH = parseInt(inTz.find(p => p.type === "hour")!.value);
+    const localM = parseInt(inTz.find(p => p.type === "minute")!.value);
+    const diffMs = ((targetH * 60 + targetM) - (localH * 60 + localM)) * 60_000;
+    return new Date(naive.getTime() + diffMs);
   }
-  const fb = new Date(); fb.setDate(fb.getDate() + waitDays);
+
+  const fb = new Date();
+  fb.setDate(fb.getDate() + waitDays);
   return fb;
 }
 

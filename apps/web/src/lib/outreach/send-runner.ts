@@ -141,6 +141,7 @@ export async function runSendBatch(
   maxDelay = 5_000,
 ): Promise<SendRunResult> {
   const due    = await getDueEnrollments(workspaceId, limit);
+  console.log(`[send-runner] due=${due.length} ws=${workspaceId}`);
   const result: SendRunResult = { processed: due.length, sent: 0, skipped: 0, errors: 0 };
   if (!due.length) return result;
 
@@ -160,6 +161,7 @@ export async function runSendBatch(
     const cid = item.campaign.id;
     if (!byCampaign.has(cid)) {
       const slots = await buildInboxPool(db, item.campaign);
+      console.log(`[send-runner] campaign=${cid} inbox_ids=${JSON.stringify(item.campaign.inbox_ids)} slots=${slots.length}`);
       byCampaign.set(cid, { items: [], slots, rrIdx: 0 });
     }
     byCampaign.get(cid)!.items.push(item);
@@ -260,8 +262,11 @@ export async function runSendBatch(
 
       const { data: sendRecord } = await db.from("outreach_sends").insert({
         workspace_id:     workspaceId,
+        campaign_id:      campaign.id,
         enrollment_id:    enrollment.id,
         sequence_step_id: seqStep.id,
+        lead_id:          lead.id,
+        step_order:       seqStep.step_order,
         inbox_id:         slot.inbox.id,
         to_email:         lead.email,
         subject:          subjectTemplate,
