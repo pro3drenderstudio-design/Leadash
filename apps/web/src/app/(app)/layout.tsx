@@ -62,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Silently claim any approved beta enrollment linked to this email (no account at apply-time)
   claimBetaIfApproved(user.id, user.email ?? "", ctx.workspaceId).catch(() => {});
 
-  const workspace = ctx.workspace as { name: string; plan_id: string; plan_status: string; trial_ends_at: string | null; grace_ends_at: string | null; lead_credits_balance: number; subscription_credits_balance: number };
+  const workspace = ctx.workspace as { name: string; plan_id: string; plan_status: string; trial_ends_at: string | null; grace_ends_at: string | null; subscription_renews_at: string | null; lead_credits_balance: number; subscription_credits_balance: number };
   const userName  = (user.user_metadata?.full_name as string | null) ?? null;
 
   return (
@@ -93,6 +93,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               workspaceName={workspace.name}
               plan={workspace.plan_id}
               trialEndsAt={workspace.trial_ends_at}
+              subscriptionRenewsAt={workspace.subscription_renews_at}
             />
           </div>
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative">

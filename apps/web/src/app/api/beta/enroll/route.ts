@@ -81,9 +81,20 @@ export async function GET() {
   // Find enrollment by user_id or by email
   const { data } = await db
     .from("beta_enrollments")
-    .select("id, status, created_at, review_note")
+    .select("id, status, created_at, review_note, workspace_id")
     .or(`user_id.eq.${user.id},email.eq.${user.email}`)
     .maybeSingle();
 
-  return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null });
+  // Fetch trial_ends_at from workspace so the banner can show days remaining
+  let trialEndsAt: string | null = null;
+  if (data?.workspace_id) {
+    const { data: ws } = await db
+      .from("workspaces")
+      .select("trial_ends_at")
+      .eq("id", data.workspace_id)
+      .single();
+    trialEndsAt = ws?.trial_ends_at ?? null;
+  }
+
+  return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null, trialEndsAt });
 }

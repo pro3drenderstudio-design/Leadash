@@ -43,14 +43,15 @@ export async function POST(req: NextRequest) {
       await db
         .from("workspaces")
         .update({
-          plan_id:           planId,
-          plan_status:       sub.status as string,
-          stripe_sub_id:     sub.id,
-          trial_ends_at:     null,
-          max_inboxes:       plan.max_inboxes,
-          max_monthly_sends: plan.max_monthly_sends,
-          max_seats:         plan.max_seats,
-          updated_at:        new Date().toISOString(),
+          plan_id:                plan.plan_id,
+          plan_status:            sub.status as string,
+          stripe_sub_id:          sub.id,
+          trial_ends_at:          null,
+          subscription_renews_at: new Date(((sub as unknown as Record<string, number>).current_period_end ?? (Date.now() / 1000 + 30 * 86400)) * 1000).toISOString(),
+          max_inboxes:            plan.max_inboxes,
+          max_monthly_sends:      plan.max_monthly_sends,
+          max_seats:              plan.max_seats,
+          updated_at:             new Date().toISOString(),
         })
         .eq("stripe_customer_id", sub.customer as string);
 
@@ -123,13 +124,14 @@ export async function POST(req: NextRequest) {
       await db
         .from("workspaces")
         .update({
-          plan_id:           "free",
-          plan_status:       "canceled",
-          stripe_sub_id:     null,
-          trial_ends_at:     null,
-          max_inboxes:       freePlan.max_inboxes,
-          max_monthly_sends: freePlan.max_monthly_sends,
-          max_seats:         freePlan.max_seats,
+          plan_id:                "free",
+          plan_status:            "canceled",
+          stripe_sub_id:          null,
+          trial_ends_at:          null,
+          subscription_renews_at: null,
+          max_inboxes:            freePlan.max_inboxes,
+          max_monthly_sends:      freePlan.max_monthly_sends,
+          max_seats:              freePlan.max_seats,
         })
         .eq("stripe_customer_id", sub.customer as string);
 

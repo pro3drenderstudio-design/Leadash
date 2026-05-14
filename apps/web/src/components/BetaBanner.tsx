@@ -3,19 +3,23 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function BetaBanner() {
-  const [status, setStatus] = useState<"approved" | null | undefined>(undefined);
+  const [status, setStatus]       = useState<"approved" | null | undefined>(undefined);
+  const [trialEndsAt, setTrial]   = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Check session storage — don't re-fetch every navigation
     const cached = sessionStorage.getItem("beta_dismissed");
     if (cached) { setDismissed(true); return; }
 
     fetch("/api/beta/enroll")
       .then(r => r.json())
       .then(d => {
-        if (d.enrollment?.status === "approved") setStatus("approved");
-        else setStatus(null);
+        if (d.enrollment?.status === "approved") {
+          setStatus("approved");
+          setTrial(d.trialEndsAt ?? null);
+        } else {
+          setStatus(null);
+        }
       })
       .catch(() => setStatus(null));
   }, []);
@@ -27,17 +31,46 @@ export default function BetaBanner() {
 
   if (dismissed || status !== "approved") return null;
 
+  // Compute days left
+  const msLeft   = trialEndsAt ? new Date(trialEndsAt).getTime() - Date.now() : null;
+  const daysLeft = msLeft !== null ? Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24))) : null;
+  const expired  = daysLeft !== null && daysLeft === 0;
+
+  // Auto-hide the banner once beta access has fully expired — nothing useful to show
+  if (expired) return null;
+
+  const daysLabel = daysLeft !== null
+    ? daysLeft === 1 ? "1 day remaining" : `${daysLeft} days remaining`
+    : "30 days";
+
+  const expiryText = trialEndsAt
+    ? `Expires ${new Date(trialEndsAt).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}`
+    : null;
+
   return (
     <div className="w-full relative flex items-center justify-center gap-3 px-4 py-2.5 text-sm" style={{ background: "linear-gradient(90deg, rgba(249,115,22,0.12) 0%, rgba(234,88,12,0.08) 100%)", borderBottom: "1px solid rgba(249,115,22,0.2)" }}>
-      {/* Glow dot */}
       <span className="flex-shrink-0 w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
 
       <p className="text-orange-300/90 text-xs font-medium text-center">
-        <span className="font-bold text-orange-300">You&apos;re part of the Leadash Beta!</span>
-        {" "}You have free Starter access for 30 days.{" "}
-        <Link href="/beta" className="underline underline-offset-2 hover:text-orange-200 transition-colors">
-          Learn more
-        </Link>
+        <span className="font-bold text-orange-300">You&apos;re in the Leadash Beta!</span>
+        {" "}Free Starter access — <span className="font-semibold text-orange-200">{daysLabel}</span>
+        {expiryText && <span className="text-orange-400/60"> · {expiryText}</span>}
+        {daysLeft !== null && daysLeft <= 5 && (
+          <>
+            {" "}·{" "}
+            <Link href="/settings?tab=billing" className="underline underline-offset-2 hover:text-orange-200 transition-colors font-semibold">
+              Upgrade to keep access
+            </Link>
+          </>
+        )}
+        {(daysLeft === null || daysLeft > 5) && (
+          <>
+            {" "}·{" "}
+            <Link href="/beta" className="underline underline-offset-2 hover:text-orange-200 transition-colors">
+              Learn more
+            </Link>
+          </>
+        )}
       </p>
 
       <button

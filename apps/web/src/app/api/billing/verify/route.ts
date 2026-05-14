@@ -32,15 +32,16 @@ export async function POST(req: NextRequest) {
 
   // Upsert plan — idempotent, webhook may have already done this
   await db.from("workspaces").update({
-    plan_id:           plan.plan_id,
-    plan_status:       "active",
-    trial_ends_at:     null,
-    max_inboxes:       plan.max_inboxes,
-    max_monthly_sends: plan.max_monthly_sends,
-    max_seats:         plan.max_seats,
+    plan_id:                plan.plan_id,
+    plan_status:            "active",
+    trial_ends_at:          null,
+    subscription_renews_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    max_inboxes:            plan.max_inboxes,
+    max_monthly_sends:      plan.max_monthly_sends,
+    max_seats:              plan.max_seats,
     ...(authorizationCode ? { paystack_auth_code:      authorizationCode } : {}),
     ...(customerCode      ? { paystack_customer_code:  customerCode }      : {}),
-    updated_at:        new Date().toISOString(),
+    updated_at:             new Date().toISOString(),
   }).eq("id", workspaceId);
 
   // Record invoice — upsert so webhook duplicate is silently ignored.

@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
-import { sendInboxPaymentSuccess, sendInboxPaymentFailed } from "@/lib/email/notifications";
+import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxSuspendedEmail } from "@/lib/email/notifications";
 
 export async function POST(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const { data: domains, error } = await db
     .from("outreach_domains")
-    .select("id, domain, workspace_id, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo")
+    .select("id, domain, workspace_id, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, charge_failure_count")
     .eq("status", "active")
     .eq("payment_provider", "paystack")
     .not("paystack_auth_code",          "is", null)
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       await db
         .from("outreach_domains")
-        .update({ inbox_next_billing_date: nextBillingDate })
+        .update({ inbox_next_billing_date: nextBillingDate, charge_failure_count: 0 })
         .eq("id", domain.id);
 
       // Notify user of successful charge
@@ -76,9 +76,24 @@ export async function POST(req: NextRequest) {
         errorMessage: msg,
       }).catch(e => console.error("[inbox-billing] failure email failed:", e));
 
-      // If the charge fails (card declined etc.), mark inboxes as suspended
-      // after 3 days of non-payment (give a grace period).
-      // For now just log — suspension logic can be added later.
+      // Increment failure count and suspend after 3 consecutive failures
+      const newFailureCount = ((domain.charge_failure_count as number | null) ?? 0) + 1;
+      if (newFailureCount >= 3) {
+        await db.from("outreach_domains").update({
+          charge_failure_count: newFailureCount,
+          status:               "payment_failed",
+          payment_suspended_at: now,
+          error_message:        "Suspended after 3 failed payment attempts",
+        }).eq("id", domain.id);
+        sendInboxSuspendedEmail({
+          userEmail: domain.paystack_billing_email as string,
+          domain:    domain.domain,
+          amountNgn,
+        }).catch(e => console.error("[inbox-billing] suspension email failed:", e));
+      } else {
+        await db.from("outreach_domains").update({ charge_failure_count: newFailureCount }).eq("id", domain.id);
+      }
+
       results.push({ domain: domain.domain, status: "failed", error: msg });
     }
   }

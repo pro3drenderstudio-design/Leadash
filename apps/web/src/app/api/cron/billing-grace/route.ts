@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
+import { sendDowngradeNotification } from "@/lib/email/notifications";
 
 export const maxDuration = 60;
 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
   // Find all workspaces past their grace period
   const { data: expired, error } = await db
     .from("workspaces")
-    .select("id")
+    .select("id, name, billing_email")
     .eq("plan_status", "past_due")
     .lte("grace_ends_at", now);
 
@@ -53,6 +54,13 @@ export async function GET(req: NextRequest) {
       const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "grace_period_expired");
       results.push({ workspaceId: ws.id, paused, creditsExpired });
       console.warn(`[billing-grace] Downgraded workspace=${ws.id} paused=${paused} credits_expired=${creditsExpired}`);
+      if (ws.billing_email) {
+        sendDowngradeNotification({
+          userEmail:     ws.billing_email,
+          workspaceName: ws.name,
+          reason:        "grace_period_expired",
+        }).catch(e => console.error(`[billing-grace] downgrade email failed ws=${ws.id}:`, e instanceof Error ? e.message : e));
+      }
     } catch (err) {
       console.error(`[billing-grace] Failed to downgrade workspace=${ws.id}:`, err instanceof Error ? err.message : err);
     }

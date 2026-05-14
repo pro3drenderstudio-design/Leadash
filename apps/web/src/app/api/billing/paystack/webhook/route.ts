@@ -134,18 +134,20 @@ export async function POST(req: NextRequest) {
         const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const plan = await getPlanById(planId);
+          const subRenewsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
           await db
             .from("workspaces")
             .update({
-              plan_id:              plan.plan_id,
-              plan_status:          "active",
-              trial_ends_at:        null,
-              max_inboxes:          plan.max_inboxes,
-              max_monthly_sends:    plan.max_monthly_sends,
-              max_seats:            plan.max_seats,
+              plan_id:                 plan.plan_id,
+              plan_status:             "active",
+              trial_ends_at:           null,
+              subscription_renews_at:  subRenewsAt,
+              max_inboxes:             plan.max_inboxes,
+              max_monthly_sends:       plan.max_monthly_sends,
+              max_seats:               plan.max_seats,
               ...(authorizationCode ? { paystack_auth_code: authorizationCode } : {}),
               ...(customerCode      ? { paystack_customer_code: customerCode }  : {}),
-              updated_at:           new Date().toISOString(),
+              updated_at:              new Date().toISOString(),
             })
             .eq("id", workspaceId);
           // Record invoice
@@ -374,6 +376,10 @@ export async function POST(req: NextRequest) {
 
       if (ws) {
         const plan = await getPlanById(ws.plan_id ?? "free");
+        const nextRenewsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await db.from("workspaces")
+          .update({ subscription_renews_at: nextRenewsAt })
+          .eq("id", ws.id);
         if (plan.included_credits > 0) {
           const currentSub   = ws.subscription_credits_balance ?? 0;
           const currentTotal = ws.lead_credits_balance ?? 0;
@@ -435,6 +441,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       if (ws?.id) {
+        await db.from("workspaces").update({ subscription_renews_at: null }).eq("id", ws.id);
         const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "subscription_disabled");
         console.warn(`[billing] Subscription disabled: workspace=${ws.id} campaigns_paused=${paused} credits_expired=${creditsExpired}`);
         const { data: wsName } = await db.from("workspaces").select("name").eq("id", ws.id).single();

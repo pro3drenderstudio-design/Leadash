@@ -19,6 +19,7 @@ interface Props {
   workspaceName: string;
   plan: string;
   trialEndsAt?: string | null;
+  subscriptionRenewsAt?: string | null;
 }
 
 const PLAN_STYLE: Record<string, string> = {
@@ -28,7 +29,7 @@ const PLAN_STYLE: Record<string, string> = {
   enterprise: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
 };
 
-export default function AppHeader({ userEmail, userName, workspaceName, plan, trialEndsAt }: Props) {
+export default function AppHeader({ userEmail, userName, workspaceName, plan, trialEndsAt, subscriptionRenewsAt }: Props) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [search, setSearch]           = useState("");
   const [results, setResults]         = useState<SearchResult[]>([]);
@@ -184,27 +185,58 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
       {/* ── Right cluster ── */}
       <div className="flex items-center gap-2 ml-auto">
 
-        {/* Trial countdown — free plan only */}
-        {plan === "free" && trialEndsAt && (() => {
-          const msLeft   = new Date(trialEndsAt).getTime() - Date.now();
-          const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
-          const expired  = daysLeft === 0;
-          const color    = expired ? "#ef4444" : daysLeft <= 3 ? "#f97316" : daysLeft <= 7 ? "#f59e0b" : "#10b981";
-          const bg       = expired ? "rgba(239,68,68,0.1)" : daysLeft <= 3 ? "rgba(249,115,22,0.1)" : daysLeft <= 7 ? "rgba(245,158,11,0.1)" : "rgba(16,185,129,0.1)";
-          const border   = expired ? "rgba(239,68,68,0.2)" : daysLeft <= 3 ? "rgba(249,115,22,0.2)" : daysLeft <= 7 ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)";
-          const label    = expired ? "Trial expired" : daysLeft === 1 ? "1 day left" : `${daysLeft}d trial`;
-          return (
-            <Link
-              href="/settings?tab=billing"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={{ background: bg, border: `1px solid ${border}`, color }}
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {label}
-            </Link>
-          );
+        {/* Trial / subscription countdown pill */}
+        {(() => {
+          // Trial takes priority (shows for any plan with trial_ends_at)
+          if (trialEndsAt) {
+            const msLeft   = new Date(trialEndsAt).getTime() - Date.now();
+            const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+            const expired  = daysLeft === 0;
+            const color    = expired ? "#ef4444" : daysLeft <= 3 ? "#f97316" : daysLeft <= 7 ? "#f59e0b" : "#10b981";
+            const bg       = expired ? "rgba(239,68,68,0.1)" : daysLeft <= 3 ? "rgba(249,115,22,0.1)" : daysLeft <= 7 ? "rgba(245,158,11,0.1)" : "rgba(16,185,129,0.1)";
+            const border   = expired ? "rgba(239,68,68,0.2)" : daysLeft <= 3 ? "rgba(249,115,22,0.2)" : daysLeft <= 7 ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)";
+            const isBeta   = plan !== "free";
+            const label    = expired
+              ? (isBeta ? "Beta expired" : "Trial expired")
+              : daysLeft === 1 ? "1 day left"
+              : `${daysLeft}d ${isBeta ? "beta" : "trial"}`;
+            return (
+              <Link
+                href="/settings?tab=billing"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ background: bg, border: `1px solid ${border}`, color }}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {label}
+              </Link>
+            );
+          }
+          // Subscription renewal — show when ≤ 7 days away
+          if (subscriptionRenewsAt && plan !== "free") {
+            const msLeft   = new Date(subscriptionRenewsAt).getTime() - Date.now();
+            const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+            if (daysLeft > 0 && daysLeft <= 7) {
+              const color  = daysLeft <= 1 ? "#f97316" : daysLeft <= 3 ? "#f59e0b" : "#94a3b8";
+              const bg     = daysLeft <= 1 ? "rgba(249,115,22,0.1)" : daysLeft <= 3 ? "rgba(245,158,11,0.1)" : "rgba(148,163,184,0.08)";
+              const border = daysLeft <= 1 ? "rgba(249,115,22,0.2)" : daysLeft <= 3 ? "rgba(245,158,11,0.2)" : "rgba(148,163,184,0.15)";
+              const label  = daysLeft === 1 ? "Renews tomorrow" : `Renews in ${daysLeft}d`;
+              return (
+                <Link
+                  href="/settings?tab=billing"
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                  style={{ background: bg, border: `1px solid ${border}`, color }}
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {label}
+                </Link>
+              );
+            }
+          }
+          return null;
         })()}
 
         {/* Credits */}
