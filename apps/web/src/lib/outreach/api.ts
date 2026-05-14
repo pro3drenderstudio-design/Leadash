@@ -51,7 +51,7 @@ export async function importInboxes(rows: Record<string, string>[]): Promise<Imp
 // ─── Lists ────────────────────────────────────────────────────────────────────
 export const getLists    = ()                             => get<OutreachList[]>(`${base}/lists`);
 export const createList  = (name: string, description?: string) => post<OutreachList>(`${base}/lists`, { name, description });
-export const deleteList  = (id: string)                   => del(`${base}/lists/${id}`);
+export const deleteList  = (id: string, force = false)    => del(`${base}/lists/${id}${force ? "?force=1" : ""}`);
 export const verifyList  = (id: string, leadIds?: string[]) =>
   post<{ verified: number; safe: number; invalid: number; credits_used: number }>(
     `${base}/lists/${id}/verify`,

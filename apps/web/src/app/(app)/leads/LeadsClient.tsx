@@ -201,6 +201,11 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
   const [verifyingList, setVerifyingList] = useState<string | null>(null);
   const [verifiedExternal, setVerifiedExternal] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState<{
+    listId: string; listName: string;
+    enrolledCount: number;
+    campaigns: { id: string; name: string }[];
+  } | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -284,8 +289,23 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete list "${name}" and all its leads?`)) return;
-    await deleteList(id); load();
+    const wsId = getWorkspaceId() ?? "";
+    const res = await fetch(`/api/outreach/lists/${id}`, {
+      method: "DELETE",
+      headers: { "x-workspace-id": wsId },
+    });
+    if (res.status === 409) {
+      const data = await res.json() as { enrolled_count: number; campaigns: { id: string; name: string }[] };
+      setDeleteWarning({ listId: id, listName: name, enrolledCount: data.enrolled_count, campaigns: data.campaigns });
+      return;
+    }
+    if (res.ok) load();
+  }
+
+  async function handleForceDelete(listId: string) {
+    await deleteList(listId, true);
+    setDeleteWarning(null);
+    load();
   }
 
   async function handleVerify(listId: string, pendingCount: number) {
@@ -762,6 +782,51 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete warning modal — shown when list has active enrollments */}
+      {deleteWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setDeleteWarning(null)}>
+          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h2 className="text-white font-bold text-lg mb-2">Leads in active sequences</h2>
+            <p className="text-white/50 text-sm leading-relaxed mb-3">
+              <span className="text-white font-semibold">{deleteWarning.enrolledCount} lead{deleteWarning.enrolledCount !== 1 ? "s" : ""}</span> from{" "}
+              <span className="text-white font-semibold">&ldquo;{deleteWarning.listName}&rdquo;</span> are currently enrolled in:
+            </p>
+            <ul className="mb-5 space-y-1.5">
+              {deleteWarning.campaigns.map(c => (
+                <li key={c.id} className="flex items-center gap-2 px-3 py-1.5 bg-white/4 border border-white/8 rounded-lg">
+                  <svg className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-white/70 text-sm truncate">{c.name}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-white/35 text-xs mb-5">Deleting will remove these leads from their sequences immediately. This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleForceDelete(deleteWarning.listId)}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 text-white text-sm font-semibold rounded-xl transition-colors"
+              >
+                Delete anyway
+              </button>
+              <button
+                onClick={() => setDeleteWarning(null)}
+                className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
