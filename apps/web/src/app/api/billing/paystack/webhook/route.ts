@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { verifyPaystackSignature, verifyPaystackPayment } from "@/lib/billing/paystack";
+import { verifyPaystackSignature, verifyPaystackPayment, disablePaystackSubscription } from "@/lib/billing/paystack";
 import { logActivity } from "@/lib/activity";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { enqueueProvision } from "@/lib/queue";
@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
     if (type === "plan_subscription" && workspaceId) {
       const planId = meta.plan_id as string | undefined;
       const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+      // Subscription code may be present on recurring charge.success events
+      const chargeSubCode = (data as Record<string, unknown>).subscription_code as string | undefined;
       if (planId) {
         // Idempotency — skip if this reference was already processed
         const { data: existingPlanInvoice } = await db
@@ -145,8 +147,9 @@ export async function POST(req: NextRequest) {
               max_inboxes:             plan.max_inboxes,
               max_monthly_sends:       plan.max_monthly_sends,
               max_seats:               plan.max_seats,
-              ...(authorizationCode ? { paystack_auth_code: authorizationCode } : {}),
-              ...(customerCode      ? { paystack_customer_code: customerCode }  : {}),
+              ...(authorizationCode ? { paystack_auth_code:      authorizationCode } : {}),
+              ...(customerCode      ? { paystack_customer_code:  customerCode }      : {}),
+              ...(chargeSubCode     ? { paystack_sub_code:       chargeSubCode }     : {}),
               updated_at:              new Date().toISOString(),
             })
             .eq("id", workspaceId);
@@ -337,15 +340,20 @@ export async function POST(req: NextRequest) {
   if (event.event === "subscription.create") {
     const data = event.data as {
       subscription_code?: string;
-      customer?: { metadata?: { workspace_id?: string } };
+      customer?: { customer_code?: string; metadata?: { workspace_id?: string } };
     };
-    const subCode     = data.subscription_code;
-    const workspaceId = data.customer?.metadata?.workspace_id;
-    if (subCode && workspaceId) {
-      await db
-        .from("workspaces")
-        .update({ paystack_sub_code: subCode })
-        .eq("id", workspaceId);
+    const subCode = data.subscription_code;
+    if (subCode) {
+      // Paystack does not echo transaction metadata here — workspace_id won't be in
+      // customer.metadata unless the customer was created with it. Use customer_code
+      // (stored on workspace during charge.success) as the reliable lookup key.
+      const fromMeta     = data.customer?.metadata?.workspace_id;
+      const customerCode = data.customer?.customer_code;
+      if (fromMeta) {
+        await db.from("workspaces").update({ paystack_sub_code: subCode }).eq("id", fromMeta);
+      } else if (customerCode) {
+        await db.from("workspaces").update({ paystack_sub_code: subCode }).eq("paystack_customer_code", customerCode);
+      }
     }
     return NextResponse.json({ received: true });
   }

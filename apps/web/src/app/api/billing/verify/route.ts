@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { verifyPaystackPayment } from "@/lib/billing/paystack";
+import { verifyPaystackPayment, disablePaystackSubscription } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { createAdminClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -37,6 +37,13 @@ export async function POST(req: NextRequest) {
   }
 
   const plan = await getPlanById(plan_id);
+
+  // Read current workspace state before upgrading so we can cancel any existing subscription
+  const { data: currentWs } = await db
+    .from("workspaces")
+    .select("paystack_sub_code, plan_id")
+    .eq("id", workspaceId)
+    .single();
 
   // Upsert plan — idempotent, webhook may have already done this
   await db.from("workspaces").update({
@@ -81,6 +88,28 @@ export async function POST(req: NextRequest) {
       amount:       plan.included_credits,
       description:  `Monthly credits — ${plan.name} plan`,
     });
+  }
+
+  // If the workspace was on a different paid plan, cancel the old Paystack subscription
+  // so the user isn't billed twice. Fire-and-forget — failure is logged, not fatal.
+  const oldSubCode = currentWs?.paystack_sub_code;
+  if (oldSubCode && currentWs?.plan_id !== plan.plan_id) {
+    (async () => {
+      try {
+        const res = await fetch(
+          `https://api.paystack.co/subscription/${oldSubCode}`,
+          { headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` }, signal: AbortSignal.timeout(8000) },
+        );
+        const json = await res.json() as { data?: { email_token?: string } };
+        const emailToken = json.data?.email_token;
+        if (emailToken) {
+          await disablePaystackSubscription({ code: oldSubCode, emailToken });
+          await db.from("workspaces").update({ paystack_sub_code: null }).eq("id", workspaceId);
+        }
+      } catch (e) {
+        console.error("[billing/verify] Failed to cancel old subscription:", e);
+      }
+    })().catch(() => {});
   }
 
   return NextResponse.json({ ok: true, plan_id: plan.plan_id, plan_name: plan.name });
