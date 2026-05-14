@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
 import type { DiscoverExportRequest } from "@/types/discover";
 
-const CREDITS_PER_LEAD = 0.5;
+const CREDITS_PER_LEAD = 0.25;
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -163,17 +163,18 @@ export async function POST(req: NextRequest) {
     }
 
     const leads = mergedPeople.map((p) => ({
-      workspace_id: workspaceId,
-      list_id:      resolvedListId,
-      first_name:   p.first_name   ?? null,
-      last_name:    p.last_name    ?? null,
-      email:        p.email        ?? null,
-      title:        p.title        ?? null,
-      company:      p.company_name ?? null,
-      linkedin_url: p.linkedin_url ?? null,
-      country:      p.country      ?? null,
-      city:         p.city         ?? null,
-      status:       "active",
+      workspace_id:        workspaceId,
+      list_id:             resolvedListId,
+      first_name:          p.first_name   ?? null,
+      last_name:           p.last_name    ?? null,
+      email:               p.email        ?? null,
+      title:               p.title        ?? null,
+      company:             p.company_name ?? null,
+      linkedin_url:        p.linkedin_url ?? null,
+      country:             p.country      ?? null,
+      city:                p.city         ?? null,
+      status:              "active",
+      verification_status: "pending",
     }));
 
     const { data: insertedLeads, error: insertError } = await adminDb
@@ -245,17 +246,18 @@ export async function POST(req: NextRequest) {
     }
 
     const leads = mergedPeople.map((p) => ({
-      workspace_id: workspaceId,
-      list_id:      listId,
-      first_name:   p.first_name   ?? null,
-      last_name:    p.last_name    ?? null,
-      email:        p.email        ?? null,
-      title:        p.title        ?? null,
-      company:      p.company_name ?? null,
-      linkedin_url: p.linkedin_url ?? null,
-      country:      p.country      ?? null,
-      city:         p.city         ?? null,
-      status:       "active",
+      workspace_id:        workspaceId,
+      list_id:             listId,
+      first_name:          p.first_name   ?? null,
+      last_name:           p.last_name    ?? null,
+      email:               p.email        ?? null,
+      title:               p.title        ?? null,
+      company:             p.company_name ?? null,
+      linkedin_url:        p.linkedin_url ?? null,
+      country:             p.country      ?? null,
+      city:                p.city         ?? null,
+      status:              "active",
+      verification_status: "pending",
     }));
 
     const { data: insertedLeads, error: insertError } = await adminDb

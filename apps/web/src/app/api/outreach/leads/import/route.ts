@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const { list_id, rows } = await req.json() as { list_id: string; rows: CsvRow[] };
+  const { list_id, rows, verified_external } = await req.json() as { list_id: string; rows: CsvRow[]; verified_external?: boolean };
   if (!list_id || !rows?.length) return NextResponse.json({ error: "list_id and rows required" }, { status: 400 });
 
   // ── Outreach leads pool limit ────────────────────────────────────────────
@@ -97,15 +97,16 @@ export async function POST(req: NextRequest) {
     }
 
     toInsert.push({
-      workspace_id:  workspaceId,
+      workspace_id:        workspaceId,
       list_id,
       email,
-      first_name:    row.first_name ?? null,
-      last_name:     row.last_name ?? null,
-      company:       row.company ?? null,
-      title:         row.title ?? null,
-      website:       row.website ?? null,
-      custom_fields: Object.keys(custom).length ? custom : null,
+      first_name:          row.first_name ?? null,
+      last_name:           row.last_name ?? null,
+      company:             row.company ?? null,
+      title:               row.title ?? null,
+      website:             row.website ?? null,
+      custom_fields:       Object.keys(custom).length ? custom : null,
+      verification_status: verified_external ? "verified_external" : "pending",
     });
   }
 

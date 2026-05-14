@@ -115,15 +115,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const batch = toInsert.slice(i, i + BATCH);
     const { error } = await db.from("outreach_leads").insert(
       batch.map(l => ({
-        workspace_id: workspaceId,
-        list_id:      targetListId,
-        email:        l.email,
-        first_name:   l.first_name,
-        last_name:    l.last_name,
-        company:      l.company,
-        title:        l.title,
-        website:      l.website,
-        status:       "active",
+        workspace_id:        workspaceId,
+        list_id:             targetListId,
+        email:               l.email,
+        first_name:          l.first_name,
+        last_name:           l.last_name,
+        company:             l.company,
+        title:               l.title,
+        website:             l.website,
+        status:              "active",
+        verification_status: "pending",
         custom_fields: l.personalized_line
           ? { personalized_line: l.personalized_line }
           : null,

@@ -3,7 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
 
-const CREDITS_PER_REVEAL = 0.5;
+const CREDITS_PER_REVEAL = 0.25;
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
           workspace_id: workspaceId,
           type:         "debit",
           amount:       totalCost,
-          description:  `Discover reveal — ${newIds.length} lead${newIds.length !== 1 ? "s" : ""}`,
+          description:  `Discover reveal — ${newIds.length} lead${newIds.length !== 1 ? "s" : ""} (0.25 credits each)`,
         }),
       ]);
     }

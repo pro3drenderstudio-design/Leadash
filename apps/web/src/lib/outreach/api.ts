@@ -52,12 +52,17 @@ export async function importInboxes(rows: Record<string, string>[]): Promise<Imp
 export const getLists    = ()                             => get<OutreachList[]>(`${base}/lists`);
 export const createList  = (name: string, description?: string) => post<OutreachList>(`${base}/lists`, { name, description });
 export const deleteList  = (id: string)                   => del(`${base}/lists/${id}`);
+export const verifyList  = (id: string, leadIds?: string[]) =>
+  post<{ verified: number; safe: number; invalid: number; credits_used: number }>(
+    `${base}/lists/${id}/verify`,
+    leadIds ? { lead_ids: leadIds } : {},
+  );
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
 export const importLeadRows = (listId: string, rows: Record<string, string>[]) =>
   post<ImportResult>(`${base}/leads/import`, { list_id: listId, rows });
 
-export async function importLeads(rows: Record<string, string>[], listId: string, mapping: unknown[]): Promise<ImportResult> {
+export async function importLeads(rows: Record<string, string>[], listId: string, mapping: unknown[], verifiedExternal?: boolean): Promise<ImportResult> {
   // Build mapped rows from mapping
   const mapped = rows.map(row => {
     const out: Record<string, string> = {};
@@ -68,7 +73,7 @@ export async function importLeads(rows: Record<string, string>[], listId: string
     }
     return out;
   });
-  return post<ImportResult>(`${base}/leads/import`, { list_id: listId, rows: mapped });
+  return post<ImportResult>(`${base}/leads/import`, { list_id: listId, rows: mapped, verified_external: verifiedExternal ?? false });
 }
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
@@ -79,10 +84,10 @@ export const updateCampaign = (id: string, d: Partial<OutreachCampaign>) => patc
 export const deleteCampaign = (id: string)                      => del(`${base}/campaigns/${id}`);
 
 export const enrollLeads = (campaignId: string, listIds: string[]) =>
-  post<{ enrolled: number; new_count: number; duplicate_count: number }>(`${base}/campaigns/${campaignId}/enrollments`, { list_ids: listIds });
+  post<{ enrolled: number; new_count: number; duplicate_count: number; skipped_unverified: number }>(`${base}/campaigns/${campaignId}/enrollments`, { list_ids: listIds });
 
 export const checkEnrollmentDuplicates = (campaignId: string, listIds: string[]) =>
-  post<{ new_count: number; duplicate_count: number; total: number }>(`${base}/campaigns/${campaignId}/enrollments?dry_run=1`, { list_ids: listIds });
+  post<{ new_count: number; duplicate_count: number; skipped_unverified: number; total: number }>(`${base}/campaigns/${campaignId}/enrollments?dry_run=1`, { list_ids: listIds });
 
 export const getCampaignEnrollments = (campaignId: string, page = 0, limit = 50, status = "all") =>
   get<{ enrollments: CampaignEnrollmentRow[]; total: number }>(

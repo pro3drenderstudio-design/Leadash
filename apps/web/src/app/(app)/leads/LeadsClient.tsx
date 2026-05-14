@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getLists, createList, deleteList, importLeads } from "@/lib/outreach/api";
+import { getLists, createList, deleteList, importLeads, verifyList } from "@/lib/outreach/api";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
 
@@ -28,18 +28,42 @@ type ImportMode = "csv" | "campaign";
 const DB_FIELDS = ["email", "first_name", "last_name", "company", "title", "website"] as const;
 const CUSTOM_SENTINEL = "__custom__";
 
+function VerificationBadge({ status, count }: { status: "verified" | "pending" | "invalid"; count: number }) {
+  if (count === 0) return null;
+  const styles = {
+    verified: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    pending:  "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    invalid:  "bg-red-500/10 text-red-400 border-red-500/20",
+  };
+  const labels = { verified: "verified", pending: "pending", invalid: "invalid" };
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${styles[status]}`}>
+      {count.toLocaleString()} {labels[status]}
+    </span>
+  );
+}
+
 function ListCard({
   list,
   isImporting,
   onImportToggle,
   onDelete,
+  onVerify,
+  verifying,
 }: {
   list: OutreachList;
   isImporting: boolean;
   onImportToggle: () => void;
   onDelete: () => void;
+  onVerify: () => void;
+  verifying: boolean;
 }) {
-  const count = list.lead_count ?? 0;
+  const count    = list.lead_count    ?? 0;
+  const verified = list.verified_count ?? 0;
+  const pending  = list.pending_count  ?? 0;
+  const invalid  = list.invalid_count  ?? 0;
+  const verifiedPct = count > 0 ? Math.round((verified / count) * 100) : 0;
+
   return (
     <div className="group bg-white/4 border border-white/8 hover:border-white/14 rounded-2xl transition-all overflow-hidden">
       <div className="p-5">
@@ -66,21 +90,32 @@ function ListCard({
         </div>
 
         {/* Stats row */}
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-4 mb-3">
           <div>
             <p className="text-2xl font-bold text-white tabular-nums">{count.toLocaleString()}</p>
             <p className="text-white/35 text-xs">leads</p>
           </div>
-          {/* Progress bar visual if > 0 */}
           {count > 0 && (
-            <div className="flex-1 h-1 bg-white/8 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full"
-                style={{ width: `${Math.min(100, (count / 10000) * 100)}%` }}
-              />
+            <div className="flex-1 space-y-1">
+              <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all"
+                  style={{ width: `${verifiedPct}%` }}
+                />
+              </div>
+              <p className="text-white/30 text-[10px]">{verifiedPct}% verified</p>
             </div>
           )}
         </div>
+
+        {/* Verification badges */}
+        {count > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <VerificationBadge status="verified" count={verified} />
+            <VerificationBadge status="pending"  count={pending}  />
+            <VerificationBadge status="invalid"  count={invalid}  />
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-2">
@@ -97,6 +132,26 @@ function ListCard({
             </svg>
             Import
           </button>
+          {pending > 0 && (
+            <button
+              onClick={onVerify}
+              disabled={verifying}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/12 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all disabled:opacity-50"
+              title={`Verify ${pending} pending leads — ${(pending * 0.5).toFixed(1)} credits`}
+            >
+              {verifying ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </svg>
+              )}
+              Verify · {(pending * 0.5).toFixed(1)} cr
+            </button>
+          )}
           <Link
             href={`/leads/${list.id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white/6 hover:bg-white/10 text-white/60 hover:text-white rounded-lg text-xs font-semibold transition-all"
@@ -144,6 +199,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [preview, setPreview]         = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
+  const [verifyingList, setVerifyingList] = useState<string | null>(null);
+  const [verifiedExternal, setVerifiedExternal] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -231,6 +288,24 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     await deleteList(id); load();
   }
 
+  async function handleVerify(listId: string, pendingCount: number) {
+    if (!confirm(`Verify ${pendingCount} pending leads in this list? This will cost ${(pendingCount * 0.5).toFixed(1)} credits.`)) return;
+    setVerifyingList(listId);
+    try {
+      const result = await verifyList(listId);
+      setImportResult({
+        ok: true,
+        msg: `Verified ${result.verified} leads — ${result.safe} deliverable · ${result.invalid} invalid · ${result.credits_used} credits used`,
+      });
+      load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      setImportResult({ ok: false, msg });
+    } finally {
+      setVerifyingList(null);
+    }
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -280,7 +355,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""]));
     });
     try {
-      const result = await importLeads(rows, listId, fieldMapping);
+      const result = await importLeads(rows, listId, fieldMapping, verifiedExternal);
       const parts = [`Imported ${result.imported} leads.`];
       if (result.skipped_unsubscribed) parts.push(`${result.skipped_unsubscribed} unsubscribed skipped.`);
       if (result.skipped_duplicate)    parts.push(`${result.skipped_duplicate} duplicates skipped.`);
@@ -467,6 +542,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                 isImporting={importing === list.id}
                 onImportToggle={() => openImport(list.id)}
                 onDelete={() => handleDelete(list.id, list.name)}
+                onVerify={() => handleVerify(list.id, list.pending_count ?? 0)}
+                verifying={verifyingList === list.id}
               />
 
               {/* Import panel */}
@@ -532,6 +609,15 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                               );
                             })}
                           </div>
+                          <label className="flex items-center gap-3 cursor-pointer py-1">
+                            <div
+                              onClick={() => setVerifiedExternal(v => !v)}
+                              className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 flex-shrink-0 ${verifiedExternal ? "bg-emerald-500" : "bg-white/15"}`}
+                            >
+                              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${verifiedExternal ? "translate-x-4" : "translate-x-0"}`} />
+                            </div>
+                            <span className="text-white/50 text-xs">These leads are already verified externally</span>
+                          </label>
                           <button onClick={() => handleImport(list.id)}
                             className="w-full py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
                             Upload & Import

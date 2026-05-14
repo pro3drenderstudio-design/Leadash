@@ -2,7 +2,8 @@
 
 export type InboxProvider    = "gmail" | "outlook" | "smtp";
 export type InboxStatus      = "active" | "paused" | "error";
-export type LeadStatus       = "active" | "unsubscribed" | "bounced" | "invalid";
+export type LeadStatus             = "active" | "unsubscribed" | "bounced" | "invalid";
+export type LeadVerificationStatus = "pending" | "safe" | "valid" | "catch_all" | "disposable" | "invalid" | "unknown" | "verified_external";
 export type CampaignStatus   = "draft" | "active" | "paused" | "completed";
 export type SequenceStepType = "email" | "wait";
 export type EnrollmentStatus = "active" | "replied" | "bounced" | "unsubscribed" | "completed" | "paused";
@@ -58,6 +59,10 @@ export interface OutreachList {
   description?: string | null;
   created_at: string;
   lead_count?: number;
+  // Verification stats (computed)
+  verified_count?: number;
+  pending_count?: number;
+  invalid_count?: number;
 }
 
 export interface OutreachLead {
@@ -71,6 +76,10 @@ export interface OutreachLead {
   title?: string | null;
   website?: string | null;
   status: LeadStatus;
+  verification_status: LeadVerificationStatus;
+  verification_score?: number | null;
+  verification_data?: Record<string, unknown> | null;
+  verified_at?: string | null;
   custom_fields?: Record<string, string> | null;
   created_at: string;
 }
@@ -112,6 +121,7 @@ export interface OutreachCampaign {
   total_unsubscribed?: number;
   total_clicked?: number;
   pause_reason?: string | null;
+  verified_only: boolean;
   sequence_steps?: OutreachSequenceStep[];
 }
 

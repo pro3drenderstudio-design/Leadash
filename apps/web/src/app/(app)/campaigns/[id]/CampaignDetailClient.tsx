@@ -168,6 +168,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editStopOnAutoReply, setEditStopOnAutoReply]           = useState(false);
   const [editStopOnCompanyReply, setEditStopOnCompanyReply]     = useState(false);
   const [editPauseAfterOpen, setEditPauseAfterOpen]             = useState(false);
+  const [editVerifiedOnly, setEditVerifiedOnly]                 = useState(true);
   const [editTextOnly, setEditTextOnly]                         = useState(false);
   const [editFirstEmailTextOnly, setEditFirstEmailTextOnly]     = useState(false);
   const [editInsertUnsubHeader, setEditInsertUnsubHeader]       = useState(true);
@@ -215,7 +216,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [followupError, setFollowupError]         = useState<string | null>(null);
 
   // Duplicate check + enrollment confirmation
-  const [dupCheck, setDupCheck] = useState<{ new_count: number; duplicate_count: number; total: number } | null>(null);
+  const [dupCheck, setDupCheck] = useState<{ new_count: number; duplicate_count: number; skipped_unverified: number; total: number } | null>(null);
   const [dupChecking, setDupChecking] = useState(false);
 
   // Trigger sends
@@ -322,6 +323,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     setEditStopOnAutoReply(campaign.stop_on_auto_reply ?? false);
     setEditStopOnCompanyReply(campaign.stop_on_company_reply ?? false);
     setEditPauseAfterOpen(campaign.pause_after_open ?? false);
+    setEditVerifiedOnly(campaign.verified_only ?? true);
     setEditTextOnly(campaign.text_only ?? false);
     setEditFirstEmailTextOnly(campaign.first_email_text_only ?? false);
     setEditInsertUnsubHeader(campaign.insert_unsubscribe_header ?? true);
@@ -341,6 +343,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         stop_on_reply: editStopOnReply, stop_on_auto_reply: editStopOnAutoReply,
         stop_on_company_reply: editStopOnCompanyReply,
         pause_after_open: editPauseAfterOpen,
+        verified_only: editVerifiedOnly,
         text_only: editTextOnly, first_email_text_only: editFirstEmailTextOnly,
         insert_unsubscribe_header: editInsertUnsubHeader,
         custom_tags: editCustomTags,
@@ -606,6 +609,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             </>
           )}
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Pause After Open</p><p className="text-white/35 text-xs">Pause when a lead opens an email</p></div><Toggle value={editPauseAfterOpen} onChange={setEditPauseAfterOpen} color="amber" /></div>
+          <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Verified Leads Only</p><p className="text-white/35 text-xs">Skip unverified leads at enrollment — requires Reoon verification first</p></div><Toggle value={editVerifiedOnly} onChange={setEditVerifiedOnly} /></div>
         </div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
@@ -1558,7 +1562,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                     if (!addListId) return;
                     setAddingLeads(true); setAddLeadsResult(null);
                     const res = await enrollLeads(campaignId, [addListId]);
-                    setAddLeadsResult(`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`);
+                    const parts = [`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`];
+                    if (res.skipped_unverified > 0) parts.push(`${res.skipped_unverified} skipped (unverified — verify in Leads Pool first)`);
+                    setAddLeadsResult(parts.join(" · "));
                     setAddingLeads(false); setAddListId(""); setDupCheck(null);
                     const [data, fresh] = await Promise.all([
                       getCampaignEnrollments(campaignId, leadsPage, LEADS_PAGE_SIZE, leadsStatus),
@@ -1577,9 +1583,12 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             {/* Duplicate check summary */}
             {dupCheck && (
               <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${dupCheck.new_count === 0 ? "bg-amber-500/8 border-amber-500/20 text-amber-300" : "bg-white/4 border-white/8"}`}>
-                <div className="flex items-center gap-4 flex-1">
-                  <span className="text-green-400 font-semibold">{dupCheck.new_count} new</span>
-                  {dupCheck.duplicate_count > 0 && <span className="text-white/40">{dupCheck.duplicate_count} already enrolled (will be skipped)</span>}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
+                  <span className="text-green-400 font-semibold">{dupCheck.new_count} will enroll</span>
+                  {dupCheck.duplicate_count > 0 && <span className="text-white/40">{dupCheck.duplicate_count} already enrolled</span>}
+                  {dupCheck.skipped_unverified > 0 && (
+                    <span className="text-amber-400 font-semibold">⚠ {dupCheck.skipped_unverified} unverified (will be skipped — verify in Leads Pool first)</span>
+                  )}
                   <span className="text-white/25">{dupCheck.total} total in list</span>
                 </div>
                 <button onClick={() => { setDupCheck(null); setAddListId(""); }} className="text-white/30 hover:text-white/60 transition-colors">✕</button>
