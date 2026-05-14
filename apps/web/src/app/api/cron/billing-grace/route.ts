@@ -17,6 +17,20 @@ import { sendDowngradeNotification } from "@/lib/email/notifications";
 
 export const maxDuration = 60;
 
+async function resolveEmail(
+  db: ReturnType<typeof createAdminClient>,
+  billingEmail: string | null,
+  members: Array<{ user_id: string }> | null,
+): Promise<string | null> {
+  if (billingEmail) return billingEmail;
+  const userId = members?.[0]?.user_id;
+  if (!userId) return null;
+  try {
+    const { data: { user } } = await db.auth.admin.getUserById(userId);
+    return user?.email ?? null;
+  } catch { return null; }
+}
+
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
@@ -34,7 +48,7 @@ export async function GET(req: NextRequest) {
   // Find all workspaces past their grace period
   const { data: expired, error } = await db
     .from("workspaces")
-    .select("id, name, billing_email")
+    .select("id, name, billing_email, workspace_members(user_id)")
     .eq("plan_status", "past_due")
     .lte("grace_ends_at", now);
 
@@ -54,9 +68,10 @@ export async function GET(req: NextRequest) {
       const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "grace_period_expired");
       results.push({ workspaceId: ws.id, paused, creditsExpired });
       console.warn(`[billing-grace] Downgraded workspace=${ws.id} paused=${paused} credits_expired=${creditsExpired}`);
-      if (ws.billing_email) {
+      const emailTo = await resolveEmail(db, ws.billing_email, (ws as Record<string, unknown>).workspace_members as Array<{ user_id: string }> | null);
+      if (emailTo) {
         sendDowngradeNotification({
-          userEmail:     ws.billing_email,
+          userEmail:     emailTo,
           workspaceName: ws.name,
           reason:        "grace_period_expired",
         }).catch(e => console.error(`[billing-grace] downgrade email failed ws=${ws.id}:`, e instanceof Error ? e.message : e));

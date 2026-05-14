@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { sendWelcomeEmail } from "@/lib/email/notifications";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -75,7 +76,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Genuinely new user — send to onboarding
+  // Genuinely new user — send welcome email fire-and-forget, then send to onboarding
+  const fullName = (user.user_metadata?.full_name as string | undefined) ?? null;
+  sendWelcomeEmail({ userEmail: user.email!, userName: fullName })
+    .catch(e => console.error("[callback] welcome email failed:", e));
+
   response.headers.set("location", `${origin}/onboarding`);
   return response;
 }

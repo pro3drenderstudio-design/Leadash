@@ -808,6 +808,111 @@ export async function sendInboxPaymentSuccess(opts: {
   });
 }
 
+export async function sendWelcomeEmail(opts: {
+  userEmail: string;
+  userName: string | null;
+}): Promise<void> {
+  const name = opts.userName ?? opts.userEmail.split("@")[0];
+
+  await sendEmail({
+    to: opts.userEmail,
+    subject: "Welcome to Leadash — let's get you started",
+    text: [
+      `Hi ${name},`,
+      ``,
+      `Welcome to Leadash! Your account is active and ready to go.`,
+      ``,
+      `Here's what you can do right now:`,
+      `• Discover leads — search our database of 700M+ people and companies`,
+      `• Connect inboxes — add your email accounts for outreach`,
+      `• Launch campaigns — build automated email sequences`,
+      ``,
+      `Get started: ${APP_URL}/dashboard`,
+      ``,
+      `If you have any questions, reply to this email or visit ${APP_URL}/support.`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:32px 32px 24px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+          <p style="color:#f97316;font-size:13px;font-weight:600;margin:10px 0 0">Welcome aboard!</p>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;margin-top:0">Hi ${name},</p>
+          <p style="color:#6b7280">Your Leadash account is live. Here's what you can do to hit the ground running:</p>
+          <div style="margin:24px 0">
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px">
+              <div style="width:32px;height:32px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">🔍</div>
+              <div><p style="margin:0;font-weight:600;color:#111;font-size:14px">Discover leads</p><p style="margin:4px 0 0;color:#6b7280;font-size:13px">Search 700M+ verified contacts and companies</p></div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px">
+              <div style="width:32px;height:32px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">📬</div>
+              <div><p style="margin:0;font-weight:600;color:#111;font-size:14px">Connect inboxes</p><p style="margin:4px 0 0;color:#6b7280;font-size:13px">Add Gmail, Outlook, or custom SMTP accounts</p></div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:12px">
+              <div style="width:32px;height:32px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">🚀</div>
+              <div><p style="margin:0;font-weight:600;color:#111;font-size:14px">Launch campaigns</p><p style="margin:4px 0 0;color:#6b7280;font-size:13px">Build multi-step automated email sequences</p></div>
+            </div>
+          </div>
+          <p><a href="${APP_URL}/dashboard" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Go to Dashboard →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">Questions? Reply to this email or visit <a href="${APP_URL}/support" style="color:#f97316">${APP_URL}/support</a> — The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendCancellationConfirmationEmail(opts: {
+  userEmail: string;
+  workspaceName: string;
+  planName: string;
+}): Promise<void> {
+  const { userEmail, workspaceName, planName } = opts;
+
+  await sendEmail({
+    to: userEmail,
+    subject: "Your Leadash subscription has been cancelled",
+    text: [
+      `Hi,`,
+      ``,
+      `We've confirmed the cancellation of your ${planName} subscription for ${workspaceName}.`,
+      ``,
+      `Your plan will remain active until the end of the current billing period. After that, your account will be moved to the free plan.`,
+      ``,
+      `Your data, contacts, and purchased credits are safe and will remain accessible on the free plan.`,
+      ``,
+      `If you change your mind, you can resubscribe anytime:`,
+      `${APP_URL}/settings?tab=billing`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">Subscription cancelled</p>
+          <p style="color:#6b7280">Your <strong style="color:#111">${planName}</strong> subscription for <strong style="color:#111">${workspaceName}</strong> has been cancelled.</p>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin:24px 0;font-size:14px;color:#6b7280">
+            <p style="margin:0 0 8px;font-weight:600;color:#374151">What happens next</p>
+            <ul style="margin:0;padding-left:20px;line-height:1.8">
+              <li>Your plan stays active until the end of the current billing period</li>
+              <li>After that, your account moves to the <strong style="color:#374151">free plan</strong></li>
+              <li>Your data and purchased credits are <strong style="color:#16a34a">safe</strong></li>
+            </ul>
+          </div>
+          <p style="color:#6b7280;font-size:14px">Changed your mind? You can resubscribe anytime — no setup required.</p>
+          <p><a href="${APP_URL}/settings?tab=billing" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Resubscribe →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendInboxPaymentFailed(opts: {
   userEmail: string;
   domain: string;

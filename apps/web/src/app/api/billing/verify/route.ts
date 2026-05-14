@@ -11,11 +11,20 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { createAdminClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId } = auth;
+
+  const db = createAdminClient();
+
+  // 10 verify calls per hour per workspace
+  const allowed = await checkRateLimit(db, `verify:${workspaceId}`, 10, 60 * 60 * 1000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
 
   const { reference, plan_id } = await req.json() as { reference?: string; plan_id?: string };
   if (!reference || !plan_id) {
@@ -28,7 +37,6 @@ export async function POST(req: NextRequest) {
   }
 
   const plan = await getPlanById(plan_id);
-  const db   = createAdminClient();
 
   // Upsert plan — idempotent, webhook may have already done this
   await db.from("workspaces").update({

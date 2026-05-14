@@ -263,6 +263,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [addWorking, setAddWorking]             = useState(false);
   const [addMsg, setAddMsg]                     = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // ── Retry payment ─────────────────────────────────────────────────────────
+  const [retryingPaymentId, setRetryingPaymentId] = useState<string | null>(null);
+
   // ── Inbox drawer ──────────────────────────────────────────────────────────
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
   const [drawerEdits, setDrawerEdits]   = useState<Partial<OutreachInboxSafe>>({});
@@ -469,6 +472,24 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
       showToast("Domain record deleted");
     } catch (e) {
       showToast(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function handleRetryPayment(domainId: string) {
+    setRetryingPaymentId(domainId);
+    try {
+      const res = await wsFetch(`/api/outreach/domains/${domainId}/retry-payment`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? "Payment retry failed. Please try again.");
+      } else {
+        setDomains(prev => prev.map(d => d.id === domainId ? { ...d, status: "active" } : d));
+        showToast("Payment successful — domain reactivated");
+      }
+    } catch {
+      showToast("Payment retry failed. Please check your connection.");
+    } finally {
+      setRetryingPaymentId(null);
     }
   }
 
@@ -838,17 +859,37 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                         </div>
                       ) : (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          d.status === "active"      ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
-                          d.status === "failed"      ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "dns_pending" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                          d.status === "active"         ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                          d.status === "failed"         ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                          d.status === "payment_failed" ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                          d.status === "dns_pending"    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
                           "text-white/40 bg-white/5 border-white/10"
-                        }`}>{d.status === "dns_pending" ? "DNS pending" : d.status}</span>
+                        }`}>{
+                          d.status === "dns_pending"    ? "DNS pending" :
+                          d.status === "payment_failed" ? "Payment failed" :
+                          d.status
+                        }</span>
                       )}
                     </div>
                     <div className="text-white/50 text-xs">
                       {warmupDaysLeft !== null ? (warmupDaysLeft > 0 ? `${warmupDaysLeft}d left` : "Done") : "—"}
                     </div>
                     <div className="flex items-center gap-1.5">
+                      {d.status === "payment_failed" && (
+                        <button
+                          onClick={() => handleRetryPayment(d.id)}
+                          disabled={retryingPaymentId === d.id}
+                          className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 disabled:opacity-50 disabled:cursor-wait border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5"
+                          title="Retry payment to reactivate this domain"
+                        >
+                          {retryingPaymentId === d.id ? (
+                            <>
+                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                              Retrying…
+                            </>
+                          ) : "↻ Retry Payment"}
+                        </button>
+                      )}
                       {canAddMore && (
                         <button
                           onClick={() => {

@@ -8,15 +8,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { disablePaystackSubscription } from "@/lib/billing/paystack";
+import { sendCancellationConfirmationEmail } from "@/lib/email/notifications";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
+  // 3 cancellations per day per workspace
+  const allowed = await checkRateLimit(db, `cancel:${workspaceId}`, 3, 24 * 60 * 60 * 1000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
+
   const { data: ws } = await db
     .from("workspaces")
-    .select("paystack_sub_code, plan_id, plan_status")
+    .select("paystack_sub_code, plan_id, plan_status, billing_email, name")
     .eq("id", workspaceId)
     .single();
 
@@ -59,6 +67,15 @@ export async function POST(req: NextRequest) {
     .update({ plan_status: "canceled", updated_at: new Date().toISOString() })
     .eq("id", workspaceId);
   if (dbError) console.error("[billing/cancel] DB update failed:", dbError);
+
+  if (ws?.billing_email) {
+    const planMap: Record<string, string> = { starter: "Starter", growth: "Growth", scale: "Scale" };
+    sendCancellationConfirmationEmail({
+      userEmail:     ws.billing_email,
+      workspaceName: ws.name,
+      planName:      planMap[ws.plan_id ?? ""] ?? (ws.plan_id ?? "paid"),
+    }).catch(e => console.error("[billing/cancel] cancellation email failed:", e));
+  }
 
   return NextResponse.json({ ok: true });
 }

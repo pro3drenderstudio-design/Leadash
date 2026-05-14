@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
+
+  // 5 checkout attempts per hour per workspace
+  const allowed = await checkRateLimit(db, `checkout:${workspaceId}`, 5, 60 * 60 * 1000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
 
   const { plan_id } = await req.json();
   const plan = await getPlanById(plan_id);
