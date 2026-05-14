@@ -1206,7 +1206,7 @@ function DiscoverContent() {
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
+    <div className="absolute inset-0 flex overflow-hidden">
 
       {/* ── Left sidebar ── */}
       <div className="w-[240px] flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
