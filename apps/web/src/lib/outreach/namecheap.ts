@@ -1,178 +1,119 @@
 /**
  * Namecheap XML API wrapper.
- *
  * Docs: https://www.namecheap.com/support/api/methods/
  *
  * Required env vars:
- *   NAMECHEAP_API_USER   — Namecheap account username
- *   NAMECHEAP_API_KEY    — Namecheap API key
- *   NAMECHEAP_CLIENT_IP  — Whitelisted IP for API calls (your server's egress IP)
- *   NAMECHEAP_SANDBOX    — "true" to hit the sandbox endpoint
+ *   NAMECHEAP_API_USER  — Namecheap account username
+ *   NAMECHEAP_API_KEY   — Namecheap API key
+ *   NAMECHEAP_CLIENT_IP — Whitelisted IP (uses VPS IP so Namecheap accepts calls from Vercel)
  */
 
-export interface DnsRecord {
-  type: "A" | "AAAA" | "CNAME" | "MX" | "TXT";
-  name: string;   // subdomain / "@" for root
-  value: string;
-  priority?: number; // MX only
-  ttl?: number;
-}
-
-interface NamecheapDomainCheck {
-  domain: string;
+export interface DomainCheckResult {
+  domain:    string;
   available: boolean;
-  price: number;
+  price:     number;
 }
 
 function getConfig() {
   const apiUser  = process.env.NAMECHEAP_API_USER!;
   const apiKey   = process.env.NAMECHEAP_API_KEY!;
-  const clientIp = process.env.NAMECHEAP_CLIENT_IP ?? "127.0.0.1";
-  const sandbox  = process.env.NAMECHEAP_SANDBOX === "true";
-  const base     = sandbox
-    ? "https://api.sandbox.namecheap.com/xml.response"
-    : "https://api.namecheap.com/xml.response";
+  const clientIp = process.env.NAMECHEAP_CLIENT_IP ?? "209.145.55.138";
+  const base     = "https://api.namecheap.com/xml.response";
   return { apiUser, apiKey, clientIp, base };
 }
 
-function buildUrl(command: string, extra: Record<string, string> = {}): string {
+async function callApi(command: string, extra: Record<string, string> = {}): Promise<string> {
   const { apiUser, apiKey, clientIp, base } = getConfig();
   const params = new URLSearchParams({
-    ApiUser:   apiUser,
-    ApiKey:    apiKey,
-    UserName:  apiUser,
-    ClientIp:  clientIp,
-    Command:   command,
+    ApiUser:  apiUser,
+    ApiKey:   apiKey,
+    UserName: apiUser,
+    ClientIp: clientIp,
+    Command:  command,
     ...extra,
   });
-  return `${base}?${params.toString()}`;
-}
-
-async function callApi(command: string, extra: Record<string, string> = {}): Promise<string> {
-  const url = buildUrl(command, extra);
-
-  // If QUOTAGUARD_URL is set, route through the static proxy so Namecheap
-  // sees a whitelisted IP even on Vercel serverless. Format:
-  //   QUOTAGUARD_URL=http://user:pass@proxy.quotaguard.com:9293
-  const proxyUrl = process.env.NAMECHEAP_PROXY_URL;
-  const fetchOptions: RequestInit = {};
-  if (proxyUrl) {
-    // Route through a static proxy so Namecheap sees a whitelisted IP on Vercel.
-    // Node respects HTTPS_PROXY / HTTP_PROXY env vars natively.
-    process.env.HTTPS_PROXY = proxyUrl;
-    process.env.HTTP_PROXY  = proxyUrl;
-  }
-
-  const res = await fetch(url, fetchOptions);
-  if (!res.ok) throw new Error(`Namecheap HTTP error ${res.status}`);
+  const res = await fetch(`${base}?${params.toString()}`, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`Namecheap HTTP ${res.status}`);
   return res.text();
 }
 
-function extractText(xml: string, tag: string): string | null {
-  const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, "i"));
-  return match ? match[1] : null;
-}
-
 function checkApiErrors(xml: string): void {
-  const errorMatch = xml.match(/<Error[^>]*Number="(\d+)"[^>]*>([^<]*)<\/Error>/i);
-  if (errorMatch) throw new Error(`Namecheap API error ${errorMatch[1]}: ${errorMatch[2]}`);
+  const errMatch = xml.match(/<Error[^>]*Number="(\d+)"[^>]*>([^<]*)<\/Error>/i);
+  if (errMatch) throw new Error(`Namecheap error ${errMatch[1]}: ${errMatch[2]}`);
   if (xml.includes('Status="ERROR"')) {
-    const msg = extractText(xml, "Error") ?? "Unknown Namecheap error";
-    throw new Error(`Namecheap error: ${msg}`);
+    const m = xml.match(/<Error[^>]*>([^<]+)<\/Error>/i);
+    throw new Error(`Namecheap error: ${m?.[1] ?? "Unknown"}`);
   }
 }
 
-/**
- * Check availability and pricing for one or more domains.
- */
-export async function checkDomains(names: string[]): Promise<NamecheapDomainCheck[]> {
-  const xml = await callApi("namecheap.domains.check", {
-    DomainList: names.join(","),
-  });
-  checkApiErrors(xml);
+// Fallback pricing when API is unavailable
+const FALLBACK_PRICING: Record<string, number> = {
+  com: 9.06,  net: 9.06,  org: 9.06,  io: 32.88, co: 25.88,
+  ai: 67.88,  app: 14.00, dev: 12.00, biz: 9.06,  info: 4.88,
+  pro: 12.88, me: 16.88,  uk: 6.88,   us: 7.88,   xyz: 2.18,
+  site: 3.88, online: 3.88, click: 3.88, website: 3.88,
+  fun: 3.88,  space: 3.88, homes: 19.88,
+};
 
-  const results: NamecheapDomainCheck[] = [];
-  const regex = /<DomainCheckResult\s+Domain="([^"]+)"\s+Available="([^"]+)"[^>]*PremiumRegistrationPrice="([^"]*)"[^>]*\/>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(xml)) !== null) {
-    results.push({
-      domain:    m[1],
-      available: m[2].toLowerCase() === "true",
-      price:     parseFloat(m[3]) || 10.98, // fallback price if not in response
+let pricingCache: { data: Record<string, number>; ts: number } | null = null;
+
+async function getLivePricing(): Promise<Record<string, number>> {
+  if (pricingCache && Date.now() - pricingCache.ts < 3_600_000) {
+    return pricingCache.data;
+  }
+  try {
+    const xml = await callApi("namecheap.users.getPricing", {
+      ProductType:  "DOMAIN",
+      ActionName:   "REGISTER",
     });
-  }
-  return results;
-}
+    checkApiErrors(xml);
 
-export interface RegistrantContact {
-  firstName:  string;
-  lastName:   string;
-  address:    string;
-  city:       string;
-  state:      string;
-  zip:        string;
-  country:    string;
-  phone:      string;
-  email:      string;
-}
-
-/**
- * Register a domain using the provided registrant contact info.
- * Contact details come from the workspace's saved registrant profile.
- */
-export async function purchaseDomain(domain: string, registrant: RegistrantContact): Promise<void> {
-  const [sld, ...tldParts] = domain.split(".");
-  const tld = tldParts.join(".");
-
-  // All four contact roles (Registrant, Tech, Admin, AuxBilling) use the same info
-  const contact = {
-    FirstName:        registrant.firstName,
-    LastName:         registrant.lastName,
-    Address1:         registrant.address,
-    City:             registrant.city,
-    StateProvince:    registrant.state,
-    PostalCode:       registrant.zip,
-    Country:          registrant.country,
-    Phone:            registrant.phone,
-    EmailAddress:     registrant.email,
-  };
-
-  const extra: Record<string, string> = {
-    DomainName: domain,
-    Years:      "1",
-    _sld:       sld,
-    _tld:       tld,
-  };
-
-  for (const prefix of ["Registrant", "Tech", "Admin", "AuxBilling"] as const) {
-    for (const [key, value] of Object.entries(contact)) {
-      extra[`${prefix}${key}`] = value;
+    const pricing: Record<string, number> = {};
+    // Extract <Product Name="com"><Price ... YourPrice="9.06" .../></Product>
+    const productRe = /<Product\s+Name="([^"]+)"[^>]*>([\s\S]*?)<\/Product>/gi;
+    let pm: RegExpExecArray | null;
+    while ((pm = productRe.exec(xml)) !== null) {
+      const tld   = pm[1].toLowerCase();
+      const inner = pm[2];
+      const priceMatch = inner.match(/YourPrice="([^"]+)"/i);
+      if (priceMatch) {
+        const p = parseFloat(priceMatch[1]);
+        if (!isNaN(p) && p > 0) pricing[tld] = p;
+      }
     }
-  }
 
-  const xml = await callApi("namecheap.domains.create", extra);
-  checkApiErrors(xml);
+    if (Object.keys(pricing).length > 0) {
+      pricingCache = { data: pricing, ts: Date.now() };
+      return pricing;
+    }
+    throw new Error("No pricing data parsed from response");
+  } catch (err) {
+    console.warn("[namecheap] getLivePricing failed, using fallback:", err instanceof Error ? err.message : err);
+    return { ...FALLBACK_PRICING, ...(pricingCache?.data ?? {}) };
+  }
 }
 
 /**
- * Set DNS host records for a domain, replacing all existing records.
- * Used to publish SPF, DKIM, DMARC, and MX records after Mailgun setup.
+ * Check availability and Namecheap pricing for a list of domains.
  */
-export async function setDnsHosts(domain: string, records: DnsRecord[]): Promise<void> {
-  const [sld, ...tldParts] = domain.split(".");
-  const tld = tldParts.join(".");
-
-  const extra: Record<string, string> = { SLD: sld, TLD: tld };
-
-  records.forEach((rec, i) => {
-    const n = i + 1;
-    extra[`HostName${n}`]    = rec.name;
-    extra[`RecordType${n}`]  = rec.type;
-    extra[`Address${n}`]     = rec.value;
-    extra[`TTL${n}`]         = String(rec.ttl ?? 1800);
-    if (rec.priority !== undefined) extra[`MXPref${n}`] = String(rec.priority);
-  });
-
-  const xml = await callApi("namecheap.domains.dns.setHosts", extra);
+export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
+  const [xml, pricing] = await Promise.all([
+    callApi("namecheap.domains.check", { DomainList: names.join(",") }),
+    getLivePricing(),
+  ]);
   checkApiErrors(xml);
+
+  const results: DomainCheckResult[] = [];
+  const re = /<DomainCheckResult\s+Domain="([^"]+)"\s+Available="([^"]+)"[^/]*\/>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) {
+    const domain    = m[1].toLowerCase();
+    const available = m[2].toLowerCase() === "true";
+    const tld       = domain.split(".").slice(1).join(".");
+    const price     = pricing[tld] ?? FALLBACK_PRICING[tld] ?? 9.99;
+    results.push({ domain, available, price });
+  }
+
+  // Preserve input order; fill in any missing entries as unavailable
+  return names.map(n => results.find(r => r.domain === n.toLowerCase()) ?? { domain: n, available: false, price: 0 });
 }
