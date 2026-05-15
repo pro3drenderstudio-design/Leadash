@@ -113,17 +113,14 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
       const price = parseFloat(tldData.registration);
       if (isNaN(price)) throw new Error(`Invalid price for .${tld}`);
 
-      // Cloudflare DoH: Status 3 = NXDOMAIN = not registered = available
+      // Use Porkbun's own availability API — more accurate than DNS NXDOMAIN checks,
+      // which can show "available" for domains the registry won't actually allow to register.
       let available = false;
       try {
-        const doh  = await fetch(
-          `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
-          { headers: { Accept: "application/dns-json" } },
-        );
-        const json = await doh.json() as { Status: number };
-        available  = json.Status === 3;
+        const result = await call<{ response?: { avail?: string } }>(`/domain/check/${domain}`);
+        available = result.response?.avail === "yes";
       } catch {
-        available = true;
+        available = false;
       }
 
       return { domain, available, price };
@@ -175,12 +172,14 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
       await call(`/domain/create/${domain}`, createArgs);
       return;
     } catch (err) {
-      const msg = err instanceof Error ? err.message.toLowerCase() : "";
+      const raw = err instanceof Error ? err.message : String(err);
+      const msg = raw.toLowerCase();
+      console.error(`[porkbun] /domain/create/${domain} attempt ${attempt} error:`, raw);
       // Idempotency: domain already in our account
       if (msg.includes("already") || msg.includes("registered") || msg.includes("taken") || msg.includes("unable to register")) return;
       // Domain unavailable (taken by someone else or not orderable)
       if (msg.includes("not available") || msg.includes("domain not available") || msg.includes("unable to process order") || msg.includes("002")) {
-        throw new Error(`The domain ${domain} is no longer available for registration. Please contact support for a refund.`);
+        throw new Error(`The domain ${domain} is no longer available for registration. Please contact support for a refund. (Porkbun: ${raw})`);
       }
       // Rate limit: wait 12s and retry
       if (msg.includes("create attempts") || msg.includes("rate limit") || msg.includes("too many")) {
