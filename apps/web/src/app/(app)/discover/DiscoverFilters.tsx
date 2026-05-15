@@ -513,6 +513,56 @@ function CheckboxGroup({
   );
 }
 
+// ── Include/exclude checkbox group (click once = include, twice = exclude) ────
+
+function IncludeExcludeCheckboxGroup({
+  options, includes, excludes, onChangeIncludes, onChangeExcludes,
+}: {
+  options: readonly { label: string; value: string }[];
+  includes: string[];
+  excludes: string[];
+  onChangeIncludes: (v: string[]) => void;
+  onChangeExcludes: (v: string[]) => void;
+}) {
+  function toggle(val: string) {
+    if (includes.includes(val)) {
+      onChangeIncludes(includes.filter(x => x !== val));
+      onChangeExcludes([...excludes, val]);
+    } else if (excludes.includes(val)) {
+      onChangeExcludes(excludes.filter(x => x !== val));
+    } else {
+      onChangeIncludes([...includes, val]);
+    }
+  }
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[10px] text-white/25 pb-1">Click once to include · twice to exclude</p>
+      {options.map(o => {
+        const inc = includes.includes(o.value);
+        const exc = excludes.includes(o.value);
+        return (
+          <label key={o.value} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
+            <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+              inc ? "bg-orange-500 border-orange-500" :
+              exc ? "bg-red-500/80 border-red-500" :
+                    "border-white/20 group-hover:border-white/40"
+            }`}>
+              {inc && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>}
+              {exc && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 2l6 6M8 2l-6 6" /></svg>}
+            </div>
+            <span className={`text-[11px] transition-colors ${
+              inc ? "text-orange-300" :
+              exc ? "text-red-300/70 line-through" :
+                    "text-white/55 group-hover:text-white/80"
+            }`}>{o.label}</span>
+            <input type="checkbox" className="sr-only" checked={inc || exc} onChange={() => toggle(o.value)} />
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Employee range checkboxes ─────────────────────────────────────────────────
 
 const APOLLO_EMPLOYEE_RANGES = [
@@ -533,7 +583,9 @@ export interface PeopleFilters {
   titleIncludes:        string[];
   titleExcludes:        string[];
   seniorities:          string[];
+  senioritiesExclude:   string[];
   departments:          string[];
+  departmentsExclude:   string[];
   countryIncludes:      string[];
   countryExcludes:      string[];
   locationIncludes:     string[];
@@ -567,7 +619,8 @@ export interface CompanyFilters {
 
 export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   keyword: "", titleIncludes: [], titleExcludes: [], seniorities: [],
-  departments: [], countryIncludes: [], countryExcludes: [],
+  senioritiesExclude: [], departments: [], departmentsExclude: [],
+  countryIncludes: [], countryExcludes: [],
   locationIncludes: [], locationExcludes: [],
   companyIncludes: [], companyExcludes: [], industryIncludes: [],
   industryExcludes: [], companySizes: [], emailStatus: "any",
@@ -619,8 +672,8 @@ export function PeopleSidebar({
   }
 
   const titleCount    = filters.titleIncludes.length    + filters.titleExcludes.length;
-  const senCount      = filters.seniorities.length;
-  const deptCount     = filters.departments.length;
+  const senCount      = filters.seniorities.length + filters.senioritiesExclude.length;
+  const deptCount     = filters.departments.length + filters.departmentsExclude.length;
   const countryCount  = filters.countryIncludes.length  + filters.countryExcludes.length;
   const locCount      = filters.locationIncludes.length + filters.locationExcludes.length;
   const coCount       = filters.companyIncludes.length  + filters.companyExcludes.length;
@@ -670,19 +723,23 @@ export function PeopleSidebar({
 
       {/* Management Level */}
       <FilterSection title="Management Level" activeCount={senCount}>
-        <CheckboxGroup
+        <IncludeExcludeCheckboxGroup
           options={SENIORITY_OPTIONS}
-          selected={filters.seniorities}
-          onChange={v => set("seniorities", v)}
+          includes={filters.seniorities}
+          excludes={filters.senioritiesExclude}
+          onChangeIncludes={v => set("seniorities", v)}
+          onChangeExcludes={v => set("senioritiesExclude", v)}
         />
       </FilterSection>
 
       {/* Department */}
       <FilterSection title="Department" activeCount={deptCount}>
-        <CheckboxGroup
+        <IncludeExcludeCheckboxGroup
           options={DEPARTMENT_OPTIONS}
-          selected={filters.departments}
-          onChange={v => set("departments", v)}
+          includes={filters.departments}
+          excludes={filters.departmentsExclude}
+          onChangeIncludes={v => set("departments", v)}
+          onChangeExcludes={v => set("departmentsExclude", v)}
         />
       </FilterSection>
 

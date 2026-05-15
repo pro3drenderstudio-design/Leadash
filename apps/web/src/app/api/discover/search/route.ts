@@ -37,8 +37,10 @@ export async function GET(req: NextRequest) {
   const keyword         = p.get("q")?.trim() || null;
   const titleIncludes   = csv(p.get("title_include"));
   const titleExcludes   = csv(p.get("title_exclude"));
-  const seniorities     = csv(p.get("seniority"));
-  const departments     = csv(p.get("department"));
+  const seniorities        = csv(p.get("seniority"));
+  const senioritiesExclude = csv(p.get("seniority_exclude"));
+  const departments        = csv(p.get("department"));
+  const departmentsExclude = csv(p.get("department_exclude"));
   const countryIncludes  = csv(p.get("country_include"));
   const countryExcludes  = csv(p.get("country_exclude"));
   const locationIncludes = csv(p.get("location_include"));
@@ -130,8 +132,10 @@ export async function GET(req: NextRequest) {
     }
     addOr("p.title",      titleIncludes,   true);
     addNone("p.title",    titleExcludes,   true);
-    addOr("p.seniority",  seniorities,     false);
-    addOr("p.department", departments,     true);
+    addOr("p.seniority",   seniorities,        false);
+    addNone("p.seniority", senioritiesExclude, false);
+    addOr("p.department",  departments,        true);
+    addNone("p.department", departmentsExclude, true);
     addOrLower("p.country",   countryIncludes);
     addNoneLower("p.country", countryExcludes);
     addLocationOr(locationIncludes);

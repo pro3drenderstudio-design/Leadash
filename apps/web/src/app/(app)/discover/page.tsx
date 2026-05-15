@@ -60,7 +60,9 @@ function filtersToParams(
   if (pf.titleIncludes.length)          p.set("ti",    pf.titleIncludes.join(","));
   if (pf.titleExcludes.length)          p.set("te",    pf.titleExcludes.join(","));
   if (pf.seniorities.length)            p.set("sen",   pf.seniorities.join(","));
+  if (pf.senioritiesExclude.length)     p.set("sene",  pf.senioritiesExclude.join(","));
   if (pf.departments.length)            p.set("dept",  pf.departments.join(","));
+  if (pf.departmentsExclude.length)     p.set("depte", pf.departmentsExclude.join(","));
   if (pf.countryIncludes.length)        p.set("ctry",  pf.countryIncludes.join(","));
   if (pf.countryExcludes.length)        p.set("ctrye", pf.countryExcludes.join(","));
   if (pf.locationIncludes.length)       p.set("loc",   pf.locationIncludes.join(","));
@@ -102,7 +104,9 @@ function filtersFromParams(p: { get(key: string): string | null }): {
       titleIncludes:        csv("ti"),
       titleExcludes:        csv("te"),
       seniorities:          csv("sen"),
+      senioritiesExclude:   csv("sene"),
       departments:          csv("dept"),
+      departmentsExclude:   csv("depte"),
       countryIncludes:      csv("ctry"),
       countryExcludes:      csv("ctrye"),
       locationIncludes:     csv("loc"),
@@ -958,8 +962,10 @@ function DiscoverContent() {
       if (f.keyword)                       params.set("q",               f.keyword);
       if (f.titleIncludes.length)          params.set("title_include",    f.titleIncludes.join(","));
       if (f.titleExcludes.length)          params.set("title_exclude",    f.titleExcludes.join(","));
-      if (f.seniorities.length)            params.set("seniority",        f.seniorities.join(","));
-      if (f.departments.length)            params.set("department",       f.departments.join(","));
+      if (f.seniorities.length)            params.set("seniority",         f.seniorities.join(","));
+      if (f.senioritiesExclude.length)     params.set("seniority_exclude", f.senioritiesExclude.join(","));
+      if (f.departments.length)            params.set("department",        f.departments.join(","));
+      if (f.departmentsExclude.length)     params.set("department_exclude",f.departmentsExclude.join(","));
       if (f.countryIncludes.length)        params.set("country_include",  f.countryIncludes.join(","));
       if (f.countryExcludes.length)        params.set("country_exclude",  f.countryExcludes.join(","));
       if (f.locationIncludes.length)       params.set("location_include", f.locationIncludes.join(","));
