@@ -113,14 +113,17 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
       const price = parseFloat(tldData.registration);
       if (isNaN(price)) throw new Error(`Invalid price for .${tld}`);
 
-      // Use Porkbun's own availability API — more accurate than DNS NXDOMAIN checks,
-      // which can show "available" for domains the registry won't actually allow to register.
+      // Cloudflare DoH: Status 3 = NXDOMAIN = not registered = available
       let available = false;
       try {
-        const result = await call<{ response?: { avail?: string } }>(`/domain/check/${domain}`);
-        available = result.response?.avail === "yes";
+        const doh  = await fetch(
+          `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
+          { headers: { Accept: "application/dns-json" } },
+        );
+        const json = await doh.json() as { Status: number };
+        available  = json.Status === 3;
       } catch {
-        available = false;
+        available = true;
       }
 
       return { domain, available, price };
