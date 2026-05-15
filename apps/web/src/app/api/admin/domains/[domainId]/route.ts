@@ -42,11 +42,16 @@ export async function PATCH(
     }
 
     const { purchaseDomain } = await import("@/lib/outreach/porkbun");
-    await purchaseDomain(
-      domainRow.domain as string,
-      undefined,
-      (domainRow.domain_price_usd as number) ?? undefined,
-    );
+    try {
+      await purchaseDomain(
+        domainRow.domain as string,
+        undefined,
+        (domainRow.domain_price_usd as number) ?? undefined,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Purchase failed: ${msg}` }, { status: 422 });
+    }
 
     await ctx.adminClient
       .from("outreach_domains")

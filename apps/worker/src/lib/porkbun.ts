@@ -180,8 +180,8 @@ export async function purchaseDomain(domain: string, _registrant?: RegistrantCon
       console.error(`[porkbun] /domain/create/${domain} attempt ${attempt} error:`, raw);
       // Idempotency: domain already in our account
       if (msg.includes("already") || msg.includes("registered") || msg.includes("taken") || msg.includes("unable to register")) return;
-      // Domain unavailable (taken by someone else or not orderable)
-      if (msg.includes("not available") || msg.includes("domain not available") || msg.includes("unable to process order") || msg.includes("002")) {
+      // Domain unavailable (taken by someone else, not orderable, or unsupported TLD)
+      if (msg.includes("not available") || msg.includes("domain not available") || msg.includes("(002)")) {
         throw new Error(`The domain ${domain} is no longer available for registration. Please contact support for a refund. (Porkbun: ${raw})`);
       }
       // Rate limit: wait 12s and retry
