@@ -37,7 +37,7 @@ export async function PATCH(
       .single();
 
     if (!domainRow) return NextResponse.json({ error: "Domain not found" }, { status: 404 });
-    if (domainRow.status !== "awaiting_manual_purchase") {
+    if (domainRow.status !== "awaiting_manual_purchase" && domainRow.status !== "purchasing") {
       return NextResponse.json({ error: "Domain is not awaiting manual purchase" }, { status: 400 });
     }
 
@@ -68,7 +68,7 @@ export async function PATCH(
       .single();
 
     if (!domain) return NextResponse.json({ error: "Domain not found" }, { status: 404 });
-    if (domain.status !== "awaiting_manual_purchase") {
+    if (domain.status !== "awaiting_manual_purchase" && domain.status !== "purchasing") {
       return NextResponse.json({ error: "Domain is not awaiting manual purchase" }, { status: 400 });
     }
 

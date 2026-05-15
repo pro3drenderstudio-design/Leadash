@@ -79,7 +79,7 @@ function ActionButtons({ domain, onAction }: { domain: Domain; onAction: (id: st
 
   return (
     <div className="flex gap-1.5 flex-wrap">
-      {status === "awaiting_manual_purchase" && isLocalhost && (
+      {(status === "awaiting_manual_purchase" || status === "purchasing") && isLocalhost && (
         <button
           onClick={() => onAction(domain.id, "purchase_via_dev")}
           className="text-[11px] font-medium px-2 py-1 rounded bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors border border-blue-300 dark:border-blue-500/30"
@@ -87,7 +87,7 @@ function ActionButtons({ domain, onAction }: { domain: Domain; onAction: (id: st
           ↺ Retry Purchase
         </button>
       )}
-      {status === "awaiting_manual_purchase" && !isLocalhost && (
+      {(status === "awaiting_manual_purchase" || status === "purchasing") && !isLocalhost && (
         <button
           onClick={() => window.open(`http://localhost:3000/admin/domains?search=${encodeURIComponent(domain.domain)}`, "_blank")}
           className="text-[11px] font-medium px-2 py-1 rounded bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors border border-blue-300 dark:border-blue-500/30"
@@ -95,7 +95,7 @@ function ActionButtons({ domain, onAction }: { domain: Domain; onAction: (id: st
           ↗ Open in Dev
         </button>
       )}
-      {status === "awaiting_manual_purchase" && !isLocalhost && (
+      {(status === "awaiting_manual_purchase" || status === "purchasing") && !isLocalhost && (
         <button
           onClick={() => onAction(domain.id, "mark_purchased")}
           className="text-[11px] font-medium px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-500/10 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition-colors border border-yellow-300 dark:border-yellow-500/30"
