@@ -72,8 +72,8 @@ export async function checkDomains(names: string[]): Promise<DomainCheckResult[]
         return { domain, available, price };
       });
     } catch (err) {
-      // Re-throw API errors (IP not whitelisted, invalid key, etc.) — don't silently fall back
-      throw err;
+      // IP not whitelisted (1011102) or other API error — fall through to Cloudflare DoH
+      console.warn("[namecheap] domain check fell back to DoH:", (err as Error).message);
     }
   }
 
