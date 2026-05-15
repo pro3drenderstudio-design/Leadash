@@ -11,6 +11,7 @@ import { processVerifyBulk } from "./workers/verify-bulk-worker";
 import { processEnrichBulk } from "./workers/enrich-bulk-worker";
 import { processProvision } from "./workers/provision-worker";
 import { startSchedulers } from "./schedulers";
+import { startHttpServer } from "./server";
 
 console.log("[Leadash Worker] Starting...");
 
@@ -51,6 +52,9 @@ new Worker("leadash:provision",      processProvision,      { connection, concur
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();
+
+// ── HTTP server (domain check proxy, etc.) ────────────────────────────────────
+startHttpServer();
 
 // ── Heartbeat (admin system page checks this every 30s) ───────────────────────
 startHeartbeat();

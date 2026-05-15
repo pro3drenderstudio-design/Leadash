@@ -9,6 +9,33 @@
 
 const BASE = "https://api.namecheap.com/xml.response";
 
+export interface DomainCheckResult {
+  domain:    string;
+  available: boolean;
+  price:     number;
+}
+
+const NAMECHEAP_PRICING: Record<string, number> = {
+  com: 9.06,  net: 9.06,  org: 9.06,  io: 32.88,  co: 25.88,
+  ai: 67.88,  app: 14.00, dev: 12.00, biz: 9.06,   info: 4.88,
+  pro: 12.88, me: 16.88,  uk: 6.88,   us: 7.88,    xyz: 2.18,
+  site: 3.88, online: 3.88, click: 3.88, website: 3.88,
+  fun: 3.88,  space: 3.88, homes: 19.88,
+};
+
+export async function checkDomains(names: string[]): Promise<DomainCheckResult[]> {
+  const xml = await callApi("namecheap.domains.check", { DomainList: names.join(",") });
+  checkErrors(xml);
+  return names.map(domain => {
+    const tld   = domain.split(".").slice(1).join(".");
+    const price = NAMECHEAP_PRICING[tld] ?? 9.99;
+    const match = xml.match(
+      new RegExp(`DomainCheckResult[^>]+Domain="${domain.replace(/\./g, "\\.")}"[^>]+Available="(true|false)"`, "i"),
+    );
+    return { domain, available: match?.[1]?.toLowerCase() === "true", price };
+  });
+}
+
 export interface RegistrantContact {
   first_name:  string;
   last_name:   string;
