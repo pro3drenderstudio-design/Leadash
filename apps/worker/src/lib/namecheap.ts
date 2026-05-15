@@ -5,16 +5,21 @@
  * Required env vars:
  *   NAMECHEAP_API_USER  — Namecheap account username
  *   NAMECHEAP_API_KEY   — Namecheap API key
- *
- * Optional registrant contact env vars (required by Namecheap for domain registration):
- *   NAMECHEAP_REG_FIRST    NAMECHEAP_REG_LAST
- *   NAMECHEAP_REG_ADDR     NAMECHEAP_REG_CITY
- *   NAMECHEAP_REG_STATE    NAMECHEAP_REG_ZIP
- *   NAMECHEAP_REG_COUNTRY  NAMECHEAP_REG_PHONE
- *   NAMECHEAP_REG_EMAIL
  */
 
 const BASE = "https://api.namecheap.com/xml.response";
+
+export interface RegistrantContact {
+  first_name:  string;
+  last_name:   string;
+  email:       string;
+  phone:       string;
+  address:     string;
+  city:        string;
+  state:       string;
+  zip:         string;
+  country:     string;
+}
 
 function getConfig() {
   const apiUser = process.env.NAMECHEAP_API_USER;
@@ -22,20 +27,6 @@ function getConfig() {
   if (!apiUser || !apiKey) throw new Error("NAMECHEAP_API_USER and NAMECHEAP_API_KEY must be set");
   const clientIp = process.env.NAMECHEAP_CLIENT_IP ?? "209.145.55.138";
   return { apiUser, apiKey, clientIp };
-}
-
-function getRegistrant() {
-  return {
-    FirstName:     process.env.NAMECHEAP_REG_FIRST   ?? "",
-    LastName:      process.env.NAMECHEAP_REG_LAST    ?? "",
-    Address1:      process.env.NAMECHEAP_REG_ADDR    ?? "",
-    City:          process.env.NAMECHEAP_REG_CITY    ?? "",
-    StateProvince: process.env.NAMECHEAP_REG_STATE   ?? "",
-    PostalCode:    process.env.NAMECHEAP_REG_ZIP     ?? "",
-    Country:       process.env.NAMECHEAP_REG_COUNTRY ?? "",
-    Phone:         process.env.NAMECHEAP_REG_PHONE   ?? "",
-    EmailAddress:  process.env.NAMECHEAP_REG_EMAIL   ?? process.env.ADMIN_EMAIL ?? "",
-  };
 }
 
 async function callApi(command: string, extra: Record<string, string> = {}): Promise<string> {
@@ -62,10 +53,21 @@ function checkErrors(xml: string): void {
   }
 }
 
-export async function purchaseDomain(domain: string): Promise<void> {
+export async function purchaseDomain(domain: string, registrant: RegistrantContact): Promise<void> {
   const [sld, ...tldParts] = domain.split(".");
   const tld = tldParts.join(".");
-  const reg = getRegistrant();
+
+  const contact = {
+    FirstName:     registrant.first_name,
+    LastName:      registrant.last_name,
+    EmailAddress:  registrant.email,
+    Phone:         registrant.phone,
+    Address1:      registrant.address,
+    City:          registrant.city,
+    StateProvince: registrant.state,
+    PostalCode:    registrant.zip,
+    Country:       registrant.country,
+  };
 
   const extra: Record<string, string> = {
     DomainName: domain,
@@ -75,7 +77,7 @@ export async function purchaseDomain(domain: string): Promise<void> {
   };
 
   for (const prefix of ["Registrant", "Tech", "Admin", "AuxBilling"] as const) {
-    for (const [key, val] of Object.entries(reg)) {
+    for (const [key, val] of Object.entries(contact)) {
       extra[`${prefix}${key}`] = val;
     }
   }

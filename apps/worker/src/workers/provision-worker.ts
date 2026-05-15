@@ -54,7 +54,27 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   }
 
   // ── Step 1: Purchase domain via Namecheap (VPS IP is whitelisted) ─────────
-  await purchaseDomain(domainRecord.domain);
+  const { data: wsSettings } = await db
+    .from("workspace_settings")
+    .select("registrant_first_name, registrant_last_name, registrant_email, registrant_phone, registrant_address, registrant_city, registrant_state, registrant_zip, registrant_country")
+    .eq("workspace_id", workspace_id)
+    .single();
+
+  if (!wsSettings?.registrant_first_name || !wsSettings?.registrant_email) {
+    throw new Error("Registrant contact info is incomplete. Please fill in Settings → Outreach → Domain Registrant Info.");
+  }
+
+  await purchaseDomain(domainRecord.domain, {
+    first_name: wsSettings.registrant_first_name,
+    last_name:  wsSettings.registrant_last_name  ?? "",
+    email:      wsSettings.registrant_email,
+    phone:      wsSettings.registrant_phone      ?? "",
+    address:    wsSettings.registrant_address    ?? "",
+    city:       wsSettings.registrant_city       ?? "",
+    state:      wsSettings.registrant_state      ?? "",
+    zip:        wsSettings.registrant_zip        ?? "",
+    country:    wsSettings.registrant_country    ?? "US",
+  });
 
   // ── Step 2: Register domain with Postal + get DKIM public key ─────────────
   await setStatus("dns_pending");
