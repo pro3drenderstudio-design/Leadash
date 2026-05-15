@@ -1,8 +1,6 @@
 import type { Job } from "bullmq";
-import { UnrecoverableError } from "bullmq";
 import { adminClient } from "../lib/supabase";
-import { purchaseDomain, updateNameservers } from "../lib/porkbun";
-import { notifyAdminDomainPurchaseRequired } from "../lib/email";
+import { purchaseDomain, updateNameservers } from "../lib/namecheap";
 import {
   registerDomain,
   isDomainVerified,
@@ -42,7 +40,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     .single();
 
   if (!domainRecord) throw new Error(`Domain record ${domain_record_id} not found`);
-  if (domainRecord.status === "active") return; // already done
+  if (domainRecord.status === "active") return;
 
   async function setStatus(status: string, errorMessage?: string) {
     await db
@@ -55,41 +53,22 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       .eq("id", domain_record_id);
   }
 
-  // ── Step 1: Purchase domain via Porkbun ──────────────────────────────────────
-  try {
-    await purchaseDomain(
-      domainRecord.domain,
-      undefined,
-      (domainRecord as Record<string, unknown>).domain_price_usd as number ?? undefined,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message.toLowerCase() : "";
-    if (msg.includes("unable to process order") || msg.includes("fraud") || msg.includes("(001)") || msg.includes("(002)")) {
-      await setStatus("awaiting_manual_purchase", "Domain is being manually registered by our team. Your inboxes will activate automatically.");
-      notifyAdminDomainPurchaseRequired({
-        domain:      domainRecord.domain,
-        domainId:    domain_record_id,
-        priceUsd:    (domainRecord as Record<string, unknown>).domain_price_usd as number ?? 0,
-        workspaceId: workspace_id,
-      }).catch(e => console.error("[provision] admin email failed:", e));
-      throw new UnrecoverableError(`Manual purchase required for ${domainRecord.domain}: ${err instanceof Error ? err.message : err}`);
-    }
-    throw err;
-  }
+  // ── Step 1: Purchase domain via Namecheap (VPS IP is whitelisted) ─────────
+  await purchaseDomain(domainRecord.domain);
 
-  // ── Step 2: Register domain with Postal + get DKIM public key ──────────────
+  // ── Step 2: Register domain with Postal + get DKIM public key ─────────────
   await setStatus("dns_pending");
   const postalDomain = await registerDomain(domainRecord.domain)
     .catch(e => { throw new Error(`Postal registerDomain: ${e.message}`); });
 
-  // ── Step 3: Add zone to Cloudflare + point Porkbun nameservers ───────────────
+  // ── Step 3: Add zone to Cloudflare + point Namecheap nameservers ──────────
   await sleep(5_000);
   const { nameservers } = await addZone(domainRecord.domain)
     .catch(e => { throw new Error(`CF addZone: ${e.message}`); });
   await updateNameservers(domainRecord.domain, nameservers)
-    .catch(e => { throw new Error(`Porkbun updateNameservers: ${e.message}`); });
+    .catch(e => { throw new Error(`Namecheap updateNameservers: ${e.message}`); });
 
-  // ── Step 4: Publish DNS records via Cloudflare ──────────────────────────────
+  // ── Step 4: Publish DNS records via Cloudflare ────────────────────────────
   const postalIp = process.env.POSTAL_SERVER_IP ?? "";
   if (!postalIp) throw new Error("POSTAL_SERVER_IP env var is not set");
   const dnsRecords = buildPostalMailDnsRecords(
@@ -102,7 +81,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
 
   await db.from("outreach_domains").update({ dns_records: dnsRecords }).eq("id", domain_record_id);
 
-  // ── Step 4b: Optional web redirect + email forwarding ────────────────────────
+  // ── Step 4b: Optional web redirect + email forwarding ────────────────────
   if (domainRecord.redirect_url) {
     await setWebRedirect(domainRecord.domain, domainRecord.redirect_url).catch(err => {
       console.warn(`[provision] setWebRedirect failed (non-fatal):`, err instanceof Error ? err.message : err);
@@ -115,7 +94,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     await db.from("outreach_domains").update({ forward_verified: false }).eq("id", domain_record_id);
   }
 
-  // ── Step 5: Wait for DKIM DNS propagation ───────────────────────────────────
+  // ── Step 5: Wait for DKIM DNS propagation ────────────────────────────────
   await setStatus("verifying");
   let verified = false;
   for (let attempt = 1; attempt <= 6; attempt++) {
@@ -127,12 +106,10 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     console.warn(`[provision] DKIM not yet visible for ${domainRecord.domain} — continuing`);
   }
 
-  // ── Step 6: Create per-mailbox Postal SMTP credentials + inboxes ─────────────
+  // ── Step 6: Pick Postal node + create SMTP credentials + inboxes ─────────
   const smtpSettings = getSmtpSettings();
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  // Pick the shared node with the most remaining capacity.
-  // Blocks provisioning if all shared nodes are at or over the inbox_limit.
   const { data: sharedNodes } = await db
     .from("postal_nodes")
     .select("id, inbox_limit")
@@ -141,7 +118,6 @@ export async function processProvision(job: Job<ProvisionJobData>) {
 
   let assignedNodeId: string | null = null;
   if (sharedNodes?.length) {
-    // Count active inboxes per node
     const counts = await Promise.all(
       sharedNodes.map(async (n: { id: string; inbox_limit: number }) => {
         const { count } = await db
@@ -159,18 +135,23 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     assignedNodeId = available[0].id;
   }
 
-  // Activate placeholder inboxes created at payment time
-  const { data: pendingInboxes } = await db
-    .from("outreach_inboxes")
-    .select("id, email_address")
-    .eq("domain_id", domain_record_id)
-    .eq("status", "pending");
+  const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
+    ? domainRecord.mailbox_prefixes as string[]
+    : null;
+  const logins = explicitPrefixes
+    ?? Array.from({ length: domainRecord.mailbox_count }, (_, i) => `${domainRecord.mailbox_prefix}${i + 1}`);
 
-  for (const inbox of pendingInboxes ?? []) {
-    const cred = await createSmtpCredential(domainRecord.domain, inbox.email_address)
-      .catch(e => { throw new Error(`Postal createSmtpCredential(${inbox.email_address}): ${e.message}`); });
+  for (const login of logins) {
+    const email = `${login}@${domainRecord.domain}`;
+    const cred = await createSmtpCredential(domainRecord.domain, email)
+      .catch(e => { throw new Error(`Postal createSmtpCredential(${email}): ${e.message}`); });
 
-    const { error: inboxError } = await db.from("outreach_inboxes").update({
+    const { error: inboxError } = await db.from("outreach_inboxes").insert({
+      workspace_id:         workspace_id,
+      domain_id:            domain_record_id,
+      label:                email,
+      email_address:        email,
+      provider:             "smtp",
       status:               "active",
       smtp_host:            smtpSettings.host,
       smtp_port:            smtpSettings.port,
@@ -183,18 +164,20 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       warmup_current_daily: 1,
       warmup_target_daily:  30,
       warmup_ends_at:       warmupEndsAt,
+      first_name:           domainRecord.first_name ?? null,
+      last_name:            domainRecord.last_name  ?? null,
       postal_node_id:       assignedNodeId,
-    }).eq("id", inbox.id);
-    if (inboxError) throw new Error(`Failed to activate inbox ${inbox.email_address}: ${inboxError.message}`);
+    });
+    if (inboxError) throw new Error(`Failed to create inbox ${email}: ${inboxError.message}`);
   }
 
-  // ── Step 7: Register inbound route in Postal ─────────────────────────────────
+  // ── Step 7: Register inbound route in Postal ─────────────────────────────
   const appUrl = process.env.APP_URL ?? "https://leadash.com";
   await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`).catch(err => {
     console.warn(`[provision] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
   });
 
-  // ── Step 8: Mark domain active ───────────────────────────────────────────────
+  // ── Step 8: Mark domain active ───────────────────────────────────────────
   await db
     .from("outreach_domains")
     .update({
