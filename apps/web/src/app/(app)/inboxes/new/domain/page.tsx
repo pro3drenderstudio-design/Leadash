@@ -268,9 +268,8 @@ export default function BuyDomainPage() {
         }),
       }).catch(() => {}),
     ));
-    // Redirect to inboxes — placeholder inboxes are now visible there
-    router.push("/inboxes?tab=domains");
-  }, [router]);
+    setProvisioning(false);
+  }, []);
 
   // Kick off provision on mount when returning from payment
   useEffect(() => {
