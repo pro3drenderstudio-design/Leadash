@@ -69,30 +69,54 @@ interface TldPricing {
   transfer?:    string;
 }
 
+// Fallback pricing for common TLDs (used when Porkbun pricing API is unavailable)
+const FALLBACK_PRICING: Record<string, TldPricing> = {
+  com: { registration: "9.73" }, net: { registration: "11.98" }, org: { registration: "11.98" },
+  io:  { registration: "39.99" }, co:  { registration: "28.88" }, ai:  { registration: "79.99" },
+  app: { registration: "14.00" }, dev: { registration: "12.00" }, biz: { registration: "12.98" },
+  info:{ registration: "4.99"  }, pro: { registration: "14.98" }, me:  { registration: "19.98" },
+  uk:  { registration: "7.48"  }, us:  { registration: "8.98"  }, xyz: { registration: "2.48"  },
+  site:{ registration: "4.98"  }, online: { registration: "4.98" }, click: { registration: "4.98" },
+  website: { registration: "4.98" }, fun: { registration: "4.98" }, space: { registration: "4.98" },
+  homes: { registration: "24.98" },
+};
+
+let pricingCache: { data: Record<string, TldPricing>; ts: number } | null = null;
+
 /**
- * Fetch live TLD pricing from Porkbun.
- * Throws if the API call fails — no fallbacks, so the UI always shows accurate prices.
+ * Fetch live TLD pricing from Porkbun, cached for 1 hour.
+ * Falls back to hardcoded pricing if the API is unavailable.
  */
 export async function getLivePricing(): Promise<Record<string, TldPricing>> {
-  // Pricing is public — no auth required
-  const res = await fetch(`${BASE}/pricing/get`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({}),
-  });
+  if (pricingCache && Date.now() - pricingCache.ts < 3_600_000) {
+    return pricingCache.data;
+  }
 
-  let data: { status: string; message?: string; pricing: Record<string, TldPricing> };
   try {
-    data = await res.json();
-  } catch {
-    throw new Error(`Porkbun pricing API returned non-JSON response (HTTP ${res.status})`);
-  }
+    const res = await fetch(`${BASE}/pricing/get`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({}),
+      signal:  AbortSignal.timeout(8000),
+    });
 
-  if (data.status !== "SUCCESS") {
-    throw new Error(`Porkbun pricing error: ${data.message ?? data.status}`);
-  }
+    let data: { status: string; message?: string; pricing: Record<string, TldPricing> };
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Porkbun pricing API returned non-JSON response (HTTP ${res.status})`);
+    }
 
-  return data.pricing;
+    if (data.status !== "SUCCESS") {
+      throw new Error(`Porkbun pricing error: ${data.message ?? data.status}`);
+    }
+
+    pricingCache = { data: data.pricing, ts: Date.now() };
+    return data.pricing;
+  } catch (err) {
+    console.warn("[porkbun] getLivePricing failed, using fallback:", err instanceof Error ? err.message : err);
+    return { ...FALLBACK_PRICING, ...(pricingCache?.data ?? {}) };
+  }
 }
 
 /**
