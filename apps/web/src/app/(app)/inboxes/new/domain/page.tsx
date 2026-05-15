@@ -256,7 +256,7 @@ export default function BuyDomainPage() {
     provisioningRef.current = true;
     setProvisioning(true);
     const wsId = getWorkspaceId() ?? "";
-    // Fire provision for each domain in parallel (fire-and-forget)
+    // Kick off provisioning for each domain — waits for placeholder inboxes to be created
     await Promise.all(ids.map(dId =>
       fetch("/api/outreach/domains/provision", {
         method: "POST",
@@ -268,7 +268,9 @@ export default function BuyDomainPage() {
         }),
       }).catch(() => {}),
     ));
-  }, []);
+    // Redirect to inboxes — placeholder inboxes are now visible there
+    router.push("/inboxes");
+  }, [router]);
 
   // Kick off provision on mount when returning from payment
   useEffect(() => {

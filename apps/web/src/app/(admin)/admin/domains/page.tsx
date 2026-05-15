@@ -9,7 +9,7 @@ interface Domain {
   workspace_name: string;
   workspace_owner: string;
   domain: string;
-  status: "pending" | "purchasing" | "dns_pending" | "verifying" | "active" | "failed";
+  status: "pending" | "purchasing" | "awaiting_manual_purchase" | "dns_pending" | "verifying" | "active" | "failed";
   payment_provider: "stripe" | "paystack";
   mailgun_domain: string | null;
   mailbox_count: number;
@@ -26,16 +26,17 @@ interface Domain {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:     "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
-  purchasing:  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  dns_pending: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  verifying:   "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
-  active:      "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
-  failed:      "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  pending:                   "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
+  purchasing:                "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  awaiting_manual_purchase:  "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
+  dns_pending:               "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+  verifying:                 "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
+  active:                    "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
+  failed:                    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const pulse = status === "dns_pending" || status === "verifying" || status === "purchasing";
+  const pulse = status === "dns_pending" || status === "verifying" || status === "purchasing" || status === "awaiting_manual_purchase";
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${STATUS_COLORS[status] ?? STATUS_COLORS.pending}`}>
       {pulse && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
@@ -75,6 +76,14 @@ function ActionButtons({ domain, onAction }: { domain: Domain; onAction: (id: st
   const { status } = domain;
   return (
     <div className="flex gap-1.5 flex-wrap">
+      {status === "awaiting_manual_purchase" && (
+        <button
+          onClick={() => onAction(domain.id, "mark_purchased")}
+          className="text-[11px] font-medium px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-500/10 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition-colors border border-yellow-300 dark:border-yellow-500/30"
+        >
+          ✓ Mark Purchased
+        </button>
+      )}
       {(status === "failed" || status === "dns_pending") && (
         <button
           onClick={() => onAction(domain.id, "retry_dns")}
@@ -207,6 +216,7 @@ function DomainsInner() {
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="purchasing">Purchasing</option>
+          <option value="awaiting_manual_purchase">Awaiting Manual Purchase</option>
           <option value="dns_pending">DNS Pending</option>
           <option value="verifying">Verifying</option>
           <option value="active">Active</option>
@@ -267,6 +277,11 @@ function DomainsInner() {
                 </td>
                 <td className="px-4 py-4">
                   <StatusBadge status={d.status} />
+                  {d.status === "awaiting_manual_purchase" && (
+                    <p className="text-[10px] text-yellow-600 dark:text-yellow-400 mt-0.5 max-w-[160px]">
+                      Buy on Porkbun → Mark Purchased
+                    </p>
+                  )}
                   {d.status === "failed" && d.error_message && (
                     <p className="text-[10px] text-red-500 dark:text-red-400 mt-0.5 max-w-[160px] truncate" title={d.error_message}>
                       {d.error_message}

@@ -1,6 +1,8 @@
 import type { Job } from "bullmq";
+import { UnrecoverableError } from "bullmq";
 import { adminClient } from "../lib/supabase";
 import { purchaseDomain, updateNameservers } from "../lib/porkbun";
+import { notifyAdminDomainPurchaseRequired } from "../lib/email";
 import {
   registerDomain,
   isDomainVerified,
@@ -54,11 +56,26 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   }
 
   // ── Step 1: Purchase domain via Porkbun ──────────────────────────────────────
-  await purchaseDomain(
-    domainRecord.domain,
-    undefined,
-    (domainRecord as Record<string, unknown>).domain_price_usd as number ?? undefined,
-  );
+  try {
+    await purchaseDomain(
+      domainRecord.domain,
+      undefined,
+      (domainRecord as Record<string, unknown>).domain_price_usd as number ?? undefined,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    if (msg.includes("unable to process order") || msg.includes("fraud") || msg.includes("(001)") || msg.includes("(002)")) {
+      await setStatus("awaiting_manual_purchase", "Domain is being manually registered by our team. Your inboxes will activate automatically.");
+      notifyAdminDomainPurchaseRequired({
+        domain:      domainRecord.domain,
+        domainId:    domain_record_id,
+        priceUsd:    (domainRecord as Record<string, unknown>).domain_price_usd as number ?? 0,
+        workspaceId: workspace_id,
+      }).catch(e => console.error("[provision] admin email failed:", e));
+      throw new UnrecoverableError(`Manual purchase required for ${domainRecord.domain}: ${err instanceof Error ? err.message : err}`);
+    }
+    throw err;
+  }
 
   // ── Step 2: Register domain with Postal + get DKIM public key ──────────────
   await setStatus("dns_pending");
@@ -83,7 +100,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   await publishDnsRecords(domainRecord.domain, dnsRecords)
     .catch(e => { throw new Error(`CF publishDnsRecords: ${e.message}`); });
 
-  await db.from("outreach_domains").update({ dns_records: dnsRecords, postal_node_id: assignedNodeId }).eq("id", domain_record_id);
+  await db.from("outreach_domains").update({ dns_records: dnsRecords }).eq("id", domain_record_id);
 
   // ── Step 4b: Optional web redirect + email forwarding ────────────────────────
   if (domainRecord.redirect_url) {
@@ -142,23 +159,18 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     assignedNodeId = available[0].id;
   }
 
-  const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
-    ? domainRecord.mailbox_prefixes as string[]
-    : null;
-  const logins = explicitPrefixes
-    ?? Array.from({ length: domainRecord.mailbox_count }, (_, i) => `${domainRecord.mailbox_prefix}${i + 1}`);
+  // Activate placeholder inboxes created at payment time
+  const { data: pendingInboxes } = await db
+    .from("outreach_inboxes")
+    .select("id, email_address")
+    .eq("domain_id", domain_record_id)
+    .eq("status", "pending");
 
-  for (const login of logins) {
-    const email = `${login}@${domainRecord.domain}`;
-    const cred = await createSmtpCredential(domainRecord.domain, email)
-      .catch(e => { throw new Error(`Postal createSmtpCredential(${email}): ${e.message}`); });
+  for (const inbox of pendingInboxes ?? []) {
+    const cred = await createSmtpCredential(domainRecord.domain, inbox.email_address)
+      .catch(e => { throw new Error(`Postal createSmtpCredential(${inbox.email_address}): ${e.message}`); });
 
-    const { error: inboxError } = await db.from("outreach_inboxes").insert({
-      workspace_id:         workspace_id,
-      domain_id:            domain_record_id,
-      label:                email,
-      email_address:        email,
-      provider:             "smtp",
+    const { error: inboxError } = await db.from("outreach_inboxes").update({
       status:               "active",
       smtp_host:            smtpSettings.host,
       smtp_port:            smtpSettings.port,
@@ -166,16 +178,14 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       smtp_pass_encrypted:  encrypt(cred.password),
       imap_host:            null,
       imap_port:            null,
-      daily_send_limit:      1,
-      warmup_enabled:        true,
-      warmup_current_daily:  1,
-      warmup_target_daily:   30,
-      warmup_ends_at:        warmupEndsAt,
-      first_name:           domainRecord.first_name ?? null,
-      last_name:            domainRecord.last_name  ?? null,
+      daily_send_limit:     1,
+      warmup_enabled:       true,
+      warmup_current_daily: 1,
+      warmup_target_daily:  30,
+      warmup_ends_at:       warmupEndsAt,
       postal_node_id:       assignedNodeId,
-    });
-    if (inboxError) throw new Error(`Failed to create inbox ${email}: ${inboxError.message}`);
+    }).eq("id", inbox.id);
+    if (inboxError) throw new Error(`Failed to activate inbox ${inbox.email_address}: ${inboxError.message}`);
   }
 
   // ── Step 7: Register inbound route in Postal ─────────────────────────────────
@@ -188,9 +198,10 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   await db
     .from("outreach_domains")
     .update({
-      status:         "active",
-      warmup_ends_at: warmupEndsAt,
-      updated_at:     new Date().toISOString(),
+      status:          "active",
+      warmup_ends_at:  warmupEndsAt,
+      postal_node_id:  assignedNodeId,
+      updated_at:      new Date().toISOString(),
     })
     .eq("id", domain_record_id);
 

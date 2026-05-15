@@ -107,6 +107,48 @@ export async function sendAdminNewTicketNotification(opts: {
   });
 }
 
+// ─── Admin: manual domain purchase required ───────────────────────────────────
+
+export async function sendAdminDomainPurchaseRequired(opts: {
+  adminEmail: string;
+  domain:     string;
+  domainId:   string;
+  priceUsd:   number;
+  workspaceId: string;
+}): Promise<void> {
+  const adminUrl = `${APP_URL}/admin/domains?search=${encodeURIComponent(opts.domain)}`;
+  await sendEmail({
+    to:      opts.adminEmail,
+    subject: `[Action Required] Manual domain purchase: ${opts.domain}`,
+    text: [
+      `A user paid for a domain that needs to be manually registered on Porkbun.`,
+      ``,
+      `Domain:    ${opts.domain}`,
+      `Price:     $${opts.priceUsd}`,
+      `Workspace: ${opts.workspaceId}`,
+      ``,
+      `Steps:`,
+      `1. Register ${opts.domain} on porkbun.com`,
+      `2. Go to ${adminUrl}`,
+      `3. Click "Mark Purchased" — this will continue provisioning automatically`,
+    ].join("\n"),
+    html: `
+      <p>A user paid for a domain that needs to be manually registered on Porkbun.</p>
+      <table style="border-collapse:collapse;margin:16px 0;font-size:14px;font-family:sans-serif">
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Domain</td><td><strong>${opts.domain}</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Price</td><td>$${opts.priceUsd}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Workspace</td><td>${opts.workspaceId}</td></tr>
+      </table>
+      <ol style="font-family:sans-serif;font-size:14px">
+        <li>Register <strong>${opts.domain}</strong> on <a href="https://porkbun.com">porkbun.com</a></li>
+        <li>Return to the <a href="${adminUrl}">admin domains page</a></li>
+        <li>Click <strong>"Mark Purchased"</strong> — provisioning continues automatically</li>
+      </ol>
+      <p><a href="${adminUrl}" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">Open Admin Panel →</a></p>
+    `,
+  });
+}
+
 // ─── Beta programme ───────────────────────────────────────────────────────────
 
 export async function sendBetaApplicationConfirmation(opts: {

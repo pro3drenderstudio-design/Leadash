@@ -22,11 +22,35 @@ export async function PATCH(
   const body = await req.json();
   const { action } = body;
 
-  if (!["retry_dns", "force_active", "reset", "set_failed"].includes(action)) {
+  if (!["retry_dns", "force_active", "reset", "set_failed", "mark_purchased"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
   const now = new Date().toISOString();
+
+  // mark_purchased: admin manually bought the domain on Porkbun — re-enqueue provisioning
+  if (action === "mark_purchased") {
+    const { data: domain } = await ctx.adminClient
+      .from("outreach_domains")
+      .select("workspace_id, status")
+      .eq("id", domainId)
+      .single();
+
+    if (!domain) return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+    if (domain.status !== "awaiting_manual_purchase") {
+      return NextResponse.json({ error: "Domain is not awaiting manual purchase" }, { status: 400 });
+    }
+
+    await ctx.adminClient
+      .from("outreach_domains")
+      .update({ status: "purchasing", error_message: null, updated_at: now })
+      .eq("id", domainId);
+
+    const { enqueueProvision } = await import("@/lib/queue");
+    await enqueueProvision(domainId, domain.workspace_id as string);
+
+    return NextResponse.json({ ok: true, action, newStatus: "purchasing" });
+  }
 
   const statusMap: Record<string, string> = {
     retry_dns:    "dns_pending",
@@ -40,7 +64,6 @@ export async function PATCH(
     updated_at: now,
   };
 
-  // Clear error on retry/force
   if (action === "retry_dns" || action === "force_active") {
     updates.error_message = null;
   }

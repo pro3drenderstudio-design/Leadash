@@ -62,6 +62,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Create placeholder inboxes (visible immediately on /inboxes) ─────────────
+  const { count: existingInboxCount } = await db
+    .from("outreach_inboxes")
+    .select("id", { count: "exact", head: true })
+    .eq("domain_id", domain_record_id);
+
+  if (!existingInboxCount) {
+    const explicitPrefixes = Array.isArray(domainRecord.mailbox_prefixes)
+      ? domainRecord.mailbox_prefixes as string[]
+      : null;
+    const logins = explicitPrefixes
+      ?? Array.from(
+           { length: (domainRecord.mailbox_count as number) ?? 1 },
+           (_, i) => `${(domainRecord.mailbox_prefix as string) ?? "inbox"}${i + 1}`,
+         );
+    await db.from("outreach_inboxes").insert(
+      logins.map(login => ({
+        workspace_id:     workspaceId,
+        domain_id:        domain_record_id,
+        label:            `${login}@${domainRecord.domain}`,
+        email_address:    `${login}@${domainRecord.domain}`,
+        provider:         "smtp",
+        status:           "pending",
+        daily_send_limit: 0,
+        warmup_enabled:   false,
+        first_name:       domainRecord.first_name ?? null,
+        last_name:        domainRecord.last_name  ?? null,
+      })),
+    );
+  }
+
   // ── Hand off domain purchase + provisioning to the VPS worker ───────────────
   await db
     .from("outreach_domains")

@@ -859,14 +859,18 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                         </div>
                       ) : (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          d.status === "active"         ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
-                          d.status === "failed"         ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "payment_failed" ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "dns_pending"    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                          d.status === "active"                     ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                          d.status === "failed"                     ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                          d.status === "payment_failed"             ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                          d.status === "dns_pending"                ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                          d.status === "purchasing"                 ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                          d.status === "awaiting_manual_purchase"   ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
                           "text-white/40 bg-white/5 border-white/10"
                         }`}>{
-                          d.status === "dns_pending"    ? "DNS pending" :
-                          d.status === "payment_failed" ? "Payment failed" :
+                          d.status === "dns_pending"                ? "DNS pending" :
+                          d.status === "payment_failed"             ? "Payment failed" :
+                          d.status === "purchasing"                 ? "Setting up…" :
+                          d.status === "awaiting_manual_purchase"   ? "Setting up…" :
                           d.status
                         }</span>
                       )}
