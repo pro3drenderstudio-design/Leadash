@@ -68,11 +68,18 @@ export async function GET() {
       .limit(25),
   ]);
 
-  const plans    = planConfigs ?? [];
-  const priceMap = Object.fromEntries(plans.map(p => [p.plan_id, p.price_ngn ?? 0]));
-  const nameMap  = Object.fromEntries(plans.map(p => [p.plan_id, p.name ?? p.plan_id]));
-  const ws       = workspaces ?? [];
-  const invoices = invoicesRaw ?? [];
+  type PlanConfig = { plan_id: string; name: string | null; price_ngn: number | null; sort_order: number | null };
+  type WsRow      = { plan_id: string | null; plan_status: string | null; trial_ends_at: string | null; created_at: string | null };
+  type IpRow      = { price_ngn: number | null };
+  type InboxRow   = { paystack_inbox_monthly_kobo: number | null };
+  type InvoiceRow = { type: string | null; amount_kobo: number | null; created_at: string | null };
+
+  const plans     = (planConfigs   ?? []) as PlanConfig[];
+  const ws        = (workspaces    ?? []) as WsRow[];
+  const ips       = (dedicatedIps  ?? []) as IpRow[];
+  const inboxes   = (inboxDomains  ?? []) as InboxRow[];
+  const invoices  = (invoicesRaw   ?? []) as InvoiceRow[];
+  const priceMap  = Object.fromEntries(plans.map((p: PlanConfig) => [p.plan_id, p.price_ngn ?? 0]));
 
   // ── MRR calculation ──────────────────────────────────────────────────────────
 
@@ -86,8 +93,8 @@ export async function GET() {
   let trialPipelineMrr = 0;
 
   for (const w of ws) {
-    const planId = (w.plan_id as string) ?? "free";
-    const status = (w.plan_status as string) ?? "active";
+    const planId = w.plan_id ?? "free";
+    const status = w.plan_status ?? "active";
 
     if (planId === "free") { freeCount++; continue; }
 
@@ -107,9 +114,9 @@ export async function GET() {
 
   // Also count trial_ends_at still in future (beta programme users)
   for (const w of ws) {
-    if (w.trial_ends_at && new Date(w.trial_ends_at as string) > now) {
+    if (w.trial_ends_at && new Date(w.trial_ends_at) > now) {
       trialing++;
-      trialPipelineMrr += priceMap[(w.plan_id as string) ?? "free"] ?? 0;
+      trialPipelineMrr += priceMap[w.plan_id ?? "free"] ?? 0;
     }
   }
 
@@ -125,11 +132,11 @@ export async function GET() {
     .filter(p => p.count > 0 || plans.length <= 6); // always show defined tiers
 
   // Dedicated IP add-on MRR
-  const ipMrr = (dedicatedIps ?? []).reduce((s, r) => s + (r.price_ngn ?? 0), 0);
+  const ipMrr = ips.reduce((s, r: IpRow) => s + (r.price_ngn ?? 0), 0);
 
   // Inbox billing MRR (kobo → NGN)
   const inboxMrr = Math.round(
-    (inboxDomains ?? []).reduce((s, r) => s + ((r.paystack_inbox_monthly_kobo as number) ?? 0), 0) / 100
+    inboxes.reduce((s, r: InboxRow) => s + (r.paystack_inbox_monthly_kobo ?? 0), 0) / 100
   );
 
   const totalMrr = plansMrr + ipMrr + inboxMrr;
@@ -139,17 +146,17 @@ export async function GET() {
   // ── Invoice aggregations ────────────────────────────────────────────────────
 
   // Total revenue all-time from invoices in window (we also fetch all-time below via sum)
-  const allTimeRevenue = invoices.reduce((s, i) => s + ((i.amount_kobo as number) ?? 0), 0);
+  const allTimeRevenue = invoices.reduce((s, i: InvoiceRow) => s + (i.amount_kobo ?? 0), 0);
 
   // This-month collected
   const thisMonthRevenue = invoices
-    .filter(i => (i.created_at as string) >= monthStart)
-    .reduce((s, i) => s + ((i.amount_kobo as number) ?? 0), 0);
+    .filter((i: InvoiceRow) => (i.created_at ?? "") >= monthStart)
+    .reduce((s, i: InvoiceRow) => s + (i.amount_kobo ?? 0), 0);
 
   // Last-month collected (for MoM delta)
   const lastMonthRevenue = invoices
-    .filter(i => (i.created_at as string) >= prevMonthStart && (i.created_at as string) < monthStart)
-    .reduce((s, i) => s + ((i.amount_kobo as number) ?? 0), 0);
+    .filter((i: InvoiceRow) => (i.created_at ?? "") >= prevMonthStart && (i.created_at ?? "") < monthStart)
+    .reduce((s, i: InvoiceRow) => s + (i.amount_kobo ?? 0), 0);
 
   const momDeltaPct = lastMonthRevenue > 0
     ? Math.round(((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
@@ -158,9 +165,9 @@ export async function GET() {
   // Revenue type breakdown this month (kobo → NGN)
   const typeBreakdown: Record<string, number> = {};
   for (const inv of invoices) {
-    if ((inv.created_at as string) >= monthStart) {
-      const t = (inv.type as string);
-      typeBreakdown[t] = (typeBreakdown[t] ?? 0) + Math.round(((inv.amount_kobo as number) ?? 0) / 100);
+    if ((inv.created_at ?? "") >= monthStart) {
+      const t = inv.type ?? "unknown";
+      typeBreakdown[t] = (typeBreakdown[t] ?? 0) + Math.round((inv.amount_kobo ?? 0) / 100);
     }
   }
 
@@ -177,10 +184,10 @@ export async function GET() {
   for (const mk of months) chartBuckets[mk] = {};
 
   for (const inv of invoices) {
-    const mk = monthKey(inv.created_at as string);
+    const mk = monthKey(inv.created_at ?? "");
     if (!chartBuckets[mk]) continue;
-    const t   = (inv.type as string);
-    const ngn = Math.round(((inv.amount_kobo as number) ?? 0) / 100);
+    const t   = inv.type ?? "unknown";
+    const ngn = Math.round((inv.amount_kobo ?? 0) / 100);
     chartBuckets[mk][t] = (chartBuckets[mk][t] ?? 0) + ngn;
   }
 
