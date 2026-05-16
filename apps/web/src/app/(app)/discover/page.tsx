@@ -1221,13 +1221,14 @@ function DiscoverContent() {
   const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
   const revealCost  = Math.ceil(unrevealed.length * 0.25 * 10) / 10;
 
-  function SortTh({ label, col, sortBy, sortDir, onSort }: {
+  function SortTh({ label, col, sortBy, sortDir, onSort, className = "" }: {
     label: string; col: string | null;
     sortBy: string; sortDir: "asc" | "desc";
     onSort: (col: string) => void;
+    className?: string;
   }) {
     return (
-      <th className="px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap">
+      <th className={`px-3 py-2.5 text-left font-semibold text-white/30 whitespace-nowrap ${className}`}>
         {col ? (
           <button onClick={() => onSort(col)} className="flex items-center gap-1 hover:text-white/60 transition-colors group">
             {label}
@@ -1460,11 +1461,12 @@ function DiscoverContent() {
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
                 <tr>
-                  <th className="w-10 px-3 py-2.5">
+                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#111]">
                     <input type="checkbox" checked={results.length > 0 && (selectAllMode || selected.size === results.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  <SortTh label="Name"     col="name"         sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
+                  <SortTh label="Name" col="name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort}
+                    className="sticky left-10 z-20 bg-[#111] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
                   <SortTh label="Title"    col="title"        sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
                   <SortTh label="Company"  col="company_name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
                   <SortTh label="Location" col="location"     sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
@@ -1485,17 +1487,18 @@ function DiscoverContent() {
                   const isHovered = hoveredRow === r.id;
                   const isSelected = selected.has(r.id);
                   const isActive = drawer?.type === "person" && drawer.id === r.id;
+                  const stickyBg = isSelected ? "bg-[#1b0e04]" : isActive ? "bg-[#181818]" : isHovered ? "bg-[#161616]" : "bg-[#111]";
                   return (
                     <tr key={r.id}
                       onMouseEnter={() => setHoveredRow(r.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className="px-3 py-2.5">
+                      <td className={`px-3 py-2.5 sticky left-0 z-[5] transition-colors ${stickyBg}`}>
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Name */}
-                      <td className="px-3 py-2.5">
+                      <td className={`px-3 py-2.5 sticky left-10 z-[5] relative transition-colors after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06] ${stickyBg}`}>
                         <div className="flex items-center gap-2">
                           <Avatar first={r.first_name} last={r.last_name} size="sm" />
                           <button
@@ -1609,11 +1612,12 @@ function DiscoverContent() {
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
                 <tr>
-                  <th className="w-10 px-3 py-2.5">
+                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#111]">
                     <input type="checkbox" checked={companyResults.length > 0 && selected.size === companyResults.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
-                  <SortTh label="Company"  col="name"         sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
+                  <SortTh label="Company" col="name" sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort}
+                    className="sticky left-10 z-20 bg-[#111] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
                   <SortTh label="Industry" col="industry"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
                   <SortTh label="Size"     col="size"         sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
                   <SortTh label="Location" col="location"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
@@ -1633,17 +1637,18 @@ function DiscoverContent() {
                   const isHovered  = hoveredRow === c.id;
                   const isSelected = selected.has(c.id);
                   const isActive   = drawer?.type === "company" && drawer.id === c.id;
+                  const stickyBg   = isSelected ? "bg-[#1b0e04]" : isActive ? "bg-[#181818]" : isHovered ? "bg-[#161616]" : "bg-[#111]";
                   return (
                     <tr key={c.id}
                       onMouseEnter={() => setHoveredRow(c.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className="px-3 py-2.5">
+                      <td className={`px-3 py-2.5 sticky left-0 z-[5] transition-colors ${stickyBg}`}>
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Company name */}
-                      <td className="px-3 py-2.5">
+                      <td className={`px-3 py-2.5 sticky left-10 z-[5] relative transition-colors after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06] ${stickyBg}`}>
                         <div className="flex items-center gap-2">
                           <CompanyLogo name={c.name} />
                           <div className="min-w-0">
