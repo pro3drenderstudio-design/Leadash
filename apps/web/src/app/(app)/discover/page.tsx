@@ -913,7 +913,8 @@ function DiscoverContent() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savingSearch,  setSavingSearch]  = useState(false);
   const [saveNameVal,   setSaveNameVal]   = useState("");
-  const [showSaveInput, setShowSaveInput] = useState(false);
+  const [showSaveInput,    setShowSaveInput]    = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const limit      = 25;
   const SEARCH_CAP = 50_000;
@@ -1248,91 +1249,130 @@ function DiscoverContent() {
     else { setCoSortBy(col); setCoSortDir("desc"); }
   }
 
+  const sidebarInner = (
+    <>
+      <div className="flex-shrink-0 px-4 py-3 border-b border-white/8">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-xs font-bold text-white/70">Filters</span>
+          <div className="flex items-center gap-2">
+            {balance !== null && (
+              <span className="text-[11px] text-amber-400 font-semibold tabular-nums">{balance.toLocaleString()} cr</span>
+            )}
+            {activeFilterCount > 0 && (
+              <button onClick={clearAll} className="text-[10px] text-white/35 hover:text-orange-400 transition-colors">Clear all</button>
+            )}
+          </div>
+        </div>
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+          </svg>
+          <input
+            value={mode === "people" ? peopleFilters.keyword : companyFilters.coKeyword}
+            onChange={e => mode === "people"
+              ? setPeopleFilters(f => ({ ...f, keyword: e.target.value }))
+              : setCompanyFilters(f => ({ ...f, coKeyword: e.target.value }))
+            }
+            placeholder={mode === "people" ? "Name, title, company…" : "Company name, domain…"}
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+        {mode === "people" ? (
+          <PeopleSidebar filters={peopleFilters} onChange={setPeopleFilters}
+            onAiApply={(partial) => setPeopleFilters(f => ({ ...f, ...partial }))} />
+        ) : (
+          <CompanySidebar filters={companyFilters} onChange={setCompanyFilters}
+            onAiApply={(partial) => setCompanyFilters(f => ({ ...f, ...partial }))} />
+        )}
+
+        <div className="border-b border-white/6">
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-[11px] font-semibold text-white/45 uppercase tracking-wider">Saved Searches</span>
+            <button onClick={() => setShowSaveInput(s => !s)} className="text-[10px] text-white/30 hover:text-orange-400 transition-colors">
+              {showSaveInput ? "Cancel" : "+ Save"}
+            </button>
+          </div>
+          {showSaveInput && (
+            <div className="px-3 pb-2 flex gap-1.5">
+              <input value={saveNameVal} onChange={e => setSaveNameVal(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && saveSearch()} placeholder="Search name…"
+                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
+              <button onClick={saveSearch} disabled={savingSearch || !saveNameVal.trim()}
+                className="px-2 py-1 text-[10px] font-bold bg-orange-500 text-white rounded-lg disabled:opacity-40">
+                {savingSearch ? "…" : "Save"}
+              </button>
+            </div>
+          )}
+          {savedSearches.length > 0 ? (
+            <div className="pb-1">
+              {savedSearches.map(s => (
+                <div key={s.id} className="flex items-center group px-4 py-1.5 hover:bg-white/3 transition-colors">
+                  <button onClick={() => applySavedSearch(s)} className="flex-1 text-left text-xs text-white/50 hover:text-white/80 truncate">{s.name}</button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[9px] text-white/25">{s.mode}</span>
+                    <button onClick={() => deleteSavedSearch(s.id)} className="text-white/20 hover:text-red-400 transition-colors"><XIcon sm /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="px-4 pb-3 text-[10px] text-white/20">No saved searches yet</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="absolute inset-0 flex overflow-hidden">
 
-      {/* ── Left sidebar ── */}
-      <div className="w-[240px] flex-shrink-0 border-r border-white/8 flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 px-4 py-3 border-b border-white/8">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-xs font-bold text-white/70">Filters</span>
-            <div className="flex items-center gap-2">
-              {balance !== null && (
-                <span className="text-[11px] text-amber-400 font-semibold tabular-nums">{balance.toLocaleString()} cr</span>
-              )}
-              {activeFilterCount > 0 && (
-                <button onClick={clearAll} className="text-[10px] text-white/35 hover:text-orange-400 transition-colors">Clear all</button>
-              )}
-            </div>
-          </div>
-          <div className="relative">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
-            </svg>
-            <input
-              value={mode === "people" ? peopleFilters.keyword : companyFilters.coKeyword}
-              onChange={e => mode === "people"
-                ? setPeopleFilters(f => ({ ...f, keyword: e.target.value }))
-                : setCompanyFilters(f => ({ ...f, coKeyword: e.target.value }))
-              }
-              placeholder={mode === "people" ? "Name, title, company…" : "Company name, domain…"}
-              className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40 transition-colors"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-          {mode === "people" ? (
-            <PeopleSidebar filters={peopleFilters} onChange={setPeopleFilters}
-              onAiApply={(partial) => setPeopleFilters(f => ({ ...f, ...partial }))} />
-          ) : (
-            <CompanySidebar filters={companyFilters} onChange={setCompanyFilters}
-              onAiApply={(partial) => setCompanyFilters(f => ({ ...f, ...partial }))} />
-          )}
-
-          <div className="border-b border-white/6">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-[11px] font-semibold text-white/45 uppercase tracking-wider">Saved Searches</span>
-              <button onClick={() => setShowSaveInput(s => !s)} className="text-[10px] text-white/30 hover:text-orange-400 transition-colors">
-                {showSaveInput ? "Cancel" : "+ Save"}
+      {/* ── Mobile filter overlay ── */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-[280px] bg-[#111] flex flex-col border-r border-white/10 shadow-2xl z-10">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
+              <span className="text-sm font-bold text-white/80">Filters</span>
+              <button onClick={() => setMobileFiltersOpen(false)} className="text-white/40 hover:text-white/70 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            {showSaveInput && (
-              <div className="px-3 pb-2 flex gap-1.5">
-                <input value={saveNameVal} onChange={e => setSaveNameVal(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && saveSearch()} placeholder="Search name…"
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
-                <button onClick={saveSearch} disabled={savingSearch || !saveNameVal.trim()}
-                  className="px-2 py-1 text-[10px] font-bold bg-orange-500 text-white rounded-lg disabled:opacity-40">
-                  {savingSearch ? "…" : "Save"}
-                </button>
-              </div>
-            )}
-            {savedSearches.length > 0 ? (
-              <div className="pb-1">
-                {savedSearches.map(s => (
-                  <div key={s.id} className="flex items-center group px-4 py-1.5 hover:bg-white/3 transition-colors">
-                    <button onClick={() => applySavedSearch(s)} className="flex-1 text-left text-xs text-white/50 hover:text-white/80 truncate">{s.name}</button>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[9px] text-white/25">{s.mode}</span>
-                      <button onClick={() => deleteSavedSearch(s.id)} className="text-white/20 hover:text-red-400 transition-colors"><XIcon sm /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="px-4 pb-3 text-[10px] text-white/20">No saved searches yet</p>
-            )}
+            {sidebarInner}
           </div>
         </div>
+      )}
+
+      {/* ── Left sidebar (desktop only) ── */}
+      <div className="hidden lg:flex w-[240px] flex-shrink-0 border-r border-white/8 flex-col overflow-hidden">
+        {sidebarInner}
       </div>
 
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
 
         {/* Toolbar */}
-        <div className="flex-shrink-0 flex items-center justify-between gap-4 px-5 py-2.5 border-b border-white/8">
-          <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-2 px-3 lg:px-5 py-2.5 border-b border-white/8">
+          <div className="flex items-center gap-2 lg:gap-3">
+            {/* Mobile filter toggle */}
+            <button
+              onClick={() => setMobileFiltersOpen(true)}
+              className="lg:hidden relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+              aria-label="Open filters"
+            >
+              <svg className="w-4 h-4 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+              </svg>
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 bg-orange-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
             <h1 className="text-sm font-bold text-white/80">Discover</h1>
             <span className="text-[10px] text-white/25 font-medium hidden sm:inline">400M+ contacts</span>
             <div className="flex items-center gap-0.5 bg-white/5 rounded-lg p-0.5">
@@ -1349,26 +1389,26 @@ function DiscoverContent() {
           </div>
 
           {(selected.size > 0 || selectAllMode) && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
               {mode === "people" && unrevealed.length > 0 && (
                 <button onClick={revealSelected} disabled={revealing || exporting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
                   {revealing ? <Spinner sm /> : <LockIcon open />}
-                  Unlock {unrevealed.length} · {revealCost} cr
+                  <span className="hidden sm:inline">Unlock {unrevealed.length} · </span>{revealCost} cr
                 </button>
               )}
               <button onClick={() => { setCampaignIds(null); setShowCampaign(true); }} disabled={exporting || revealing}
-                className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                Add to Sequence
+                className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                <span className="hidden sm:inline">Add to </span>Sequence
               </button>
               <button onClick={() => { setListIds(null); setShowList(true); }} disabled={exporting || revealing}
-                className="px-3 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                Add to List
+                className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                <span className="hidden sm:inline">Add to </span>List
               </button>
               <button onClick={() => handleExport("csv")} disabled={exporting || revealing}
-                className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
-                {exporting ? "…" : "Export CSV"}
+                className="px-2.5 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
+                {exporting ? "…" : "Export"}
               </button>
             </div>
           )}
