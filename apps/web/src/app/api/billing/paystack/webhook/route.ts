@@ -362,6 +362,8 @@ export async function POST(req: NextRequest) {
   if (event.event === "invoice.update") {
     const inv = event.data as {
       status?: string;
+      reference?: string;
+      amount?: number;
       subscription?: { subscription_code?: string; plan?: { plan_code?: string } };
     };
     // Only act on paid invoices for active subscriptions
@@ -381,6 +383,18 @@ export async function POST(req: NextRequest) {
         await db.from("workspaces")
           .update({ subscription_renews_at: nextRenewsAt })
           .eq("id", ws.id);
+
+        // Record the renewal invoice for revenue tracking (idempotent via reference)
+        const renewalRef = inv.reference ?? `renewal:${subCode}:${Date.now()}`;
+        await db.from("billing_invoices").upsert({
+          workspace_id:       ws.id,
+          type:               "plan_renewal",
+          description:        `${plan.name} plan — monthly renewal`,
+          amount_kobo:        inv.amount ?? (plan.price_ngn * 100),
+          paystack_reference: renewalRef,
+          status:             "paid",
+        }, { onConflict: "paystack_reference", ignoreDuplicates: true });
+
         if (plan.included_credits > 0) {
           const currentSub   = ws.subscription_credits_balance ?? 0;
           const currentTotal = ws.lead_credits_balance ?? 0;
