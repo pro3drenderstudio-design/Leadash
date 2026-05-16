@@ -65,6 +65,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const workspace = ctx.workspace as { name: string; plan_id: string; plan_status: string; trial_ends_at: string | null; grace_ends_at: string | null; subscription_renews_at: string | null; lead_credits_balance: number; subscription_credits_balance: number };
   const userName  = (user.user_metadata?.full_name as string | null) ?? null;
 
+  // Don't surface trial/beta UI if the user already has an active paid subscription.
+  // Beta enrollments set plan_id="starter" + trial_ends_at; once users upgrade to a real
+  // paid plan the trial_ends_at is stale and should be ignored.
+  const PAID_PLANS = ["pro", "scale", "enterprise"];
+  const hasActivePaidPlan = PAID_PLANS.includes(workspace.plan_id) && workspace.plan_status === "active";
+  const trialEndsAt = hasActivePaidPlan ? null : workspace.trial_ends_at;
+
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
     <CurrencyProvider>
@@ -84,15 +91,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {workspace.plan_status === "past_due" && workspace.grace_ends_at && (
               <PastDueBanner graceEndsAt={workspace.grace_ends_at} />
             )}
-            {workspace.trial_ends_at && (
-              <TrialBanner trialEndsAt={workspace.trial_ends_at} />
+            {trialEndsAt && (
+              <TrialBanner trialEndsAt={trialEndsAt} />
             )}
             <AppHeader
               userEmail={user.email ?? ""}
               userName={userName}
               workspaceName={workspace.name}
               plan={workspace.plan_id}
-              trialEndsAt={workspace.trial_ends_at}
+              trialEndsAt={trialEndsAt}
               subscriptionRenewsAt={workspace.subscription_renews_at}
             />
           </div>
