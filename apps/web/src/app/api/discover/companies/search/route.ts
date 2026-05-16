@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     people_count: "people_count",
     revenue:      "c.revenue_usd",
   };
-  const sortRaw = p.get("sort") || "people_count";
+  const sortRaw = p.get("sort") || "name";
   const sortCol = CO_SORT_COLS[sortRaw] ?? "people_count";
   const sortDir = p.get("order") === "asc" ? "ASC" : "DESC";
 
@@ -145,6 +145,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: [], total: 0, page, limit }, { status: 200 });
     }
 
+    const needsPeopleCount = sortRaw === "people_count";
+
     const [countRows, rows] = await Promise.all([
       leadsDb.unsafe(`
         SELECT count(*) AS total
@@ -153,22 +155,37 @@ export async function GET(req: NextRequest) {
           LIMIT 100001
         ) cnt
       `, params as never[]),
-      leadsDb.unsafe(`
-        SELECT
-          c.id, c.name, c.domain, c.website_url, c.linkedin_url,
-          c.industry, c.size_range, c.employee_count, c.revenue_usd,
-          c.funding_stage, c.funding_total,
-          c.country, c.state, c.city,
-          ${descSql}
-          ${kwSql}
-          COUNT(p.id)::int AS people_count
-        FROM discover_companies c
-        LEFT JOIN discover_people p ON p.company_id = c.id
-        ${where}
-        GROUP BY c.id
-        ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
-        LIMIT $${i} OFFSET $${i + 1}
-      `, [...params, limit, offset] as never[]),
+      needsPeopleCount
+        ? leadsDb.unsafe(`
+            SELECT
+              c.id, c.name, c.domain, c.website_url, c.linkedin_url,
+              c.industry, c.size_range, c.employee_count, c.revenue_usd,
+              c.funding_stage, c.funding_total,
+              c.country, c.state, c.city,
+              ${descSql}
+              ${kwSql}
+              COUNT(p.id)::int AS people_count
+            FROM discover_companies c
+            LEFT JOIN discover_people p ON p.company_id = c.id
+            ${where}
+            GROUP BY c.id
+            ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
+            LIMIT $${i} OFFSET $${i + 1}
+          `, [...params, limit, offset] as never[])
+        : leadsDb.unsafe(`
+            SELECT
+              c.id, c.name, c.domain, c.website_url, c.linkedin_url,
+              c.industry, c.size_range, c.employee_count, c.revenue_usd,
+              c.funding_stage, c.funding_total,
+              c.country, c.state, c.city,
+              ${descSql}
+              ${kwSql}
+              0::int AS people_count
+            FROM discover_companies c
+            ${where}
+            ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
+            LIMIT $${i} OFFSET $${i + 1}
+          `, [...params, limit, offset] as never[]),
     ]);
 
     const total = parseInt((countRows[0] as unknown as { total: string }).total, 10);

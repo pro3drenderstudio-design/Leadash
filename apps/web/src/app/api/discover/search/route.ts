@@ -150,8 +150,6 @@ export async function GET(req: NextRequest) {
 
     if (emailStatus === "has_email") {
       conditions.push(`p.email IS NOT NULL AND p.email <> ''`);
-    } else if (emailStatus === "verified") {
-      conditions.push(`p.email IS NOT NULL AND p.email <> '' AND p.email_status = 'verified'`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";

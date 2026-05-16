@@ -147,7 +147,6 @@ function makeSearchLabel(mode: "people" | "companies", pf: PeopleFilters, cf: Co
     if (pf.seniorities.length)      parts.push(pf.seniorities[0]);
     if (pf.departments.length)      parts.push(pf.departments[0]);
     if (pf.industryIncludes.length) parts.push(pf.industryIncludes[0]);
-    if (pf.emailStatus === "verified") parts.push("verified email");
     if (pf.companyIncludes.length)  parts.push(pf.companyIncludes[0]);
   } else {
     if (cf.coCountryIncludes.length)  parts.push(cf.coCountryIncludes.slice(0, 2).join(", "));
@@ -574,7 +573,6 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAd
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-xs font-mono ${revealed ? "text-white/80" : "text-white/30"}`}>{email ?? "—"}</span>
-                  {!!data.email_status && <EmailPill status={data.email_status as string} />}
                 </div>
                 {emailAlts.map((alt, i) => (
                   <div key={i} className="flex items-center gap-1.5 mt-1">
@@ -859,7 +857,6 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
                 <p className="text-[10px] text-white/35 truncate">{p.title ?? "—"}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                {p.email_status && <EmailPill status={p.email_status} />}
                 {p.has_email && !p.revealed && (
                   <button onClick={() => onRevealPerson(p.id)} className="text-[9px] text-orange-400/70 hover:text-orange-400 transition-colors">
                     <LockIcon />

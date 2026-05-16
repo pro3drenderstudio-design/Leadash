@@ -513,52 +513,71 @@ function CheckboxGroup({
   );
 }
 
-// ── Include/exclude checkbox group (click once = include, twice = exclude) ────
+// ── Checkbox list with include/exclude mode toggle ────────────────────────────
 
-function IncludeExcludeCheckboxGroup({
-  options, includes, excludes, onChangeIncludes, onChangeExcludes,
+function CheckboxIncludeExclude({
+  options, includes, excludes,
+  onAddInclude, onAddExclude, onRemoveInclude, onRemoveExclude,
 }: {
   options: readonly { label: string; value: string }[];
-  includes: string[];
-  excludes: string[];
-  onChangeIncludes: (v: string[]) => void;
-  onChangeExcludes: (v: string[]) => void;
+  includes: string[]; excludes: string[];
+  onAddInclude: (v: string) => void; onAddExclude: (v: string) => void;
+  onRemoveInclude: (v: string) => void; onRemoveExclude: (v: string) => void;
 }) {
+  const [mode, setMode] = useState<"include" | "exclude">("include");
+
   function toggle(val: string) {
-    if (includes.includes(val)) {
-      onChangeIncludes(includes.filter(x => x !== val));
-      onChangeExcludes([...excludes, val]);
-    } else if (excludes.includes(val)) {
-      onChangeExcludes(excludes.filter(x => x !== val));
+    if (mode === "include") {
+      if (includes.includes(val)) onRemoveInclude(val);
+      else { onAddInclude(val); if (excludes.includes(val)) onRemoveExclude(val); }
     } else {
-      onChangeIncludes([...includes, val]);
+      if (excludes.includes(val)) onRemoveExclude(val);
+      else { onAddExclude(val); if (includes.includes(val)) onRemoveInclude(val); }
     }
   }
+
+  function isChecked(val: string) {
+    return mode === "include" ? includes.includes(val) : excludes.includes(val);
+  }
+
   return (
-    <div className="space-y-0.5">
-      <p className="text-[10px] text-white/25 pb-1">Click once to include · twice to exclude</p>
-      {options.map(o => {
-        const inc = includes.includes(o.value);
-        const exc = excludes.includes(o.value);
-        return (
-          <label key={o.value} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
-            <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-              inc ? "bg-orange-500 border-orange-500" :
-              exc ? "bg-red-500/80 border-red-500" :
-                    "border-white/20 group-hover:border-white/40"
-            }`}>
-              {inc && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>}
-              {exc && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 2l6 6M8 2l-6 6" /></svg>}
-            </div>
-            <span className={`text-[11px] transition-colors ${
-              inc ? "text-orange-300" :
-              exc ? "text-red-300/70 line-through" :
-                    "text-white/55 group-hover:text-white/80"
-            }`}>{o.label}</span>
-            <input type="checkbox" className="sr-only" checked={inc || exc} onChange={() => toggle(o.value)} />
-          </label>
-        );
-      })}
+    <div className="space-y-2">
+      <div className="flex rounded overflow-hidden border border-white/10 text-[10px] font-semibold">
+        <button onClick={() => setMode("include")} className={`flex-1 py-1 transition-colors ${mode === "include" ? "bg-orange-500/20 text-orange-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><PlusIcon /> Include</span>
+        </button>
+        <button onClick={() => setMode("exclude")} className={`flex-1 py-1 transition-colors border-l border-white/10 ${mode === "exclude" ? "bg-rose-500/20 text-rose-300" : "text-white/30 hover:text-white/50"}`}>
+          <span className="flex items-center justify-center gap-1"><MinusIcon /> Exclude</span>
+        </button>
+      </div>
+      <div className="space-y-0.5">
+        {options.map(o => {
+          const checked = isChecked(o.value);
+          const otherMode = mode === "include" ? excludes.includes(o.value) : includes.includes(o.value);
+          return (
+            <label key={o.value} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
+              <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                checked
+                  ? mode === "include" ? "bg-orange-500 border-orange-500" : "bg-rose-500 border-rose-500"
+                  : "border-white/20 group-hover:border-white/40"
+              }`}>
+                {checked && (
+                  <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" />
+                  </svg>
+                )}
+              </div>
+              <span className={`text-[11px] transition-colors ${
+                checked
+                  ? mode === "include" ? "text-orange-300" : "text-rose-300"
+                  : otherMode ? "text-white/30" : "text-white/55 group-hover:text-white/80"
+              }`}>{o.label}</span>
+              <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggle(o.value)} />
+            </label>
+          );
+        })}
+      </div>
+      <TagArea includes={includes} excludes={excludes} onRemoveInclude={onRemoveInclude} onRemoveExclude={onRemoveExclude} />
     </div>
   );
 }
@@ -595,7 +614,7 @@ export interface PeopleFilters {
   industryIncludes:     string[];
   industryExcludes:     string[];
   companySizes:         string[];
-  emailStatus:          "any" | "has_email" | "verified";
+  emailStatus:          "any" | "has_email";
   companyKeywordIncludes: string[];
   companyKeywordExcludes: string[];
 }
@@ -691,7 +710,7 @@ export function PeopleSidebar({
       {/* Email Status */}
       <FilterSection title="Email Status" activeCount={emailCount}>
         <div className="space-y-0.5">
-          {(["has_email", "verified", "any"] as const).map(v => (
+          {(["has_email", "any"] as const).map(v => (
             <label key={v} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
               <div className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
                 filters.emailStatus === v ? "border-orange-500" : "border-white/20 group-hover:border-white/40"
@@ -699,7 +718,7 @@ export function PeopleSidebar({
                 {filters.emailStatus === v && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
               </div>
               <span className="text-[11px] text-white/55 group-hover:text-white/80 capitalize">
-                {v === "has_email" ? "Has Email" : v === "verified" ? "Verified Email" : "Any"}
+                {v === "has_email" ? "Has Email" : "Any"}
               </span>
               <input type="radio" className="sr-only" checked={filters.emailStatus === v} onChange={() => set("emailStatus", v)} />
             </label>
@@ -723,23 +742,27 @@ export function PeopleSidebar({
 
       {/* Management Level */}
       <FilterSection title="Management Level" activeCount={senCount}>
-        <IncludeExcludeCheckboxGroup
+        <CheckboxIncludeExclude
           options={SENIORITY_OPTIONS}
           includes={filters.seniorities}
           excludes={filters.senioritiesExclude}
-          onChangeIncludes={v => set("seniorities", v)}
-          onChangeExcludes={v => set("senioritiesExclude", v)}
+          onAddInclude={v => addInc("seniorities", v)}
+          onAddExclude={v => addInc("senioritiesExclude", v)}
+          onRemoveInclude={v => rmInc("seniorities", v)}
+          onRemoveExclude={v => rmInc("senioritiesExclude", v)}
         />
       </FilterSection>
 
       {/* Department */}
       <FilterSection title="Department" activeCount={deptCount}>
-        <IncludeExcludeCheckboxGroup
+        <CheckboxIncludeExclude
           options={DEPARTMENT_OPTIONS}
           includes={filters.departments}
           excludes={filters.departmentsExclude}
-          onChangeIncludes={v => set("departments", v)}
-          onChangeExcludes={v => set("departmentsExclude", v)}
+          onAddInclude={v => addInc("departments", v)}
+          onAddExclude={v => addInc("departmentsExclude", v)}
+          onRemoveInclude={v => rmInc("departments", v)}
+          onRemoveExclude={v => rmInc("departmentsExclude", v)}
         />
       </FilterSection>
 
