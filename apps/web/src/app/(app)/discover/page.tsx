@@ -899,6 +899,7 @@ function DiscoverContent() {
   const [error,          setError]          = useState<string | null>(null);
 
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [selectAllMode, setSelectAllMode] = useState(false);
   const [hoveredRow,    setHoveredRow]    = useState<string | null>(null);
   const [exporting,     setExporting]     = useState(false);
   const [revealing,     setRevealing]     = useState(false);
@@ -952,7 +953,7 @@ function DiscoverContent() {
   }, []);
 
   const searchPeople = useCallback(async (p = 1) => {
-    setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
     try {
       const f = peopleFilters;
       const params = new URLSearchParams();
@@ -984,7 +985,7 @@ function DiscoverContent() {
   }, [peopleFilters, peopleSortBy, peopleSortDir]);
 
   const searchCompanies = useCallback(async (p = 1) => {
-    setLoading(true); setError(null); setSelected(new Set()); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
     try {
       const f = companyFilters;
       const params = new URLSearchParams();
@@ -1068,8 +1069,43 @@ function DiscoverContent() {
   }
 
   const visibleResults = mode === "people" ? results : companyResults;
-  function toggleSelect(id: string) { setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
-  function toggleAll() { setSelected(selected.size === visibleResults.length ? new Set() : new Set(visibleResults.map(r => r.id))); }
+  function toggleSelect(id: string) {
+    setSelectAllMode(false);
+    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    if (selectAllMode) { setSelectAllMode(false); setSelected(new Set()); return; }
+    setSelected(selected.size === visibleResults.length ? new Set() : new Set(visibleResults.map(r => r.id)));
+  }
+
+  const SELECT_ALL_CAP = 50_000;
+
+  async function fetchAllMatchingIds(): Promise<string[]> {
+    const f = peopleFilters;
+    const params = new URLSearchParams();
+    if (f.keyword)                       params.set("q",               f.keyword);
+    if (f.titleIncludes.length)          params.set("title_include",    f.titleIncludes.join(","));
+    if (f.titleExcludes.length)          params.set("title_exclude",    f.titleExcludes.join(","));
+    if (f.seniorities.length)            params.set("seniority",         f.seniorities.join(","));
+    if (f.senioritiesExclude.length)     params.set("seniority_exclude", f.senioritiesExclude.join(","));
+    if (f.departments.length)            params.set("department",        f.departments.join(","));
+    if (f.departmentsExclude.length)     params.set("department_exclude",f.departmentsExclude.join(","));
+    if (f.countryIncludes.length)        params.set("country_include",  f.countryIncludes.join(","));
+    if (f.countryExcludes.length)        params.set("country_exclude",  f.countryExcludes.join(","));
+    if (f.locationIncludes.length)       params.set("location_include", f.locationIncludes.join(","));
+    if (f.locationExcludes.length)       params.set("location_exclude", f.locationExcludes.join(","));
+    if (f.companyIncludes.length)        params.set("company_include",  f.companyIncludes.join(","));
+    if (f.companyExcludes.length)        params.set("company_exclude",  f.companyExcludes.join(","));
+    if (f.industryIncludes.length)       params.set("industry_include", f.industryIncludes.join(","));
+    if (f.industryExcludes.length)       params.set("industry_exclude", f.industryExcludes.join(","));
+    if (f.companySizes.length)           params.set("company_size",       f.companySizes.join(","));
+    if (f.companyKeywordIncludes.length) params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
+    if (f.companyKeywordExcludes.length) params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
+    params.set("email_status", f.emailStatus);
+    params.set("page", "1"); params.set("limit", String(SELECT_ALL_CAP));
+    const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
+    return (data.results ?? []).map(r => r.id);
+  }
 
   async function revealIds(ids: string[]) {
     setRevealing(true);
@@ -1093,10 +1129,13 @@ function DiscoverContent() {
     } finally { setRevealing(false); }
   }
 
-  async function revealSelected() { await revealIds(Array.from(selected)); }
+  async function revealSelected() {
+    const ids = selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
+    await revealIds(ids);
+  }
 
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
-    const ids = overrideIds ?? Array.from(selected);
+    const ids = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!ids.length) return;
     setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
     try {
@@ -1126,7 +1165,7 @@ function DiscoverContent() {
   }
 
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
-    const ids = overrideIds ?? Array.from(selected);
+    const ids = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!ids.length) return;
     setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
     try {
@@ -1177,7 +1216,8 @@ function DiscoverContent() {
     setSavedSearches(prev => prev.filter(s => s.id !== id));
   }
 
-  const unrevealed  = results.filter(r => selected.has(r.id) && !r.revealed);
+  const unrevealed  = selectAllMode ? results.filter(r => !r.revealed) : results.filter(r => selected.has(r.id) && !r.revealed);
+  const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
   const revealCost  = Math.ceil(unrevealed.length * 0.25 * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort }: {
@@ -1308,9 +1348,9 @@ function DiscoverContent() {
             )}
           </div>
 
-          {selected.size > 0 && (
+          {(selected.size > 0 || selectAllMode) && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selected.size} selected</span>
+              <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
               {mode === "people" && unrevealed.length > 0 && (
                 <button onClick={revealSelected} disabled={revealing || exporting}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
@@ -1356,6 +1396,24 @@ function DiscoverContent() {
           />
         )}
 
+        {/* ── Select-all banner ── */}
+        {mode === "people" && !selectAllMode && selected.size === results.length && results.length > 0 && total > results.length && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-white/50">All {results.length} on this page selected.</span>
+            <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
+              Select all {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching leads
+            </button>
+          </div>
+        )}
+        {selectAllMode && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-orange-300 font-semibold">All {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching leads selected.</span>
+            <button onClick={() => { setSelectAllMode(false); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
+              Clear selection
+            </button>
+          </div>
+        )}
+
         {/* ── People / Companies table ── */}
         <div className={`flex-1 min-h-0 overflow-auto ${!hasSearched ? "hidden" : ""}`}>
           {mode === "people" ? (
@@ -1363,7 +1421,7 @@ function DiscoverContent() {
               <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
                 <tr>
                   <th className="w-10 px-3 py-2.5">
-                    <input type="checkbox" checked={results.length > 0 && selected.size === results.length}
+                    <input type="checkbox" checked={results.length > 0 && (selectAllMode || selected.size === results.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Name"     col="name"         sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
@@ -1447,8 +1505,10 @@ function DiscoverContent() {
                       </td>
 
                       {/* Location */}
-                      <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">
-                        {[r.city, r.country].filter(Boolean).join(", ") || "—"}
+                      <td className="px-3 py-2.5">
+                        <span className="text-white/40 truncate block max-w-[140px]">
+                          {[r.city, r.country].filter(Boolean).join(", ") || "—"}
+                        </span>
                       </td>
 
                       {/* Keywords */}
@@ -1567,7 +1627,7 @@ function DiscoverContent() {
 
                       <td className="px-3 py-2.5 text-white/50 max-w-[160px] truncate">{c.industry ?? "—"}</td>
                       <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{c.size_range ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-white/40 whitespace-nowrap">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
+                      <td className="px-3 py-2.5"><span className="text-white/40 truncate block max-w-[140px]">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</span></td>
 
                       {/* Funding */}
                       <td className="px-3 py-2.5">
