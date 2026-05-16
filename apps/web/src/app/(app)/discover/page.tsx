@@ -1487,18 +1487,17 @@ function DiscoverContent() {
                   const isHovered = hoveredRow === r.id;
                   const isSelected = selected.has(r.id);
                   const isActive = drawer?.type === "person" && drawer.id === r.id;
-                  const stickyBg = isSelected ? "bg-[#1b0e04]" : isActive ? "bg-[#181818]" : isHovered ? "bg-[#161616]" : "bg-[#111]";
                   return (
                     <tr key={r.id}
                       onMouseEnter={() => setHoveredRow(r.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className={`px-3 py-2.5 sticky left-0 z-[5] transition-colors ${stickyBg}`}>
+                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#111]">
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Name */}
-                      <td className={`px-3 py-2.5 sticky left-10 z-[5] relative transition-colors after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06] ${stickyBg}`}>
+                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#111] after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
                         <div className="flex items-center gap-2">
                           <Avatar first={r.first_name} last={r.last_name} size="sm" />
                           <button
@@ -1637,18 +1636,17 @@ function DiscoverContent() {
                   const isHovered  = hoveredRow === c.id;
                   const isSelected = selected.has(c.id);
                   const isActive   = drawer?.type === "company" && drawer.id === c.id;
-                  const stickyBg   = isSelected ? "bg-[#1b0e04]" : isActive ? "bg-[#181818]" : isHovered ? "bg-[#161616]" : "bg-[#111]";
                   return (
                     <tr key={c.id}
                       onMouseEnter={() => setHoveredRow(c.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className={`px-3 py-2.5 sticky left-0 z-[5] transition-colors ${stickyBg}`}>
+                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#111]">
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Company name */}
-                      <td className={`px-3 py-2.5 sticky left-10 z-[5] relative transition-colors after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06] ${stickyBg}`}>
+                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#111] after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
                         <div className="flex items-center gap-2">
                           <CompanyLogo name={c.name} />
                           <div className="min-w-0">
