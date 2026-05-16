@@ -1334,7 +1334,7 @@ function DiscoverContent() {
       {mobileFiltersOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-[280px] bg-[#111] flex flex-col border-r border-white/10 shadow-2xl z-10">
+          <div className="absolute left-0 top-0 h-full w-[280px] bg-[#0a0f1e] flex flex-col border-r border-white/10 shadow-2xl z-10">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
               <span className="text-sm font-bold text-white/80">Filters</span>
               <button onClick={() => setMobileFiltersOpen(false)} className="text-white/40 hover:text-white/70 transition-colors">
@@ -1459,14 +1459,14 @@ function DiscoverContent() {
         <div className={`flex-1 min-h-0 overflow-auto ${!hasSearched ? "hidden" : ""}`}>
           {mode === "people" ? (
             <table className="w-full text-xs border-collapse">
-              <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
+              <thead className="sticky top-0 z-10 bg-[#0a0f1e] border-b border-white/8">
                 <tr>
-                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#111]">
+                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#0a0f1e]">
                     <input type="checkbox" checked={results.length > 0 && (selectAllMode || selected.size === results.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Name" col="name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort}
-                    className="sticky left-10 z-20 bg-[#111] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
+                    className="sticky left-10 z-20 bg-[#0a0f1e] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
                   <SortTh label="Title"    col="title"        sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
                   <SortTh label="Company"  col="company_name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
                   <SortTh label="Location" col="location"     sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort} />
@@ -1492,12 +1492,12 @@ function DiscoverContent() {
                       onMouseEnter={() => setHoveredRow(r.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#111]">
+                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#0a0f1e]/80 backdrop-blur-md">
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Name */}
-                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#111] after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
+                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#0a0f1e]/80 backdrop-blur-md after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
                         <div className="flex items-center gap-2">
                           <Avatar first={r.first_name} last={r.last_name} size="sm" />
                           <button
@@ -1609,14 +1609,14 @@ function DiscoverContent() {
           ) : (
             /* ── Companies table ── */
             <table className="w-full text-xs border-collapse">
-              <thead className="sticky top-0 z-10 bg-[#111] border-b border-white/8">
+              <thead className="sticky top-0 z-10 bg-[#0a0f1e] border-b border-white/8">
                 <tr>
-                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#111]">
+                  <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#0a0f1e]">
                     <input type="checkbox" checked={companyResults.length > 0 && selected.size === companyResults.length}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Company" col="name" sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort}
-                    className="sticky left-10 z-20 bg-[#111] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
+                    className="sticky left-10 z-20 bg-[#0a0f1e] relative after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]" />
                   <SortTh label="Industry" col="industry"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
                   <SortTh label="Size"     col="size"         sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
                   <SortTh label="Location" col="location"     sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort} />
@@ -1641,12 +1641,12 @@ function DiscoverContent() {
                       onMouseEnter={() => setHoveredRow(c.id)}
                       onMouseLeave={() => setHoveredRow(null)}
                       className={`border-b border-white/4 transition-colors ${isSelected ? "bg-orange-500/5" : isActive ? "bg-white/4" : isHovered ? "bg-white/3" : ""}`}>
-                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#111]">
+                      <td className="px-3 py-2.5 sticky left-0 z-[5] bg-[#0a0f1e]/80 backdrop-blur-md">
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)} className="accent-orange-500 w-3.5 h-3.5" />
                       </td>
 
                       {/* Company name */}
-                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#111] after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
+                      <td className="px-3 py-2.5 sticky left-10 z-[5] relative bg-[#0a0f1e]/80 backdrop-blur-md after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-white/[0.06]">
                         <div className="flex items-center gap-2">
                           <CompanyLogo name={c.name} />
                           <div className="min-w-0">
@@ -1712,7 +1712,7 @@ function DiscoverContent() {
 
         {/* Pagination */}
         {hasSearched && totalPages > 1 && (
-          <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-t border-white/8 bg-[#111]">
+          <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-t border-white/8 bg-[#0a0f1e]">
             <span className="text-xs text-white/25">
               Page {page} of {totalPages.toLocaleString()} · {totalLabel} total
             </span>
