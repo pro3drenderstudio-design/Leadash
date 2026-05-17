@@ -921,7 +921,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                 </div>
                 <h2 className="text-white font-bold text-lg mb-1">Verify emails</h2>
                 <p className="text-white/50 text-sm mb-5">
-                  {verifyModal.count.toLocaleString()} pending leads in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span> will be verified via Reoon.
+                  {verifyModal.count.toLocaleString()} pending leads in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span> will be verified.
                 </p>
 
                 <div className="bg-white/4 border border-white/8 rounded-xl p-4 mb-5 space-y-2.5">
@@ -947,7 +947,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                   </p>
                 )}
 
-                <p className="text-white/25 text-xs mb-4">Unknown results are automatically refunded. Verification runs in batches of 500.</p>
+                <p className="text-white/25 text-xs mb-4">Unknown results are automatically refunded.</p>
 
                 <div className="flex gap-3">
                   <button onClick={() => setVerifyModal(null)}
