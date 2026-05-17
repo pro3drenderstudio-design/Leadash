@@ -6,9 +6,9 @@
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 
-const CONCURRENCY  = 200;  // parallel Reoon requests
-const BATCH_SIZE   = 1000; // leads fetched per loop iteration
-const DB_CHUNK     = 100;  // max rows per Supabase upsert
+const CONCURRENCY  = 20;   // parallel Reoon requests — higher rates trigger 429s
+const BATCH_SIZE   = 500;  // leads fetched per loop iteration
+const DB_CHUNK     = 100;  // max rows per Supabase update batch
 const CREDITS_PER  = 0.5;
 const REOON_BASE   = "https://emailverifier.reoon.com/api/v1";
 const ALLOWED      = new Set(["safe", "valid", "catch_all", "verified_external"]);
@@ -44,6 +44,8 @@ async function verifySingle(apiKey: string, email: string): Promise<VerifyResult
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return { email, status: "unknown", score: 0 };
     const d = await res.json() as Record<string, unknown>;
+    // Reoon returns {"status":"error"} when rate-limited — treat as transient unknown
+    if (d.status === "error") return { email, status: "unknown", score: 0 };
     return {
       email:  (d.email  as string) ?? email,
       status: (d.status as string) ?? "unknown",
@@ -154,12 +156,21 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           };
         });
 
-        for (let i = 0; i < updates.length; i += DB_CHUNK) {
-          const { error: upsertErr } = await db
-            .from("outreach_leads")
-            .upsert(updates.slice(i, i + DB_CHUNK), { onConflict: "id" });
-          if (upsertErr) console.error(`[verify-bulk] ${job_id}: upsert failed`, upsertErr.message);
-        }
+        // UPDATE (not upsert) — upsert requires all NOT NULL columns on the insert
+        // path even when a conflict is guaranteed; individual updates avoid that.
+        const updateResults = await Promise.all(
+          updates.map(u =>
+            db.from("outreach_leads")
+              .update({
+                verification_status: u.verification_status,
+                verification_score:  u.verification_score,
+                verified_at:         u.verified_at,
+              })
+              .eq("id", u.id),
+          ),
+        );
+        const firstErr = updateResults.find(r => r.error);
+        if (firstErr?.error) console.error(`[verify-bulk] ${job_id}: update failed`, firstErr.error.message);
 
         // Refund unknowns — Reoon doesn't charge for these
         const batchRefund = Math.round(batchUnknown * CREDITS_PER * 10) / 10;
