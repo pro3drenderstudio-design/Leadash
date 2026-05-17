@@ -7,8 +7,7 @@
  * invalidated immediately when an admin saves a change.
  */
 
-import { unstable_cache, revalidateTag } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 
 export interface PlanConfig {
   plan_id:                 string;
@@ -95,24 +94,30 @@ const FALLBACK_PLANS: PlanConfig[] = [
   },
 ];
 
-// Cached fetch — 60s TTL, invalidated by revalidateTag("plan_configs")
-const fetchPlansFromDb = unstable_cache(
-  async (): Promise<PlanConfig[]> => {
-    try {
-      const db = createAdminClient();
-      const { data, error } = await db
-        .from("plan_configs")
-        .select("*")
-        .order("sort_order", { ascending: true });
-      if (error || !data?.length) return FALLBACK_PLANS;
-      return data as PlanConfig[];
-    } catch {
-      return FALLBACK_PLANS;
-    }
-  },
-  ["plan_configs"],
-  { tags: ["plan_configs"], revalidate: 60 }
-);
+// Simple in-memory TTL cache — works in both Next.js and plain Node.js (worker).
+let _cache: PlanConfig[] | null = null;
+let _cacheAt = 0;
+const CACHE_TTL = 60_000;
+
+async function fetchPlansFromDb(): Promise<PlanConfig[]> {
+  if (_cache && Date.now() - _cacheAt < CACHE_TTL) return _cache;
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    if (!url || !key) return FALLBACK_PLANS;
+    const db = createClient(url, key, { auth: { persistSession: false } });
+    const { data, error } = await db
+      .from("plan_configs")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error || !data?.length) return FALLBACK_PLANS;
+    _cache   = data as PlanConfig[];
+    _cacheAt = Date.now();
+    return _cache;
+  } catch {
+    return FALLBACK_PLANS;
+  }
+}
 
 /** Returns all active plans ordered by sort_order. Cached 60s. */
 export async function getActivePlans(): Promise<PlanConfig[]> {
@@ -132,7 +137,8 @@ export async function getPlansMap(): Promise<Map<string, PlanConfig>> {
   return new Map(plans.map(p => [p.plan_id, p]));
 }
 
-/** Called by the admin PATCH route after saving to invalidate the cache. */
+/** Called by the admin PATCH route after saving to bust the in-process cache. */
 export function invalidatePlanCache(): void {
-  revalidateTag("plan_configs", {});
+  _cache   = null;
+  _cacheAt = 0;
 }
