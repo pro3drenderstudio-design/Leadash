@@ -14,7 +14,7 @@ export async function verifyEmails(
   apiKey: string,
   emails: string[],
 ): Promise<ReoonResult[]> {
-  const CONCURRENCY = 10;
+  const CONCURRENCY = 100;
   const results: ReoonResult[] = [];
 
   for (let i = 0; i < emails.length; i += CONCURRENCY) {

@@ -5,7 +5,7 @@ import { verifyEmails } from "@/lib/lead-campaigns/reoon";
 
 const CREDITS_PER_VERIFY = 0.5;
 const ALLOWED_STATUSES   = new Set(["safe", "valid", "catch_all", "verified_external"]);
-const BATCH_SIZE         = 500;
+const BATCH_SIZE         = 2000;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
