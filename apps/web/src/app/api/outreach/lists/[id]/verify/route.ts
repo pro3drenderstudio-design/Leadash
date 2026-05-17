@@ -25,12 +25,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Fetch pending leads (or specific lead_ids if provided)
   const adminDb = createAdminClient();
+  // Include "unknown" alongside "pending" — unknowns were refunded and are retryable
   let query = adminDb
     .from("outreach_leads")
     .select("id, email, verification_status")
     .eq("list_id", listId)
     .eq("workspace_id", workspaceId)
-    .eq("verification_status", "pending");
+    .in("verification_status", ["pending", "unknown"]);
 
   if (body.lead_ids?.length) {
     query = adminDb
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("list_id", listId)
       .eq("workspace_id", workspaceId)
       .in("id", body.lead_ids)
-      .eq("verification_status", "pending");
+      .in("verification_status", ["pending", "unknown"]);
   }
 
   type LeadRow = { id: string; email: string; verification_status: string };
@@ -83,8 +84,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const emailToId = new Map(typedLeads.map(l => [l.email, l.id]));
   const now = new Date().toISOString();
 
-  let safeCount   = 0;
+  let safeCount    = 0;
   let invalidCount = 0;
+  let unknownCount = 0;
 
   const updates = results.map(r => ({
     id:                  emailToId.get(r.email)!,
@@ -102,13 +104,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   for (const r of results) {
     if (ALLOWED_STATUSES.has(r.status)) safeCount++;
+    else if (r.status === "unknown") unknownCount++;
     else invalidCount++;
   }
+
+  // Refund credits for unknown results — Reoon doesn't charge for these
+  const refundAmount = Math.round(unknownCount * CREDITS_PER_VERIFY * 10) / 10;
+  if (refundAmount > 0) {
+    await Promise.all([
+      adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: refundAmount }),
+      adminDb.from("lead_credit_transactions").insert({
+        workspace_id: workspaceId,
+        type:         "credit",
+        amount:       refundAmount,
+        description:  `Verification refund — ${unknownCount} unknown result${unknownCount !== 1 ? "s" : ""}`,
+      }),
+    ]);
+  }
+
+  const creditsUsed = Math.round((totalCost - refundAmount) * 10) / 10;
 
   return NextResponse.json({
     verified:     results.length,
     safe:         safeCount,
     invalid:      invalidCount,
-    credits_used: totalCost,
+    unknown:      unknownCount,
+    credits_used: creditsUsed,
+    refunded:     refundAmount,
   });
 }
