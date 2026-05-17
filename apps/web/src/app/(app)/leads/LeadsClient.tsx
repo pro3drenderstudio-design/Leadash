@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getLists, createList, deleteList, importLeads, verifyList } from "@/lib/outreach/api";
+import { getLists, createList, deleteList, importLeads, verifyList, getVerifyPreview } from "@/lib/outreach/api";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
 
@@ -199,7 +199,21 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [preview, setPreview]         = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
-  const [verifyingList, setVerifyingList] = useState<string | null>(null);
+  const [verifyPreviewLoading, setVerifyPreviewLoading] = useState<string | null>(null);
+  const [verifyModal, setVerifyModal] = useState<{
+    phase: "confirm" | "running" | "done";
+    listId: string;
+    listName: string;
+    count: number;
+    cost: number;
+    balance: number;
+    processed: number;
+    safe: number;
+    invalid: number;
+    unknown: number;
+    creditsUsed: number;
+    refunded: number;
+  } | null>(null);
   const [verifiedExternal, setVerifiedExternal] = useState(false);
   const [deleteWarning, setDeleteWarning] = useState<{
     listId: string; listName: string;
@@ -308,21 +322,81 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     load();
   }
 
-  async function handleVerify(listId: string, pendingCount: number) {
-    if (!confirm(`Verify ${pendingCount} pending leads in this list? This will cost ${(pendingCount * 0.5).toFixed(1)} credits.`)) return;
-    setVerifyingList(listId);
+  async function handleVerify(listId: string, listName: string) {
+    setVerifyPreviewLoading(listId);
     try {
-      const result = await verifyList(listId);
-      setImportResult({
-        ok: true,
-        msg: `Verified ${result.verified} leads — ${result.safe} deliverable · ${result.invalid} invalid · ${result.credits_used} credits used`,
+      const preview = await getVerifyPreview(listId);
+      setVerifyModal({
+        phase: "confirm",
+        listId,
+        listName,
+        count: preview.count,
+        cost: preview.credits_required,
+        balance: preview.balance,
+        processed: 0,
+        safe: 0,
+        invalid: 0,
+        unknown: 0,
+        creditsUsed: 0,
+        refunded: 0,
       });
+    } catch (err) {
+      setImportResult({ ok: false, msg: err instanceof Error ? err.message : "Failed to load verification preview" });
+    } finally {
+      setVerifyPreviewLoading(null);
+    }
+  }
+
+  async function startVerification() {
+    if (!verifyModal || verifyModal.phase !== "confirm") return;
+    const { listId, listName, count, cost, balance } = verifyModal;
+    setVerifyModal({ phase: "running", listId, listName, count, cost, balance, processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: 0, refunded: 0 });
+
+    let processed = 0;
+    let safe      = 0;
+    let invalid   = 0;
+    let unknown   = 0;
+    let creditsUsed = 0;
+    let refunded    = 0;
+
+    try {
+      while (true) {
+        const result = await verifyList(listId);
+        if (result.verified === 0) break;
+
+        processed   += result.verified;
+        safe        += result.safe;
+        invalid     += result.invalid;
+        unknown     += result.unknown ?? 0;
+        creditsUsed += result.credits_used;
+        refunded    += result.refunded ?? 0;
+
+        setVerifyModal(prev => prev && prev.phase === "running" ? {
+          ...prev,
+          processed,
+          safe,
+          invalid,
+          unknown,
+          creditsUsed: Math.round(creditsUsed * 10) / 10,
+          refunded:    Math.round(refunded    * 10) / 10,
+        } : prev);
+      }
+
+      setVerifyModal(prev => prev ? {
+        ...prev,
+        phase: "done",
+        processed,
+        safe,
+        invalid,
+        unknown,
+        creditsUsed: Math.round(creditsUsed * 10) / 10,
+        refunded:    Math.round(refunded    * 10) / 10,
+      } : prev);
       load();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Verification failed";
+      setVerifyModal(null);
       setImportResult({ ok: false, msg });
-    } finally {
-      setVerifyingList(null);
     }
   }
 
@@ -562,8 +636,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                 isImporting={importing === list.id}
                 onImportToggle={() => openImport(list.id)}
                 onDelete={() => handleDelete(list.id, list.name)}
-                onVerify={() => handleVerify(list.id, list.pending_count ?? 0)}
-                verifying={verifyingList === list.id}
+                onVerify={() => handleVerify(list.id, list.name)}
+                verifying={verifyPreviewLoading === list.id}
               />
 
               {/* Import panel */}
@@ -826,6 +900,166 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verification progress modal */}
+      {verifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={verifyModal.phase === "running" ? undefined : () => setVerifyModal(null)}>
+          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+
+            {/* Confirm phase */}
+            {verifyModal.phase === "confirm" && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                </div>
+                <h2 className="text-white font-bold text-lg mb-1">Verify emails</h2>
+                <p className="text-white/50 text-sm mb-5">
+                  {verifyModal.count.toLocaleString()} pending leads in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span> will be verified via Reoon.
+                </p>
+
+                <div className="bg-white/4 border border-white/8 rounded-xl p-4 mb-5 space-y-2.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/45">Leads to verify</span>
+                    <span className="text-white font-semibold">{verifyModal.count.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/45">Estimated cost</span>
+                    <span className="text-amber-400 font-semibold">{verifyModal.cost.toLocaleString()} cr</span>
+                  </div>
+                  <div className="border-t border-white/6 pt-2.5 flex justify-between text-sm">
+                    <span className="text-white/45">Your balance</span>
+                    <span className={`font-semibold ${verifyModal.balance >= verifyModal.cost ? "text-emerald-400" : "text-red-400"}`}>
+                      {verifyModal.balance.toLocaleString()} cr
+                    </span>
+                  </div>
+                </div>
+
+                {verifyModal.balance < verifyModal.cost && (
+                  <p className="text-red-400 text-xs mb-4 bg-red-500/8 border border-red-500/20 rounded-lg px-3 py-2">
+                    Insufficient credits. You need {(verifyModal.cost - verifyModal.balance).toFixed(1)} more credits to verify all leads.
+                  </p>
+                )}
+
+                <p className="text-white/25 text-xs mb-4">Unknown results are automatically refunded. Verification runs in batches of 500.</p>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setVerifyModal(null)}
+                    className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={startVerification}
+                    disabled={verifyModal.balance < verifyModal.cost || verifyModal.count === 0}
+                    className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    Start Verifying →
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Running phase */}
+            {verifyModal.phase === "running" && (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-amber-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold text-sm">Verifying emails…</p>
+                    <p className="text-white/35 text-xs">{verifyModal.listName}</p>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <div className="flex justify-between text-xs text-white/35 mb-2">
+                    <span>{verifyModal.processed.toLocaleString()} / {verifyModal.count.toLocaleString()} processed</span>
+                    <span>{verifyModal.count > 0 ? Math.round((verifyModal.processed / verifyModal.count) * 100) : 0}%</span>
+                  </div>
+                  <div className="h-2 bg-white/8 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-700"
+                      style={{ width: `${verifyModal.count > 0 ? Math.min(100, (verifyModal.processed / verifyModal.count) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-emerald-500/8 border border-emerald-500/15 rounded-xl p-3 text-center">
+                    <p className="text-emerald-400 font-bold text-base tabular-nums">{verifyModal.safe.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">deliverable</p>
+                  </div>
+                  <div className="bg-red-500/8 border border-red-500/15 rounded-xl p-3 text-center">
+                    <p className="text-red-400 font-bold text-base tabular-nums">{verifyModal.invalid.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">invalid</p>
+                  </div>
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                    <p className="text-white/55 font-bold text-base tabular-nums">{verifyModal.unknown.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">unknown</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between text-xs text-white/30 border-t border-white/6 pt-3">
+                  <span>{verifyModal.creditsUsed.toFixed(1)} cr used</span>
+                  {verifyModal.refunded > 0 && <span className="text-emerald-400/70">{verifyModal.refunded.toFixed(1)} cr refunded</span>}
+                </div>
+              </>
+            )}
+
+            {/* Done phase */}
+            {verifyModal.phase === "done" && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-white font-bold text-lg mb-1">Verification complete!</h2>
+                <p className="text-white/50 text-sm mb-5">
+                  {verifyModal.processed.toLocaleString()} leads verified in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span>
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-emerald-500/8 border border-emerald-500/15 rounded-xl p-3 text-center">
+                    <p className="text-emerald-400 font-bold text-lg tabular-nums">{verifyModal.safe.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">deliverable</p>
+                  </div>
+                  <div className="bg-red-500/8 border border-red-500/15 rounded-xl p-3 text-center">
+                    <p className="text-red-400 font-bold text-lg tabular-nums">{verifyModal.invalid.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">invalid</p>
+                  </div>
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                    <p className="text-white/55 font-bold text-lg tabular-nums">{verifyModal.unknown.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">unknown</p>
+                  </div>
+                </div>
+
+                <div className="bg-white/4 border border-white/8 rounded-xl p-3 mb-5 flex justify-between text-sm">
+                  <span className="text-white/45">Credits used</span>
+                  <span className="text-white font-semibold">
+                    {verifyModal.creditsUsed.toFixed(1)} cr
+                    {verifyModal.refunded > 0 && <span className="text-emerald-400/80 font-normal ml-1">(−{verifyModal.refunded.toFixed(1)} refunded)</span>}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => setVerifyModal(null)}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold rounded-xl transition-colors"
+                >
+                  Done
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
