@@ -535,7 +535,13 @@ export default function VerifyEmailPage() {
                       )}
                       {job.status === "failed" && <span className="text-xs text-red-400">Failed</span>}
                     </div>
-                    <p className="text-white/30 text-xs mt-0.5">{job.completed_at ? fmtDate(job.completed_at) : "Processing…"} · {job.credits_used} credits</p>
+                    <p className="text-white/30 text-xs mt-0.5">
+                      {job.completed_at ? fmtDate(job.completed_at) : job.status === "failed" ? "Failed" : "Processing…"}
+                      {" · "}
+                      {job.list_id
+                        ? `${fmt(job.processed)} verified`
+                        : `${job.credits_used} credits`}
+                    </p>
                   </div>
                   {job.status === "done" && (
                     <button onClick={() => downloadJob(job)} disabled={downloading === job.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/6 border border-white/10 text-white/60 text-xs font-medium rounded-lg hover:bg-white/10 transition-colors disabled:opacity-40">
@@ -544,10 +550,13 @@ export default function VerifyEmailPage() {
                     </button>
                   )}
                 </div>
-                {job.status === "done" && <StatusBar counts={jobCounts(job)} total={job.total} />}
+                {/* Breakdown bar — show for done jobs or any list-mode job with partial results */}
+                {(job.status === "done" || (job.list_id && job.processed > 0)) && (
+                  <StatusBar counts={jobCounts(job)} total={job.processed} />
+                )}
                 {job.status === "running" && (
-                  <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-                    <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.round((job.processed / job.total) * 100) : 0}%` }} />
+                  <div className="h-1.5 rounded-full bg-white/8 overflow-hidden mt-2">
+                    <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${job.total ? Math.min(100, Math.round((job.processed / job.total) * 100)) : 0}%` }} />
                   </div>
                 )}
                 {job.error && <p className="text-red-400 text-xs mt-2">{job.error}</p>}

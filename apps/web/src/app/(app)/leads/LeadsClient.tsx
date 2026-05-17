@@ -206,6 +206,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     listId: string;
     listName: string;
     count: number;
+    alreadyVerified: number;
     cost: number;
     balance: number;
     processed: number;
@@ -331,15 +332,11 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
         phase: "confirm",
         listId,
         listName,
-        count: preview.count,
-        cost: preview.credits_required,
-        balance: preview.balance,
-        processed: 0,
-        safe: 0,
-        invalid: 0,
-        unknown: 0,
-        creditsUsed: 0,
-        refunded: 0,
+        count:           preview.count,
+        alreadyVerified: preview.already_verified ?? 0,
+        cost:            preview.credits_required,
+        balance:         preview.balance,
+        processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: 0, refunded: 0,
       });
     } catch (err) {
       setImportResult({ ok: false, msg: err instanceof Error ? err.message : "Failed to load verification preview" });
@@ -352,7 +349,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     if (!verifyModal || verifyModal.phase !== "confirm") return;
     const { listId, listName, count, cost, balance } = verifyModal;
 
-    setVerifyModal({ phase: "running", listId, listName, count, cost, balance, processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: cost, refunded: 0 });
+    const { alreadyVerified } = verifyModal;
+    setVerifyModal({ phase: "running", listId, listName, count, alreadyVerified, cost, balance, processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: cost, refunded: 0 });
 
     try {
       // Enqueue the job — VPS worker handles the rest
@@ -927,10 +925,19 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                   </svg>
                 </div>
-                <h2 className="text-white font-bold text-lg mb-1">Verify emails</h2>
+                <h2 className="text-white font-bold text-lg mb-1">
+                  {verifyModal.alreadyVerified > 0 ? "Resume verification" : "Verify emails"}
+                </h2>
                 <p className="text-white/50 text-sm mb-5">
-                  {verifyModal.count.toLocaleString()} pending leads in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span> will be verified.
+                  {verifyModal.count.toLocaleString()} unverified leads in <span className="text-white/70 font-medium">&ldquo;{verifyModal.listName}&rdquo;</span> will be verified.
                 </p>
+
+                {verifyModal.alreadyVerified > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg mb-4">
+                    <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="text-emerald-400 text-xs">{verifyModal.alreadyVerified.toLocaleString()} leads already verified — resuming from where it left off</span>
+                  </div>
+                )}
 
                 <div className="bg-white/4 border border-white/8 rounded-xl p-4 mb-5 space-y-2.5">
                   <div className="flex justify-between text-sm">
@@ -967,7 +974,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                     disabled={verifyModal.balance < verifyModal.cost || verifyModal.count === 0}
                     className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
                   >
-                    Start Verifying →
+                    {verifyModal.alreadyVerified > 0 ? "Resume →" : "Start Verifying →"}
                   </button>
                 </div>
               </>

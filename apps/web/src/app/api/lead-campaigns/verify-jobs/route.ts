@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db
     .from("lead_verification_jobs")
-    .select("id, status, total, processed, safe, invalid, catch_all, risky, dangerous, disposable, unknown, credits_used, error, completed_at, expires_at, created_at")
+    .select("id, status, total, processed, safe, invalid, catch_all, risky, dangerous, disposable, unknown, credits_used, credits_deducted, refunded, list_id, error, completed_at, expires_at, created_at")
     .eq("workspace_id", workspaceId)
     .gte("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })

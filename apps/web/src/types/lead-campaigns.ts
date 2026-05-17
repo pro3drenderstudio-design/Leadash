@@ -90,12 +90,15 @@ export interface VerifyBulkJob {
   dangerous:    number;
   disposable:   number;
   unknown:      number;
-  credits_used: number;
-  error?:       string | null;
-  results?:     VerifyResult[] | null;
-  completed_at: string | null;
-  expires_at:   string | null;
-  created_at:   string;
+  credits_used:      number;
+  credits_deducted?: number;
+  refunded?:         number;
+  list_id?:          string | null;
+  error?:            string | null;
+  results?:          VerifyResult[] | null;
+  completed_at:      string | null;
+  expires_at:        string | null;
+  created_at:        string;
 }
 
 export interface LeadInput {

@@ -20,24 +20,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!list) return NextResponse.json({ error: "List not found" }, { status: 404 });
 
   const adminDb = createAdminClient();
-  const { count } = await adminDb
-    .from("outreach_leads")
-    .select("id", { count: "exact", head: true })
-    .eq("list_id", listId)
-    .eq("workspace_id", workspaceId)
-    .in("verification_status", ["pending", "unknown"]);
 
-  const pendingCount    = count ?? 0;
+  const [{ count: unverifiedCount }, { count: totalCount }, { data: ws }] = await Promise.all([
+    adminDb.from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("list_id", listId).eq("workspace_id", workspaceId).is("verified_at", null),
+    adminDb.from("outreach_leads").select("id", { count: "exact", head: true })
+      .eq("list_id", listId).eq("workspace_id", workspaceId),
+    adminDb.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single(),
+  ]);
+
+  const pendingCount    = unverifiedCount ?? 0;
+  const alreadyVerified = (totalCount ?? 0) - pendingCount;
   const creditsRequired = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
+  const balance         = (ws?.lead_credits_balance as number) ?? 0;
 
-  const { data: ws } = await adminDb
-    .from("workspaces")
-    .select("lead_credits_balance")
-    .eq("id", workspaceId)
-    .single();
-  const balance = (ws?.lead_credits_balance as number) ?? 0;
-
-  return NextResponse.json({ count: pendingCount, credits_required: creditsRequired, balance });
+  return NextResponse.json({ count: pendingCount, already_verified: alreadyVerified, credits_required: creditsRequired, balance });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -69,17 +66,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ job_id: existing.id, already_running: true }, { status: 202 });
   }
 
-  // Count pending + unknown leads
+  // Count only leads that haven't been verified yet
   const { count } = await adminDb
     .from("outreach_leads")
     .select("id", { count: "exact", head: true })
     .eq("list_id", listId)
     .eq("workspace_id", workspaceId)
-    .in("verification_status", ["pending", "unknown"]);
+    .is("verified_at", null);
 
   const pendingCount = count ?? 0;
   if (pendingCount === 0) {
-    return NextResponse.json({ error: "No pending leads to verify" }, { status: 400 });
+    return NextResponse.json({ error: "All leads in this list have already been verified" }, { status: 400 });
   }
 
   const totalCost = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;

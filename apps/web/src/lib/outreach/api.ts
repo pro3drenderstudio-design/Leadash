@@ -53,7 +53,7 @@ export const getLists    = ()                             => get<OutreachList[]>
 export const createList  = (name: string, description?: string) => post<OutreachList>(`${base}/lists`, { name, description });
 export const deleteList  = (id: string, force = false)    => del(`${base}/lists/${id}${force ? "?force=1" : ""}`);
 export const getVerifyPreview = (id: string) =>
-  get<{ count: number; credits_required: number; balance: number }>(`${base}/lists/${id}/verify`);
+  get<{ count: number; already_verified: number; credits_required: number; balance: number }>(`${base}/lists/${id}/verify`);
 
 export const verifyList  = (id: string, leadIds?: string[]) =>
   post<{ verified: number; safe: number; invalid: number; unknown: number; credits_used: number; refunded: number }>(
