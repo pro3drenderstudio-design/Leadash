@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getLists, createList, deleteList, importLeads, verifyList, getVerifyPreview } from "@/lib/outreach/api";
+import { getLists, createList, deleteList, importLeads, getVerifyPreview } from "@/lib/outreach/api";
+import { wsFetch } from "@/lib/workspace/client";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
 
@@ -350,53 +351,60 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   async function startVerification() {
     if (!verifyModal || verifyModal.phase !== "confirm") return;
     const { listId, listName, count, cost, balance } = verifyModal;
-    setVerifyModal({ phase: "running", listId, listName, count, cost, balance, processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: 0, refunded: 0 });
 
-    let processed = 0;
-    let safe      = 0;
-    let invalid   = 0;
-    let unknown   = 0;
-    let creditsUsed = 0;
-    let refunded    = 0;
+    setVerifyModal({ phase: "running", listId, listName, count, cost, balance, processed: 0, safe: 0, invalid: 0, unknown: 0, creditsUsed: cost, refunded: 0 });
 
     try {
-      while (true) {
-        const result = await verifyList(listId);
-        if (result.verified === 0) break;
+      // Enqueue the job — VPS worker handles the rest
+      const enqRes  = await wsFetch(`/api/outreach/lists/${listId}/verify`, { method: "POST", body: "{}" });
+      const enqData = await enqRes.json() as { job_id?: string; error?: string };
+      if (!enqRes.ok) throw new Error(enqData.error ?? "Failed to start verification");
+      const jobId = enqData.job_id!;
 
-        processed   += result.verified;
-        safe        += result.safe;
-        invalid     += result.invalid;
-        unknown     += result.unknown ?? 0;
-        creditsUsed += result.credits_used;
-        refunded    += result.refunded ?? 0;
+      // Poll verify-jobs/[id] every 2 seconds for live progress
+      while (true) {
+        await new Promise(r => setTimeout(r, 2_000));
+
+        const pollRes = await wsFetch(`/api/lead-campaigns/verify-jobs/${jobId}`);
+        if (!pollRes.ok) continue;
+        const j = await pollRes.json() as {
+          status: string; processed: number; total: number;
+          safe: number; catch_all: number; invalid: number;
+          risky: number; dangerous: number; disposable: number;
+          unknown: number; credits_deducted: number; refunded: number;
+          error?: string;
+        };
+
+        const deliverable  = (j.safe ?? 0) + (j.catch_all ?? 0);
+        const invalidTotal = (j.invalid ?? 0) + (j.risky ?? 0) + (j.dangerous ?? 0) + (j.disposable ?? 0);
+        const netUsed      = Math.round(Math.max(0, (j.credits_deducted ?? cost) - (j.refunded ?? 0)) * 10) / 10;
+
+        if (j.status === "done") {
+          setVerifyModal(prev => prev ? {
+            ...prev, phase: "done",
+            processed: j.processed, safe: deliverable, invalid: invalidTotal,
+            unknown: j.unknown ?? 0, creditsUsed: netUsed, refunded: j.refunded ?? 0,
+          } : null);
+          load();
+          break;
+        }
+
+        if (j.status === "failed") {
+          setVerifyModal(null);
+          setImportResult({ ok: false, msg: `Verification failed: ${j.error ?? "Unknown error"}` });
+          load();
+          break;
+        }
 
         setVerifyModal(prev => prev && prev.phase === "running" ? {
           ...prev,
-          processed,
-          safe,
-          invalid,
-          unknown,
-          creditsUsed: Math.round(creditsUsed * 10) / 10,
-          refunded:    Math.round(refunded    * 10) / 10,
+          processed: j.processed ?? 0, safe: deliverable, invalid: invalidTotal,
+          unknown: j.unknown ?? 0, creditsUsed: netUsed, refunded: j.refunded ?? 0,
         } : prev);
       }
-
-      setVerifyModal(prev => prev ? {
-        ...prev,
-        phase: "done",
-        processed,
-        safe,
-        invalid,
-        unknown,
-        creditsUsed: Math.round(creditsUsed * 10) / 10,
-        refunded:    Math.round(refunded    * 10) / 10,
-      } : prev);
-      load();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed";
       setVerifyModal(null);
-      setImportResult({ ok: false, msg });
+      setImportResult({ ok: false, msg: err instanceof Error ? err.message : "Verification failed" });
     }
   }
 

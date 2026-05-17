@@ -16,7 +16,7 @@ export async function GET(
 
   const { data, error } = await db
     .from("lead_verification_jobs")
-    .select("id, status, total, processed, safe, invalid, catch_all, risky, dangerous, disposable, unknown, credits_used, error, results, completed_at, expires_at, created_at")
+    .select("id, status, total, processed, safe, invalid, catch_all, risky, dangerous, disposable, unknown, credits_used, credits_deducted, refunded, list_id, error, results, completed_at, expires_at, created_at")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();

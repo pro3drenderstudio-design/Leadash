@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
-import { verifyEmails } from "@/lib/lead-campaigns/reoon";
+import { enqueueVerifyBulk } from "@/lib/queue";
 
 const CREDITS_PER_VERIFY = 0.5;
-const ALLOWED_STATUSES   = new Set(["safe", "valid", "catch_all", "verified_external"]);
-const BATCH_SIZE         = 500;
-
-export const maxDuration = 60; // seconds — safe for both Hobby and Pro Vercel plans
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
@@ -31,8 +27,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq("workspace_id", workspaceId)
     .in("verification_status", ["pending", "unknown"]);
 
-  const pendingCount      = count ?? 0;
-  const creditsRequired   = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
+  const pendingCount    = count ?? 0;
+  const creditsRequired = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
 
   const { data: ws } = await adminDb
     .from("workspaces")
@@ -50,9 +46,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { workspaceId, db } = auth;
   const { id: listId } = await params;
 
-  const body = await req.json().catch(() => ({})) as { lead_ids?: string[] };
-
-  // Verify list belongs to workspace
   const { data: list } = await db
     .from("outreach_lists")
     .select("id")
@@ -61,35 +54,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single();
   if (!list) return NextResponse.json({ error: "List not found" }, { status: 404 });
 
-  // Fetch pending leads (or specific lead_ids if provided) — capped at BATCH_SIZE per call
   const adminDb = createAdminClient();
-  // Include "unknown" alongside "pending" — unknowns were refunded and are retryable
-  let query = adminDb
-    .from("outreach_leads")
-    .select("id, email, verification_status")
-    .eq("list_id", listId)
-    .eq("workspace_id", workspaceId)
-    .in("verification_status", ["pending", "unknown"])
-    .limit(BATCH_SIZE);
 
-  if (body.lead_ids?.length) {
-    const cappedIds = body.lead_ids.slice(0, BATCH_SIZE);
-    query = adminDb
-      .from("outreach_leads")
-      .select("id, email, verification_status")
-      .eq("list_id", listId)
-      .eq("workspace_id", workspaceId)
-      .in("id", cappedIds)
-      .in("verification_status", ["pending", "unknown"])
-      .limit(BATCH_SIZE);
+  // Return existing job if one is already running for this list
+  const { data: existing } = await adminDb
+    .from("lead_verification_jobs")
+    .select("id, status")
+    .eq("workspace_id", workspaceId)
+    .eq("list_id", listId)
+    .in("status", ["pending", "running"])
+    .maybeSingle();
+
+  if (existing) {
+    return NextResponse.json({ job_id: existing.id, already_running: true }, { status: 202 });
   }
 
-  type LeadRow = { id: string; email: string; verification_status: string };
-  const { data: leads } = await query;
-  const typedLeads = (leads ?? []) as LeadRow[];
-  if (!typedLeads.length) return NextResponse.json({ verified: 0, safe: 0, invalid: 0, unknown: 0, credits_used: 0, refunded: 0 });
+  // Count pending + unknown leads
+  const { count } = await adminDb
+    .from("outreach_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("list_id", listId)
+    .eq("workspace_id", workspaceId)
+    .in("verification_status", ["pending", "unknown"]);
 
-  const totalCost = Math.round(typedLeads.length * CREDITS_PER_VERIFY * 10) / 10;
+  const pendingCount = count ?? 0;
+  if (pendingCount === 0) {
+    return NextResponse.json({ error: "No pending leads to verify" }, { status: 400 });
+  }
+
+  const totalCost = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
 
   // Credit check
   const { data: ws } = await adminDb
@@ -112,65 +105,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       workspace_id: workspaceId,
       type:         "debit",
       amount:       totalCost,
-      description:  `Email verification — ${typedLeads.length} lead${typedLeads.length !== 1 ? "s" : ""} in list`,
+      description:  `Email verification — ${pendingCount} lead${pendingCount !== 1 ? "s" : ""} in list`,
     }),
   ]);
 
-  // Run Reoon verification
-  const apiKey = process.env.REOON_API_KEY ?? "";
-  const emails = typedLeads.map(l => l.email);
-  const results = await verifyEmails(apiKey, emails);
+  // Create the job row
+  const { data: jobRow, error: jobErr } = await adminDb
+    .from("lead_verification_jobs")
+    .insert({
+      workspace_id:      workspaceId,
+      list_id:           listId,
+      status:            "pending",
+      total:             pendingCount,
+      processed:         0,
+      safe:              0,
+      invalid:           0,
+      catch_all:         0,
+      risky:             0,
+      dangerous:         0,
+      disposable:        0,
+      unknown:           0,
+      credits_used:      totalCost,
+      credits_deducted:  totalCost,
+      refunded:          0,
+    })
+    .select("id")
+    .single();
 
-  // Map results back to lead IDs
-  const emailToId = new Map(typedLeads.map(l => [l.email, l.id]));
-  const now = new Date().toISOString();
-
-  let safeCount    = 0;
-  let invalidCount = 0;
-  let unknownCount = 0;
-
-  const updates = results.map(r => ({
-    id:                  emailToId.get(r.email)!,
-    verification_status: r.status as string,
-    verification_score:  r.score,
-    verified_at:         now,
-  })).filter(u => u.id);
-
-  // Batch update results
-  const BATCH = 100;
-  for (let i = 0; i < updates.length; i += BATCH) {
-    const batch = updates.slice(i, i + BATCH);
-    await adminDb.from("outreach_leads").upsert(batch, { onConflict: "id" });
+  if (jobErr || !jobRow) {
+    // Refund on job creation failure
+    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).catch(() => {});
+    return NextResponse.json({ error: "Failed to create verification job" }, { status: 500 });
   }
 
-  for (const r of results) {
-    if (ALLOWED_STATUSES.has(r.status)) safeCount++;
-    else if (r.status === "unknown") unknownCount++;
-    else invalidCount++;
+  // Enqueue to BullMQ → VPS worker picks it up
+  try {
+    await enqueueVerifyBulk(jobRow.id, workspaceId);
+  } catch (err) {
+    await adminDb.from("lead_verification_jobs")
+      .update({ status: "failed", error: "Queue unavailable — Redis may be down" })
+      .eq("id", jobRow.id);
+    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).catch(() => {});
+    return NextResponse.json({ error: "Failed to enqueue job" }, { status: 500 });
   }
 
-  // Refund credits for unknown results — Reoon doesn't charge for these
-  const refundAmount = Math.round(unknownCount * CREDITS_PER_VERIFY * 10) / 10;
-  if (refundAmount > 0) {
-    await Promise.all([
-      adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: refundAmount }),
-      adminDb.from("lead_credit_transactions").insert({
-        workspace_id: workspaceId,
-        type:         "credit",
-        amount:       refundAmount,
-        description:  `Verification refund — ${unknownCount} unknown result${unknownCount !== 1 ? "s" : ""}`,
-      }),
-    ]);
-  }
-
-  const creditsUsed = Math.round((totalCost - refundAmount) * 10) / 10;
-
-  return NextResponse.json({
-    verified:     results.length,
-    safe:         safeCount,
-    invalid:      invalidCount,
-    unknown:      unknownCount,
-    credits_used: creditsUsed,
-    refunded:     refundAmount,
-  });
+  return NextResponse.json(
+    { job_id: jobRow.id, total: pendingCount, credits_deducted: totalCost },
+    { status: 202 },
+  );
 }
