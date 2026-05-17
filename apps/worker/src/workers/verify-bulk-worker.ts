@@ -123,7 +123,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           .select("id, email")
           .eq("list_id", listId)
           .eq("workspace_id", workspace_id)
-          .in("verification_status", ["pending", "unknown"])
+          .is("verified_at", null)
           .limit(BATCH_SIZE);
 
         if (!leads?.length) break;
@@ -131,13 +131,13 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         const rows    = leads as LeadRow[];
         const results = await verifyBatch(apiKey, rows.map(l => l.email));
 
-        const emailToId = new Map(rows.map(l => [l.email, l.id]));
-        const nowStr    = now();
+        const nowStr = now();
 
         let batchSafe = 0, batchCatchAll = 0, batchInvalid = 0;
         let batchRisky = 0, batchDangerous = 0, batchDisposable = 0, batchUnknown = 0;
 
-        const updates = results.map(r => {
+        // Use index-based matching — position in results always matches rows
+        const updates = results.map((r, i) => {
           const st = r.status;
           if      (st === "safe")        batchSafe++;
           else if (st === "catch_all")   batchCatchAll++;
@@ -147,15 +147,18 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           else if (st === "disposable")  batchDisposable++;
           else                           batchInvalid++;
           return {
-            id:                  emailToId.get(r.email),
+            id:                  rows[i].id,
             verification_status: st,
             verification_score:  r.score,
             verified_at:         nowStr,
           };
-        }).filter(u => u.id);
+        });
 
         for (let i = 0; i < updates.length; i += DB_CHUNK) {
-          await db.from("outreach_leads").upsert(updates.slice(i, i + DB_CHUNK), { onConflict: "id" });
+          const { error: upsertErr } = await db
+            .from("outreach_leads")
+            .upsert(updates.slice(i, i + DB_CHUNK), { onConflict: "id" });
+          if (upsertErr) console.error(`[verify-bulk] ${job_id}: upsert failed`, upsertErr.message);
         }
 
         // Refund unknowns — Reoon doesn't charge for these
@@ -165,7 +168,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
             db.rpc("refund_lead_credits", { p_workspace_id: workspace_id, p_amount: batchRefund }),
             db.from("lead_credit_transactions").insert({
               workspace_id,
-              type:        "credit",
+              type:        "refund",
               amount:      batchRefund,
               description: `Verification refund — ${batchUnknown} unknown result${batchUnknown !== 1 ? "s" : ""}`,
             }),
@@ -273,7 +276,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         await db.rpc("refund_lead_credits", { p_workspace_id: workspace_id, p_amount: unprocessed });
         await db.from("lead_credit_transactions").insert({
           workspace_id,
-          type:        "credit",
+          type:        "refund",
           amount:      unprocessed,
           description: "Verification failed — unprocessed leads refund",
         });

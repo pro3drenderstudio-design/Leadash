@@ -103,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     adminDb.rpc("deduct_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }),
     adminDb.from("lead_credit_transactions").insert({
       workspace_id: workspaceId,
-      type:         "debit",
+      type:         "consume",
       amount:       totalCost,
       description:  `Email verification — ${pendingCount} lead${pendingCount !== 1 ? "s" : ""} in list`,
     }),
