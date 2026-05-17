@@ -55,7 +55,7 @@ export async function GET() {
 
     // All paid invoices from last 13 months (for chart + this-month totals)
     db.from("billing_invoices")
-      .select("type, amount_kobo, created_at")
+      .select("workspace_id, type, amount_kobo, created_at")
       .eq("status", "paid")
       .gte("created_at", thirteenMonthsAgo)
       .order("created_at", { ascending: true }),
@@ -72,7 +72,7 @@ export async function GET() {
   type WsRow      = { id: string; name: string | null; plan_id: string | null; plan_status: string | null; trial_ends_at: string | null; created_at: string | null };
   type IpRow      = { price_ngn: number | null };
   type InboxRow   = { paystack_inbox_monthly_kobo: number | null };
-  type InvoiceRow = { type: string | null; amount_kobo: number | null; created_at: string | null };
+  type InvoiceRow = { workspace_id: string | null; type: string | null; amount_kobo: number | null; created_at: string | null };
 
   const plans     = (planConfigs   ?? []) as PlanConfig[];
   const ws        = (workspaces    ?? []) as WsRow[];
@@ -82,8 +82,15 @@ export async function GET() {
   const priceMap  = Object.fromEntries(plans.map((p: PlanConfig) => [p.plan_id, p.price_ngn ?? 0]));
 
   // ── MRR calculation ──────────────────────────────────────────────────────────
-  // Beta = trial_ends_at IS NOT NULL (not yet converted to commercial paying).
-  // Commercial = trial_ends_at IS NULL, plan_id != 'free', plan_status determines health.
+  // Beta = trial_ends_at IS NOT NULL AND no paid plan invoice exists.
+  // If a workspace has a paid plan_subscription or plan_renewal invoice they are
+  // commercial even if trial_ends_at was never cleared (webhook failure edge case).
+  const paidPlanWsIds = new Set(
+    invoices
+      .filter((i: InvoiceRow) => i.type === "plan_subscription" || i.type === "plan_renewal")
+      .map((i: InvoiceRow) => i.workspace_id)
+      .filter(Boolean) as string[]
+  );
 
   const planCounts: Record<string, number> = {};
   let activePaid       = 0;
@@ -98,7 +105,8 @@ export async function GET() {
   for (const w of ws) {
     const planId = w.plan_id ?? "free";
     const status = w.plan_status ?? "active";
-    const isBeta = !!w.trial_ends_at;
+    // Beta: has trial_ends_at AND has never made a real plan payment
+    const isBeta = !!w.trial_ends_at && !paidPlanWsIds.has(w.id);
 
     if (planId === "free") { freeCount++; continue; }
 
@@ -223,7 +231,7 @@ export async function GET() {
 
   // ── Top customers (commercial active, ordered by plan price) ────────────────
   const topCustomers = ws
-    .filter((w: WsRow) => !w.trial_ends_at && (w.plan_id ?? "free") !== "free")
+    .filter((w: WsRow) => (!w.trial_ends_at || paidPlanWsIds.has(w.id)) && (w.plan_id ?? "free") !== "free")
     .map((w: WsRow) => ({
       id:          w.id,
       name:        w.name ?? "—",

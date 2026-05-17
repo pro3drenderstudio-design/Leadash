@@ -25,14 +25,11 @@ export async function GET(req: Request) {
   switch (type) {
     case "plan":
       if (!planId) return NextResponse.json({ error: "plan_id required" }, { status: 400 });
-      q = base
-        .eq("plan_id", planId)
-        .eq("plan_status", "active")
-        .is("trial_ends_at", null);
+      q = base.eq("plan_id", planId).eq("plan_status", "active");
       break;
     case "status":
       if (!status) return NextResponse.json({ error: "status required" }, { status: 400 });
-      q = base.eq("plan_status", status).is("trial_ends_at", null);
+      q = base.eq("plan_status", status);
       break;
     case "beta":
       q = base.not("trial_ends_at", "is", null).neq("plan_id", "free");

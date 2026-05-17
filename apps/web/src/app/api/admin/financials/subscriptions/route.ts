@@ -131,7 +131,7 @@ export async function GET(req: Request) {
       plan_id:          w.plan_id ?? "free",
       plan_name:        plan?.name ?? w.plan_id ?? "—",
       plan_status:      w.plan_status,
-      is_beta:          !!w.trial_ends_at,
+      is_beta:          !!w.trial_ends_at && !invoiceAgg,
       trial_ends_at:    w.trial_ends_at,
       price_ngn:        plan?.price_ngn ?? 0,
       subscribed_at:    subscribedAt,
