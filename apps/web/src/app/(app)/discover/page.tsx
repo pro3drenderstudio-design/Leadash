@@ -741,17 +741,26 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
   onRevealPerson: (personId: string) => Promise<void>;
   onViewPerson: (personId: string) => void;
 }) {
-  const [data, setData]       = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descClamped,  setDescClamped]  = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setDescExpanded(false);
     try { setData(await wsGet<Record<string, unknown>>(`/api/discover/companies/${id}`)); }
     catch { /* ignore */ }
     setLoading(false);
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!descRef.current) return;
+    setDescClamped(descRef.current.scrollHeight > descRef.current.clientHeight + 2);
+  }, [data]);
 
   if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>;
   if (!data)   return <div className="px-5 py-4 text-xs text-white/30">Could not load company</div>;
@@ -808,7 +817,22 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
         </div>
 
         {!!(data.description as string | null) && (
-          <p className="mt-3 text-[11px] text-white/45 leading-relaxed line-clamp-4">{data.description as string}</p>
+          <div className="mt-3">
+            <p
+              ref={descRef}
+              className={`text-[11px] text-white/45 leading-relaxed transition-all ${descExpanded ? "" : "line-clamp-4"}`}
+            >
+              {data.description as string}
+            </p>
+            {(descClamped || descExpanded) && (
+              <button
+                onClick={() => setDescExpanded(e => !e)}
+                className="mt-1 text-[10px] text-white/30 hover:text-white/60 transition-colors"
+              >
+                {descExpanded ? "See less" : "See more"}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Funding */}

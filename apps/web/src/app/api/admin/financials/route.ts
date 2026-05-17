@@ -42,8 +42,8 @@ export async function GET() {
     // Plan configs (prices)
     db.from("plan_configs").select("plan_id, name, price_ngn, sort_order").order("sort_order"),
 
-    // All workspaces (lightweight — just billing status columns)
-    db.from("workspaces").select("plan_id, plan_status, trial_ends_at, created_at"),
+    // All workspaces (lightweight — billing status + identity for drill-downs)
+    db.from("workspaces").select("id, name, plan_id, plan_status, trial_ends_at, created_at"),
 
     // Active dedicated IP subscriptions
     db.from("dedicated_ip_subscriptions").select("price_ngn").eq("status", "active"),
@@ -60,16 +60,16 @@ export async function GET() {
       .gte("created_at", thirteenMonthsAgo)
       .order("created_at", { ascending: true }),
 
-    // Recent 25 invoices with workspace name
+    // Recent 25 invoices with workspace name + id for linking
     db.from("billing_invoices")
-      .select("id, type, description, amount_kobo, created_at, workspaces(name)")
+      .select("id, type, description, amount_kobo, created_at, workspace_id, workspaces(id, name)")
       .eq("status", "paid")
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
 
   type PlanConfig = { plan_id: string; name: string | null; price_ngn: number | null; sort_order: number | null };
-  type WsRow      = { plan_id: string | null; plan_status: string | null; trial_ends_at: string | null; created_at: string | null };
+  type WsRow      = { id: string; name: string | null; plan_id: string | null; plan_status: string | null; trial_ends_at: string | null; created_at: string | null };
   type IpRow      = { price_ngn: number | null };
   type InboxRow   = { paystack_inbox_monthly_kobo: number | null };
   type InvoiceRow = { type: string | null; amount_kobo: number | null; created_at: string | null };
@@ -82,24 +82,36 @@ export async function GET() {
   const priceMap  = Object.fromEntries(plans.map((p: PlanConfig) => [p.plan_id, p.price_ngn ?? 0]));
 
   // ── MRR calculation ──────────────────────────────────────────────────────────
+  // Beta = trial_ends_at IS NOT NULL (not yet converted to commercial paying).
+  // Commercial = trial_ends_at IS NULL, plan_id != 'free', plan_status determines health.
 
-  // Plans MRR — count active paid workspaces per plan
   const planCounts: Record<string, number> = {};
-  let activePaid = 0;
-  let pastDue    = 0;
-  let trialing   = 0;
-  let freeCount  = 0;
-  let atRiskMrr  = 0;
+  let activePaid       = 0;
+  let pastDue          = 0;
+  let trialing         = 0;
+  let freeCount        = 0;
+  let atRiskMrr        = 0;
   let trialPipelineMrr = 0;
+  let betaCount        = 0;
+  let betaMrrNgn       = 0;
 
   for (const w of ws) {
     const planId = w.plan_id ?? "free";
     const status = w.plan_status ?? "active";
+    const isBeta = !!w.trial_ends_at;
 
     if (planId === "free") { freeCount++; continue; }
 
     const price = priceMap[planId] ?? 0;
 
+    if (isBeta) {
+      // Beta programme — counts as pipeline, never commercial MRR
+      betaCount++;
+      betaMrrNgn += price;
+      continue;
+    }
+
+    // Commercial workspaces
     if (status === "active") {
       planCounts[planId] = (planCounts[planId] ?? 0) + 1;
       activePaid++;
@@ -109,14 +121,6 @@ export async function GET() {
     } else if (status === "trialing") {
       trialing++;
       trialPipelineMrr += price;
-    }
-  }
-
-  // Also count trial_ends_at still in future (beta programme users)
-  for (const w of ws) {
-    if (w.trial_ends_at && new Date(w.trial_ends_at) > now) {
-      trialing++;
-      trialPipelineMrr += priceMap[w.plan_id ?? "free"] ?? 0;
     }
   }
 
@@ -217,13 +221,28 @@ export async function GET() {
       .gte("created_at", monthStart),
   ]);
 
+  // ── Top customers (commercial active, ordered by plan price) ────────────────
+  const topCustomers = ws
+    .filter((w: WsRow) => !w.trial_ends_at && (w.plan_id ?? "free") !== "free")
+    .map((w: WsRow) => ({
+      id:          w.id,
+      name:        w.name ?? "—",
+      plan_id:     w.plan_id ?? "free",
+      plan_status: w.plan_status ?? "active",
+      mrr_ngn:     priceMap[w.plan_id ?? "free"] ?? 0,
+      created_at:  w.created_at,
+    }))
+    .sort((a, b) => b.mrr_ngn - a.mrr_ngn)
+    .slice(0, 10);
+
   // ── Recent transactions ─────────────────────────────────────────────────────
   const recentTransactions = (recentInvoicesRaw ?? []).map((inv: Record<string, unknown>) => ({
-    id:          inv.id,
-    type:        inv.type,
-    description: inv.description,
-    amount_ngn:  Math.round(((inv.amount_kobo as number) ?? 0) / 100),
-    created_at:  inv.created_at,
+    id:             inv.id,
+    type:           inv.type,
+    description:    inv.description,
+    amount_ngn:     Math.round(((inv.amount_kobo as number) ?? 0) / 100),
+    created_at:     inv.created_at,
+    workspace_id:   (inv.workspaces as { id?: string } | null)?.id ?? null,
     workspace_name: (inv.workspaces as { name?: string } | null)?.name ?? "—",
   }));
 
@@ -248,6 +267,10 @@ export async function GET() {
     free_count:   freeCount,
     arpu_ngn:     arpu,
 
+    // Beta programme (excluded from commercial MRR)
+    beta_count:            betaCount,
+    beta_mrr_ngn:          betaMrrNgn,
+
     // Pipeline & risk
     at_risk_mrr_ngn:       atRiskMrr,
     trial_pipeline_mrr_ngn: trialPipelineMrr,
@@ -264,6 +287,9 @@ export async function GET() {
 
     // Chart (12 months)
     chart: chartData,
+
+    // Top customers
+    top_customers: topCustomers,
 
     // Recent transactions
     recent_transactions: recentTransactions,
