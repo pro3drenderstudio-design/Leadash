@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/billing/plans";
 import { getPlanById, getActivePlans } from "@/lib/billing/getActivePlans";
 import { logActivity } from "@/lib/activity";
+import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
 
 export async function POST(req: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -120,28 +121,22 @@ export async function POST(req: NextRequest) {
         .eq("stripe_customer_id", sub.customer as string)
         .maybeSingle();
 
-      const freePlan = await getPlanById("free");
-      await db
-        .from("workspaces")
-        .update({
-          plan_id:                "free",
-          plan_status:            "canceled",
-          stripe_sub_id:          null,
-          trial_ends_at:          null,
-          subscription_renews_at: null,
-          max_inboxes:            freePlan.max_inboxes,
-          max_monthly_sends:      freePlan.max_monthly_sends,
-          max_seats:              freePlan.max_seats,
-        })
-        .eq("stripe_customer_id", sub.customer as string);
-
       if (wsCancel) {
+        // Clear Stripe-specific fields first, then use shared downgrade helper
+        // (pauses campaigns, expires subscription credits, resets plan limits)
+        await db.from("workspaces").update({
+          stripe_sub_id:          null,
+          subscription_renews_at: null,
+        }).eq("id", wsCancel.id);
+
+        await downgradeWorkspaceToFree(db, wsCancel.id, "subscription_cancelled");
+
         await logActivity({
           workspace_id:   wsCancel.id,
           workspace_name: wsCancel.name,
           type:           "subscription_cancelled",
           title:          "Subscription cancelled",
-          description:    `${wsCancel.name} cancelled — downgraded to Free`,
+          description:    `${wsCancel.name} cancelled — downgraded to Free (Stripe)`,
           metadata:       { stripe_sub_id: sub.id },
         });
       }

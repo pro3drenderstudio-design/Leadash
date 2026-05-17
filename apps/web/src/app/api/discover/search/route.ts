@@ -7,6 +7,7 @@ import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 const CREDITS_PER_LEAD = 0.5;
 const DEFAULT_LIMIT    = 25;
 const MAX_LIMIT        = 100;
+const IDS_ONLY_MAX     = 50_000;
 
 function maskEmail(email: string | null): string | null {
   if (!email) return null;
@@ -53,8 +54,13 @@ export async function GET(req: NextRequest) {
   const companyKeywordIncludes = csv(p.get("co_keyword_include"));
   const companyKeywordExcludes = csv(p.get("co_keyword_exclude"));
   const emailStatus            = p.get("email_status") || "any";
-  const page            = Math.max(1, parseInt(p.get("page") || "1"));
-  const limit           = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
+  const idsOnly    = p.get("ids_only")    === "true";
+  const skipCount  = p.get("skip_count") === "true";
+  const page       = Math.max(1, parseInt(p.get("page") || "1"));
+  const requestedLimit  = Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT)));
+  const limit           = idsOnly
+    ? Math.min(requestedLimit, IDS_ONLY_MAX)
+    : Math.min(requestedLimit, MAX_LIMIT);
   const offset          = (page - 1) * limit;
 
   const SORT_COLS: Record<string, string> = {
@@ -154,16 +160,32 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
+    // Lightweight ID-only path — used by the frontend's "select all" bulk operations.
+    // Returns raw IDs without reveal lookups or email masking, supporting up to 50k.
+    if (idsOnly) {
+      const idRows = await leadsDb.unsafe<{ id: string }[]>(`
+        SELECT p.id
+        FROM discover_people p
+        LEFT JOIN discover_companies c ON c.id = p.company_id
+        ${where}
+        ORDER BY p.created_at DESC NULLS LAST
+        LIMIT $${i}
+      `, [...params, limit] as never[]);
+      return NextResponse.json({ ids: idRows.map(r => r.id) });
+    }
+
     const [countRows, rows] = await Promise.all([
-      leadsDb.unsafe(`
-        SELECT count(*) AS total
-        FROM (
-          SELECT 1 FROM discover_people p
-          LEFT JOIN discover_companies c ON c.id = p.company_id
-          ${where}
-          LIMIT 100001
-        ) cnt
-      `, params as never[]),
+      skipCount
+        ? Promise.resolve(null)
+        : leadsDb.unsafe(`
+            SELECT count(*) AS total
+            FROM (
+              SELECT 1 FROM discover_people p
+              LEFT JOIN discover_companies c ON c.id = p.company_id
+              ${where}
+              LIMIT 100001
+            ) cnt
+          `, params as never[]),
       leadsDb.unsafe(`
         SELECT
           p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
@@ -180,9 +202,9 @@ export async function GET(req: NextRequest) {
       `, [...params, limit, offset] as never[]),
     ]);
 
-    const rawTotal = parseInt((countRows[0] as unknown as { total: string }).total, 10);
+    const rawTotal = skipCount ? -1 : parseInt((countRows![0] as unknown as { total: string }).total, 10);
     const HARD_CAP = 50_000;
-    const capped   = rawTotal > HARD_CAP;
+    const capped   = !skipCount && rawTotal > HARD_CAP;
     const total    = capped ? HARD_CAP : rawTotal;
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 

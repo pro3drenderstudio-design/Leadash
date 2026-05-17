@@ -5,6 +5,19 @@ import type { DiscoverCompanySearchResponse, DiscoverCompanyResult } from "@/typ
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT     = 100;
+const IDS_ONLY_MAX  = 50_000;
+
+// Cached once per server process — these columns never change at runtime
+let _colCache: Set<string> | null = null;
+async function getExistingCols(): Promise<Set<string>> {
+  if (_colCache) return _colCache;
+  const rows = await leadsDb.unsafe<{ column_name: string }[]>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name='discover_companies' AND column_name IN ('keywords','description')`,
+    [] as never[]
+  );
+  _colCache = new Set(rows.map(r => r.column_name));
+  return _colCache;
+}
 
 function csv(val: string | null | undefined, fallback: string[] = []): string[] {
   const v = (val || "").trim();
@@ -34,8 +47,13 @@ export async function GET(req: NextRequest) {
   const revenueMin       = parseInt(p.get("revenue_min") || "0") || 0;
   const revenueMax       = parseInt(p.get("revenue_max") || "0") || 0;
   const hasPeople        = p.get("has_people") === "true";
+  const idsOnly          = p.get("ids_only")    === "true";
+  const skipCount        = p.get("skip_count") === "true";
   const page             = Math.max(1, parseInt(p.get("page") || "1"));
-  const limit            = Math.min(MAX_LIMIT, Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT))));
+  const requestedLimit   = Math.max(1, parseInt(p.get("limit") || String(DEFAULT_LIMIT)));
+  const limit            = idsOnly
+    ? Math.min(requestedLimit, IDS_ONLY_MAX)
+    : Math.min(requestedLimit, MAX_LIMIT);
   const offset           = (page - 1) * limit;
 
   const CO_SORT_COLS: Record<string, string> = {
@@ -131,16 +149,19 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Check which optional columns exist (keywords was added via backfill; description was always there)
-    const colCheck = await leadsDb.unsafe<{ column_name: string }[]>(
-      `SELECT column_name FROM information_schema.columns WHERE table_name='discover_companies' AND column_name IN ('keywords','description')`,
-      [] as never[]
-    );
-    const existingCols = new Set(colCheck.map(r => r.column_name));
+    if (idsOnly) {
+      const idRows = await leadsDb.unsafe<{ id: string }[]>(`
+        SELECT c.id FROM discover_companies c ${where}
+        ORDER BY c.name ASC NULLS LAST
+        LIMIT $${i}
+      `, [...params, limit] as never[]);
+      return NextResponse.json({ ids: idRows.map(r => r.id) });
+    }
+
+    const existingCols = await getExistingCols();
     const descSql  = existingCols.has("description") ? "c.description," : "NULL::text AS description,";
     const kwSql    = existingCols.has("keywords")    ? "c.keywords,"    : "NULL::text AS keywords,";
 
-    // keyword filter on c.keywords only applies when column exists
     if (!existingCols.has("keywords") && conditions.some(c => c.includes("c.keywords"))) {
       return NextResponse.json({ results: [], total: 0, page, limit }, { status: 200 });
     }
@@ -148,13 +169,15 @@ export async function GET(req: NextRequest) {
     const needsPeopleCount = sortRaw === "people_count";
 
     const [countRows, rows] = await Promise.all([
-      leadsDb.unsafe(`
-        SELECT count(*) AS total
-        FROM (
-          SELECT 1 FROM discover_companies c ${where}
-          LIMIT 100001
-        ) cnt
-      `, params as never[]),
+      skipCount
+        ? Promise.resolve(null)
+        : leadsDb.unsafe(`
+            SELECT count(*) AS total
+            FROM (
+              SELECT 1 FROM discover_companies c ${where}
+              LIMIT 100001
+            ) cnt
+          `, params as never[]),
       needsPeopleCount
         ? leadsDb.unsafe(`
             SELECT
@@ -188,7 +211,7 @@ export async function GET(req: NextRequest) {
           `, [...params, limit, offset] as never[]),
     ]);
 
-    const total = parseInt((countRows[0] as unknown as { total: string }).total, 10);
+    const total = skipCount ? -1 : parseInt((countRows![0] as unknown as { total: string }).total, 10);
 
     const results: DiscoverCompanyResult[] = (rows as Record<string, unknown>[]).map(r => ({
       id:            r.id            as string,

@@ -928,6 +928,8 @@ function DiscoverContent() {
   const [exporting,     setExporting]     = useState(false);
   const [revealing,     setRevealing]     = useState(false);
   const [exportMsg,     setExportMsg]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [bulkProgress,  setBulkProgress]  = useState<{ current: number; total: number; label: string } | null>(null);
+  const isInitialRender = useRef(true);
   const [balance,       setBalance]       = useState<number | null>(null);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
   const [showCampaign,  setShowCampaign]  = useState(false);
@@ -977,7 +979,7 @@ function DiscoverContent() {
     setRecentSearches(loadRecent());
   }, []);
 
-  const searchPeople = useCallback(async (p = 1) => {
+  const searchPeople = useCallback(async (p = 1, skipCount = false) => {
     setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
     try {
       const f = peopleFilters;
@@ -1003,13 +1005,16 @@ function DiscoverContent() {
       params.set("email_status", f.emailStatus);
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
+      if (skipCount) params.set("skip_count", "true");
       const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
-      setResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p); setResultsCapped(!!data.message);
+      setResults(data.results ?? []);
+      if (!skipCount) { setTotal(data.total ?? 0); setResultsCapped(!!data.message); }
+      setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
   }, [peopleFilters, peopleSortBy, peopleSortDir]);
 
-  const searchCompanies = useCallback(async (p = 1) => {
+  const searchCompanies = useCallback(async (p = 1, skipCount = false) => {
     setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
     try {
       const f = companyFilters;
@@ -1032,8 +1037,11 @@ function DiscoverContent() {
       params.set("has_people", String(f.coHasPeople));
       params.set("sort", coSortBy); params.set("order", coSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
+      if (skipCount) params.set("skip_count", "true");
       const data = await wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`);
-      setCompanyResults(data.results ?? []); setTotal(data.total ?? 0); setPage(p); setResultsCapped(false);
+      setCompanyResults(data.results ?? []);
+      if (!skipCount) setTotal(data.total ?? 0);
+      setPage(p); setResultsCapped(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
   }, [companyFilters, coSortBy, coSortDir]);
@@ -1044,7 +1052,10 @@ function DiscoverContent() {
   useEffect(() => {
     if (!hasSearched) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(1), 600);
+    // Fire immediately on first render (e.g. arriving via saved-search URL); debounce after
+    const delay = isInitialRender.current ? 0 : 600;
+    isInitialRender.current = false;
+    debounceRef.current = setTimeout(() => search(1), delay);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters, coSortBy, coSortDir, mode, hasSearched]);
@@ -1127,31 +1138,120 @@ function DiscoverContent() {
     if (f.companyKeywordIncludes.length) params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
     if (f.companyKeywordExcludes.length) params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
     params.set("email_status", f.emailStatus);
-    params.set("page", "1"); params.set("limit", String(SELECT_ALL_CAP));
-    const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
-    return (data.results ?? []).map(r => r.id);
+    params.set("ids_only", "true");
+    params.set("limit", String(SELECT_ALL_CAP));
+    const data = await wsGet<{ ids?: string[]; results?: { id: string }[] }>(`/api/discover/search?${params}`);
+    return data.ids ?? (data.results ?? []).map(r => r.id);
+  }
+
+  async function fetchAllMatchingCompanyIds(): Promise<string[]> {
+    const f = companyFilters;
+    const params = new URLSearchParams();
+    if (f.coKeyword)                 params.set("q",               f.coKeyword);
+    if (f.coCountryIncludes.length)  params.set("country_include",  f.coCountryIncludes.join(","));
+    if (f.coCountryExcludes.length)  params.set("country_exclude",  f.coCountryExcludes.join(","));
+    if (f.coLocationIncludes.length) params.set("location_include", f.coLocationIncludes.join(","));
+    if (f.coLocationExcludes.length) params.set("location_exclude", f.coLocationExcludes.join(","));
+    if (f.coIndustryIncludes.length) params.set("industry_include", f.coIndustryIncludes.join(","));
+    if (f.coIndustryExcludes.length) params.set("industry_exclude", f.coIndustryExcludes.join(","));
+    if (f.coSizes.length)            params.set("company_size",     f.coSizes.join(","));
+    if (f.coFundingStages.length)    params.set("funding_stage",    f.coFundingStages.join(","));
+    if (f.coKeywordIncludes.length)  params.set("keyword_include",  f.coKeywordIncludes.join(","));
+    if (f.coKeywordExcludes.length)  params.set("keyword_exclude",  f.coKeywordExcludes.join(","));
+    if (f.coEmployeeRange?.min)      params.set("employee_min",     String(f.coEmployeeRange.min));
+    if (f.coEmployeeRange?.max)      params.set("employee_max",     String(f.coEmployeeRange.max));
+    if (f.coRevenueRange?.min)       params.set("revenue_min",      String(f.coRevenueRange.min));
+    if (f.coRevenueRange?.max)       params.set("revenue_max",      String(f.coRevenueRange.max));
+    params.set("has_people", String(f.coHasPeople));
+    params.set("ids_only", "true");
+    params.set("limit", String(SELECT_ALL_CAP));
+    const data = await wsGet<{ ids?: string[] }>(`/api/discover/companies/search?${params}`);
+    return data.ids ?? [];
+  }
+
+  async function handleFindPeopleAtSelected() {
+    const ids = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const names = companyResults.filter(c => ids.includes(c.id)).map(c => c.name).filter(Boolean);
+    setSelectAllMode(false);
+    setSelected(new Set());
+    setMode("people");
+    if (names.length > 0) {
+      setPeopleFilters(f => ({ ...f, companyIncludes: names }));
+      setHasSearched(true);
+    }
+  }
+
+  async function handleCompanyExport() {
+    const allIds = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    if (!allIds.length) return;
+    setExporting(true); setExportMsg(null);
+    const COMPANY_BATCH = 5000;
+    try {
+      for (let start = 0; start < allIds.length; start += COMPANY_BATCH) {
+        const batch = allIds.slice(start, start + COMPANY_BATCH);
+        if (allIds.length > COMPANY_BATCH) {
+          setBulkProgress({ current: start + batch.length, total: allIds.length, label: "Exporting" });
+        }
+        const res = await wsFetch("/api/discover/companies/export", {
+          method: "POST",
+          body: JSON.stringify({ ids: batch }),
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url  = URL.createObjectURL(blob);
+          const part = allIds.length > COMPANY_BATCH ? `-part${Math.floor(start / COMPANY_BATCH) + 1}` : "";
+          Object.assign(document.createElement("a"), { href: url, download: `leadash-companies-${Date.now()}${part}.csv` }).click();
+          URL.revokeObjectURL(url);
+          if (start + batch.length < allIds.length) await new Promise(r => setTimeout(r, 400));
+        } else {
+          const j = await res.json().catch(() => ({ error: res.statusText }));
+          setExportMsg({ ok: false, text: j.error ?? "Export failed" });
+          return;
+        }
+      }
+      const parts = Math.ceil(allIds.length / COMPANY_BATCH);
+      setExportMsg({ ok: true, text: `${allIds.length.toLocaleString()} companies exported${parts > 1 ? ` in ${parts} files` : ""}` });
+      setSelected(new Set());
+    } catch (e) {
+      setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Export failed" });
+    } finally { setExporting(false); setBulkProgress(null); }
   }
 
   async function revealIds(ids: string[]) {
     setRevealing(true);
+    if (ids.length > 500) setBulkProgress({ current: 0, total: ids.length, label: "Unlocking" });
+    const REVEAL_BATCH  = 500;
+    const CONCURRENCY   = 5;
+    let completed = 0;
     try {
-      const res = await wsFetch("/api/discover/reveal", { method: "POST", body: JSON.stringify({ ids }) });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({ error: res.statusText }));
-        setExportMsg({ ok: false, text: j.error ?? "Reveal failed" });
-        return;
+      for (let i = 0; i < ids.length; i += REVEAL_BATCH * CONCURRENCY) {
+        const window: string[][] = [];
+        for (let c = 0; c < CONCURRENCY && i + c * REVEAL_BATCH < ids.length; c++) {
+          window.push(ids.slice(i + c * REVEAL_BATCH, i + (c + 1) * REVEAL_BATCH));
+        }
+        const batchResults = await Promise.all(window.map(async batch => {
+          const res = await wsFetch("/api/discover/reveal", { method: "POST", body: JSON.stringify({ ids: batch }) });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({ error: res.statusText }));
+            throw new Error(j.error ?? "Reveal failed");
+          }
+          return res.json() as Promise<{ reveals: Record<string, { email: string | null; phone: string | null; email_status: string | null }>; credits_used: number }>;
+        }));
+        for (const data of batchResults) {
+          setResults(prev => prev.map(r => {
+            const rev = data.reveals[r.id];
+            if (!rev) return r;
+            return { ...r, email_preview: rev.email, phone_preview: rev.phone, email_status: (rev.email_status as DiscoverResult["email_status"]) ?? r.email_status, revealed: true };
+          }));
+          if (data.credits_used > 0) setBalance(b => (b ?? 0) - data.credits_used);
+        }
+        completed += window.reduce((s, b) => s + b.length, 0);
+        setBulkProgress(p => p ? { ...p, current: Math.min(completed, ids.length) } : null);
       }
-      const data = await res.json() as { reveals: Record<string, { email: string | null; phone: string | null; email_status: string | null }>; credits_used: number };
-      setResults(prev => prev.map(r => {
-        const rev = data.reveals[r.id];
-        if (!rev) return r;
-        return { ...r, email_preview: rev.email, phone_preview: rev.phone, email_status: (rev.email_status as DiscoverResult["email_status"]) ?? r.email_status, revealed: true };
-      }));
-      if (data.credits_used > 0) setBalance(b => (b ?? 0) - data.credits_used);
-      setExportMsg({ ok: true, text: `${ids.length} lead${ids.length !== 1 ? "s" : ""} unlocked` });
+      setExportMsg({ ok: true, text: `${ids.length.toLocaleString()} lead${ids.length !== 1 ? "s" : ""} unlocked` });
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Reveal failed" });
-    } finally { setRevealing(false); }
+    } finally { setRevealing(false); setBulkProgress(null); }
   }
 
   async function revealSelected() {
@@ -1160,56 +1260,109 @@ function DiscoverContent() {
   }
 
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
-    const ids = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
-    if (!ids.length) return;
+    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
+    const EXPORT_BATCH = 2500;
     try {
-      const res = await wsFetch("/api/discover/export", {
-        method: "POST",
-        body: JSON.stringify({ ids, format, campaign_id: campaignId, campaign_name: campaignName }),
-      });
-      if (format === "csv" && res.ok) {
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        Object.assign(document.createElement("a"), { href: url, download: `leadash-discover-${Date.now()}.csv` }).click();
-        URL.revokeObjectURL(url);
-        setExportMsg({ ok: true, text: `${ids.length} leads exported` });
+      if (format === "csv") {
+        if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Exporting" });
+        let downloaded = 0;
+        for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
+          const batch = allIds.slice(start, start + EXPORT_BATCH);
+          const res = await wsFetch("/api/discover/export", {
+            method: "POST",
+            body: JSON.stringify({ ids: batch, format: "csv" }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({ error: res.statusText }));
+            setExportMsg({ ok: false, text: j.error ?? "Export failed" });
+            return;
+          }
+          const blob = await res.blob();
+          const url  = URL.createObjectURL(blob);
+          const part = allIds.length > EXPORT_BATCH ? `-part${Math.floor(start / EXPORT_BATCH) + 1}` : "";
+          Object.assign(document.createElement("a"), { href: url, download: `leadash-discover-${Date.now()}${part}.csv` }).click();
+          URL.revokeObjectURL(url);
+          downloaded += batch.length;
+          setBulkProgress(p => p ? { ...p, current: Math.min(downloaded, allIds.length) } : null);
+          if (start + batch.length < allIds.length) await new Promise(r => setTimeout(r, 400));
+        }
+        const parts = Math.ceil(allIds.length / EXPORT_BATCH);
+        setExportMsg({ ok: true, text: `${allIds.length.toLocaleString()} leads exported${parts > 1 ? ` in ${parts} files` : ""}` });
         setSelected(new Set());
-      } else if (res.ok) {
-        const j = await res.json();
-        setExportMsg({ ok: true, text: `${j.leads_added} leads added to campaign` });
-        if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
-        setSelected(new Set());
-      } else {
-        const j = await res.json().catch(() => ({ error: res.statusText }));
-        setExportMsg({ ok: false, text: j.error ?? "Export failed" });
+        return;
       }
+
+      // Campaign format — batch in 2500-lead chunks
+      if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
+      let resolvedCampaignId = campaignId ?? null;
+      let totalAdded = 0;
+      for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
+        const batch = allIds.slice(start, start + EXPORT_BATCH);
+        const res = await wsFetch("/api/discover/export", {
+          method: "POST",
+          body: JSON.stringify({
+            ids:           batch,
+            format:        "campaign",
+            campaign_id:   resolvedCampaignId,
+            campaign_name: start === 0 ? campaignName : null,
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({ error: res.statusText }));
+          setExportMsg({ ok: false, text: j.error ?? "Export failed" });
+          return;
+        }
+        const j = await res.json() as { leads_added: number; credits_used: number; campaign_id?: string };
+        totalAdded += j.leads_added ?? 0;
+        if (!resolvedCampaignId && j.campaign_id) resolvedCampaignId = j.campaign_id;
+        if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
+        setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
+      }
+      setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} leads added to campaign` });
+      setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Export failed" });
-    } finally { setExporting(false); }
+    } finally { setExporting(false); setBulkProgress(null); }
   }
 
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
-    const ids = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
-    if (!ids.length) return;
+    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
+    const EXPORT_BATCH = 2500;
+    if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
+    let totalAdded = 0;
+    let resolvedListId = listId;
     try {
-      const res = await wsFetch("/api/discover/export", {
-        method: "POST",
-        body: JSON.stringify({ ids, format: "list", list_id: listId, list_name: listName }),
-      });
-      if (res.ok) {
-        const j = await res.json();
-        setExportMsg({ ok: true, text: `${j.leads_added} lead${j.leads_added !== 1 ? "s" : ""} added to list` });
+      for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
+        const batch = allIds.slice(start, start + EXPORT_BATCH);
+        const res = await wsFetch("/api/discover/export", {
+          method: "POST",
+          body: JSON.stringify({
+            ids:       batch,
+            format:    "list",
+            list_id:   resolvedListId,
+            list_name: start === 0 ? listName : null,
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({ error: res.statusText }));
+          setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
+          return;
+        }
+        const j = await res.json() as { leads_added: number; credits_used: number; list_id?: string };
+        totalAdded += j.leads_added ?? 0;
+        if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
         if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
-        setSelected(new Set());
-      } else {
-        const j = await res.json().catch(() => ({ error: res.statusText }));
-        setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
+        setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
+      setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added to list` });
+      setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed to add to list" });
-    } finally { setExporting(false); }
+    } finally { setExporting(false); setBulkProgress(null); }
   }
 
   async function saveSearch() {
@@ -1241,9 +1394,10 @@ function DiscoverContent() {
     setSavedSearches(prev => prev.filter(s => s.id !== id));
   }
 
-  const unrevealed  = selectAllMode ? results.filter(r => !r.revealed) : results.filter(r => selected.has(r.id) && !r.revealed);
+  const unrevealed    = results.filter(r => selected.has(r.id) && !r.revealed);
   const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
-  const revealCost  = Math.ceil(unrevealed.length * 0.25 * 10) / 10;
+  const unrevealedCount = selectAllMode ? selectedCount : unrevealed.length;
+  const revealCost  = Math.ceil(unrevealedCount * 0.25 * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort, className = "" }: {
     label: string; col: string | null;
@@ -1416,29 +1570,57 @@ function DiscoverContent() {
           {(selected.size > 0 || selectAllMode) && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
-              {mode === "people" && unrevealed.length > 0 && (
-                <button onClick={revealSelected} disabled={revealing || exporting}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
-                  {revealing ? <Spinner sm /> : <LockIcon open />}
-                  <span className="hidden sm:inline">Unlock {unrevealed.length} · </span>{revealCost} cr
-                </button>
+              {mode === "people" ? (
+                <>
+                  {unrevealedCount > 0 && (
+                    <button onClick={revealSelected} disabled={revealing || exporting}
+                      title="Already revealed leads cost 0 credits"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/25 text-amber-300 rounded-lg transition-colors disabled:opacity-50">
+                      {revealing ? <Spinner sm /> : <LockIcon open />}
+                      <span className="hidden sm:inline">Unlock {unrevealedCount.toLocaleString()} · </span>{revealCost} cr
+                    </button>
+                  )}
+                  <button onClick={() => { setCampaignIds(null); setShowCampaign(true); }} disabled={exporting || revealing}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                    <span className="hidden sm:inline">Add to </span>Sequence
+                  </button>
+                  <button onClick={() => { setListIds(null); setShowList(true); }} disabled={exporting || revealing}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                    <span className="hidden sm:inline">Add to </span>List
+                  </button>
+                  <button onClick={() => handleExport("csv")} disabled={exporting || revealing}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {exporting ? "…" : "Export"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={handleFindPeopleAtSelected} disabled={exporting || revealing}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
+                    Find People
+                  </button>
+                  <button onClick={handleCompanyExport} disabled={exporting || revealing}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {exporting ? "…" : "Export CSV"}
+                  </button>
+                </>
               )}
-              <button onClick={() => { setCampaignIds(null); setShowCampaign(true); }} disabled={exporting || revealing}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                <span className="hidden sm:inline">Add to </span>Sequence
-              </button>
-              <button onClick={() => { setListIds(null); setShowList(true); }} disabled={exporting || revealing}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-white/8 hover:bg-white/12 border border-white/12 text-white/70 rounded-lg transition-colors disabled:opacity-50">
-                <span className="hidden sm:inline">Add to </span>List
-              </button>
-              <button onClick={() => handleExport("csv")} disabled={exporting || revealing}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-400 text-white rounded-lg transition-colors disabled:opacity-50">
-                {exporting ? "…" : "Export"}
-              </button>
             </div>
           )}
         </div>
 
+        {bulkProgress && (
+          <div className="flex-shrink-0 px-5 py-2.5 border-b border-white/8 bg-[#0a0f1e]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-white/50">{bulkProgress.label} {bulkProgress.current.toLocaleString()} / {bulkProgress.total.toLocaleString()}</span>
+              <span className="text-xs text-white/30 tabular-nums">{Math.round(bulkProgress.current / bulkProgress.total * 100)}%</span>
+            </div>
+            <div className="h-1 bg-white/8 rounded-full overflow-hidden">
+              <div className="h-full bg-orange-500 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(bulkProgress.current / bulkProgress.total * 100)}%` }} />
+            </div>
+          </div>
+        )}
         {exportMsg && (
           <div className={`flex-shrink-0 flex items-center justify-between px-5 py-2 text-xs ${exportMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
             <span>{exportMsg.text}</span>
@@ -1470,9 +1652,25 @@ function DiscoverContent() {
             </button>
           </div>
         )}
-        {selectAllMode && (
+        {mode === "people" && selectAllMode && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-orange-300 font-semibold">All {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching leads selected.</span>
+            <button onClick={() => { setSelectAllMode(false); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
+              Clear selection
+            </button>
+          </div>
+        )}
+        {mode === "companies" && !selectAllMode && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-white/50">All {companyResults.length} on this page selected.</span>
+            <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
+              Select all {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching companies
+            </button>
+          </div>
+        )}
+        {mode === "companies" && selectAllMode && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-orange-300 font-semibold">All {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching companies selected.</span>
             <button onClick={() => { setSelectAllMode(false); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
               Clear selection
             </button>
@@ -1636,7 +1834,7 @@ function DiscoverContent() {
               <thead className="sticky top-0 z-10 bg-[#0a0f1e] border-b border-white/8">
                 <tr>
                   <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#0a0f1e]">
-                    <input type="checkbox" checked={companyResults.length > 0 && selected.size === companyResults.length}
+                    <input type="checkbox" checked={companyResults.length > 0 && (selectAllMode || selected.size === companyResults.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Company" col="name" sortBy={coSortBy} sortDir={coSortDir} onSort={handleCoSort}
@@ -1741,23 +1939,23 @@ function DiscoverContent() {
               Page {page} of {totalPages.toLocaleString()} · {totalLabel} total
             </span>
             <div className="flex items-center gap-1">
-              <button disabled={page <= 1 || loading} onClick={() => search(1)}
+              <button disabled={page <= 1 || loading} onClick={() => search(1, true)}
                 className="px-2 py-1 text-[11px] text-white/40 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed">«</button>
-              <button disabled={page <= 1 || loading} onClick={() => search(page - 1)}
+              <button disabled={page <= 1 || loading} onClick={() => search(page - 1, true)}
                 className="px-2.5 py-1 text-xs text-white/40 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed">‹ Prev</button>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 const start = Math.max(1, Math.min(page - 2, totalPages - 4));
                 const p2 = start + i;
                 return (
-                  <button key={p2} disabled={loading} onClick={() => search(p2)}
+                  <button key={p2} disabled={loading} onClick={() => search(p2, true)}
                     className={`w-7 h-7 text-xs rounded transition-colors ${p2 === page ? "bg-orange-500 text-white" : "text-white/40 hover:text-white hover:bg-white/8"}`}>
                     {p2}
                   </button>
                 );
               })}
-              <button disabled={page >= totalPages || loading} onClick={() => search(page + 1)}
+              <button disabled={page >= totalPages || loading} onClick={() => search(page + 1, true)}
                 className="px-2.5 py-1 text-xs text-white/40 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed">Next ›</button>
-              <button disabled={page >= totalPages || loading} onClick={() => search(totalPages)}
+              <button disabled={page >= totalPages || loading} onClick={() => search(totalPages, true)}
                 className="px-2 py-1 text-[11px] text-white/40 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed">»</button>
             </div>
           </div>
@@ -1807,14 +2005,14 @@ function DiscoverContent() {
       {/* ── Modals ── */}
       {showCampaign && (
         <SequenceModal
-          count={campaignIds ? campaignIds.length : selected.size}
+          count={campaignIds ? campaignIds.length : selectedCount}
           onClose={() => { setShowCampaign(false); setCampaignIds(null); }}
           onConfirm={(cid, cname) => handleExport("campaign", cid, cname, campaignIds ?? undefined)}
         />
       )}
       {showList && (
         <ListModal
-          count={listIds ? listIds.length : selected.size}
+          count={listIds ? listIds.length : selectedCount}
           onClose={() => { setShowList(false); setListIds(null); }}
           onConfirm={(lid, lname) => handleAddToList(lid, lname, listIds ?? undefined)}
         />

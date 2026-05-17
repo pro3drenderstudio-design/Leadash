@@ -145,7 +145,7 @@ export async function runSendBatch(
   // ── Plan gate: block sends for free-plan or expired-trial workspaces ─────────
   const { data: wsRow } = await db
     .from("workspaces")
-    .select("plan_id, trial_ends_at")
+    .select("plan_id, trial_ends_at, max_monthly_sends")
     .eq("id", workspaceId)
     .single();
 
@@ -181,6 +181,30 @@ export async function runSendBatch(
       .eq("status", "active");
     console.log(`[send-runner] ws=${workspaceId} free plan — sends blocked, campaigns paused`);
     return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Monthly send limit ───────────────────────────────────────────────────────
+  const maxMonthly = (wsRow as Record<string, unknown>)?.max_monthly_sends as number ?? -1;
+  if (maxMonthly !== -1 && maxMonthly > 0) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+    const { count: monthlySent } = await db
+      .from("outreach_sends")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .in("status", ["sent", "queued", "opened", "replied", "clicked"])
+      .gte("created_at", monthStart.toISOString());
+    if ((monthlySent ?? 0) >= maxMonthly) {
+      await db.from("outreach_campaigns")
+        .update({ status: "paused", pause_reason: "Monthly send limit reached — resets next billing cycle", updated_at: new Date().toISOString() })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active");
+      console.log(`[send-runner] ws=${workspaceId} monthly limit=${maxMonthly} reached (sent=${monthlySent}) — blocked`);
+      return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+    }
+    const remaining = maxMonthly - (monthlySent ?? 0);
+    if (remaining < limit) limit = remaining;
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -296,6 +320,21 @@ export async function runSendBatch(
           .eq("enrollment_id", enrollment.id).not("opened_at", "is", null).limit(1).single();
         if (opened) { result.skipped++; continue; }
       }
+
+      // Claim this enrollment step before inserting the send record. The conditional
+      // update only matches if no other runner has already advanced or claimed it,
+      // preventing duplicate sends when two cron invocations overlap.
+      const claimAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const { data: claimed } = await db
+        .from("outreach_enrollments")
+        .update({ next_send_at: claimAt })
+        .eq("id", enrollment.id)
+        .eq("current_step", seqStep.step_order)
+        .eq("status", "active")
+        .or(`next_send_at.is.null,next_send_at.lte.${new Date().toISOString()}`)
+        .select("id")
+        .maybeSingle();
+      if (!claimed) { result.skipped++; continue; }
 
       const abVariant: "a" | "b" = enrollment.ab_variant ?? "a";
       const subjectTemplate = abVariant === "b" && seqStep.subject_template_b

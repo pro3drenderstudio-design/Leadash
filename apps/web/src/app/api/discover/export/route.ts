@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
       ok:           true,
       leads_added:  insertedLeads?.length ?? 0,
       credits_used: totalCost,
+      list_id:      resolvedListId,
     });
   }
 
@@ -312,6 +313,7 @@ export async function POST(req: NextRequest) {
       ok:           true,
       leads_added:  insertedLeads?.length ?? 0,
       credits_used: totalCost,
+      campaign_id:  campaign_id ?? null,
     });
   }
 

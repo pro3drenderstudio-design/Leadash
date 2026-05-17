@@ -65,6 +65,16 @@ export async function GET(req: NextRequest) {
 
   for (const ws of expired) {
     try {
+      // Re-check plan_status — workspace may have recovered via payment during this run
+      const { data: current } = await db.from("workspaces")
+        .select("plan_status")
+        .eq("id", ws.id)
+        .single();
+      if (current?.plan_status !== "past_due") {
+        console.warn(`[billing-grace] Skipping workspace=${ws.id} — status is now ${current?.plan_status}`);
+        continue;
+      }
+
       const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "grace_period_expired");
       results.push({ workspaceId: ws.id, paused, creditsExpired });
       console.warn(`[billing-grace] Downgraded workspace=${ws.id} paused=${paused} credits_expired=${creditsExpired}`);

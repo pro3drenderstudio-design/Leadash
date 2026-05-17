@@ -9,6 +9,7 @@ import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import PastDueBanner from "@/components/PastDueBanner";
+import SubscriptionRenewalBanner from "@/components/SubscriptionRenewalBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 
@@ -68,9 +69,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Don't surface trial/beta UI if the user already has an active paid subscription.
   // Beta enrollments set plan_id="starter" + trial_ends_at; once users upgrade to a real
   // paid plan the trial_ends_at is stale and should be ignored.
+  // A workspace is "commercially active" if it is on a named paid plan OR has a
+  // subscription_renews_at set (starter users who paid — they always have renews_at
+  // after backfill; beta starters do not).
   const PAID_PLANS = ["pro", "scale", "enterprise"];
-  const hasActivePaidPlan = PAID_PLANS.includes(workspace.plan_id) && workspace.plan_status === "active";
+  const hasActivePaidPlan =
+    (PAID_PLANS.includes(workspace.plan_id) || workspace.subscription_renews_at !== null)
+    && workspace.plan_status === "active";
   const trialEndsAt = hasActivePaidPlan ? null : workspace.trial_ends_at;
+
+  // Show renewal banner when renewal is within 7 days (or overdue) for paid plans
+  const renewalDate = workspace.subscription_renews_at ? new Date(workspace.subscription_renews_at) : null;
+  const showRenewalBanner = hasActivePaidPlan
+    && renewalDate !== null
+    && renewalDate <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
@@ -90,6 +102,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <BetaBanner />
             {workspace.plan_status === "past_due" && workspace.grace_ends_at && (
               <PastDueBanner graceEndsAt={workspace.grace_ends_at} />
+            )}
+            {showRenewalBanner && workspace.subscription_renews_at && (
+              <SubscriptionRenewalBanner renewsAt={workspace.subscription_renews_at} />
             )}
             {trialEndsAt && (
               <TrialBanner trialEndsAt={trialEndsAt} />

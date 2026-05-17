@@ -46,13 +46,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: before } = await db
     .from("outreach_campaigns")
-    .select("status")
+    .select("status, inbox_ids")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
 
-  // Block activation when outreach leads pool is over plan quota
+  // Validate campaign state before activation
   if (update.status === "active" && before?.status !== "active") {
+    const inboxIds = (before?.inbox_ids ?? []) as string[];
+    if (!inboxIds.length) {
+      return NextResponse.json(
+        { error: "Cannot activate campaign: no inboxes assigned. Add at least one inbox first." },
+        { status: 400 },
+      );
+    }
+    const { count: activeInboxCount } = await db
+      .from("outreach_inboxes")
+      .select("id", { count: "exact", head: true })
+      .in("id", inboxIds)
+      .eq("status", "active");
+    if (!activeInboxCount) {
+      return NextResponse.json(
+        { error: "Cannot activate campaign: none of the assigned inboxes are active. Check inbox status first." },
+        { status: 400 },
+      );
+    }
+
     const quota = await getPoolQuotaStatus(db, workspaceId);
     if (quota.isOver) {
       return NextResponse.json(

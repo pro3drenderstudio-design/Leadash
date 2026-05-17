@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { createClient } from "@/lib/supabase/server";
 import { disablePaystackSubscription } from "@/lib/billing/paystack";
 import { sendCancellationConfirmationEmail } from "@/lib/email/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -68,10 +69,19 @@ export async function POST(req: NextRequest) {
     .eq("id", workspaceId);
   if (dbError) console.error("[billing/cancel] DB update failed:", dbError);
 
-  if (ws?.billing_email) {
+  // Resolve email: billing_email first, fall back to the authenticated user's email
+  let emailTo: string | null = ws?.billing_email ?? null;
+  if (!emailTo) {
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      emailTo = user?.email ?? null;
+    } catch { /* non-fatal */ }
+  }
+  if (emailTo) {
     const planMap: Record<string, string> = { starter: "Starter", growth: "Growth", scale: "Scale" };
     sendCancellationConfirmationEmail({
-      userEmail:     ws.billing_email,
+      userEmail:     emailTo,
       workspaceName: ws.name,
       planName:      planMap[ws.plan_id ?? ""] ?? (ws.plan_id ?? "paid"),
     }).catch(e => console.error("[billing/cancel] cancellation email failed:", e));

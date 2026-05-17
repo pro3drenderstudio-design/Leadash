@@ -28,15 +28,19 @@ export async function POST(req: NextRequest) {
 
   const db = createAdminClient();
 
-  // Idempotency — don't create a second subscription for the same reference
-  const { data: existing } = await db
-    .from("billing_invoices")
-    .select("id")
-    .eq("paystack_reference", reference)
-    .maybeSingle();
+  // Idempotency — check both invoice AND subscription to guard against concurrent calls.
+  // Two simultaneous requests could both pass an invoice-only check before either commits.
+  const [{ data: existingInvoice }, { data: existingSub }] = await Promise.all([
+    db.from("billing_invoices").select("id").eq("paystack_reference", reference).maybeSingle(),
+    db.from("dedicated_ip_subscriptions").select("id")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  if (existing) {
-    return NextResponse.json({ ok: true, already_processed: true });
+  if (existingInvoice || existingSub) {
+    return NextResponse.json({ ok: true, already_processed: true, subscription_id: existingSub?.id });
   }
 
   const { priceNgn } = await getDedicatedIpPrice();
@@ -54,15 +58,15 @@ export async function POST(req: NextRequest) {
     .select("id")
     .single();
 
-  // Record invoice
-  await db.from("billing_invoices").insert({
+  // Record invoice — unique constraint on paystack_reference prevents any remaining race
+  await db.from("billing_invoices").upsert({
     workspace_id:       workspaceId,
     type:               "dedicated_ip",
     description:        "Dedicated IP add-on",
     amount_kobo:        priceNgn * 100,
     paystack_reference: reference,
     status:             "paid",
-  });
+  }, { onConflict: "paystack_reference", ignoreDuplicates: true });
 
   return NextResponse.json({ ok: true, subscription_id: sub?.id });
 }

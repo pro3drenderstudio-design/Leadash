@@ -47,11 +47,25 @@ export async function POST(req: NextRequest) {
         metadata:          { domain_id: domain.id, workspace_id: domain.workspace_id, type: "inbox_renewal" },
       });
 
+      if (status !== "success") {
+        throw new Error(`Charge returned status: ${status}`);
+      }
+
       const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       await db
         .from("outreach_domains")
         .update({ inbox_next_billing_date: nextBillingDate, charge_failure_count: 0 })
         .eq("id", domain.id);
+
+      // Record invoice for revenue tracking (upsert — webhook may also record it)
+      await db.from("billing_invoices").upsert({
+        workspace_id:       domain.workspace_id,
+        type:               "inbox_billing",
+        description:        `Inbox domain — ${domain.domain}`,
+        amount_kobo:        domain.paystack_inbox_monthly_kobo as number,
+        paystack_reference: reference,
+        status:             "paid",
+      }, { onConflict: "paystack_reference", ignoreDuplicates: true });
 
       // Notify user of successful charge
       const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);

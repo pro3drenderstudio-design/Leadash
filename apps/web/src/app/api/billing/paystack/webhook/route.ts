@@ -118,6 +118,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // Inbox domain billing (recurring charge from cron or retry)
+    if ((type === "inbox_renewal" || type === "inbox_renewal_retry") && workspaceId) {
+      const domainId   = meta.domain_id as string | undefined;
+      const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+      if (domainId) {
+        const { data: dom } = await db
+          .from("outreach_domains")
+          .select("domain")
+          .eq("id", domainId)
+          .maybeSingle();
+        // Record invoice — upsert so the cron's direct insert is not duplicated
+        await db.from("billing_invoices").upsert({
+          workspace_id:       workspaceId,
+          type:               "inbox_billing",
+          description:        `Inbox domain — ${dom?.domain ?? domainId}`,
+          amount_kobo:        amountKobo ?? 0,
+          paystack_reference: data.reference,
+          status:             "paid",
+        }, { onConflict: "paystack_reference", ignoreDuplicates: true });
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Plan subscription payment
     if (type === "plan_subscription" && workspaceId) {
       const planId = meta.plan_id as string | undefined;
@@ -341,18 +364,39 @@ export async function POST(req: NextRequest) {
     const data = event.data as {
       subscription_code?: string;
       customer?: { customer_code?: string; metadata?: { workspace_id?: string } };
+      authorization?: { authorization_code?: string };
     };
-    const subCode = data.subscription_code;
+    const subCode      = data.subscription_code;
+    const authCode     = data.authorization?.authorization_code;
+    const fromMeta     = data.customer?.metadata?.workspace_id;
+    const customerCode = data.customer?.customer_code;
+
     if (subCode) {
-      // Paystack does not echo transaction metadata here — workspace_id won't be in
-      // customer.metadata unless the customer was created with it. Use customer_code
-      // (stored on workspace during charge.success) as the reliable lookup key.
-      const fromMeta     = data.customer?.metadata?.workspace_id;
-      const customerCode = data.customer?.customer_code;
+      // Try each identifier in order, stopping at the first match.
+      // Lookups 1 & 2 depend on charge.success having already run; lookup 3
+      // (auth_code) works even if the events arrive out of order.
       if (fromMeta) {
-        await db.from("workspaces").update({ paystack_sub_code: subCode }).eq("id", fromMeta);
+        await db.from("workspaces")
+          .update({ paystack_sub_code: subCode })
+          .eq("id", fromMeta);
       } else if (customerCode) {
-        await db.from("workspaces").update({ paystack_sub_code: subCode }).eq("paystack_customer_code", customerCode);
+        const { data: matched } = await db.from("workspaces")
+          .update({ paystack_sub_code: subCode })
+          .eq("paystack_customer_code", customerCode)
+          .is("paystack_sub_code", null)
+          .select("id")
+          .maybeSingle();
+        if (!matched && authCode) {
+          await db.from("workspaces")
+            .update({ paystack_sub_code: subCode })
+            .eq("paystack_auth_code", authCode)
+            .is("paystack_sub_code", null);
+        }
+      } else if (authCode) {
+        await db.from("workspaces")
+          .update({ paystack_sub_code: subCode })
+          .eq("paystack_auth_code", authCode)
+          .is("paystack_sub_code", null);
       }
     }
     return NextResponse.json({ received: true });

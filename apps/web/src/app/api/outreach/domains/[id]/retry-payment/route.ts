@@ -35,6 +35,10 @@ export async function POST(
       metadata:          { domain_id: domain.id, workspace_id: workspaceId, type: "inbox_renewal_retry" },
     });
 
+    if (status !== "success") {
+      return NextResponse.json({ error: `Payment returned status: ${status}. Card may have insufficient funds.` }, { status: 402 });
+    }
+
     const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await db.from("outreach_domains").update({
       status:                  "active",
@@ -43,6 +47,16 @@ export async function POST(
       error_message:           null,
       inbox_next_billing_date: nextBillingDate,
     }).eq("id", domain.id);
+
+    // Record invoice for revenue tracking
+    await db.from("billing_invoices").upsert({
+      workspace_id:       workspaceId,
+      type:               "inbox_billing",
+      description:        `Inbox domain — ${domain.domain} (retry)`,
+      amount_kobo:        domain.paystack_inbox_monthly_kobo as number,
+      paystack_reference: reference,
+      status:             "paid",
+    }, { onConflict: "paystack_reference", ignoreDuplicates: true });
 
     const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
     sendInboxPaymentSuccess({
