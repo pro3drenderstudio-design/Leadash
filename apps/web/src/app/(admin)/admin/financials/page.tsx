@@ -359,6 +359,439 @@ function Drawer({ state, onClose }: { state: DrawerState; onClose: () => void })
   );
 }
 
+// ── Subscription types ────────────────────────────────────────────────────────
+
+interface PlanSub {
+  workspace_id:     string;
+  workspace_name:   string;
+  workspace_slug:   string;
+  plan_id:          string;
+  plan_name:        string | null;
+  plan_status:      string | null;
+  is_beta:          boolean;
+  trial_ends_at:    string | null;
+  price_ngn:        number;
+  subscribed_at:    string | null;
+  last_billed_at:   string | null;
+  est_next_renewal: string | null;
+  lifetime_ngn:     number;
+  invoice_count:    number;
+}
+
+interface InboxDomain {
+  id:               string;
+  domain:           string;
+  mailbox_count:    number;
+  monthly_ngn:      number;
+  next_billing_date: string | null;
+}
+
+interface InboxSub {
+  workspace_id:      string;
+  workspace_name:    string;
+  workspace_slug:    string;
+  total_monthly_ngn: number;
+  domain_count:      number;
+  mailbox_count:     number;
+  next_billing_date: string | null;
+  domains:           InboxDomain[];
+}
+
+// ── Renewal date helpers ──────────────────────────────────────────────────────
+
+function renewalLabel(iso: string | null) {
+  if (!iso) return "—";
+  const days = Math.floor((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  if (days < 0)  return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Today";
+  if (days <= 45) return `${days}d`;
+  return fmtDate(iso);
+}
+
+function renewalColor(iso: string | null) {
+  if (!iso) return "text-white/25";
+  const days = Math.floor((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  if (days < 0)   return "text-red-400";
+  if (days <= 7)  return "text-amber-400";
+  return "text-emerald-400/60";
+}
+
+// ── Sortable column header ────────────────────────────────────────────────────
+
+function SortTh({ col, label, sortBy, sortDir, onSort, className = "" }: {
+  col: string; label: string; sortBy: string; sortDir: "asc" | "desc";
+  onSort: (col: string) => void; className?: string;
+}) {
+  const active = sortBy === col;
+  return (
+    <th
+      onClick={() => onSort(col)}
+      className={`px-4 py-2.5 text-left text-[10px] font-semibold text-white/30 uppercase tracking-wider cursor-pointer select-none hover:text-white/60 transition-colors whitespace-nowrap ${className}`}
+    >
+      {label}
+      <span className={`ml-1 ${active ? "text-orange-400" : "text-white/15"}`}>
+        {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </th>
+  );
+}
+
+// ── Subscriptions Section ─────────────────────────────────────────────────────
+
+function SubscriptionsSection() {
+  const [tab,        setTab]        = useState<"plan" | "inbox">("plan");
+  const [planSubs,   setPlanSubs]   = useState<PlanSub[]  | null>(null);
+  const [inboxSubs,  setInboxSubs]  = useState<InboxSub[] | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+
+  // Plan filters
+  const [search,     setSearch]     = useState("");
+  const [planFilter, setPlanFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // Sort
+  const [sortBy,  setSortBy]  = useState("price_ngn");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Inbox expand
+  const [expandedInbox, setExpandedInbox] = useState<string | null>(null);
+
+  const loadTab = useCallback(async (t: "plan" | "inbox") => {
+    const already = t === "plan" ? planSubs : inboxSubs;
+    if (already !== null) return;
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch(`/api/admin/financials/subscriptions?type=${t}`);
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.json() as { subscriptions: PlanSub[] | InboxSub[] };
+      if (t === "plan")  setPlanSubs(json.subscriptions as PlanSub[]);
+      else               setInboxSubs(json.subscriptions as InboxSub[]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [planSubs, inboxSubs]);
+
+  useEffect(() => { loadTab("plan"); }, []);  // auto-load plan tab on mount
+
+  function switchTab(t: "plan" | "inbox") {
+    setTab(t);
+    loadTab(t);
+  }
+
+  function handleSort(col: string) {
+    if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(col); setSortDir("desc"); }
+  }
+
+  // ── Filtered + sorted plan subs ──
+  const planRows = useCallback(() => {
+    if (!planSubs) return [];
+    let rows = planSubs.filter(s => {
+      if (search && !s.workspace_name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (planFilter !== "all" && s.plan_id !== planFilter) return false;
+      if (statusFilter === "beta"     && !s.is_beta) return false;
+      if (statusFilter === "active"   && (s.is_beta || s.plan_status !== "active")) return false;
+      if (statusFilter === "past_due" && s.plan_status !== "past_due") return false;
+      if (statusFilter === "trialing" && s.plan_status !== "trialing") return false;
+      return true;
+    });
+
+    rows = [...rows].sort((a, b) => {
+      let av: number | string = 0, bv: number | string = 0;
+      switch (sortBy) {
+        case "workspace_name":   av = a.workspace_name;   bv = b.workspace_name;   break;
+        case "plan_id":          av = a.price_ngn;        bv = b.price_ngn;        break;
+        case "price_ngn":        av = a.price_ngn;        bv = b.price_ngn;        break;
+        case "subscribed_at":    av = a.subscribed_at  ?? ""; bv = b.subscribed_at  ?? ""; break;
+        case "last_billed_at":   av = a.last_billed_at ?? ""; bv = b.last_billed_at ?? ""; break;
+        case "est_next_renewal": av = a.est_next_renewal ?? ""; bv = b.est_next_renewal ?? ""; break;
+        case "lifetime_ngn":     av = a.lifetime_ngn;    bv = b.lifetime_ngn;     break;
+        case "invoice_count":    av = a.invoice_count;   bv = b.invoice_count;    break;
+      }
+      if (typeof av === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      }
+      return sortDir === "asc" ? (av - (bv as number)) : ((bv as number) - av);
+    });
+    return rows;
+  }, [planSubs, search, planFilter, statusFilter, sortBy, sortDir]);
+
+  const PLAN_OPTIONS = [
+    { value: "all",        label: "All Plans" },
+    { value: "starter",    label: "Starter" },
+    { value: "growth",     label: "Growth" },
+    { value: "scale",      label: "Scale" },
+    { value: "enterprise", label: "Enterprise" },
+  ];
+
+  const STATUS_OPTIONS = [
+    { value: "all",      label: "All" },
+    { value: "active",   label: "Active" },
+    { value: "past_due", label: "Past Due" },
+    { value: "trialing", label: "Trialing" },
+    { value: "beta",     label: "Beta" },
+  ];
+
+  const rows = planRows();
+  const totalMrr = rows.reduce((s, r) => s + (r.is_beta ? 0 : r.price_ngn), 0);
+
+  return (
+    <div className="bg-white/[0.03] border border-white/8 rounded-xl overflow-hidden">
+
+      {/* Header + tabs */}
+      <div className="px-5 py-4 border-b border-white/6 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-sm font-bold text-white/80">Subscriptions</h2>
+          <p className="text-[11px] text-white/30 mt-0.5">All active billing relationships</p>
+        </div>
+        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
+          {(["plan", "inbox"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => switchTab(t)}
+              className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                tab === t
+                  ? "bg-white/10 text-white/80"
+                  : "text-white/35 hover:text-white/60"
+              }`}
+            >
+              {t === "plan" ? "Plan Subscriptions" : "Inbox Billing"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Plan tab ── */}
+      {tab === "plan" && (
+        <>
+          {/* Filters */}
+          <div className="px-5 py-3 border-b border-white/5 flex items-center gap-3 flex-wrap">
+            {/* Search */}
+            <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search workspace…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 text-xs bg-white/5 border border-white/8 rounded-lg text-white/70 placeholder-white/25 focus:outline-none focus:border-white/20 w-44"
+              />
+            </div>
+
+            {/* Plan filter */}
+            <select
+              value={planFilter}
+              onChange={e => setPlanFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs bg-white/5 border border-white/8 rounded-lg text-white/60 focus:outline-none focus:border-white/20"
+            >
+              {PLAN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+
+            {/* Status chips */}
+            <div className="flex items-center gap-1">
+              {STATUS_OPTIONS.map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => setStatusFilter(o.value)}
+                  className={`px-2.5 py-1 text-[10px] font-semibold rounded-md border transition-all ${
+                    statusFilter === o.value
+                      ? "bg-orange-500/15 border-orange-500/25 text-orange-300"
+                      : "bg-transparent border-white/8 text-white/35 hover:text-white/60"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Summary */}
+            <div className="ml-auto text-[10px] text-white/30">
+              {rows.length} workspace{rows.length !== 1 ? "s" : ""}
+              {totalMrr > 0 && <span className="ml-2 text-orange-300/70 font-semibold">{ngn(totalMrr)}/mo</span>}
+            </div>
+          </div>
+
+          {/* Table */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 border-white/20 border-t-orange-400 rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <p className="px-5 py-8 text-xs text-red-400">{error}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-white/6">
+                    <SortTh col="workspace_name"   label="Workspace"     sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="pl-5 w-48" />
+                    <SortTh col="plan_id"           label="Plan"          sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-white/30 uppercase tracking-wider">Status</th>
+                    <SortTh col="price_ngn"         label="MRR"           sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="subscribed_at"     label="Started"       sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="last_billed_at"    label="Last Billed"   sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="est_next_renewal"  label="Next Renewal"  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="lifetime_ngn"      label="Lifetime"      sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="invoice_count"     label="#"             sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-5 py-12 text-center text-white/20">
+                        No subscriptions match the current filters
+                      </td>
+                    </tr>
+                  )}
+                  {rows.map(s => (
+                    <tr key={s.workspace_id} className="border-b border-white/4 hover:bg-white/[0.02] transition-colors">
+                      <td className="pl-5 pr-4 py-3 max-w-[180px]">
+                        <a
+                          href={`/admin/workspaces/${s.workspace_id}`}
+                          className="font-medium text-white/75 hover:text-orange-400 hover:underline truncate block transition-colors"
+                        >
+                          {s.workspace_name}
+                        </a>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-300 border-blue-500/15 capitalize">
+                          {s.plan_name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.is_beta ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            Beta
+                          </span>
+                        ) : (
+                          <StatusBadge status={s.plan_status} />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums font-semibold text-white/70">
+                        {s.is_beta
+                          ? <span className="text-white/25 line-through">{ngn(s.price_ngn)}</span>
+                          : ngn(s.price_ngn)
+                        }
+                      </td>
+                      <td className="px-4 py-3 text-white/40 tabular-nums">{fmtDate(s.subscribed_at)}</td>
+                      <td className="px-4 py-3 text-white/40 tabular-nums">{fmtDate(s.last_billed_at)}</td>
+                      <td className={`px-4 py-3 tabular-nums font-medium ${renewalColor(s.est_next_renewal)}`}>
+                        {s.is_beta ? "—" : renewalLabel(s.est_next_renewal)}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-white/60 font-semibold">
+                        {s.lifetime_ngn > 0 ? ngn(s.lifetime_ngn) : <span className="text-white/20">—</span>}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-white/35">{s.invoice_count || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Inbox tab ── */}
+      {tab === "inbox" && (
+        <>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 border-white/20 border-t-orange-400 rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <p className="px-5 py-8 text-xs text-red-400">{error}</p>
+          ) : !inboxSubs || inboxSubs.length === 0 ? (
+            <p className="px-5 py-12 text-xs text-white/20 text-center">No active inbox billing subscriptions</p>
+          ) : (
+            <div className="divide-y divide-white/4">
+              {inboxSubs.map(s => (
+                <div key={s.workspace_id}>
+                  {/* Summary row */}
+                  <div
+                    onClick={() => setExpandedInbox(expandedInbox === s.workspace_id ? null : s.workspace_id)}
+                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] cursor-pointer transition-colors group"
+                  >
+                    {/* Expand chevron */}
+                    <svg
+                      className={`w-3.5 h-3.5 text-white/25 flex-shrink-0 transition-transform ${expandedInbox === s.workspace_id ? "rotate-90" : ""}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+
+                    {/* Workspace */}
+                    <a
+                      href={`/admin/workspaces/${s.workspace_id}`}
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 min-w-0 font-medium text-white/75 hover:text-orange-400 hover:underline truncate transition-colors text-sm"
+                    >
+                      {s.workspace_name}
+                    </a>
+
+                    {/* Stats */}
+                    <div className="flex items-center gap-6 flex-shrink-0 text-xs">
+                      <div className="text-center hidden sm:block">
+                        <p className="font-semibold text-white/60 tabular-nums">{s.domain_count}</p>
+                        <p className="text-[9px] text-white/25 uppercase tracking-wide">Domains</p>
+                      </div>
+                      <div className="text-center hidden sm:block">
+                        <p className="font-semibold text-white/60 tabular-nums">{s.mailbox_count}</p>
+                        <p className="text-[9px] text-white/25 uppercase tracking-wide">Mailboxes</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-white/80 tabular-nums">{ngn(s.total_monthly_ngn)}</p>
+                        <p className="text-[9px] text-white/25 uppercase tracking-wide">MRR</p>
+                      </div>
+                      <div className="text-center w-20">
+                        <p className={`font-medium tabular-nums text-xs ${renewalColor(s.next_billing_date)}`}>
+                          {renewalLabel(s.next_billing_date)}
+                        </p>
+                        <p className="text-[9px] text-white/25 uppercase tracking-wide">Next Bill</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded domain rows */}
+                  {expandedInbox === s.workspace_id && (
+                    <div className="bg-white/[0.015] border-t border-white/5">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-white/5">
+                            <th className="pl-12 pr-4 py-2 text-left text-[9px] font-semibold text-white/25 uppercase tracking-wider">Domain</th>
+                            <th className="px-4 py-2 text-right text-[9px] font-semibold text-white/25 uppercase tracking-wider">Mailboxes</th>
+                            <th className="px-4 py-2 text-right text-[9px] font-semibold text-white/25 uppercase tracking-wider">Monthly</th>
+                            <th className="px-4 py-2 text-right text-[9px] font-semibold text-white/25 uppercase tracking-wider">Next Billing</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {s.domains.map(d => (
+                            <tr key={d.id} className="border-b border-white/4 last:border-0">
+                              <td className="pl-12 pr-4 py-2.5 font-mono text-white/50">{d.domain}</td>
+                              <td className="px-4 py-2.5 text-right text-white/40 tabular-nums">{d.mailbox_count}</td>
+                              <td className="px-4 py-2.5 text-right text-cyan-400/80 font-semibold tabular-nums">{ngn(d.monthly_ngn)}</td>
+                              <td className={`px-4 py-2.5 text-right tabular-nums ${renewalColor(d.next_billing_date)}`}>
+                                {renewalLabel(d.next_billing_date)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function FinancialsPage() {
@@ -776,6 +1209,9 @@ export default function FinancialsPage() {
             </div>
           </div>
         )}
+
+        {/* ── Subscriptions ── */}
+        <SubscriptionsSection />
 
         {/* ── Recent Transactions ── */}
         <div className="bg-white/[0.03] border border-white/8 rounded-xl overflow-hidden">
