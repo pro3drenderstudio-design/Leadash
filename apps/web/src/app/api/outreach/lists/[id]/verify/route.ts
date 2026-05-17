@@ -5,7 +5,9 @@ import { verifyEmails } from "@/lib/lead-campaigns/reoon";
 
 const CREDITS_PER_VERIFY = 0.5;
 const ALLOWED_STATUSES   = new Set(["safe", "valid", "catch_all", "verified_external"]);
-const BATCH_SIZE         = 2000;
+const BATCH_SIZE         = 500;
+
+export const maxDuration = 60; // seconds — safe for both Hobby and Pro Vercel plans
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);

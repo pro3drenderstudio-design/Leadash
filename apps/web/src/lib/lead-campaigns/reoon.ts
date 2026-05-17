@@ -35,13 +35,21 @@ export async function verifyEmails(
 }
 
 async function verifySingle(apiKey: string, email: string): Promise<ReoonResult> {
-  const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Reoon API error ${res.status}`);
-  const data = await res.json();
-  return {
-    email:  data.email  ?? email,
-    status: data.status ?? "unknown",
-    score:  typeof data.overall_score === "number" ? data.overall_score : 0,
-  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Reoon API error ${res.status}`);
+    const data = await res.json();
+    return {
+      email:  data.email  ?? email,
+      status: data.status ?? "unknown",
+      score:  typeof data.overall_score === "number" ? data.overall_score : 0,
+    };
+  } catch {
+    return { email, status: "unknown", score: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
 }
