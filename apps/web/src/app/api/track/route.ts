@@ -12,42 +12,47 @@ function ipHash(req: NextRequest): string {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const sendId  = searchParams.get("s");
-  const type    = searchParams.get("t") ?? "open"; // "open" | "click"
-  const linkIdx = searchParams.get("l");
+  const sendId   = searchParams.get("s");
+  const type     = searchParams.get("t") ?? "open"; // "open" | "click"
+  const linkIdx  = searchParams.get("l");
   const redirect = searchParams.get("r");
 
+  // Respond immediately — never let tracking errors block the redirect
+  const response = (type === "click" && redirect)
+    ? NextResponse.redirect(decodeURIComponent(redirect))
+    : new NextResponse(PIXEL, {
+        headers: {
+          "Content-Type":  "image/gif",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Pragma":        "no-cache",
+        },
+      });
+
+  // Fire-and-forget tracking — errors are swallowed so they never cause a 500
   if (sendId) {
-    const db  = createAdminClient();
-    const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const hash = ipHash(req);
+    (async () => {
+      try {
+        const db   = createAdminClient();
+        const day  = new Date().toISOString().slice(0, 10);
+        const hash = ipHash(req);
 
-    const { error: dedupErr } = await db.from("track_event_log").insert({
-      send_id:    sendId,
-      event_type: type,
-      ip_hash:    hash,
-      day,
-    });
+        const { error: dedupErr } = await db.from("track_event_log").insert({
+          send_id:    sendId,
+          event_type: type,
+          ip_hash:    hash,
+          day,
+        });
 
-    if (!dedupErr) {
-      // First event of this type from this IP for this send today — record it
-      if (type === "open") {
-        await db.rpc("track_open", { p_send_id: sendId }).catch(() => {});
-      } else if (type === "click" && linkIdx !== null) {
-        await db.rpc("track_click", { p_send_id: sendId, p_link_index: parseInt(linkIdx) }).catch(() => {});
-      }
-    }
+        if (!dedupErr) {
+          if (type === "open") {
+            await db.rpc("track_open", { p_send_id: sendId }).catch(() => {});
+          } else if (type === "click" && linkIdx !== null) {
+            await db.rpc("track_click", { p_send_id: sendId, p_link_index: parseInt(linkIdx) }).catch(() => {});
+          }
+        }
+      } catch { /* non-fatal */ }
+    })();
   }
 
-  if (type === "click" && redirect) {
-    return NextResponse.redirect(decodeURIComponent(redirect));
-  }
-
-  return new NextResponse(PIXEL, {
-    headers: {
-      "Content-Type":  "image/gif",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-      "Pragma":        "no-cache",
-    },
-  });
+  return response;
 }
