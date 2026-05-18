@@ -29,8 +29,11 @@ Body: ${snippet}
 Respond with JSON only: {"category": "...", "confidence": 0.0-1.0}`;
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5_000);
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -43,6 +46,7 @@ Respond with JSON only: {"category": "...", "confidence": 0.0-1.0}`;
         response_format: { type: "json_object" },
       }),
     });
+    clearTimeout(timer);
     if (!res.ok) return { category: "neutral", confidence: 0 };
     const data   = await res.json();
     const text   = (data?.choices?.[0]?.message?.content ?? "").trim();

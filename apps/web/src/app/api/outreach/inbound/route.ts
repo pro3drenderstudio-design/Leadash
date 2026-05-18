@@ -79,6 +79,15 @@ function extractBouncedEmail(text: string): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    return await handleInbound(req);
+  } catch (err) {
+    console.error("[inbound] unhandled error:", err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+async function handleInbound(req: NextRequest) {
   // Auth
   const secret = req.headers.get("x-agent-secret");
   if (!secret || secret !== process.env.POSTAL_AGENT_SECRET) {
