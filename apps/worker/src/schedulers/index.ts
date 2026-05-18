@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { Queue } from "bullmq";
 import { connection } from "../lib/redis";
 import { adminClient } from "../lib/supabase";
+import { runPostalAiDigest } from "./postal-health";
 
 const APP_URL     = process.env.APP_URL     ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
@@ -100,7 +101,6 @@ export function startSchedulers() {
   // ── Postal AI digest: 6 AM and 6 PM UTC ────────────────────────────────
   cron.schedule("0 6,18 * * *", async () => {
     try {
-      const { runPostalAiDigest } = await import("./postal-health");
       await runPostalAiDigest();
     } catch (e) {
       console.error("[scheduler:postal-digest] failed:", e);
