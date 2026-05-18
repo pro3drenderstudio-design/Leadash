@@ -76,7 +76,7 @@ function leadsToCSV(leads: Lead[]): string {
   const headers = ["email","first_name","last_name","company","title","website","status","verification_status","verification_score","first_line","created_at"];
   const rows = leads.map(l =>
     headers.map(h => {
-      const v = (l as Record<string, unknown>)[h];
+      const v = (l as unknown as Record<string, unknown>)[h];
       const s = v == null ? "" : String(v);
       return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(","),
