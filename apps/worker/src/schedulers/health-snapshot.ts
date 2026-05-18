@@ -184,20 +184,19 @@ async function checkReoon(): Promise<ExternalServiceStatus> {
   const key = process.env.REOON_API_KEY;
   if (!key) return { name: "Reoon", status: "unknown", message: "API key not configured" };
   try {
-    const res = await fetch(`https://emailverifier.reoon.com/api/v1/get-credits?key=${key}`, {
+    const res = await fetch(`https://emailverifier.reoon.com/api/v1/check-account-balance/?key=${encodeURIComponent(key)}`, {
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return { name: "Reoon", status: "error", message: `API ${res.status}` };
     const body = await res.json() as Record<string, unknown>;
-    const credits = body.data as Record<string, unknown> | null;
-    const remaining = (credits?.remaining_credits ?? body.remaining_credits ?? null) as number | null;
+    const remaining = (body.remaining_instant_credits ?? body.remaining_daily_credits ?? null) as number | null;
     if (remaining === null) return { name: "Reoon", status: "ok", message: "Connected", details: body };
-    const status = remaining < 100 ? "critical" : remaining < 500 ? "warning" : "ok";
+    const level = remaining < 100 ? "error" : remaining < 500 ? "warning" : "ok";
     return {
       name:    "Reoon",
-      status:  status === "critical" ? "error" : status === "warning" ? "warning" : "ok",
+      status:  level,
       message: `${remaining.toLocaleString()} credits remaining`,
-      details: credits ?? body,
+      details: body,
     };
   } catch {
     return { name: "Reoon", status: "error", message: "Request failed" };

@@ -1,19 +1,27 @@
 // ─── Verify Bulk Worker ────────────────────────────────────────────────────────
 // Two modes:
 //   list mode  — list_id set, streams outreach_leads directly, updates them in-place
-//   email mode — emails[] stored in job row (standalone verify tool, unchanged)
+//   email mode — emails[] stored in job row (standalone verify tool)
+//
+// Both modes now use Reoon's bulk API (up to 50k emails per task) instead of
+// individual requests. Progress is polled from Reoon every 15s.
 
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 
-const CONCURRENCY       = 50;   // parallel Reoon requests (power mode; 100 causes rate limits, testing 50)
-const BATCH_SIZE        = 500;  // leads fetched per loop iteration
-const CREDITS_PER       = 0.5;
-const REOON_BASE        = "https://emailverifier.reoon.com/api/v1";
-const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown (Reoon down)
+const BULK_CHUNK      = 50_000; // max emails per Reoon bulk task
+const DB_CHUNK        = 100;    // rows per Supabase update batch
+const CREDITS_PER     = 0.5;
+const POLL_MS         = 15_000; // how often to poll Reoon for task progress
+const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown
 
-// Statuses the DB constraint currently allows (migration 033 expands this — until then, map the rest)
-const ALLOWED_STATUSES = new Set(["pending","valid","invalid","catch_all","disposable","unknown","safe","risky","dangerous","verified_external"]);
+const REOON_BASE = "https://emailverifier.reoon.com/api/v1";
+
+// Statuses the DB constraint allows; anything else falls back to "unknown"
+const ALLOWED_STATUSES = new Set([
+  "pending","valid","invalid","catch_all","disposable","unknown",
+  "safe","risky","dangerous","verified_external",
+]);
 
 const STATUS_MAP: Record<string, string> = {
   safe:              "valid",
@@ -29,13 +37,17 @@ export interface VerifyBulkJobData {
   workspace_id: string;
 }
 
-interface VerifyResult {
-  email:  string;
-  status: string;
-  score:  number;
+interface BulkPollResult {
+  status:              "waiting" | "running" | "completed";
+  count_total:         number;
+  count_checked:       number;
+  progress_percentage: number;
+  results?: Record<string, { status?: string; overall_score?: number }>;
 }
 
-// ─── Supabase ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 function getDb() {
   return createClient(
@@ -45,44 +57,53 @@ function getDb() {
   );
 }
 
-// ─── Reoon ────────────────────────────────────────────────────────────────────
+// ─── Reoon bulk API ───────────────────────────────────────────────────────────
 
-async function verifySingle(apiKey: string, email: string): Promise<VerifyResult> {
-  try {
-    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return { email, status: "unknown", score: 0 };
-    const d = await res.json() as Record<string, unknown>;
-    // Reoon returns {"status":"error"} when rate-limited — treat as transient unknown
-    if (d.status === "error") return { email, status: "unknown", score: 0 };
-    return {
-      email:  (d.email  as string) ?? email,
-      status: (d.status as string) || "unknown",
-      score:  typeof d.overall_score === "number" ? d.overall_score : 0,
-    };
-  } catch {
-    return { email, status: "unknown", score: 0 };
-  }
+async function submitBulkTask(apiKey: string, emails: string[]): Promise<string> {
+  const res = await fetch(`${REOON_BASE}/create-bulk-verification-task/`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ key: apiKey, emails }),
+    signal:  AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`Reoon bulk submit failed: HTTP ${res.status}`);
+  const d = await res.json() as Record<string, unknown>;
+  const taskId = d.task_id as string | undefined;
+  if (!taskId) throw new Error(`Reoon bulk submit: no task_id in response — ${JSON.stringify(d)}`);
+  return taskId;
 }
 
-async function verifyBatch(
-  apiKey: string,
-  emails: string[],
-  onChunk?: (results: VerifyResult[]) => Promise<void>,
-): Promise<VerifyResult[]> {
-  const results: VerifyResult[] = [];
-  for (let i = 0; i < emails.length; i += CONCURRENCY) {
-    const chunk   = emails.slice(i, i + CONCURRENCY);
-    const settled = await Promise.allSettled(chunk.map(e => verifySingle(apiKey, e)));
-    const chunkResults: VerifyResult[] = [];
-    for (let j = 0; j < chunk.length; j++) {
-      const s = settled[j];
-      chunkResults.push(s.status === "fulfilled" ? s.value : { email: chunk[j], status: "unknown", score: 0 });
-    }
-    results.push(...chunkResults);
-    if (onChunk) await onChunk(chunkResults);
+async function pollBulkTask(apiKey: string, taskId: string): Promise<BulkPollResult> {
+  const url = `${REOON_BASE}/get-result-bulk-verification-task/?key=${encodeURIComponent(apiKey)}&task_id=${encodeURIComponent(taskId)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`Reoon poll failed: HTTP ${res.status}`);
+  return await res.json() as BulkPollResult;
+}
+
+// Map a Reoon status string to a safe DB value
+function mapStatus(raw: string): string {
+  const st     = raw || "unknown";
+  const mapped = STATUS_MAP[st] ?? st;
+  if (!ALLOWED_STATUSES.has(mapped)) {
+    console.warn(`[verify-bulk] unexpected Reoon status "${st}" — storing as "unknown"`);
+    return "unknown";
   }
-  return results;
+  return mapped;
+}
+
+// Count a status into the batch accumulators
+function countStatus(st: string, acc: ReturnType<typeof freshAccumulators>) {
+  if      (st === "safe")        acc.batchSafe++;
+  else if (st === "catch_all")   acc.batchCatchAll++;
+  else if (st === "unknown")     acc.batchUnknown++;
+  else if (st === "risky")       acc.batchRisky++;
+  else if (st === "dangerous")   acc.batchDangerous++;
+  else if (st === "disposable")  acc.batchDisposable++;
+  else                           acc.batchInvalid++;
+}
+
+function freshAccumulators() {
+  return { batchSafe: 0, batchCatchAll: 0, batchInvalid: 0, batchRisky: 0, batchDangerous: 0, batchDisposable: 0, batchUnknown: 0 };
 }
 
 // ─── Main processor ───────────────────────────────────────────────────────────
@@ -111,7 +132,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
     return;
   }
 
-  const listId     = jobRecord.list_id  as string | null;
+  const listId     = jobRecord.list_id as string | null;
   const isListMode = !!listId;
 
   await db.from("lead_verification_jobs")
@@ -129,19 +150,14 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
   let disposable    = 0;
   let unknown       = 0;
   let totalRefunded = 0;
-  let lastDbUpdate  = Date.now();
 
   try {
     if (isListMode) {
-      // ── List mode: stream outreach_leads, update in-place ──────────────────
+      // ── List mode ─────────────────────────────────────────────────────────
       while (true) {
-        // Check for cancellation before each batch
-        const { data: statusCheck } = await db
-          .from("lead_verification_jobs").select("status").eq("id", job_id).single();
-        if (statusCheck?.status === "cancelled") {
-          console.log(`[verify-bulk] ${job_id}: cancelled by user`);
-          break;
-        }
+        // Cancellation check before each chunk
+        const { data: sc } = await db.from("lead_verification_jobs").select("status").eq("id", job_id).single();
+        if (sc?.status === "cancelled") { console.log(`[verify-bulk] ${job_id}: cancelled`); break; }
 
         type LeadRow = { id: string; email: string };
         const { data: leads } = await db
@@ -150,83 +166,82 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           .eq("list_id", listId)
           .eq("workspace_id", workspace_id)
           .is("verified_at", null)
-          .limit(BATCH_SIZE);
+          .limit(BULK_CHUNK);
 
         if (!leads?.length) break;
 
-        const rows      = leads as LeadRow[];
-        const nowStr    = now();
-        let chunkOffset = 0;
+        const rows     = leads as LeadRow[];
+        const emailMap = new Map(rows.map(r => [r.email.toLowerCase(), r]));
 
-        let batchSafe = 0, batchCatchAll = 0, batchInvalid = 0;
-        let batchRisky = 0, batchDangerous = 0, batchDisposable = 0, batchUnknown = 0;
+        console.log(`[verify-bulk] ${job_id}: submitting ${rows.length} emails to Reoon bulk API`);
+        const taskId = await submitBulkTask(apiKey, rows.map(r => r.email));
+        console.log(`[verify-bulk] ${job_id}: task_id=${taskId}`);
 
-        // Stream per-chunk: write DB + update progress after every CONCURRENCY-sized slice
-        await verifyBatch(apiKey, rows.map(l => l.email), async (chunkResults) => {
-          const chunkUpdates = chunkResults.map((r, j) => {
-            const st = r.status;
-            if      (st === "safe")        batchSafe++;
-            else if (st === "catch_all")   batchCatchAll++;
-            else if (st === "unknown")     batchUnknown++;
-            else if (st === "risky")       batchRisky++;
-            else if (st === "dangerous")   batchDangerous++;
-            else if (st === "disposable")  batchDisposable++;
-            else                           batchInvalid++;
-            const mapped = STATUS_MAP[st] ?? st;
-            const dbStatus = ALLOWED_STATUSES.has(mapped) ? mapped : "unknown";
-            if (!ALLOWED_STATUSES.has(mapped)) console.warn(`[verify-bulk] unexpected Reoon status: "${st}" → "${mapped}" → fallback "unknown"`);
-            return {
-              id:                  rows[chunkOffset + j].id,
-              verification_status: dbStatus,
-              verification_score:  r.score,
-              verified_at:         nowStr,
-            };
+        // ── Poll until Reoon finishes ──────────────────────────────────────
+        const batchStart = processed;
+        let   taskResult: BulkPollResult | null = null;
+
+        while (true) {
+          await sleep(POLL_MS);
+
+          const { data: cc } = await db.from("lead_verification_jobs").select("status").eq("id", job_id).single();
+          if (cc?.status === "cancelled") { console.log(`[verify-bulk] ${job_id}: cancelled during poll`); return; }
+
+          taskResult = await pollBulkTask(apiKey, taskId);
+          console.log(`[verify-bulk] ${job_id}: poll status=${taskResult.status} ${taskResult.count_checked}/${taskResult.count_total} (${taskResult.progress_percentage}%)`);
+
+          // Update progress display from Reoon's count
+          const displayProcessed = batchStart + (taskResult.count_checked ?? 0);
+          await db.from("lead_verification_jobs").update({ processed: displayProcessed }).eq("id", job_id);
+          await job.updateProgress({ processed: displayProcessed, total: jobRecord.total as number });
+
+          if (taskResult.status === "completed") break;
+        }
+
+        if (!taskResult?.results) {
+          console.error(`[verify-bulk] ${job_id}: task completed but no results returned`);
+          break;
+        }
+
+        // ── Process results ────────────────────────────────────────────────
+        const acc    = freshAccumulators();
+        const nowStr = now();
+        const updates: { id: string; verification_status: string; verification_score: number; verified_at: string }[] = [];
+
+        for (const [email, result] of Object.entries(taskResult.results)) {
+          const lead = emailMap.get(email.toLowerCase());
+          if (!lead) continue;
+          const st = (result.status as string) || "unknown";
+          countStatus(st, acc);
+          updates.push({
+            id:                  lead.id,
+            verification_status: mapStatus(st),
+            verification_score:  typeof result.overall_score === "number" ? result.overall_score : 0,
+            verified_at:         nowStr,
           });
-          chunkOffset += chunkResults.length;
+        }
 
-          // Write chunk updates immediately (≤CONCURRENCY=20 rows per round)
-          const dbResults = await Promise.all(
-            chunkUpdates.map(u =>
+        // Abort if service appears down
+        if (updates.length >= 50 && acc.batchUnknown / updates.length > UNKNOWN_ABORT_PCT) {
+          throw new Error(`Email verification service returned too many unknown results — ${acc.batchUnknown}/${updates.length}. Credits for unprocessed leads will be refunded.`);
+        }
+
+        // Write to DB in chunks
+        for (let ci = 0; ci < updates.length; ci += DB_CHUNK) {
+          const chunk = updates.slice(ci, ci + DB_CHUNK);
+          const res   = await Promise.all(
+            chunk.map(u =>
               db.from("outreach_leads")
-                .update({
-                  verification_status: u.verification_status,
-                  verification_score:  u.verification_score,
-                  verified_at:         u.verified_at,
-                })
+                .update({ verification_status: u.verification_status, verification_score: u.verification_score, verified_at: u.verified_at })
                 .eq("id", u.id),
             ),
           );
-          const firstErr = dbResults.find(r => r.error);
-          if (firstErr?.error) console.error(`[verify-bulk] ${job_id}: update failed`, firstErr.error.message);
-
-          processed += chunkResults.length;
-
-          // Throttled job-progress update — every 3s
-          if (Date.now() - lastDbUpdate > 3_000) {
-            await db.from("lead_verification_jobs").update({
-              processed,
-              safe:       safe + batchSafe,
-              catch_all:  catchAll + batchCatchAll,
-              invalid:    invalid + batchInvalid,
-              risky:      risky + batchRisky,
-              dangerous:  dangerous + batchDangerous,
-              disposable: disposable + batchDisposable,
-              unknown:    unknown + batchUnknown,
-              refunded:   Math.round(totalRefunded * 10) / 10,
-            }).eq("id", job_id);
-            await job.updateProgress({ processed, total: jobRecord.total as number });
-            lastDbUpdate = Date.now();
-          }
-        });
-
-        // Abort if Reoon appears to be down (85%+ unknowns in a batch of ≥50 leads)
-        const batchTotal = batchSafe + batchCatchAll + batchInvalid + batchRisky + batchDangerous + batchDisposable + batchUnknown;
-        if (batchTotal >= 50 && batchUnknown / batchTotal > UNKNOWN_ABORT_PCT) {
-          throw new Error(`Email verification service is unavailable — ${batchUnknown}/${batchTotal} results were unknown. Credits for unprocessed leads will be refunded.`);
+          const err = res.find(r => r.error);
+          if (err?.error) console.error(`[verify-bulk] ${job_id}: DB update error`, err.error.message);
         }
 
-        // Refund unknowns — Reoon doesn't charge for these
-        const batchRefund = Math.round(batchUnknown * CREDITS_PER * 10) / 10;
+        // Refund unknowns (Reoon doesn't charge for these)
+        const batchRefund = Math.round(acc.batchUnknown * CREDITS_PER * 10) / 10;
         if (batchRefund > 0) {
           await Promise.all([
             db.rpc("refund_lead_credits", { p_workspace_id: workspace_id, p_amount: batchRefund }),
@@ -234,77 +249,81 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
               workspace_id,
               type:        "refund",
               amount:      batchRefund,
-              description: `Verification refund — ${batchUnknown} unknown result${batchUnknown !== 1 ? "s" : ""}`,
+              description: `Verification refund — ${acc.batchUnknown} unknown result${acc.batchUnknown !== 1 ? "s" : ""}`,
             }),
           ]);
         }
 
-        // Commit batch counters to outer totals
-        safe          += batchSafe;
-        catchAll      += batchCatchAll;
-        invalid       += batchInvalid;
-        risky         += batchRisky;
-        dangerous     += batchDangerous;
-        disposable    += batchDisposable;
-        unknown       += batchUnknown;
+        // Accumulate outer totals
+        processed     += rows.length;
+        safe          += acc.batchSafe;
+        catchAll      += acc.batchCatchAll;
+        invalid       += acc.batchInvalid;
+        risky         += acc.batchRisky;
+        dangerous     += acc.batchDangerous;
+        disposable    += acc.batchDisposable;
+        unknown       += acc.batchUnknown;
         totalRefunded += batchRefund;
 
-        // Final progress flush for this batch
         await db.from("lead_verification_jobs").update({
-          processed,
-          safe,
-          catch_all:  catchAll,
-          invalid,
-          risky,
-          dangerous,
-          disposable,
-          unknown,
-          refunded:   Math.round(totalRefunded * 10) / 10,
+          processed, safe, catch_all: catchAll, invalid, risky, dangerous, disposable, unknown,
+          refunded: Math.round(totalRefunded * 10) / 10,
         }).eq("id", job_id);
         await job.updateProgress({ processed, total: jobRecord.total as number });
-        lastDbUpdate = Date.now();
 
-        console.log(`[verify-bulk] ${job_id}: ${processed}/${jobRecord.total} processed`);
+        console.log(`[verify-bulk] ${job_id}: ${processed}/${jobRecord.total} total processed`);
       }
 
     } else {
-      // ── Email mode: existing standalone-tool behaviour ─────────────────────
+      // ── Email mode (standalone verify tool) ───────────────────────────────
       const emails = (jobRecord.emails as string[]) ?? [];
-      const allResults: VerifyResult[] = [];
+      if (!emails.length) throw new Error("No emails in job record");
 
-      for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-        const results = await verifyBatch(apiKey, emails.slice(i, i + BATCH_SIZE));
-        allResults.push(...results);
+      console.log(`[verify-bulk] ${job_id}: submitting ${emails.length} emails to Reoon bulk API`);
+      const taskId = await submitBulkTask(apiKey, emails);
+      console.log(`[verify-bulk] ${job_id}: task_id=${taskId}`);
 
-        for (const r of results) {
-          const st = r.status;
-          if      (st === "safe")       safe++;
-          else if (st === "catch_all")  catchAll++;
-          else if (st === "unknown")    unknown++;
-          else if (st === "risky")      risky++;
-          else if (st === "dangerous")  dangerous++;
-          else if (st === "disposable") disposable++;
-          else                          invalid++;
-        }
-        processed += results.length;
+      // Poll until done
+      let taskResult: BulkPollResult | null = null;
 
-        if (Date.now() - lastDbUpdate > 3_000) {
-          await db.from("lead_verification_jobs").update({
-            processed, safe, catch_all: catchAll, invalid,
-            risky, dangerous, disposable, unknown,
-          }).eq("id", job_id);
-          await job.updateProgress({ processed, total: emails.length });
-          lastDbUpdate = Date.now();
-        }
+      while (true) {
+        await sleep(POLL_MS);
+
+        const { data: cc } = await db.from("lead_verification_jobs").select("status").eq("id", job_id).single();
+        if (cc?.status === "cancelled") { console.log(`[verify-bulk] ${job_id}: cancelled`); return; }
+
+        taskResult = await pollBulkTask(apiKey, taskId);
+        console.log(`[verify-bulk] ${job_id}: poll status=${taskResult.status} ${taskResult.count_checked}/${taskResult.count_total} (${taskResult.progress_percentage}%)`);
+
+        processed = taskResult.count_checked ?? 0;
+        await db.from("lead_verification_jobs").update({ processed }).eq("id", job_id);
+        await job.updateProgress({ processed, total: emails.length });
+
+        if (taskResult.status === "completed") break;
       }
 
-      // Store full results for the standalone tool's download feature
-      await db.from("lead_verification_jobs")
-        .update({ results: allResults })
-        .eq("id", job_id);
+      if (!taskResult?.results) throw new Error("Task completed but no results returned");
+
+      // Process + count
+      const allResults: { email: string; status: string; score: number }[] = [];
+      for (const [email, r] of Object.entries(taskResult.results)) {
+        const st = (r.status as string) || "unknown";
+        if      (st === "safe")        safe++;
+        else if (st === "catch_all")   catchAll++;
+        else if (st === "unknown")     unknown++;
+        else if (st === "risky")       risky++;
+        else if (st === "dangerous")   dangerous++;
+        else if (st === "disposable")  disposable++;
+        else                           invalid++;
+        allResults.push({ email, status: mapStatus(st), score: typeof r.overall_score === "number" ? r.overall_score : 0 });
+      }
+      processed = allResults.length;
+
+      // Store results for download
+      await db.from("lead_verification_jobs").update({ results: allResults }).eq("id", job_id);
     }
 
-    // ── Finalize ──────────────────────────────────────────────────────────────
+    // ── Finalize ─────────────────────────────────────────────────────────────
     const deducted    = (jobRecord.credits_deducted as number) ?? 0;
     const creditsUsed = Math.round(Math.max(0, deducted - totalRefunded) * 10) / 10;
 
@@ -329,7 +348,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[verify-bulk] ${job_id}: FAILED`, msg);
 
-    // Refund unprocessed credits for list-mode jobs (upfront deduction)
+    // Refund unprocessed credits for list-mode jobs
     if (isListMode) {
       const deducted         = (jobRecord.credits_deducted as number) ?? 0;
       const creditsProcessed = Math.round(processed * CREDITS_PER * 10) / 10;
