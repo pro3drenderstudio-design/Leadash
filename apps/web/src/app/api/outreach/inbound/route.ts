@@ -192,12 +192,57 @@ async function handleInbound(req: NextRequest) {
     return NextResponse.json({ ok: true, type: "dsn_unresolved" });
   }
 
-  if (!inbox) {
-    // Unknown address — ignore silently (could be catch-all receiving unrelated mail)
-    return NextResponse.json({ ok: true, note: "inbox not found" });
+  // ── Parse referenced message-ids early (needed for workspace resolution) ────────
+  const stripBrackets = (id: string) => id.replace(/^<|>$/g, "").trim();
+  const referencedIds: string[] = [];
+  if (inReplyTo) referencedIds.push(stripBrackets(inReplyTo));
+  if (references) {
+    const refs = references.match(/<[^>]+>/g) ?? [];
+    referencedIds.push(...refs.map(stripBrackets));
   }
 
-  const workspaceId = inbox.workspace_id as string;
+  // ── Resolve workspace — may be via inbox or by matching referenced sends ──────
+  // When inbox is null (e.g. auto-reply sent to return-path bounce address), try to
+  // find the workspace from In-Reply-To / References before giving up.
+  let workspaceId: string;
+  let inboxId: string | null = null;
+
+  if (inbox) {
+    workspaceId = inbox.workspace_id as string;
+    inboxId     = inbox.id as string;
+  } else {
+    let derivedWorkspace: string | null = null;
+
+    if (referencedIds.length > 0) {
+      const { data: refSend } = await db
+        .from("outreach_sends")
+        .select("workspace_id")
+        .in("message_id", referencedIds)
+        .limit(1)
+        .maybeSingle();
+      if (refSend) derivedWorkspace = refSend.workspace_id as string;
+    }
+
+    if (!derivedWorkspace && from) {
+      const { data: senderSend } = await db
+        .from("outreach_sends")
+        .select("workspace_id")
+        .ilike("to_email", from)
+        .eq("status", "sent")
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (senderSend) derivedWorkspace = senderSend.workspace_id as string;
+    }
+
+    if (!derivedWorkspace) {
+      // Truly unknown — could be catch-all receiving unrelated mail
+      return NextResponse.json({ ok: true, note: "inbox not found" });
+    }
+
+    workspaceId = derivedWorkspace;
+    console.log(`[inbound] no inbox for ${to}, resolved workspace ${workspaceId} via send match`);
+  }
 
   // ── Warmup reply: update outreach_warmup_sends ────────────────────────────────
   if (xLdRef) {
@@ -211,16 +256,6 @@ async function handleInbound(req: NextRequest) {
 
   // ── Campaign reply: match via In-Reply-To / References ────────────────────────
   const isFiltered = detectOoo(subject, text);
-
-  // Collect all message-ids from In-Reply-To and References headers.
-  // Always strip angle brackets so IDs match outreach_sends.message_id storage format.
-  const stripBrackets = (id: string) => id.replace(/^<|>$/g, "").trim();
-  const referencedIds: string[] = [];
-  if (inReplyTo) referencedIds.push(stripBrackets(inReplyTo));
-  if (references) {
-    const refs = references.match(/<[^>]+>/g) ?? [];
-    referencedIds.push(...refs.map(stripBrackets));
-  }
 
   let enrollmentId: string | null = null;
   let matchedSendId: string | null = null;
@@ -300,7 +335,7 @@ async function handleInbound(req: NextRequest) {
   // dropping a reply while leaving the enrollment in a stale state.
   const { error: replyErr } = await db.from("outreach_replies").insert({
     workspace_id:  workspaceId,
-    inbox_id:      inbox.id,
+    inbox_id:      inboxId,
     send_id:       matchedSendId,
     enrollment_id: enrollmentId,
     from_email:    from,
