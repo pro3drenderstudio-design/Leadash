@@ -607,7 +607,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             </>
           )}
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Pause After Open</p><p className="text-white/35 text-xs">Pause when a lead opens an email</p></div><Toggle value={editPauseAfterOpen} onChange={setEditPauseAfterOpen} color="amber" /></div>
-          <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Verified Leads Only</p><p className="text-white/35 text-xs">Skip unverified leads at enrollment — requires Reoon verification first</p></div><Toggle value={editVerifiedOnly} onChange={setEditVerifiedOnly} /></div>
+          <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Verified Leads Only</p><p className="text-white/35 text-xs">Skip unverified leads at enrollment — requires email verification first</p></div><Toggle value={editVerifiedOnly} onChange={setEditVerifiedOnly} /></div>
         </div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">

@@ -222,7 +222,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         // Abort if Reoon appears to be down (85%+ unknowns in a batch of ≥50 leads)
         const batchTotal = batchSafe + batchCatchAll + batchInvalid + batchRisky + batchDangerous + batchDisposable + batchUnknown;
         if (batchTotal >= 50 && batchUnknown / batchTotal > UNKNOWN_ABORT_PCT) {
-          throw new Error(`Reoon API appears to be down — ${batchUnknown}/${batchTotal} results were unknown. Credits for unprocessed leads will be refunded.`);
+          throw new Error(`Email verification service is unavailable — ${batchUnknown}/${batchTotal} results were unknown. Credits for unprocessed leads will be refunded.`);
         }
 
         // Refund unknowns — Reoon doesn't charge for these
