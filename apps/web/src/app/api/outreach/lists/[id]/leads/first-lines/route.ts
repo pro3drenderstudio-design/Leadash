@@ -85,7 +85,7 @@ export async function POST(
 
   if (!leads?.length) return NextResponse.json({ error: "No leads found" }, { status: 404 });
 
-  const inputs: LeadInput[] = leads.map(l => ({
+  const inputs: LeadInput[] = (leads as { id: string; email: string; first_name: string | null; last_name: string | null; company: string | null; title: string | null }[]).map(l => ({
     id:           l.id,
     name:         [l.first_name, l.last_name].filter(Boolean).join(" ") || null,
     title:        l.title   ?? null,
