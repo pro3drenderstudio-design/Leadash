@@ -133,7 +133,8 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           .select("id, email")
           .eq("list_id", listId)
           .eq("workspace_id", workspace_id)
-          .is("verified_at", null)
+          // Include unknowns — they're rate-limit artifacts, not reliable results
+          .or("verified_at.is.null,verification_status.eq.unknown")
           .limit(BATCH_SIZE);
 
         if (!leads?.length) break;

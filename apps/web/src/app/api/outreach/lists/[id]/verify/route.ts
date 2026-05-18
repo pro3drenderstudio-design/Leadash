@@ -22,8 +22,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const adminDb = createAdminClient();
 
   const [{ count: unverifiedCount }, { count: totalCount }, { data: ws }] = await Promise.all([
+    // Unverified = no verified_at yet, OR unknown (rate-limit artifact, not a reliable result)
     adminDb.from("outreach_leads").select("id", { count: "exact", head: true })
-      .eq("list_id", listId).eq("workspace_id", workspaceId).is("verified_at", null),
+      .eq("list_id", listId).eq("workspace_id", workspaceId)
+      .or("verified_at.is.null,verification_status.eq.unknown"),
     adminDb.from("outreach_leads").select("id", { count: "exact", head: true })
       .eq("list_id", listId).eq("workspace_id", workspaceId),
     adminDb.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single(),
@@ -66,13 +68,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ job_id: existing.id, already_running: true }, { status: 202 });
   }
 
-  // Count only leads that haven't been verified yet
+  // Count leads needing verification: unverified OR unknown (rate-limit artifacts)
   const { count } = await adminDb
     .from("outreach_leads")
     .select("id", { count: "exact", head: true })
     .eq("list_id", listId)
     .eq("workspace_id", workspaceId)
-    .is("verified_at", null);
+    .or("verified_at.is.null,verification_status.eq.unknown");
 
   const pendingCount = count ?? 0;
   if (pendingCount === 0) {
