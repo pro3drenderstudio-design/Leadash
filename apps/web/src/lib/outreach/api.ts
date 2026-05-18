@@ -148,8 +148,16 @@ export const updateCrmStatus  = (enrollmentId: string, crm_status: string) =>
 export type CrmUnmatchedRow = OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null };
 export const getCrmUnmatched  = (page = 1, limit = 50) =>
   get<{ data: CrmUnmatchedRow[]; total: number; page: number; limit: number }>(`${base}/crm/unmatched?page=${page}&limit=${limit}`);
-export const getCrmWarmup     = () =>
-  get<(OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null })[]>(`${base}/crm/warmup`);
+export type CrmWarmupRow = {
+  id: string;
+  sent_at: string;
+  replied_at: string | null;
+  subject: string | null;
+  to_inbox:   { id: string; label: string | null; email_address: string } | null;
+  from_inbox: { id: string; label: string | null; email_address: string; workspace_id: string } | null;
+  workspace_id: string;
+};
+export const getCrmWarmup = () => get<CrmWarmupRow[]>(`${base}/crm/warmup`);
 export const getCrmFilters    = ()                                         => get<OutreachCrmFilter[]>(`${base}/crm/filters`);
 export const createCrmFilter  = (d: Omit<OutreachCrmFilter, "id" | "created_at" | "workspace_id">) => post<OutreachCrmFilter>(`${base}/crm/filters`, d);
 export const deleteCrmFilter  = (id: string)                              => del(`${base}/crm/filters`, { id });

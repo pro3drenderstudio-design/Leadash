@@ -2,13 +2,13 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   getCrmThreads, addNote, updateCrmStatus, suggestReply,
-  getCrmUnmatched, getCrmWarmup, ignoreCrmUnmatched, matchReply, promoteUnmatched,
+  getCrmUnmatched, getCrmWarmup, CrmWarmupRow, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
   triggerSendBatch, sendCrmReply, getConversation,
 } from "@/lib/outreach/api";
 import type { ConversationMessage } from "@/lib/outreach/api";
 import type { CrmUnmatchedRow } from "@/lib/outreach/api";
-import type { CrmThread, CrmStatus, OutreachReply, OutreachCrmFilter, CrmNote } from "@/types/outreach";
+import type { CrmThread, CrmStatus, OutreachCrmFilter, CrmNote } from "@/types/outreach";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -273,10 +273,9 @@ export default function CrmClient() {
   const [unmatchedSendOk, setUnmatchedSendOk]   = useState(false);
 
   // ── Warmup state ──────────────────────────────────────────────────────────
-  type WarmupReply = OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null };
-  const [warmup, setWarmup]               = useState<WarmupReply[]>([]);
+  const [warmup, setWarmup]               = useState<CrmWarmupRow[]>([]);
   const [warmupLoading, setWarmupLoading] = useState(false);
-  const [selectedWarmup, setSelectedWarmup] = useState<WarmupReply | null>(null);
+  const [selectedWarmup, setSelectedWarmup] = useState<CrmWarmupRow | null>(null);
 
   // ── Filters state ──────────────────────────────────────────────────────────
   const [filters, setFilters]       = useState<OutreachCrmFilter[]>([]);
@@ -1160,12 +1159,15 @@ export default function CrmClient() {
                   onClick={() => setSelectedWarmup(w)}
                   className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selectedWarmup?.id === w.id ? "bg-blue-500/8 border-r-2 border-blue-500" : ""}`}
                 >
-                  <p className="text-white text-sm font-medium truncate">{w.from_name || w.from_email}</p>
-                  <p className="text-white/40 text-xs truncate">{w.from_email}</p>
+                  <p className="text-white text-sm font-medium truncate">{w.from_inbox?.label || w.from_inbox?.email_address || "unknown sender"}</p>
+                  <p className="text-white/40 text-xs truncate">{w.from_inbox?.email_address}</p>
                   <p className="text-white/30 text-xs truncate mt-0.5">{w.subject ?? "(no subject)"}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <p className="text-white/20 text-[10px]">{w.inbox?.label || w.inbox?.email_address || "unknown inbox"}</p>
-                    <p className="text-white/20 text-[10px]">{timeAgo(w.received_at)}</p>
+                    <p className="text-white/20 text-[10px]">→ {w.to_inbox?.label || w.to_inbox?.email_address || "unknown inbox"}</p>
+                    <div className="flex items-center gap-1.5">
+                      {w.replied_at && <span className="text-[9px] text-teal-400/70 bg-teal-500/10 px-1.5 py-0.5 rounded-full">replied</span>}
+                      <p className="text-white/20 text-[10px]">{timeAgo(w.sent_at)}</p>
+                    </div>
                   </div>
                 </button>
               ))}
@@ -1176,18 +1178,17 @@ export default function CrmClient() {
           {selectedWarmup ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-6 py-4 border-b border-white/8 bg-white/2">
-                <p className="text-white font-semibold">{selectedWarmup.from_name || selectedWarmup.from_email}</p>
-                <p className="text-white/40 text-xs">{selectedWarmup.from_email}</p>
+                <p className="text-white font-semibold">{selectedWarmup.from_inbox?.label || selectedWarmup.from_inbox?.email_address || "Unknown sender"}</p>
+                <p className="text-white/40 text-xs">{selectedWarmup.from_inbox?.email_address}</p>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
                 <p className="text-white/50 text-xs mb-1 font-medium">{selectedWarmup.subject ?? "(no subject)"}</p>
                 <p className="text-white/25 text-xs mb-4">
-                  {new Date(selectedWarmup.received_at).toLocaleString()} · via {selectedWarmup.inbox?.email_address ?? "unknown"}
+                  Sent {new Date(selectedWarmup.sent_at).toLocaleString()} → {selectedWarmup.to_inbox?.email_address ?? "unknown inbox"}
+                  {selectedWarmup.replied_at && ` · replied ${new Date(selectedWarmup.replied_at).toLocaleString()}`}
                 </p>
-                <div className="bg-white/4 border border-white/8 rounded-xl p-5">
-                  <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                    {selectedWarmup.body_text || "(No body captured)"}
-                  </pre>
+                <div className="bg-white/4 border border-white/8 rounded-xl p-5 text-white/30 text-sm italic">
+                  (warmup email — body not stored)
                 </div>
                 <div className="mt-4 px-3 py-2.5 bg-blue-500/8 border border-blue-500/20 rounded-xl text-xs text-blue-300/70">
                   This is a warmup email — it helps build inbox reputation and is not a real lead reply.
