@@ -63,18 +63,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const BLOCKED   = new Set(["invalid", "dangerous", "disposable"]);
   const ALLOWED_VSTATUS = ["safe", "valid", "catch_all", "verified_external"];
 
-  // Get leads from those lists
-  const { data: leads } = await db
-    .from("outreach_leads")
-    .select("id, verification_status")
-    .eq("workspace_id", workspaceId)
-    .in("list_id", list_ids)
-    .eq("status", "active");
-
-  if (!leads?.length) return NextResponse.json({ enrolled: 0, new_count: 0, duplicate_count: 0, skipped_unverified: 0 });
-
+  // Fetch all leads across pages (PostgREST caps at 1000 rows per request)
   type LeadRow = { id: string; verification_status: string | null };
-  const typedLeads = leads as LeadRow[];
+  const typedLeads: LeadRow[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data: page, error: pageErr } = await db
+      .from("outreach_leads")
+      .select("id, verification_status")
+      .eq("workspace_id", workspaceId)
+      .in("list_id", list_ids)
+      .eq("status", "active")
+      .range(from, from + PAGE - 1);
+    if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 });
+    if (!page?.length) break;
+    typedLeads.push(...(page as LeadRow[]));
+    if (page.length < PAGE) break;
+    from += PAGE;
+  }
+
+  if (!typedLeads.length) return NextResponse.json({ enrolled: 0, new_count: 0, duplicate_count: 0, skipped_unverified: 0 });
 
   // Per-status counts across ALL leads in the list (for the modal to display)
   const statusCounts: Record<string, number> = {};
@@ -148,11 +157,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ab_variant:   Math.random() < 0.5 ? "a" : "b",
   }));
 
-  const { data: inserted, error } = await db.from("outreach_enrollments").insert(rows).select("id");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Insert in chunks to avoid Supabase payload limits
+  let insertedCount = 0;
+  for (let i = 0; i < rows.length; i += PAGE) {
+    const chunk = rows.slice(i, i + PAGE);
+    const { data: ins, error: insErr } = await db.from("outreach_enrollments").insert(chunk).select("id");
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    insertedCount += ins?.length ?? 0;
+  }
+
   return NextResponse.json({
-    enrolled:           inserted?.length ?? 0,
-    new_count:          inserted?.length ?? 0,
+    enrolled:           insertedCount,
+    new_count:          insertedCount,
     duplicate_count:    duplicates,
     skipped_unverified: skippedCount,
   });
