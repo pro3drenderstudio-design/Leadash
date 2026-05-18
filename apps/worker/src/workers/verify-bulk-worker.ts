@@ -6,9 +6,9 @@
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 
-const CONCURRENCY  = 20;   // parallel Reoon requests — higher rates trigger 429s
+const CONCURRENCY  = 40;   // parallel Reoon requests; quick mode handles higher rates
 const BATCH_SIZE   = 500;  // leads fetched per loop iteration
-const DB_CHUNK     = 100;  // max rows per Supabase update batch
+const DB_CHUNK     = 100;  // rows per Supabase update batch
 const CREDITS_PER  = 0.5;
 const REOON_BASE   = "https://emailverifier.reoon.com/api/v1";
 const ALLOWED      = new Set(["safe", "valid", "catch_all", "verified_external"]);
@@ -40,7 +40,7 @@ function getDb() {
 
 async function verifySingle(apiKey: string, email: string): Promise<VerifyResult> {
   try {
-    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
+    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=quick`;
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return { email, status: "unknown", score: 0 };
     const d = await res.json() as Record<string, unknown>;
@@ -156,21 +156,23 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           };
         });
 
-        // UPDATE (not upsert) — upsert requires all NOT NULL columns on the insert
-        // path even when a conflict is guaranteed; individual updates avoid that.
-        const updateResults = await Promise.all(
-          updates.map(u =>
-            db.from("outreach_leads")
-              .update({
-                verification_status: u.verification_status,
-                verification_score:  u.verification_score,
-                verified_at:         u.verified_at,
-              })
-              .eq("id", u.id),
-          ),
-        );
-        const firstErr = updateResults.find(r => r.error);
-        if (firstErr?.error) console.error(`[verify-bulk] ${job_id}: update failed`, firstErr.error.message);
+        // UPDATE in DB_CHUNK-sized parallel batches — avoids 500 simultaneous connections
+        for (let ci = 0; ci < updates.length; ci += DB_CHUNK) {
+          const chunkUpdates = updates.slice(ci, ci + DB_CHUNK);
+          const chunkResults = await Promise.all(
+            chunkUpdates.map(u =>
+              db.from("outreach_leads")
+                .update({
+                  verification_status: u.verification_status,
+                  verification_score:  u.verification_score,
+                  verified_at:         u.verified_at,
+                })
+                .eq("id", u.id),
+            ),
+          );
+          const firstErr = chunkResults.find(r => r.error);
+          if (firstErr?.error) console.error(`[verify-bulk] ${job_id}: update failed`, firstErr.error.message);
+        }
 
         // Refund unknowns — Reoon doesn't charge for these
         const batchRefund = Math.round(batchUnknown * CREDITS_PER * 10) / 10;
