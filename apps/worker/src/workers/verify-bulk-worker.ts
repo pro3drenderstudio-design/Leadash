@@ -12,7 +12,9 @@ const CREDITS_PER       = 0.5;
 const REOON_BASE        = "https://emailverifier.reoon.com/api/v1";
 const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown (Reoon down)
 
-// DB constraint only allows these values — map missing statuses until migration 033 is applied
+// Statuses the DB constraint currently allows (migration 033 expands this — until then, map the rest)
+const ALLOWED_STATUSES = new Set(["pending","valid","invalid","catch_all","disposable","unknown","safe","risky","dangerous","verified_external"]);
+
 const STATUS_MAP: Record<string, string> = {
   safe:              "valid",
   verified_external: "valid",
@@ -55,7 +57,7 @@ async function verifySingle(apiKey: string, email: string): Promise<VerifyResult
     if (d.status === "error") return { email, status: "unknown", score: 0 };
     return {
       email:  (d.email  as string) ?? email,
-      status: (d.status as string) ?? "unknown",
+      status: (d.status as string) || "unknown",
       score:  typeof d.overall_score === "number" ? d.overall_score : 0,
     };
   } catch {
@@ -170,9 +172,12 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
             else if (st === "dangerous")   batchDangerous++;
             else if (st === "disposable")  batchDisposable++;
             else                           batchInvalid++;
+            const mapped = STATUS_MAP[st] ?? st;
+            const dbStatus = ALLOWED_STATUSES.has(mapped) ? mapped : "unknown";
+            if (!ALLOWED_STATUSES.has(mapped)) console.warn(`[verify-bulk] unexpected Reoon status: "${st}" → "${mapped}" → fallback "unknown"`);
             return {
               id:                  rows[chunkOffset + j].id,
-              verification_status: STATUS_MAP[st] ?? st,
+              verification_status: dbStatus,
               verification_score:  r.score,
               verified_at:         nowStr,
             };
