@@ -5,6 +5,7 @@ import { Queue } from "bullmq";
 import { connection } from "../lib/redis";
 import { adminClient } from "../lib/supabase";
 import { upsertNotification, resolveNotification } from "../lib/notify";
+import { checkPostalHealth } from "./postal-health";
 
 const execAsync = promisify(exec);
 
@@ -610,13 +611,16 @@ export async function runHealthSnapshot(): Promise<void> {
     getExternalServiceStats(db),
   ]);
 
+  // Postal health check (runs in parallel with threshold evaluation below)
+  const postalMetrics = await checkPostalHealth(db).catch(() => null);
+
   // Write snapshot
   await db.from("system_health_snapshots").insert({
     redis,
     queues,
     server,
     db_stats:          appStats,
-    postal:            null,
+    postal:            postalMetrics ?? null,
     external_services: externalServices,
   });
 

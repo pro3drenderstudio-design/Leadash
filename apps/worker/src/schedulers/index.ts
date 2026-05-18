@@ -97,6 +97,16 @@ export function startSchedulers() {
     console.log(`[scheduler:warmup-ramp] ramped ${ramped} workspaces`);
   });
 
+  // ── Postal AI digest: 6 AM and 6 PM UTC ────────────────────────────────
+  cron.schedule("0 6,18 * * *", async () => {
+    try {
+      const { runPostalAiDigest } = await import("./postal-health");
+      await runPostalAiDigest();
+    } catch (e) {
+      console.error("[scheduler:postal-digest] failed:", e);
+    }
+  });
+
   // ── Deliverability checks: daily at 06:00 UTC ───────────────────────────
   cron.schedule("0 6 * * *", async () => {
     const { runDeliverabilityChecks } = await import("../../../web/src/lib/outreach/deliverability");
