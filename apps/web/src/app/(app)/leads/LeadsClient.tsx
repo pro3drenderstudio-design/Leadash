@@ -202,7 +202,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const [upgradeModal, setUpgradeModal] = useState<{ title: string; message: string } | null>(null);
   const [verifyPreviewLoading, setVerifyPreviewLoading] = useState<string | null>(null);
   const [verifyModal, setVerifyModal] = useState<{
-    phase: "confirm" | "running" | "done";
+    phase: "confirm" | "running" | "done" | "cancelled";
     listId: string;
     listName: string;
     count: number;
@@ -215,6 +215,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     unknown: number;
     creditsUsed: number;
     refunded: number;
+    jobId?: string;
+    stopping?: boolean;
   } | null>(null);
   const [verifiedExternal, setVerifiedExternal] = useState(false);
   const [deleteWarning, setDeleteWarning] = useState<{
@@ -359,6 +361,8 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       if (!enqRes.ok) throw new Error(enqData.error ?? "Failed to start verification");
       const jobId = enqData.job_id!;
 
+      setVerifyModal(prev => prev ? { ...prev, jobId } : prev);
+
       // Poll verify-jobs/[id] every 2 seconds for live progress
       while (true) {
         await new Promise(r => setTimeout(r, 2_000));
@@ -390,6 +394,16 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
         if (j.status === "failed") {
           setVerifyModal(null);
           setImportResult({ ok: false, msg: `Verification failed: ${j.error ?? "Unknown error"}` });
+          load();
+          break;
+        }
+
+        if (j.status === "cancelled") {
+          setVerifyModal(prev => prev ? {
+            ...prev, phase: "cancelled", stopping: false,
+            processed: j.processed ?? 0, safe: deliverable, invalid: invalidTotal,
+            unknown: j.unknown ?? 0, creditsUsed: netUsed, refunded: j.refunded ?? 0,
+          } : null);
           load();
           break;
         }
@@ -913,7 +927,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       {/* Verification progress modal */}
       {verifyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={verifyModal.phase === "running" ? undefined : () => setVerifyModal(null)}>
+          onClick={["running", "cancelled"].includes(verifyModal.phase) ? undefined : () => setVerifyModal(null)}>
           <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             onClick={e => e.stopPropagation()}>
 
@@ -1024,10 +1038,64 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                   </div>
                 </div>
 
-                <div className="flex justify-between text-xs text-white/30 border-t border-white/6 pt-3">
-                  <span>{verifyModal.creditsUsed.toFixed(1)} cr used</span>
-                  {verifyModal.refunded > 0 && <span className="text-emerald-400/70">{verifyModal.refunded.toFixed(1)} cr refunded</span>}
+                <div className="flex items-center justify-between border-t border-white/6 pt-3">
+                  <span className="text-xs text-white/30">{verifyModal.creditsUsed.toFixed(1)} cr used</span>
+                  <div className="flex items-center gap-3">
+                    {verifyModal.refunded > 0 && <span className="text-xs text-emerald-400/70">{verifyModal.refunded.toFixed(1)} cr refunded</span>}
+                    <button
+                      disabled={verifyModal.stopping}
+                      onClick={async () => {
+                        if (!verifyModal.jobId) return;
+                        setVerifyModal(prev => prev ? { ...prev, stopping: true } : prev);
+                        await wsFetch(`/api/lead-campaigns/verify-jobs/${verifyModal.jobId}`, { method: "DELETE" });
+                      }}
+                      className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 disabled:opacity-40 text-red-400 text-xs font-semibold rounded-lg border border-red-500/20 transition-colors"
+                    >
+                      {verifyModal.stopping ? "Stopping…" : "Stop"}
+                    </button>
+                  </div>
                 </div>
+              </>
+            )}
+
+            {/* Cancelled phase */}
+            {verifyModal.phase === "cancelled" && (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-white/8 border border-white/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold text-sm">Verification stopped</p>
+                    <p className="text-white/35 text-xs">{verifyModal.listName}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-emerald-500/8 border border-emerald-500/15 rounded-xl p-3 text-center">
+                    <p className="text-emerald-400 font-bold text-base tabular-nums">{verifyModal.safe.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">deliverable</p>
+                  </div>
+                  <div className="bg-red-500/8 border border-red-500/15 rounded-xl p-3 text-center">
+                    <p className="text-red-400 font-bold text-base tabular-nums">{verifyModal.invalid.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">invalid</p>
+                  </div>
+                  <div className="bg-white/4 border border-white/8 rounded-xl p-3 text-center">
+                    <p className="text-white/55 font-bold text-base tabular-nums">{verifyModal.unknown.toLocaleString()}</p>
+                    <p className="text-white/30 text-xs">unknown</p>
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs text-white/30 border-t border-white/6 pt-3 mb-4">
+                  <span>{verifyModal.processed.toLocaleString()} of {verifyModal.count.toLocaleString()} verified</span>
+                  <span className="text-emerald-400/70">{verifyModal.refunded.toFixed(1)} cr refunded</span>
+                </div>
+                <button
+                  onClick={() => setVerifyModal(null)}
+                  className="w-full py-2.5 bg-white/8 hover:bg-white/12 text-white/60 text-sm font-semibold rounded-xl transition-colors"
+                >
+                  Close
+                </button>
               </>
             )}
 

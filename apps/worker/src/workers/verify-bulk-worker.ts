@@ -119,6 +119,14 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
     if (isListMode) {
       // ── List mode: stream outreach_leads, update in-place ──────────────────
       while (true) {
+        // Check for cancellation before each batch
+        const { data: statusCheck } = await db
+          .from("lead_verification_jobs").select("status").eq("id", job_id).single();
+        if (statusCheck?.status === "cancelled") {
+          console.log(`[verify-bulk] ${job_id}: cancelled by user`);
+          break;
+        }
+
         type LeadRow = { id: string; email: string };
         const { data: leads } = await db
           .from("outreach_leads")
