@@ -215,7 +215,7 @@ export async function runSendBatch(
 
   // Load workspace settings once
   const { data: wsSettings } = await db.from("workspace_settings").select("*").eq("workspace_id", workspaceId).single();
-  const footerEnabled = wsSettings?.footer_enabled !== false;
+  const footerEnabled = wsSettings?.footer_enabled !== false && wsSettings?.footer_enabled !== "false";
   const footerText    = wsSettings?.footer_custom_text ?? undefined;
   const footerAddress = wsSettings?.footer_address ?? undefined;
 

@@ -53,7 +53,7 @@ export function buildUnsubscribeUrl(workspaceId: string, email: string): string 
 // ─── Open Tracking Pixel ──────────────────────────────────────────────────────
 
 function buildTrackingPixel(sendId: string): string {
-  return `<img src="${APP_URL}/api/track/open/${sendId}" width="1" height="1" style="display:none" alt="" />`;
+  return `<img src="${APP_URL}/api/track?s=${sendId}&t=open" width="1" height="1" style="display:none" alt="" />`;
 }
 
 // ─── Click Tracking ───────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ export function wrapLinks(
     // Skip unsubscribe links — don't double-wrap
     if (url.includes("/api/outreach/unsubscribe")) return `href="${url}"`;
     trackedLinks.push({ link_index: index, original_url: url });
-    const tracked = `${APP_URL}/api/track/click/${sendId}/${index}`;
+    const tracked = `${APP_URL}/api/track?s=${sendId}&t=click&l=${index}&r=${encodeURIComponent(url)}`;
     index++;
     return `href="${tracked}"`;
   });
@@ -127,7 +127,7 @@ export function renderEmail(opts: {
   const unsubUrl = workspaceId
     ? buildUnsubscribeUrl(workspaceId, lead.email)
     : `${APP_URL}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}`;
-  const address = physicalAddress ?? "123 Main Street, New York, NY 10001";
+  const address = (physicalAddress && physicalAddress.trim()) ? physicalAddress.trim() : "Your Company Address";
   const footerBodyText = footerText ?? "You received this email because you or your company expressed interest in our services.";
   if (footerEnabled !== false) {
     body += `
