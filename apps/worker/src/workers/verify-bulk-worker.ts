@@ -6,7 +6,7 @@
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 
-const CONCURRENCY       = 20;   // parallel Reoon requests (power mode; 100+ causes rate limits)
+const CONCURRENCY       = 50;   // parallel Reoon requests (power mode; 100 causes rate limits, testing 50)
 const BATCH_SIZE        = 500;  // leads fetched per loop iteration
 const CREDITS_PER       = 0.5;
 const REOON_BASE        = "https://emailverifier.reoon.com/api/v1";
