@@ -68,13 +68,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ job_id: existing.id, already_running: true }, { status: 202 });
   }
 
-  // Count leads needing verification: unverified OR unknown (rate-limit artifacts)
+  // Reset 'unknown' leads to verified_at=NULL so the worker's IS NULL filter picks them up.
+  // Unknown results are rate-limit artifacts — not reliable, should be re-verified.
+  await adminDb
+    .from("outreach_leads")
+    .update({ verified_at: null })
+    .eq("list_id", listId)
+    .eq("workspace_id", workspaceId)
+    .eq("verification_status", "unknown");
+
+  // Count leads needing verification: unverified OR previously-unknown (now reset above)
   const { count } = await adminDb
     .from("outreach_leads")
     .select("id", { count: "exact", head: true })
     .eq("list_id", listId)
     .eq("workspace_id", workspaceId)
-    .or("verified_at.is.null,verification_status.eq.unknown");
+    .is("verified_at", null);
 
   const pendingCount = count ?? 0;
   if (pendingCount === 0) {

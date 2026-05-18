@@ -6,12 +6,19 @@
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 
-const CONCURRENCY  = 40;   // parallel Reoon requests; quick mode handles higher rates
-const BATCH_SIZE   = 500;  // leads fetched per loop iteration
-const DB_CHUNK     = 100;  // rows per Supabase update batch
-const CREDITS_PER  = 0.5;
-const REOON_BASE   = "https://emailverifier.reoon.com/api/v1";
-const ALLOWED      = new Set(["safe", "valid", "catch_all", "verified_external"]);
+const CONCURRENCY       = 10;   // parallel Reoon requests (power mode; higher causes rate limits)
+const BATCH_SIZE        = 500;  // leads fetched per loop iteration
+const DB_CHUNK          = 100;  // rows per Supabase update batch
+const CREDITS_PER       = 0.5;
+const REOON_BASE        = "https://emailverifier.reoon.com/api/v1";
+const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown (Reoon down)
+
+// DB constraint only allows these values — map 'safe' and friends until migration 033 is applied
+const STATUS_MAP: Record<string, string> = {
+  safe:              "valid",
+  verified_external: "valid",
+  dangerous:         "invalid",
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +47,7 @@ function getDb() {
 
 async function verifySingle(apiKey: string, email: string): Promise<VerifyResult> {
   try {
-    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=quick`;
+    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return { email, status: "unknown", score: 0 };
     const d = await res.json() as Record<string, unknown>;
@@ -133,8 +140,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           .select("id, email")
           .eq("list_id", listId)
           .eq("workspace_id", workspace_id)
-          // Include unknowns — they're rate-limit artifacts, not reliable results
-          .or("verified_at.is.null,verification_status.eq.unknown")
+          .is("verified_at", null)
           .limit(BATCH_SIZE);
 
         if (!leads?.length) break;
@@ -159,11 +165,17 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           else                           batchInvalid++;
           return {
             id:                  rows[i].id,
-            verification_status: st,
+            // Map statuses not yet in DB constraint (migration 033 adds proper values)
+            verification_status: STATUS_MAP[st] ?? st,
             verification_score:  r.score,
             verified_at:         nowStr,
           };
         });
+
+        // Abort if Reoon appears to be down (85%+ unknowns in a batch of ≥50 leads)
+        if (results.length >= 50 && batchUnknown / results.length > UNKNOWN_ABORT_PCT) {
+          throw new Error(`Reoon API appears to be down — ${batchUnknown}/${results.length} results were unknown. Credits for unprocessed leads will be refunded.`);
+        }
 
         // UPDATE in DB_CHUNK-sized parallel batches — avoids 500 simultaneous connections
         for (let ci = 0; ci < updates.length; ci += DB_CHUNK) {
