@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       latest_send:outreach_sends(id, subject, body, status, sent_at, opened_at, replied_at, to_email)
     `, { count: "exact" })
     .eq("workspace_id", workspaceId)
-    .not("status", "eq", "active")
+    .or("status.neq.active,crm_status.neq.neutral")
     .order("enrolled_at", { ascending: false })
     .range(page * limit, page * limit + limit - 1);
 
@@ -41,7 +41,6 @@ export async function GET(req: NextRequest) {
       .from("outreach_replies")
       .select("id, from_email, from_name, subject, body_text, received_at, ai_category, ai_confidence, is_filtered")
       .eq("enrollment_id", row.id as string)
-      .eq("is_filtered", false)
       .order("received_at", { ascending: false })
       .limit(1)
       .maybeSingle();

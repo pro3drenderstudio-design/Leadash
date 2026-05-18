@@ -406,6 +406,14 @@ async function handleInbound(req: NextRequest) {
         .update({ crm_status: "replied", status: "replied" })
         .eq("id", enrollmentId)
         .not("crm_status", "in", '("won","lost","not_interested")');
+    } else if (isFiltered) {
+      // OOO/auto-reply — sequence keeps running, but surface it in CRM as "ooo"
+      // so the user can see it. Only set if no more significant status already exists.
+      await db
+        .from("outreach_enrollments")
+        .update({ crm_status: "ooo" })
+        .eq("id", enrollmentId)
+        .eq("crm_status", "neutral");
     }
 
     // Promote crm_status to AI-detected intent if confident and not an OOO
