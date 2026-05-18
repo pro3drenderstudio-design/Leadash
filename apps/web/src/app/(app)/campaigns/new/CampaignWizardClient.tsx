@@ -58,8 +58,10 @@ export default function CampaignWizardClient() {
   const [stopOnAutoReply, setStopOnAutoReply]             = useState(false);
   const [stopOnCompanyReply, setStopOnCompanyReply]       = useState(false);
   const [pauseAfterOpen, setPauseAfterOpen]               = useState(false);
-  const [textOnly, setTextOnly]                           = useState(false);
+  const [textOnly, setTextOnly]                           = useState(true);
   const [firstEmailTextOnly, setFirstEmailTextOnly]       = useState(false);
+  const [trackOpens, setTrackOpens]                       = useState(false);
+  const [trackClicks, setTrackClicks]                     = useState(false);
   const [insertUnsubHeader, setInsertUnsubHeader]         = useState(true);
   const [customTags, setCustomTags]                       = useState<string[]>([]);
   const [tagInput, setTagInput]                           = useState("");
@@ -244,6 +246,8 @@ export default function CampaignWizardClient() {
       if (ws.default_send_start) setStartTime(ws.default_send_start as string);
       if (ws.default_send_end)   setEndTime(ws.default_send_end as string);
       if (ws.default_daily_limit) setDailyCap(Number(ws.default_daily_limit));
+      if (ws.track_opens_default  !== undefined) setTrackOpens(ws.track_opens_default  === true || ws.track_opens_default  === "true");
+      if (ws.track_clicks_default !== undefined) setTrackClicks(ws.track_clicks_default === true || ws.track_clicks_default === "true");
     });
   }, []);
 
@@ -467,6 +471,7 @@ export default function CampaignWizardClient() {
         stop_on_company_reply: stopOnCompanyReply,
         pause_after_open: pauseAfterOpen,
         text_only: textOnly, first_email_text_only: firstEmailTextOnly,
+        track_opens: trackOpens, track_clicks: trackClicks,
         insert_unsubscribe_header: insertUnsubHeader,
         custom_tags: customTags,
       });

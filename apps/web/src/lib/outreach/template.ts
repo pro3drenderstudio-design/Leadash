@@ -3,7 +3,7 @@ import type { OutreachLead, OutreachSend } from "@/types/outreach";
 import { resolveSpintax } from "./spintax";
 export { resolveSpintax } from "./spintax";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://proplanstudio.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://leadash.com";
 const UNSUB_SECRET = process.env.OUTREACH_ENCRYPTION_KEY ?? "fallback-secret";
 
 // ─── Variable Interpolation ───────────────────────────────────────────────────
@@ -136,9 +136,6 @@ export function renderEmail(opts: {
   ${footerBodyText}<br/>
   <a href="${unsubUrl}" style="color:#999">Unsubscribe</a> &nbsp;|&nbsp; ${address}
 </p>`;
-  } else {
-    // Even when footer is disabled, keep a minimal unsubscribe link for CAN-SPAM compliance
-    body += `<br/><p style="font-size:10px;color:#bbb;margin:16px 0 0 0"><a href="${unsubUrl}" style="color:#bbb">Unsubscribe</a></p>`;
   }
 
   // Click tracking
