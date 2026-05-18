@@ -232,16 +232,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Fallback: match by sender email → most recent sent email to that address.
+  // Handles replies where the mail client strips In-Reply-To / References headers.
+  if (!enrollmentId && from) {
+    const { data: bySender } = await db
+      .from("outreach_sends")
+      .select("id, enrollment_id")
+      .eq("workspace_id", workspaceId)
+      .ilike("to_email", from)
+      .eq("status", "sent")
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (bySender) {
+      enrollmentId  = bySender.enrollment_id as string;
+      matchedSendId = bySender.id            as string;
+    }
+  }
+
   // ── Warmup detection ──────────────────────────────────────────────────────────
   let isWarmup = false;
 
   if (!enrollmentId) {
-    // If the sender is any warmup-enabled inbox (any workspace), it's warmup.
-    // Do not scope to workspaceId — the global warmup pool spans all workspaces.
+    // Check if sender is any known inbox in the platform — including previously
+    // warmup-enabled inboxes that have since been disabled. Cross-workspace.
     const { data: senderInbox } = await db
       .from("outreach_inboxes")
       .select("id")
-      .eq("warmup_enabled", true)
       .ilike("email_address", from)
       .limit(1)
       .maybeSingle();

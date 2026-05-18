@@ -253,8 +253,8 @@ async function ingestMessages(
       const { data: wu } = await db.from("outreach_warmup_sends").select("id").eq("thread_id", msg.messageId).limit(1).single();
       if (wu) continue;
     }
-    // If sender is one of this workspace's own inboxes, it's warmup — headers may
-    // have been stripped by the receiving provider so we can't rely on X-LD-Ref.
+    // If sender is any known inbox in the platform (cross-workspace warmup pool),
+    // treat as warmup — headers may have been stripped by the receiving provider.
     if (wsInboxEmails.has(msg.fromEmail.toLowerCase())) {
       await db.from("outreach_replies").insert({
         workspace_id: workspaceId, inbox_id: inboxId,
