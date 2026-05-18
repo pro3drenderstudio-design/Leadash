@@ -29,14 +29,15 @@ type ImportMode = "csv" | "campaign";
 const DB_FIELDS = ["email", "first_name", "last_name", "company", "title", "website"] as const;
 const CUSTOM_SENTINEL = "__custom__";
 
-function VerificationBadge({ status, count }: { status: "verified" | "pending" | "invalid"; count: number }) {
+function VerificationBadge({ status, count }: { status: "verified" | "pending" | "invalid" | "unknown"; count: number }) {
   if (count === 0) return null;
   const styles = {
     verified: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     pending:  "bg-amber-500/10 text-amber-400 border-amber-500/20",
     invalid:  "bg-red-500/10 text-red-400 border-red-500/20",
+    unknown:  "bg-white/6 text-white/35 border-white/10",
   };
-  const labels = { verified: "verified", pending: "pending", invalid: "invalid" };
+  const labels = { verified: "verified", pending: "pending", invalid: "invalid", unknown: "unknown" };
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${styles[status]}`}>
       {count.toLocaleString()} {labels[status]}
@@ -63,6 +64,7 @@ function ListCard({
   const verified = list.verified_count ?? 0;
   const pending  = list.pending_count  ?? 0;
   const invalid  = list.invalid_count  ?? 0;
+  const unknown  = list.unknown_count  ?? 0;
   const verifiedPct = count > 0 ? Math.round((verified / count) * 100) : 0;
 
   return (
@@ -115,6 +117,7 @@ function ListCard({
             <VerificationBadge status="verified" count={verified} />
             <VerificationBadge status="pending"  count={pending}  />
             <VerificationBadge status="invalid"  count={invalid}  />
+            <VerificationBadge status="unknown"  count={unknown}  />
           </div>
         )}
 

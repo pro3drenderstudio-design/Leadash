@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   // Attach lead counts + verification stats via SQL aggregate (avoids PostgREST 1000-row cap)
   const listIds = (data ?? []).map((l: { id: string }) => l.id);
-  const statsMap: Record<string, { lead_count: number; verified_count: number; pending_count: number; invalid_count: number }> = {};
+  const statsMap: Record<string, { lead_count: number; verified_count: number; pending_count: number; invalid_count: number; unknown_count: number }> = {};
 
   if (listIds.length > 0) {
     const { data: statRows } = await db.rpc("get_list_stats", {
@@ -24,19 +24,20 @@ export async function GET(req: NextRequest) {
       p_list_ids:     listIds,
     });
 
-    for (const row of (statRows ?? []) as { list_id: string; lead_count: number; verified_count: number; pending_count: number; invalid_count: number }[]) {
+    for (const row of (statRows ?? []) as { list_id: string; lead_count: number; verified_count: number; pending_count: number; invalid_count: number; unknown_count: number }[]) {
       statsMap[row.list_id] = {
-        lead_count:    Number(row.lead_count),
+        lead_count:     Number(row.lead_count),
         verified_count: Number(row.verified_count),
         pending_count:  Number(row.pending_count),
         invalid_count:  Number(row.invalid_count),
+        unknown_count:  Number(row.unknown_count ?? 0),
       };
     }
   }
 
   const enriched = (data ?? []).map((list: { id: string; [key: string]: unknown }) => ({
     ...list,
-    ...(statsMap[list.id] ?? { lead_count: 0, verified_count: 0, pending_count: 0, invalid_count: 0 }),
+    ...(statsMap[list.id] ?? { lead_count: 0, verified_count: 0, pending_count: 0, invalid_count: 0, unknown_count: 0 }),
   }));
 
   return NextResponse.json(enriched);

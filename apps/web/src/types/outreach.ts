@@ -63,6 +63,7 @@ export interface OutreachList {
   verified_count?: number;
   pending_count?: number;
   invalid_count?: number;
+  unknown_count?: number;
 }
 
 export interface OutreachLead {
