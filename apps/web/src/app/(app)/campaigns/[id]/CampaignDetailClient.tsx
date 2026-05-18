@@ -1217,7 +1217,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         </div>
                         <p className="text-white font-medium text-sm">{s.subject_template || "(no subject)"}</p>
                         {s.subject_template_b && <p className="text-white/35 text-xs">B: {s.subject_template_b}</p>}
-                        <p className="text-white/40 text-xs line-clamp-2 font-mono whitespace-pre-line">{s.body_template}</p>
+                        <p className="text-white/40 text-xs line-clamp-2">{s.body_template.replace(/<[^>]*>/g, " ").replace(/\s{2,}/g, " ").trim()}</p>
                       </div>
                     )}
                   </div>
