@@ -13,11 +13,12 @@ const CREDITS_PER       = 0.5;
 const REOON_BASE        = "https://emailverifier.reoon.com/api/v1";
 const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown (Reoon down)
 
-// DB constraint only allows these values — map 'safe' and friends until migration 033 is applied
+// DB constraint only allows these values — map missing statuses until migration 033 is applied
 const STATUS_MAP: Record<string, string> = {
   safe:              "valid",
   verified_external: "valid",
   dangerous:         "invalid",
+  risky:             "unknown",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
