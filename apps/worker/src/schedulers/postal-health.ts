@@ -219,11 +219,26 @@ export async function runPostalAiDigest(): Promise<void> {
   const anthropic = new Anthropic({ apiKey });
   const msg = await anthropic.messages.create({
     model:      "claude-haiku-4-5-20251001",
-    max_tokens: 600,
-    system: `You are a deliverability monitor for Leadash, a B2B email outreach SaaS.
-Analyze the Postal MTA health snapshot and respond ONLY with valid JSON (no markdown):
-{"status":"ok"|"warning"|"critical","summary":"2-3 sentence overview mentioning key numbers","issues":["specific issue with numbers"],"actions":["concrete step"]}
-If everything looks healthy, status=ok and issues=[]. Be specific with numbers. Keep summary tight.`,
+    max_tokens: 800,
+    system: `You are a deliverability health analyst for Leadash, a B2B cold email SaaS running on a self-hosted Postal MTA.
+
+You will receive a JSON health snapshot. Write a plain-English diagnosis.
+
+Return ONLY a JSON object with exactly these four keys — no prose, no markdown, no code fences:
+{
+  "status": "ok" | "warning" | "critical",
+  "summary": "2-3 sentences. State what is healthy and what is not. Mention the most important numbers.",
+  "issues": ["Each issue as one sentence with specific numbers. Empty array if none."],
+  "actions": ["Each action as one concrete imperative sentence. Empty array if none needed."]
+}
+
+Rules:
+- status=ok: hard_fail_pct < 8 AND dead_routes = 0 AND held < 100 AND suppressions_24h < 20
+- status=warning: any threshold exceeded but not critical
+- status=critical: hard_fail_pct >= 15 OR dead_routes > 0
+- "Invalid endpoint for route" errors are dead-route inbound failures — the fix is to check Postal HTTP endpoint config
+- Microsoft S3140 rejections mean the sending IP is on Hotmail/Outlook blocklist — submit delist at https://sender.office.com
+- Held messages > 100 means emails are queued but not delivered, usually a sending queue backlog`,
     messages: [{ role: "user", content: JSON.stringify(snapshot, null, 2) }],
   });
 
@@ -231,9 +246,18 @@ If everything looks healthy, status=ok and issues=[]. Be specific with numbers. 
     status: "unknown", summary: "Could not parse AI analysis.", issues: [], actions: [],
   };
   try {
-    const raw = (msg.content[0] as { type: string; text: string }).text.trim();
-    const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    analysis = JSON.parse(jsonStr);
+    const raw = (msg.content[0] as { type: string; text: string }).text ?? "";
+    // Extract the first {...} block from the response, even if wrapped in code fences or prose
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      analysis = {
+        status:  typeof parsed.status  === "string" ? parsed.status  : "unknown",
+        summary: typeof parsed.summary === "string" ? parsed.summary : "No summary provided.",
+        issues:  Array.isArray(parsed.issues)  ? parsed.issues  : [],
+        actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+      };
+    }
   } catch { /* use fallback */ }
 
   // Build email
