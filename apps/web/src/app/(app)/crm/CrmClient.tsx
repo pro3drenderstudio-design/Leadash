@@ -98,7 +98,8 @@ function AttachmentList({ attachments }: { attachments: import("@/types/outreach
 
 function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: string }) {
   const [collapsed, setCollapsed] = useState(false);
-  const isHtml = /<[a-z][\s\S]*>/i.test(msg.body ?? "");
+  const rawBody = msg.body ?? "";
+  const isHtml = rawBody.length > 0 && /<[a-z][\s\S]*>/i.test(rawBody);
   return (
     <div className="flex flex-col items-end">
       <div className="max-w-[82%] w-full">
@@ -118,17 +119,17 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
               <div className="px-4 pb-4 border-t border-white/8 pt-3">
                 {isHtml ? (
                   <iframe
-                    srcDoc={`<html><head><style>body{margin:0;font-family:sans-serif;font-size:13px;color:#ccc;background:transparent;line-height:1.6}a{color:#7dd3fc}*{max-width:100%}</style></head><body>${msg.body}</body></html>`}
+                    srcDoc={`<html><head><style>html,body{margin:0;padding:0;background:transparent}body{font-family:sans-serif;font-size:13px;color:#ccc;line-height:1.6}a{color:#7dd3fc}*{max-width:100%;box-sizing:border-box}</style></head><body>${rawBody}</body></html>`}
                     sandbox="allow-same-origin"
                     className="w-full border-0 min-h-[60px]"
-                    style={{ height: "auto" }}
+                    style={{ height: "auto", background: "transparent", colorScheme: "dark" } as React.CSSProperties}
                     onLoad={(e) => {
                       const iframe = e.currentTarget;
                       if (iframe.contentDocument?.body) iframe.style.height = iframe.contentDocument.body.scrollHeight + "px";
                     }}
                   />
                 ) : (
-                  <pre className="text-white/50 text-xs whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
+                  <pre className="text-white/50 text-xs whitespace-pre-wrap font-sans leading-relaxed">{rawBody || "(No body stored)"}</pre>
                 )}
               </div>
             )}
