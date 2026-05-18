@@ -232,7 +232,8 @@ If everything looks healthy, status=ok and issues=[]. Be specific with numbers. 
   };
   try {
     const raw = (msg.content[0] as { type: string; text: string }).text.trim();
-    analysis = JSON.parse(raw);
+    const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    analysis = JSON.parse(jsonStr);
   } catch { /* use fallback */ }
 
   // Build email
