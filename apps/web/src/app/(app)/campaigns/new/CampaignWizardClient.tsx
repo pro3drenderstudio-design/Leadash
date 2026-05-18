@@ -897,21 +897,40 @@ export default function CampaignWizardClient() {
                   </div>
 
                   {/* Subject A */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
-                      <button
-                        type="button"
-                        onClick={() => handleSpintax(i, "subject")}
-                        disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
-                        className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
-                        title="AI Spintax — generate variations"
-                      >
-                        {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
-                      </button>
-                    </div>
-                    <VariableInput value={s.subject_template} onChange={(v) => updateStep(i, "subject_template", v)} placeholder="Email subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" />
-                  </div>
+                  {(() => {
+                    const firstEmailIdx = seqSteps.findIndex(s2 => s2.type === "email");
+                    const isFollowUp    = i !== firstEmailIdx;
+                    const isReply       = isFollowUp && !s.subject_template.trim();
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                            {isReply && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-500/12 text-teal-400 border border-teal-500/20">
+                                ↩ Replies to first email
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSpintax(i, "subject")}
+                            disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
+                            className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                            title="AI Spintax — generate variations"
+                          >
+                            {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                          </button>
+                        </div>
+                        <VariableInput
+                          value={s.subject_template}
+                          onChange={(v) => updateStep(i, "subject_template", v)}
+                          placeholder={isFollowUp ? "Leave empty to reply to thread…" : "Email subject"}
+                          className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40"
+                        />
+                      </div>
+                    );
+                  })()}
 
                   {/* Subject B (A/B testing) */}
                   <div>

@@ -337,9 +337,25 @@ export async function runSendBatch(
       if (!claimed) { result.skipped++; continue; }
 
       const abVariant: "a" | "b" = enrollment.ab_variant ?? "a";
-      const subjectTemplate = abVariant === "b" && seqStep.subject_template_b
+      let subjectTemplate = abVariant === "b" && seqStep.subject_template_b
         ? seqStep.subject_template_b
         : (seqStep.subject_template ?? "");
+
+      // Empty subject on a follow-up = reply to thread — inherit Re: <first send's subject>
+      if (!subjectTemplate.trim() && seqStep.step_order > 0) {
+        const { data: firstSend } = await db
+          .from("outreach_sends")
+          .select("subject")
+          .eq("enrollment_id", enrollment.id)
+          .eq("status", "sent")
+          .order("sent_at", { ascending: true })
+          .limit(1)
+          .single();
+        if (firstSend?.subject) {
+          const base = (firstSend.subject as string).replace(/^(Re:\s*)+/i, "");
+          subjectTemplate = `Re: ${base}`;
+        }
+      }
 
       const { data: sendRecord } = await db.from("outreach_sends").insert({
         workspace_id:     workspaceId,

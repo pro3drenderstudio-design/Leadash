@@ -693,19 +693,40 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                       <button onClick={() => { setTestStepIdx(i); setTestResult(null); setTestSampleIdx(-1); setTestToEmail(""); setTestInboxId(editInboxes[0]??""); }} className="text-amber-400/80 hover:text-amber-300 text-xs ml-auto">Send Test ↗</button>
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
-                        <button
-                          type="button"
-                          onClick={() => handleSpintax(i, "subject")}
-                          disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
-                          className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
-                          title="AI Spintax — generate variations"
-                        >
-                          {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
-                        </button>
-                      </div>
-                      <VariableInput value={s.subject_template} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template:v}:st2))} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/40" />
+                      {(() => {
+                        const firstEmailIdx = editSteps.findIndex(s2 => s2.type === "email");
+                        const isFollowUp    = i !== firstEmailIdx;
+                        const isReply       = isFollowUp && !s.subject_template.trim();
+                        return (
+                          <>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                                {isReply && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-500/12 text-teal-400 border border-teal-500/20">
+                                    ↩ Replies to first email
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSpintax(i, "subject")}
+                                disabled={spintaxLoading === `${i}-subject` || !s.subject_template.trim()}
+                                className="flex items-center gap-1 text-[10px] text-violet-400/70 hover:text-violet-300 disabled:opacity-40 transition-colors"
+                                title="AI Spintax — generate variations"
+                              >
+                                {spintaxLoading === `${i}-subject` ? <span className="animate-spin">⟳</span> : "✦"} Spintax
+                              </button>
+                            </div>
+                            <VariableInput
+                              value={s.subject_template}
+                              onChange={v => setEditSteps(st => st.map((st2, idx) => idx === i ? { ...st2, subject_template: v } : st2))}
+                              placeholder={isFollowUp ? "Leave empty to reply to thread…" : "Email subject"}
+                              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40"
+                            />
+                          </>
+                        );
+                      })()}
                     </div>
                     <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><VariableInput value={s.subject_template_b} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:v}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
                     <div>
@@ -1200,29 +1221,39 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <div>
             <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-3">Email Sequence</h2>
             <div className="space-y-2">
-              {steps.map((s, i) => (
-                <div key={s.id} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center pt-1">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border flex-shrink-0 ${s.type === "wait" ? "bg-white/5 border-white/12 text-white/30" : "bg-orange-500/20 border-orange-500/30 text-orange-300"}`}>{i+1}</div>
-                    {i < steps.length - 1 && <div className="w-px h-6 bg-white/8" />}
-                  </div>
-                  <div className={`flex-1 rounded-xl border p-4 mb-1 ${s.type === "wait" ? "bg-white/2 border-white/6" : "bg-white/4 border-white/8"}`}>
-                    {s.type === "wait" ? (
-                      <p className="text-white/40 text-sm">Wait <span className="font-semibold text-white/60">{s.wait_days} day{s.wait_days !== 1 ? "s" : ""}</span></p>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400/60 bg-orange-500/10 px-2 py-0.5 rounded-full">Email #{emailSteps.indexOf(s)+1}</span>
-                          {s.subject_template_b && <span className="text-[10px] text-violet-400/60 bg-violet-500/10 px-2 py-0.5 rounded-full">A/B</span>}
-                        </div>
-                        <p className="text-white font-medium text-sm">{s.subject_template || "(no subject)"}</p>
-                        {s.subject_template_b && <p className="text-white/35 text-xs">B: {s.subject_template_b}</p>}
-                        <p className="text-white/40 text-xs line-clamp-2">{(s.body_template ?? "").replace(/<[^>]*>/g, " ").replace(/\s{2,}/g, " ").trim()}</p>
+              {(() => {
+                const firstEmailIdx = steps.findIndex(s => s.type === "email");
+                return steps.map((s, i) => {
+                  const isFollowUp = s.type === "email" && i !== firstEmailIdx;
+                  const isReply    = isFollowUp && !s.subject_template?.trim();
+                  return (
+                    <div key={s.id} className="flex items-start gap-3">
+                      <div className="flex flex-col items-center pt-1">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border flex-shrink-0 ${s.type === "wait" ? "bg-white/5 border-white/12 text-white/30" : "bg-orange-500/20 border-orange-500/30 text-orange-300"}`}>{i+1}</div>
+                        {i < steps.length - 1 && <div className="w-px h-6 bg-white/8" />}
                       </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                      <div className={`flex-1 rounded-xl border p-4 mb-1 ${s.type === "wait" ? "bg-white/2 border-white/6" : "bg-white/4 border-white/8"}`}>
+                        {s.type === "wait" ? (
+                          <p className="text-white/40 text-sm">Wait <span className="font-semibold text-white/60">{s.wait_days} day{s.wait_days !== 1 ? "s" : ""}</span></p>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400/60 bg-orange-500/10 px-2 py-0.5 rounded-full">Email #{emailSteps.indexOf(s)+1}</span>
+                              {s.subject_template_b && <span className="text-[10px] text-violet-400/60 bg-violet-500/10 px-2 py-0.5 rounded-full">A/B</span>}
+                              {isReply && <span className="text-[10px] text-teal-400/70 bg-teal-500/10 px-2 py-0.5 rounded-full">↩ reply</span>}
+                            </div>
+                            <p className={`font-medium text-sm ${isReply ? "text-teal-400/60 italic" : "text-white"}`}>
+                              {isReply ? "Re: (continues thread)" : (s.subject_template || "(no subject)")}
+                            </p>
+                            {s.subject_template_b && <p className="text-white/35 text-xs">B: {s.subject_template_b}</p>}
+                            <p className="text-white/40 text-xs line-clamp-2">{(s.body_template ?? "").replace(/<[^>]*>/g, " ").replace(/\s{2,}/g, " ").trim()}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
