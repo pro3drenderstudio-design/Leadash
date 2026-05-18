@@ -617,6 +617,7 @@ export interface PeopleFilters {
   emailStatus:          "any" | "has_email";
   companyKeywordIncludes: string[];
   companyKeywordExcludes: string[];
+  netNew:               boolean;
 }
 
 export interface CompanyFilters {
@@ -644,6 +645,7 @@ export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   companyIncludes: [], companyExcludes: [], industryIncludes: [],
   industryExcludes: [], companySizes: [], emailStatus: "any",
   companyKeywordIncludes: [], companyKeywordExcludes: [],
+  netNew: false,
 };
 
 export const DEFAULT_COMPANY_FILTERS: CompanyFilters = {
@@ -700,12 +702,31 @@ export function PeopleSidebar({
   const sizeCount     = filters.companySizes.length;
   const emailCount    = filters.emailStatus !== "any" ? 1 : 0;
   const kwCount       = filters.companyKeywordIncludes.length + filters.companyKeywordExcludes.length;
+  const netNewCount   = filters.netNew ? 1 : 0;
 
   return (
     <div className="flex-1 overflow-y-auto">
 
       {/* AI quick filter */}
       <AiFilterBar mode="people" onApply={onAiApply} />
+
+      {/* Net New */}
+      <div className="border-b border-white/[0.06] px-4 py-3">
+        <label className="flex items-center justify-between cursor-pointer group">
+          <div>
+            <p className="text-[11px] font-semibold text-white/55 uppercase tracking-wider">Net New Only</p>
+            <p className="text-[10px] text-white/30 mt-0.5">Exclude leads already in your lists</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={filters.netNew}
+            onClick={() => set("netNew", !filters.netNew)}
+            className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${filters.netNew ? "bg-orange-500" : "bg-white/10"}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${filters.netNew ? "translate-x-4" : "translate-x-0.5"}`} />
+          </button>
+        </label>
+      </div>
 
       {/* Email Status */}
       <FilterSection title="Email Status" activeCount={emailCount}>

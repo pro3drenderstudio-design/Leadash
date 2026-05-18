@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
   const companyKeywordIncludes = csv(p.get("co_keyword_include"));
   const companyKeywordExcludes = csv(p.get("co_keyword_exclude"));
   const emailStatus            = p.get("email_status") || "any";
+  const netNew     = p.get("net_new")    === "true";
   const idsOnly    = p.get("ids_only")    === "true";
   const skipCount  = p.get("skip_count") === "true";
   const page       = Math.max(1, parseInt(p.get("page") || "1"));
@@ -156,6 +157,21 @@ export async function GET(req: NextRequest) {
 
     if (emailStatus === "has_email") {
       conditions.push(`p.email IS NOT NULL AND p.email <> ''`);
+    }
+
+    if (netNew) {
+      const adminDb = createAdminClient();
+      const { data: existingLeads } = await adminDb
+        .from("outreach_leads")
+        .select("email")
+        .eq("workspace_id", workspaceId)
+        .not("email", "is", null);
+      const existingEmails = (existingLeads ?? []).map((r: { email: string }) => r.email.toLowerCase()).filter(Boolean);
+      if (existingEmails.length > 0) {
+        conditions.push(`lower(p.email) NOT IN (SELECT unnest($${i}::text[]))`);
+        params.push(existingEmails);
+        i++;
+      }
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";

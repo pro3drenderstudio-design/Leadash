@@ -75,6 +75,7 @@ function filtersToParams(
   if (pf.emailStatus !== "has_email")   p.set("em",    pf.emailStatus);
   if (pf.companyKeywordIncludes.length) p.set("cokw",  pf.companyKeywordIncludes.join(","));
   if (pf.companyKeywordExcludes.length) p.set("cokwe", pf.companyKeywordExcludes.join(","));
+  if (pf.netNew)                        p.set("nn",    "1");
   if (cf.coKeyword)                     p.set("cq",    cf.coKeyword);
   if (cf.coCountryIncludes.length)      p.set("cctry", cf.coCountryIncludes.join(","));
   if (cf.coCountryExcludes.length)      p.set("cctrye",cf.coCountryExcludes.join(","));
@@ -119,6 +120,7 @@ function filtersFromParams(p: { get(key: string): string | null }): {
       emailStatus:          (p.get("em") as PeopleFilters["emailStatus"]) ?? "has_email",
       companyKeywordIncludes: csv("cokw"),
       companyKeywordExcludes: csv("cokwe"),
+      netNew:                 p.get("nn") === "1",
     },
     cf: {
       coKeyword:          p.get("cq")   ?? "",
@@ -1003,6 +1005,7 @@ function DiscoverContent() {
       if (f.companyKeywordIncludes.length) params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
       if (f.companyKeywordExcludes.length) params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
       params.set("email_status", f.emailStatus);
+      if (f.netNew) params.set("net_new", "true");
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       if (skipCount) params.set("skip_count", "true");
@@ -1138,6 +1141,7 @@ function DiscoverContent() {
     if (f.companyKeywordIncludes.length) params.set("co_keyword_include", f.companyKeywordIncludes.join(","));
     if (f.companyKeywordExcludes.length) params.set("co_keyword_exclude", f.companyKeywordExcludes.join(","));
     params.set("email_status", f.emailStatus);
+    if (f.netNew) params.set("net_new", "true");
     params.set("ids_only", "true");
     params.set("limit", String(SELECT_ALL_CAP));
     const data = await wsGet<{ ids?: string[]; results?: { id: string }[] }>(`/api/discover/search?${params}`);
