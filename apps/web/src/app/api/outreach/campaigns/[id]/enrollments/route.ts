@@ -137,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       new_count:                toEnroll.length,
       duplicate_count:          duplicates,
       skipped_unverified:       skippedCount,
-      total:                    leads.length,
+      total:                    typedLeads.length,
     });
   }
 
