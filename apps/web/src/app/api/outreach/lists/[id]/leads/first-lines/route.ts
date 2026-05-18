@@ -85,12 +85,15 @@ export async function POST(
 
   if (!leads?.length) return NextResponse.json({ error: "No leads found" }, { status: 404 });
 
-  const inputs: LeadInput[] = (leads as { id: string; email: string; first_name: string | null; last_name: string | null; company: string | null; title: string | null }[]).map(l => ({
+  type LeadRow = { id: string; email: string; first_name: string | null; last_name: string | null; company: string | null; title: string | null };
+  const typedLeads = leads as LeadRow[];
+
+  const inputs: LeadInput[] = typedLeads.map(l => ({
     id:           l.id,
     name:         [l.first_name, l.last_name].filter(Boolean).join(" ") || null,
     title:        l.title   ?? null,
     company:      l.company ?? null,
-    email_domain: (l.email as string).split("@")[1] ?? "",
+    email_domain: l.email.split("@")[1] ?? "",
   }));
 
   // Chunk into batches, run up to 3 in parallel
@@ -105,7 +108,7 @@ export async function POST(
 
   // Merge back with display name + email for the preview modal
   const enriched = results.map(r => {
-    const lead = leads.find(l => l.id === r.id);
+    const lead = typedLeads.find((l: LeadRow) => l.id === r.id);
     return {
       id:         r.id,
       first_name: lead?.first_name ?? null,
