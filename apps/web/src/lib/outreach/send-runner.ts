@@ -433,6 +433,7 @@ export async function runSendBatch(
           subject:      rendered.subject,
           htmlBody:     sendTextOnly ? "" : rendered.body,
           textBody:     rendered.textBody,
+          replyTo:      campaign.reply_to_email ?? undefined,
           inReplyToMessageId,
           replyToThreadId,
           customHeaders,
@@ -522,10 +523,10 @@ export async function runSendBatch(
 
 async function sendViaInbox(
   inbox: OutreachInbox,
-  opts: { to: string; subject: string; htmlBody: string; textBody: string; inReplyToMessageId?: string; replyToThreadId?: string; customHeaders?: Record<string, string> },
+  opts: { to: string; subject: string; htmlBody: string; textBody: string; replyTo?: string; inReplyToMessageId?: string; replyToThreadId?: string; customHeaders?: Record<string, string> },
 ): Promise<{ messageId: string; threadId?: string }> {
   if (inbox.provider === "gmail"   && inbox.oauth_refresh_token) return sendGmailMessage(inbox, opts);
   if (inbox.provider === "outlook" && inbox.oauth_refresh_token) return sendMicrosoftMessage(inbox, opts);
-  const r = await sendSmtpMessage(inbox, opts);
+  const r = await sendSmtpMessage(inbox, { ...opts });
   return { messageId: r.messageId };
 }

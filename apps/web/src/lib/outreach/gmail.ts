@@ -78,6 +78,7 @@ export interface GmailSendOptions {
   htmlBody: string;
   textBody: string;
   fromName?: string;
+  replyTo?: string;
   replyToThreadId?: string;
   inReplyToMessageId?: string;
   customHeaders?: Record<string, string>;
@@ -105,6 +106,7 @@ export async function sendGmailMessage(
     `Subject: ${opts.subject}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    opts.replyTo ? `Reply-To: ${opts.replyTo}` : "",
     opts.replyToThreadId ? `References: <${opts.replyToThreadId}>` : "",
     opts.inReplyToMessageId ? `In-Reply-To: <${opts.inReplyToMessageId}>` : "",
     ...(opts.customHeaders ? Object.entries(opts.customHeaders).map(([k, v]) => `${k}: ${v}`) : []),

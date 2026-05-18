@@ -116,6 +116,7 @@ export interface MsSendOptions {
   htmlBody: string;
   textBody: string;
   fromName?: string;
+  replyTo?: string;
   inReplyToMessageId?: string;
   replyToThreadId?: string;
   customHeaders?: Record<string, string>;
@@ -152,6 +153,7 @@ export async function sendMicrosoftMessage(
       },
     ],
     ...(opts.fromName ? { from: { emailAddress: { name: opts.fromName, address: inbox.email_address } } } : {}),
+    ...(opts.replyTo ? { replyTo: [{ emailAddress: { address: opts.replyTo } }] } : {}),
     ...(internetMessageHeaders.length ? { internetMessageHeaders } : {}),
   };
 

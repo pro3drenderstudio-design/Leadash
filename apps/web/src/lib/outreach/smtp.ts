@@ -8,6 +8,7 @@ export interface SmtpSendOptions {
   htmlBody: string;
   textBody: string;
   fromName?: string;
+  replyTo?: string;
   messageId?: string;
   inReplyToMessageId?: string;
   replyToThreadId?: string;
@@ -53,6 +54,7 @@ export async function sendSmtpMessage(
     html:      opts.htmlBody,
     text:      opts.textBody,
     messageId: opts.messageId,
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
     ...(opts.inReplyToMessageId ? { inReplyTo: opts.inReplyToMessageId, references: opts.inReplyToMessageId } : {}),
     ...(opts.customHeaders ? { headers: opts.customHeaders } : {}),
   });
