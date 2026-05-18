@@ -12,9 +12,10 @@ import {
   getCampaign, getSequence, updateCampaign, saveSequence,
   getInboxes, getTemplates, sendTestEmail, generateSequence, generateSpintax, generateFollowups,
   getCampaignAnalytics, triggerSendBatch,
-  getCampaignEnrollments, unenrollLead, enrollLeads, checkEnrollmentDuplicates, getLists,
+  getCampaignEnrollments, unenrollLead, getLists,
   checkInboxDns, getCampaignActivity,
 } from "@/lib/outreach/api";
+import AddToSequenceModal from "@/components/AddToSequenceModal";
 import type {
   OutreachCampaign, OutreachSequenceStep, CampaignStatus,
   OutreachInboxSafe, OutreachTemplate, CampaignAnalytics,
@@ -150,8 +151,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [unenrolling, setUnenrolling]       = useState<string | null>(null);
   const [lists, setLists]                   = useState<OutreachList[]>([]);
   const [addListId, setAddListId]           = useState("");
-  const [addingLeads, setAddingLeads]       = useState(false);
   const [addLeadsResult, setAddLeadsResult] = useState<string | null>(null);
+  const [enrollModal, setEnrollModal]       = useState(false);
   const LEADS_PAGE_SIZE = 50;
 
   // Edit form state
@@ -215,9 +216,6 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [followupGenerating, setFollowupGenerating] = useState(false);
   const [followupError, setFollowupError]         = useState<string | null>(null);
 
-  // Duplicate check + enrollment confirmation
-  const [dupCheck, setDupCheck] = useState<{ new_count: number; duplicate_count: number; skipped_unverified: number; total: number } | null>(null);
-  const [dupChecking, setDupChecking] = useState(false);
 
   // Trigger sends
   const [triggering, setTriggering] = useState(false);
@@ -1526,13 +1524,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       {tab === "leads" && (
         <div className="space-y-4">
           {/* Add leads from list */}
-          <div className="bg-white/3 border border-white/6 rounded-xl p-4 space-y-3">
+          <div className="bg-white/3 border border-white/6 rounded-xl p-4">
             <div className="flex items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-48">
                 <label className="block text-xs font-semibold text-white/40 uppercase tracking-wider mb-1.5">Add Leads from List</label>
                 <select
                   value={addListId}
-                  onChange={e => { setAddListId(e.target.value); setDupCheck(null); setAddLeadsResult(null); }}
+                  onChange={e => { setAddListId(e.target.value); setAddLeadsResult(null); }}
                   className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50"
                 >
                   <option value="">— select a list —</option>
@@ -1541,59 +1539,15 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                   ))}
                 </select>
               </div>
-              {!dupCheck ? (
-                <button
-                  disabled={!addListId || dupChecking}
-                  onClick={async () => {
-                    if (!addListId) return;
-                    setDupChecking(true); setAddLeadsResult(null);
-                    const result = await checkEnrollmentDuplicates(campaignId, [addListId]).catch(() => null);
-                    setDupChecking(false);
-                    if (result) setDupCheck(result);
-                  }}
-                  className="px-4 py-2 bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white/70 text-sm font-semibold rounded-lg border border-white/10 transition-colors flex-shrink-0"
-                >
-                  {dupChecking ? "Checking…" : "Check Duplicates"}
-                </button>
-              ) : (
-                <button
-                  disabled={addingLeads || dupCheck.new_count === 0}
-                  onClick={async () => {
-                    if (!addListId) return;
-                    setAddingLeads(true); setAddLeadsResult(null);
-                    const res = await enrollLeads(campaignId, [addListId]);
-                    const parts = [`${res.enrolled} lead${res.enrolled !== 1 ? "s" : ""} enrolled`];
-                    if (res.skipped_unverified > 0) parts.push(`${res.skipped_unverified} skipped (unverified — verify in Leads Pool first)`);
-                    setAddLeadsResult(parts.join(" · "));
-                    setAddingLeads(false); setAddListId(""); setDupCheck(null);
-                    const [data, fresh] = await Promise.all([
-                      getCampaignEnrollments(campaignId, leadsPage, LEADS_PAGE_SIZE, leadsStatus),
-                      getCampaign(campaignId),
-                    ]);
-                    setLeadsData(data); setCampaign(fresh);
-                  }}
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
-                >
-                  {addingLeads ? "Enrolling…" : `Enroll ${dupCheck.new_count}`}
-                </button>
-              )}
+              <button
+                disabled={!addListId}
+                onClick={() => { setAddLeadsResult(null); setEnrollModal(true); }}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0"
+              >
+                Add Leads →
+              </button>
               {addLeadsResult && <span className="text-green-400 text-xs flex-shrink-0">{addLeadsResult}</span>}
             </div>
-
-            {/* Duplicate check summary */}
-            {dupCheck && (
-              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${dupCheck.new_count === 0 ? "bg-amber-500/8 border-amber-500/20 text-amber-300" : "bg-white/4 border-white/8"}`}>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                  <span className="text-green-400 font-semibold">{dupCheck.new_count} will enroll</span>
-                  {dupCheck.duplicate_count > 0 && <span className="text-white/40">{dupCheck.duplicate_count} already enrolled</span>}
-                  {dupCheck.skipped_unverified > 0 && (
-                    <span className="text-amber-400 font-semibold">⚠ {dupCheck.skipped_unverified} unverified (will be skipped — verify in Leads Pool first)</span>
-                  )}
-                  <span className="text-white/25">{dupCheck.total} total in list</span>
-                </div>
-                <button onClick={() => { setDupCheck(null); setAddListId(""); }} className="text-white/30 hover:text-white/60 transition-colors">✕</button>
-              </div>
-            )}
           </div>
 
           {/* Filters */}
@@ -1698,6 +1652,24 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             </>
           )}
         </div>
+      )}
+
+      {enrollModal && addListId && (
+        <AddToSequenceModal
+          campaignId={campaignId}
+          listIds={[addListId]}
+          onClose={() => setEnrollModal(false)}
+          onEnrolled={async (enrolled) => {
+            setEnrollModal(false);
+            setAddLeadsResult(`${enrolled} lead${enrolled !== 1 ? "s" : ""} enrolled`);
+            setAddListId("");
+            const [data, fresh] = await Promise.all([
+              getCampaignEnrollments(campaignId, leadsPage, LEADS_PAGE_SIZE, leadsStatus),
+              getCampaign(campaignId),
+            ]);
+            setLeadsData(data); setCampaign(fresh);
+          }}
+        />
       )}
     </div>
   );

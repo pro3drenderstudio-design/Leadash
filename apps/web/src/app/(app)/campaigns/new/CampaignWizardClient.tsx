@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, enrollLeads, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
+import AddToSequenceModal from "@/components/AddToSequenceModal";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
@@ -65,6 +66,7 @@ export default function CampaignWizardClient() {
 
   // Step 2 fields
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
+  const [enrollModal, setEnrollModal]     = useState<{ campaignId: string; listIds: string[] } | null>(null);
 
   // Inline lead import
   const [showImport, setShowImport]         = useState(false);
@@ -465,9 +467,11 @@ export default function CampaignWizardClient() {
         ...s,
         subject_template_b: s.subject_template_b || null,
       })));
-      await enrollLeads(campaign.id, selectedLists);
 
-      router.push(`/campaigns/${campaign.id}?enrolled=1`);
+      // Open status-filter modal — user picks which tiers to enroll
+      setSaving(false);
+      setEnrollModal({ campaignId: campaign.id, listIds: selectedLists });
+      return;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create campaign");
       setSaving(false);
@@ -478,6 +482,14 @@ export default function CampaignWizardClient() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
+      {enrollModal && (
+        <AddToSequenceModal
+          campaignId={enrollModal.campaignId}
+          listIds={enrollModal.listIds}
+          onClose={() => { setEnrollModal(null); router.push(`/campaigns/${enrollModal.campaignId}?enrolled=1`); }}
+          onEnrolled={() => { setEnrollModal(null); router.push(`/campaigns/${enrollModal.campaignId}?enrolled=1`); }}
+        />
+      )}
       {/* Progress */}
       <div className="flex items-center gap-2 mb-8">
         {STEP_LABELS.map((label, i) => (

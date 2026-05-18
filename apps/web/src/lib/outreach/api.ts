@@ -86,11 +86,18 @@ export const createCampaign = (d: Partial<OutreachCampaign>)    => post<Outreach
 export const updateCampaign = (id: string, d: Partial<OutreachCampaign>) => patch<OutreachCampaign>(`${base}/campaigns/${id}`, d);
 export const deleteCampaign = (id: string)                      => del(`${base}/campaigns/${id}`);
 
-export const enrollLeads = (campaignId: string, listIds: string[]) =>
-  post<{ enrolled: number; new_count: number; duplicate_count: number; skipped_unverified: number }>(`${base}/campaigns/${campaignId}/enrollments`, { list_ids: listIds });
+export const enrollLeads = (campaignId: string, listIds: string[], statuses?: string[]) =>
+  post<{ enrolled: number; new_count: number; duplicate_count: number; skipped_unverified: number }>(
+    `${base}/campaigns/${campaignId}/enrollments`,
+    { list_ids: listIds, ...(statuses ? { statuses } : {}) },
+  );
 
 export const checkEnrollmentDuplicates = (campaignId: string, listIds: string[]) =>
-  post<{ new_count: number; duplicate_count: number; skipped_unverified: number; total: number }>(`${base}/campaigns/${campaignId}/enrollments?dry_run=1`, { list_ids: listIds });
+  post<{
+    status_counts: Record<string, number>;
+    already_enrolled_by_status: Record<string, number>;
+    new_count: number; duplicate_count: number; skipped_unverified: number; total: number;
+  }>(`${base}/campaigns/${campaignId}/enrollments?dry_run=1`, { list_ids: listIds });
 
 export const getCampaignEnrollments = (campaignId: string, page = 0, limit = 50, status = "all") =>
   get<{ enrollments: CampaignEnrollmentRow[]; total: number }>(

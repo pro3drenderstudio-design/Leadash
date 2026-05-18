@@ -52,21 +52,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const url     = new URL(req.url);
-  const dryRun  = url.searchParams.get("dry_run") === "1";
+  const url    = new URL(req.url);
+  const dryRun = url.searchParams.get("dry_run") === "1";
 
-  const { list_ids } = await req.json() as { list_ids: string[] };
+  const { list_ids, statuses: requestedStatuses } =
+    await req.json() as { list_ids: string[]; statuses?: string[] };
   if (!list_ids?.length) return NextResponse.json({ error: "list_ids required" }, { status: 400 });
 
-  // Fetch campaign to check verified_only setting
-  const { data: campaign } = await db
-    .from("outreach_campaigns")
-    .select("verified_only")
-    .eq("id", campaignId)
-    .eq("workspace_id", workspaceId)
-    .single();
-  const verifiedOnly = campaign?.verified_only ?? true;
-
+  // These are never allowed regardless of what the caller requests
+  const BLOCKED   = new Set(["invalid", "dangerous", "disposable"]);
   const ALLOWED_VSTATUS = ["safe", "valid", "catch_all", "verified_external"];
 
   // Get leads from those lists
@@ -79,34 +73,62 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!leads?.length) return NextResponse.json({ enrolled: 0, new_count: 0, duplicate_count: 0, skipped_unverified: 0 });
 
-  type LeadRow = { id: string; verification_status: string };
+  type LeadRow = { id: string; verification_status: string | null };
   const typedLeads = leads as LeadRow[];
 
-  // Filter out unverified leads if verified_only is set
-  const unverifiedIds = verifiedOnly
-    ? typedLeads.filter(l => !ALLOWED_VSTATUS.includes(l.verification_status)).map(l => l.id)
-    : [];
-  const eligibleLeads = verifiedOnly
-    ? typedLeads.filter(l => ALLOWED_VSTATUS.includes(l.verification_status))
-    : typedLeads;
+  // Per-status counts across ALL leads in the list (for the modal to display)
+  const statusCounts: Record<string, number> = {};
+  for (const l of typedLeads) {
+    const s = l.verification_status ?? "pending";
+    statusCounts[s] = (statusCounts[s] ?? 0) + 1;
+  }
 
-  // List of already enrolled leads in this campaign
+  // Already-enrolled leads in this campaign
   const { data: existing } = await db
     .from("outreach_enrollments")
     .select("lead_id")
     .eq("campaign_id", campaignId);
-
   const enrolledIds = new Set((existing ?? []).map((e: { lead_id: string }) => e.lead_id));
-  const toEnroll    = eligibleLeads.filter(l => !enrolledIds.has(l.id));
-  const duplicates  = eligibleLeads.length - toEnroll.length;
+
+  // Already-enrolled count per status (for the modal live counter)
+  const alreadyEnrolledByStatus: Record<string, number> = {};
+  for (const l of typedLeads) {
+    if (enrolledIds.has(l.id)) {
+      const s = l.verification_status ?? "pending";
+      alreadyEnrolledByStatus[s] = (alreadyEnrolledByStatus[s] ?? 0) + 1;
+    }
+  }
+
+  // Determine eligible leads
+  let eligibleLeads: LeadRow[];
+  if (requestedStatuses?.length) {
+    // Caller explicitly chose statuses — honour them, minus blocked
+    const allowed = new Set(requestedStatuses.filter(s => !BLOCKED.has(s)));
+    eligibleLeads = typedLeads.filter(l => allowed.has(l.verification_status ?? "pending"));
+  } else {
+    // Legacy: use verified_only from campaign setting
+    const { data: campaign } = await db
+      .from("outreach_campaigns").select("verified_only")
+      .eq("id", campaignId).eq("workspace_id", workspaceId).single();
+    const verifiedOnly = campaign?.verified_only ?? true;
+    eligibleLeads = verifiedOnly
+      ? typedLeads.filter(l => ALLOWED_VSTATUS.includes(l.verification_status ?? ""))
+      : typedLeads.filter(l => !BLOCKED.has(l.verification_status ?? ""));
+  }
+
+  const skippedCount = typedLeads.length - eligibleLeads.length;
+  const toEnroll     = eligibleLeads.filter(l => !enrolledIds.has(l.id));
+  const duplicates   = eligibleLeads.length - toEnroll.length;
 
   // Dry-run: return counts without inserting
   if (dryRun) {
     return NextResponse.json({
-      new_count:         toEnroll.length,
-      duplicate_count:   duplicates,
-      skipped_unverified: unverifiedIds.length,
-      total:             leads.length,
+      status_counts:            statusCounts,
+      already_enrolled_by_status: alreadyEnrolledByStatus,
+      new_count:                toEnroll.length,
+      duplicate_count:          duplicates,
+      skipped_unverified:       skippedCount,
+      total:                    leads.length,
     });
   }
 
@@ -115,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       enrolled:           0,
       new_count:          0,
       duplicate_count:    duplicates,
-      skipped_unverified: unverifiedIds.length,
+      skipped_unverified: skippedCount,
     });
   }
 
@@ -132,6 +154,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     enrolled:           inserted?.length ?? 0,
     new_count:          inserted?.length ?? 0,
     duplicate_count:    duplicates,
-    skipped_unverified: unverifiedIds.length,
+    skipped_unverified: skippedCount,
   });
 }
