@@ -277,8 +277,9 @@ async function handleInbound(req: NextRequest) {
   }
 
   // Fallback: match by sender email → most recent sent email to that address.
-  // Handles replies where the mail client strips In-Reply-To / References headers.
-  if (!enrollmentId && from) {
+  // Only used when subject starts with "Re:" — prevents fresh cold emails from being
+  // incorrectly threaded to old campaign enrollments when In-Reply-To is absent.
+  if (!enrollmentId && from && /^re:/i.test(subject)) {
     const { data: bySender } = await db
       .from("outreach_sends")
       .select("id, enrollment_id")

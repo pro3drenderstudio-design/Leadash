@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     return {
       enrollment_id: row.id,
       crm_status:    row.crm_status,
+      enrolled_at:   row.enrolled_at as string,
       lead:          row.lead,
       campaign:      row.campaign,
       latest_send:   latestSend,
@@ -62,6 +63,13 @@ export async function GET(req: NextRequest) {
       notes:         notes ?? [],
     };
   }));
+
+  // Sort by most recent activity: reply time → last send time → enrollment time
+  threads.sort((a, b) => {
+    const aTime = a.replied_at ?? (a.latest_send as Record<string, string> | null)?.sent_at ?? a.enrolled_at;
+    const bTime = b.replied_at ?? (b.latest_send as Record<string, string> | null)?.sent_at ?? b.enrolled_at;
+    return bTime > aTime ? 1 : bTime < aTime ? -1 : 0;
+  });
 
   return NextResponse.json({ threads, total: count ?? 0 });
 }
