@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows } from "@/lib/outreach/api";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows, getSettings } from "@/lib/outreach/api";
 import AddToSequenceModal from "@/components/AddToSequenceModal";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
@@ -234,8 +234,16 @@ export default function CampaignWizardClient() {
   }
 
   useEffect(() => {
-    Promise.all([getInboxes(), getLists(), getTemplates()]).then(([i, l, t]) => {
+    Promise.all([
+      getInboxes(), getLists(), getTemplates(),
+      getSettings(),
+    ]).then(([i, l, t, ws]) => {
       setInboxes(i); setLists(l); setTemplates(t);
+      // Apply workspace defaults to new campaign
+      if (ws.default_timezone)  setTimezone(ws.default_timezone as string);
+      if (ws.default_send_start) setStartTime(ws.default_send_start as string);
+      if (ws.default_send_end)   setEndTime(ws.default_send_end as string);
+      if (ws.default_daily_limit) setDailyCap(Number(ws.default_daily_limit));
     });
   }, []);
 
