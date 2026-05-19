@@ -3,7 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import { enqueueVerifyBulk } from "@/lib/queue";
 
-const CREDITS_PER_VERIFY = 0.5;
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
@@ -33,7 +33,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const pendingCount    = unverifiedCount ?? 0;
   const alreadyVerified = (totalCount ?? 0) - pendingCount;
-  const creditsRequired = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
+  const { verify: rateVerify } = await getCreditRates();
+  const creditsRequired = Math.round(pendingCount * rateVerify * 10) / 10;
   const balance         = (ws?.lead_credits_balance as number) ?? 0;
 
   return NextResponse.json({ count: pendingCount, already_verified: alreadyVerified, credits_required: creditsRequired, balance });
@@ -90,7 +91,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "All leads in this list have already been verified" }, { status: 400 });
   }
 
-  const totalCost = Math.round(pendingCount * CREDITS_PER_VERIFY * 10) / 10;
+  const { verify: rateVerify } = await getCreditRates();
+  const totalCost = Math.round(pendingCount * rateVerify * 10) / 10;
 
   // Credit check
   const { data: ws } = await adminDb

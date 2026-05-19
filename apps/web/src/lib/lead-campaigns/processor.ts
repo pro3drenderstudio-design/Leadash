@@ -5,6 +5,7 @@ import { startLeadScraperRun, getApifyRunStatus, fetchApifyDataset, mapApifyReco
 import { verifyEmails as verifyEmailsReoon } from "./reoon";
 import { verifyEmails as verifyEmailsLeadash } from "./verifier";
 import { personalizeLeads } from "./gemini";
+import { getCreditRates } from "./credit-rates";
 import type { ApifyLeadScraperInput } from "@/types/lead-campaigns";
 
 export async function processLeadCampaign(campaignId: string): Promise<void> {
@@ -19,7 +20,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
   if (error || !campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (campaign.status === "completed" || campaign.status === "cancelled") return;
 
-  const apifyKey = process.env.APIFY_API_KEY;
+  const [apifyKey, rates] = [process.env.APIFY_API_KEY, await getCreditRates()];
 
   try {
     // ── Step 1: Scrape via Apify ──────────────────────────────────────────────
@@ -71,7 +72,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
 
           // Deduct scrape credits for what was actually inserted
           if (inserted > 0) {
-            await deductCredits(db, campaign.workspace_id, campaignId, inserted, "scrape");
+            await deductCredits(db, campaign.workspace_id, campaignId, inserted * rates.scrape, "scrape");
           }
 
           await db.from("lead_campaigns")
@@ -199,7 +200,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           }
         }
 
-        await deductCredits(db, fresh.workspace_id, campaignId, results.length * 0.5, "verify");
+        await deductCredits(db, fresh.workspace_id, campaignId, results.length * rates.verify, "verify");
         await db.from("lead_campaigns")
           .update({ total_verified: (fresh.total_verified ?? 0) + results.length })
           .eq("id", campaignId);
@@ -241,7 +242,7 @@ export async function processLeadCampaign(campaignId: string): Promise<void> {
           }
         }
 
-        await deductCredits(db, fresh2.workspace_id, campaignId, personalized * 0.5, "personalize");
+        await deductCredits(db, fresh2.workspace_id, campaignId, personalized * rates.first_line, "personalize");
         await db.from("lead_campaigns")
           .update({ total_personalized: (fresh2.total_personalized ?? 0) + personalized })
           .eq("id", campaignId);

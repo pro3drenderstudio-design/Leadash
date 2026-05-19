@@ -16,6 +16,10 @@ interface Settings {
   lead_credits_on_signup: number;
   support_email:          string;
   verifier_provider:      "reoon" | "leadash";
+  credit_rate_verify:     number;
+  credit_rate_discover:   number;
+  credit_rate_first_line: number;
+  credit_rate_scrape:     number;
 }
 
 interface Meta {
@@ -101,6 +105,10 @@ const DEFAULT_SETTINGS: Settings = {
   lead_credits_on_signup: 25,
   support_email:          "",
   verifier_provider:      "reoon",
+  credit_rate_verify:     1.0,
+  credit_rate_discover:   0.5,
+  credit_rate_first_line: 1.0,
+  credit_rate_scrape:     1.0,
 };
 
 export default function SettingsPage() {
@@ -400,6 +408,49 @@ export default function SettingsPage() {
             saving={savingSection === "verifier"}
             saved={savedSection === "verifier"}
             onClick={() => save("verifier", { verifier_provider: settings.verifier_provider })}
+          />
+        </div>
+      </div>
+
+      {/* ── Credit Rates ── */}
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-6">
+        <SectionHeader
+          title="Credit Rates"
+          description="Cost per lead for each billable action. Changes take effect immediately on the next operation."
+        />
+        {(
+          [
+            { key: "credit_rate_verify",     label: "Email verification",      description: "Credits charged per lead verified." },
+            { key: "credit_rate_discover",   label: "Discover reveal / export", description: "Credits charged per lead revealed or exported from Discover." },
+            { key: "credit_rate_first_line", label: "AI first-line enrichment", description: "Credits charged per lead personalized." },
+            { key: "credit_rate_scrape",     label: "Lead campaign scrape",     description: "Credits charged per lead scraped via Apify." },
+          ] as { key: keyof Settings; label: string; description: string }[]
+        ).map(({ key, label, description }) => (
+          <FieldRow key={key} label={label} description={description}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0.1}
+                max={100}
+                step={0.1}
+                value={settings[key] as number}
+                onChange={e => update(key, parseFloat(e.target.value) || 0)}
+                className="w-20 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-right"
+              />
+              <span className="text-sm text-slate-400 dark:text-white/30">cr / lead</span>
+            </div>
+          </FieldRow>
+        ))}
+        <div className="pt-4 flex justify-end">
+          <SaveButton
+            saving={savingSection === "credit_rates"}
+            saved={savedSection === "credit_rates"}
+            onClick={() => save("credit_rates", {
+              credit_rate_verify:     settings.credit_rate_verify,
+              credit_rate_discover:   settings.credit_rate_discover,
+              credit_rate_first_line: settings.credit_rate_first_line,
+              credit_rate_scrape:     settings.credit_rate_scrape,
+            })}
           />
         </div>
       </div>

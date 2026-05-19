@@ -18,7 +18,7 @@ const FAQS = [
       },
       {
         q: "How do credits work?",
-        a: "Credits are deducted per lead as they're processed — not upfront. Scraping costs 1 credit/lead, verification 1 credit/lead, and AI personalization 2 credits/lead. You can buy more credits from the credits page.",
+        a: "Credits are deducted per lead as they're processed — not upfront. Scraping costs 1 credit/lead, verification 1 credit/lead, and AI personalization 1 credit/lead. You can buy more credits from the credits page.",
       },
       {
         q: "Can I export leads to a sequence?",

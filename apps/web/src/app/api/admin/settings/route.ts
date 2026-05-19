@@ -22,6 +22,10 @@ const ALLOWED_KEYS = [
   "dedicated_ip_price_ngn",
   "dedicated_ip_price_usd",
   "verifier_provider",
+  "credit_rate_verify",
+  "credit_rate_discover",
+  "credit_rate_first_line",
+  "credit_rate_scrape",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];
@@ -96,6 +100,12 @@ export async function PATCH(req: NextRequest) {
       const n = Number(value);
       if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
         return NextResponse.json({ error: "lead_credits_on_signup must be between 0 and 1,000,000" }, { status: 400 });
+      }
+    }
+    if (["credit_rate_verify","credit_rate_discover","credit_rate_first_line","credit_rate_scrape"].includes(key)) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0 || n > 100) {
+        return NextResponse.json({ error: `${key} must be a positive number ≤ 100` }, { status: 400 });
       }
     }
   }

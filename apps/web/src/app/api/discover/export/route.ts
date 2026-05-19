@@ -5,7 +5,7 @@ import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
 import type { DiscoverExportRequest } from "@/types/discover";
 
-const CREDITS_PER_LEAD = 0.25;
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
   );
 
   const newIds = ids.filter(id => !revealMap.has(id));
-  const totalCost = Math.ceil(newIds.length * CREDITS_PER_LEAD * 10) / 10;
+  const { discover: rateDiscover } = await getCreditRates();
+  const totalCost = Math.ceil(newIds.length * rateDiscover * 10) / 10;
 
   // Credit check for unrevealed leads
   if (newIds.length > 0) {

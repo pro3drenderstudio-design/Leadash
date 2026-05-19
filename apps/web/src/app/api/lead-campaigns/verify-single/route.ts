@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyEmails as verifyEmailsReoon } from "@/lib/lead-campaigns/reoon";
 import { verifyEmails as verifyEmailsLeadash } from "@/lib/lead-campaigns/verifier";
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 // POST /api/lead-campaigns/verify-single
 export async function POST(req: NextRequest) {
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
     result = r;
   }
 
-  const cost = 0.5;
+  const { verify: rateVerify } = await getCreditRates();
+  const cost = rateVerify;
   const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
   if (ws && ws.lead_credits_balance >= cost) {
     await db.from("workspaces").update({

@@ -75,12 +75,39 @@ export async function DELETE(
   const { workspaceId } = auth;
   const { id: listId } = await params;
 
-  const { ids } = await req.json() as { ids: string[] };
+  const body = await req.json() as { ids?: string[]; all?: boolean; status?: string; search?: string };
+  const db   = createAdminClient();
+
+  // Verify list ownership
+  const { data: list } = await db.from("outreach_lists").select("id").eq("id", listId).eq("workspace_id", workspaceId).single();
+  if (!list) return NextResponse.json({ error: "List not found" }, { status: 404 });
+
+  if (body.all) {
+    // Delete all leads matching the current filter
+    let q = db.from("outreach_leads").delete()
+      .eq("list_id", listId)
+      .eq("workspace_id", workspaceId);
+
+    if (body.search) {
+      q = q.or(`email.ilike.%${body.search}%,first_name.ilike.%${body.search}%,last_name.ilike.%${body.search}%,company.ilike.%${body.search}%`);
+    }
+    switch (body.status) {
+      case "deliverable": q = q.in("verification_status", ["safe","valid","verified_external"]); break;
+      case "catch_all":   q = q.eq("verification_status", "catch_all");  break;
+      case "unknown":     q = q.eq("verification_status", "unknown");    break;
+      case "invalid":     q = q.in("verification_status", ["invalid","dangerous","disposable","risky"]); break;
+      case "unverified":  q = q.is("verified_at", null); break;
+    }
+
+    const { error } = await q;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  const { ids } = body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: "ids required" }, { status: 400 });
   }
-
-  const db = createAdminClient();
 
   const { error } = await db
     .from("outreach_leads")

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
 
-const CREDITS_PER_REVEAL = 0.25;
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
   );
 
   const newIds = ids.filter(id => !alreadyRevealed.has(id));
-  const totalCost = Math.ceil(newIds.length * CREDITS_PER_REVEAL * 10) / 10;
+  const { discover: rateDiscover } = await getCreditRates();
+  const totalCost = Math.ceil(newIds.length * rateDiscover * 10) / 10;
 
   // Credit check
   if (newIds.length > 0) {
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
           workspace_id: workspaceId,
           type:         "debit",
           amount:       totalCost,
-          description:  `Discover reveal — ${newIds.length} lead${newIds.length !== 1 ? "s" : ""} (0.25 credits each)`,
+          description:  `Discover reveal — ${newIds.length} lead${newIds.length !== 1 ? "s" : ""} (${rateDiscover} credits each)`,
         }),
       ]);
     }

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { personalizeLeads } from "@/lib/lead-campaigns/gemini";
-
-const COST_PER_LEAD = 0.5;
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 export async function POST(
   req: NextRequest,
@@ -38,7 +37,8 @@ export async function POST(
 
   if (!leads?.length) return NextResponse.json({ error: "No leads found" }, { status: 404 });
 
-  const cost = leads.length * COST_PER_LEAD;
+  const { first_line: rateFirstLine } = await getCreditRates();
+  const cost = leads.length * rateFirstLine;
 
   const { data: ws } = await db
     .from("workspaces")

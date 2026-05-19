@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { enqueueEnrichBulk } from "@/lib/queue";
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 import type { LeadInput } from "@/types/lead-campaigns";
 
-const MAX_LEADS     = 50_000;
-const COST_PER_LEAD = 0.5;
+const MAX_LEADS = 50_000;
 
 // POST /api/lead-campaigns/enrich
 // Validates, deducts credits, inserts a pending job row, enqueues to BullMQ.
@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   if (leads.length > MAX_LEADS)
     return NextResponse.json({ error: `Maximum ${MAX_LEADS.toLocaleString()} leads per batch` }, { status: 400 });
 
-  const cost = Math.ceil(leads.length * COST_PER_LEAD);
+  const { first_line: rateFirstLine } = await getCreditRates();
+  const cost = Math.ceil(leads.length * rateFirstLine);
 
   // Atomic check-and-deduct via DB function — prevents race conditions where
   // two concurrent requests both pass the balance check before either deducts.

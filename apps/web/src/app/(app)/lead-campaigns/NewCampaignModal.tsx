@@ -1,19 +1,23 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import {
-  CREDIT_COSTS, JOB_TITLES, SENIORITY_LEVELS, SENIORITY_API_VALUE,
+  JOB_TITLES, SENIORITY_LEVELS, SENIORITY_API_VALUE,
   JOB_FUNCTIONS, FUNCTION_API_VALUE,
   INDUSTRIES, EMPLOYEE_SIZES, COUNTRIES,
   type LeadCampaignMode, type ApifyLeadScraperInput,
   type ToneOfVoice, type PersonalizationDepth,
   type LeadCampaign,
 } from "@/types/lead-campaigns";
+import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
+
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
 
 interface Props {
   onClose:   () => void;
   onCreated: () => void;
   balance:   number;
+  rates?:    CreditRates;
 }
 
 type Step = 0 | 1 | 2 | 3;
@@ -448,7 +452,7 @@ function PreviewTable({ leads, loading }: { leads: PreviewLead[]; loading: boole
 }
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
-export default function NewCampaignModal({ onClose, onCreated, balance }: Props) {
+export default function NewCampaignModal({ onClose, onCreated, balance, rates = DEFAULT_RATES }: Props) {
   const [step, setStep]         = useState<Step>(0);
   const [tab, setTab]           = useState<TargetTab>("person");
   const [form, setForm]         = useState<WizardState>({ ...DEFAULT });
@@ -476,10 +480,10 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
 
   // Build cost dynamically so toggling aiEnabled updates the estimate in real-time
   const costPerLead =
-    (form.mode === "scrape" || form.mode === "full_suite" ? CREDIT_COSTS.scrape : 0) +
-    (form.mode === "verify_personalize" || form.mode === "full_suite" ? CREDIT_COSTS.verify : 0) +
+    (form.mode === "scrape" || form.mode === "full_suite" ? rates.scrape : 0) +
+    (form.mode === "verify_personalize" || form.mode === "full_suite" ? rates.verify : 0) +
     ((form.mode === "verify_personalize" || form.mode === "full_suite") && form.aiEnabled
-      ? CREDIT_COSTS.ai_personalize
+      ? rates.first_line
       : 0);
 
   const estimatedCost = form.totalResults * costPerLead;
@@ -622,7 +626,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-white font-semibold text-sm">Scrape Only</p>
-                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">1 cr / lead</span>
+                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">{rates.scrape} cr / lead</span>
                     </div>
                     <p className="text-white/40 text-xs mt-1 leading-relaxed">
                       Find new prospects matching your targeting criteria. Scrape emails, job titles, company info, and LinkedIn profiles.
@@ -649,7 +653,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   <div className="flex-1 min-w-0 pr-24">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-white font-semibold text-sm">Scrape + AI Personalize</p>
-                      <span className="text-xs text-orange-400 font-medium bg-orange-500/15 px-2 py-0.5 rounded-full flex-shrink-0">4 cr / lead</span>
+                      <span className="text-xs text-orange-400 font-medium bg-orange-500/15 px-2 py-0.5 rounded-full flex-shrink-0">{rates.scrape + rates.verify + rates.first_line} cr / lead</span>
                     </div>
                     <p className="text-white/40 text-xs mt-1 leading-relaxed">
                       Scrape leads then auto-generate a personalized first line for each prospect using AI — ready to drop into your sequences.
@@ -673,7 +677,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-white font-semibold text-sm">Verify + Personalize</p>
-                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">3 cr / lead</span>
+                      <span className="text-xs text-white/40 font-medium bg-white/8 px-2 py-0.5 rounded-full flex-shrink-0">{rates.verify + rates.first_line} cr / lead</span>
                     </div>
                     <p className="text-white/40 text-xs mt-1 leading-relaxed">
                       Upload your own leads or use a previous scrape campaign. Verify emails and generate AI personalization lines.
@@ -1016,7 +1020,7 @@ export default function NewCampaignModal({ onClose, onCreated, balance }: Props)
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">AI Verification & Personalization</p>
-                    <p className="text-white/40 text-xs">Costs {form.aiEnabled ? `${CREDIT_COSTS.ai_personalize} additional credits` : "0 additional credits"} per lead</p>
+                    <p className="text-white/40 text-xs">Costs {form.aiEnabled ? `${rates.first_line} additional credits` : "0 additional credits"} per lead</p>
                   </div>
                 </div>
                 <div

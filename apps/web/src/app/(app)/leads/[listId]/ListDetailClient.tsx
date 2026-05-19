@@ -113,6 +113,8 @@ export default function ListDetailClient({
   const [sortCol,     setSortCol]     = useState("created_at");
   const [sortOrder,   setSortOrder]   = useState<"asc" | "desc">("desc");
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
+  const [selectAll,   setSelectAll]   = useState(false);
+  const [exporting,   setExporting]   = useState(false);
   const [drawerLead,  setDrawerLead]  = useState<Lead | null>(null);
   const [copied,      setCopied]      = useState<string | null>(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
@@ -132,8 +134,8 @@ export default function ListDetailClient({
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset to page 1 on filter change
-  useEffect(() => { setPage(1); }, [debouncedQ, statusFilter]);
+  // Reset to page 1 and clear select-all on filter change
+  useEffect(() => { setPage(1); setSelectAll(false); setSelected(new Set()); }, [debouncedQ, statusFilter]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -159,20 +161,32 @@ export default function ListDetailClient({
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
-  const allSelected  = leads.length > 0 && leads.every(l => selected.has(l.id));
-  const someSelected = !allSelected && leads.some(l => selected.has(l.id));
+  const allOnPageSelected = leads.length > 0 && leads.every(l => selected.has(l.id));
+  const someSelected      = !allOnPageSelected && leads.some(l => selected.has(l.id));
+  const allSelected       = selectAll || allOnPageSelected;
+  const selectedCount     = selectAll ? total : selected.size;
+  const showBulkBar       = selected.size > 0 || selectAll;
 
   const toggleAll = () => {
-    const next = new Set(selected);
-    if (allSelected) leads.forEach(l => next.delete(l.id));
-    else             leads.forEach(l => next.add(l.id));
-    setSelected(next);
+    if (selectAll) {
+      setSelectAll(false);
+      setSelected(new Set());
+    } else if (allOnPageSelected) {
+      const next = new Set(selected);
+      leads.forEach(l => next.delete(l.id));
+      setSelected(next);
+    } else {
+      const next = new Set(selected);
+      leads.forEach(l => next.add(l.id));
+      setSelected(next);
+    }
   };
 
   const toggleLead = (id: string) => {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     setSelected(next);
+    if (selectAll) setSelectAll(false);
   };
 
   // ── Sort ───────────────────────────────────────────────────────────────────
@@ -185,21 +199,42 @@ export default function ListDetailClient({
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = async () => {
-    const ids = Array.from(selected);
-    await wsFetch(`/api/outreach/lists/${listId}/leads`, {
-      method: "DELETE",
-      body:   JSON.stringify({ ids }),
-    });
+    if (selectAll) {
+      await wsFetch(`/api/outreach/lists/${listId}/leads`, {
+        method: "DELETE",
+        body:   JSON.stringify({ all: true, status: statusFilter, search: debouncedQ }),
+      });
+    } else {
+      const ids = Array.from(selected);
+      await wsFetch(`/api/outreach/lists/${listId}/leads`, {
+        method: "DELETE",
+        body:   JSON.stringify({ ids }),
+      });
+    }
     setSelected(new Set());
+    setSelectAll(false);
     setConfirmDel(false);
     fetchLeads();
   };
 
   // ── Export ─────────────────────────────────────────────────────────────────
 
-  const handleExport = () => {
-    const target = selected.size > 0 ? leads.filter(l => selected.has(l.id)) : leads;
-    downloadCSV(leadsToCSV(target), `${listName.replace(/\s+/g,"_")}_leads.csv`);
+  const handleExport = async () => {
+    // Specific rows selected on current page → export just those
+    if (selected.size > 0 && !selectAll) {
+      const target = leads.filter(l => selected.has(l.id));
+      downloadCSV(leadsToCSV(target), `${listName.replace(/\s+/g,"_")}_leads.csv`);
+      return;
+    }
+    // Export all leads matching current filter
+    setExporting(true);
+    const sp = new URLSearchParams({ search: debouncedQ, status: statusFilter, sort: sortCol, order: sortOrder });
+    const res = await wsFetch(`/api/outreach/lists/${listId}/leads/export?${sp}`);
+    if (res.ok) {
+      const { leads: allLeads } = await res.json();
+      downloadCSV(leadsToCSV(allLeads), `${listName.replace(/\s+/g,"_")}_leads.csv`);
+    }
+    setExporting(false);
   };
 
   // ── AI First Lines ────────────────────────────────────────────────────────
@@ -265,9 +300,10 @@ export default function ListDetailClient({
         </div>
         <button
           onClick={handleExport}
-          className="px-3 py-1.5 text-white/45 hover:text-white/75 text-xs border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+          disabled={exporting}
+          className="px-3 py-1.5 text-white/45 hover:text-white/75 disabled:opacity-50 text-xs border border-white/10 hover:border-white/20 rounded-lg transition-colors"
         >
-          Export CSV
+          {exporting ? "Exporting…" : "Export CSV"}
         </button>
       </div>
 
@@ -307,25 +343,53 @@ export default function ListDetailClient({
       </div>
 
       {/* ── Bulk action bar ── */}
-      {selected.size > 0 && (
-        <div className="border-b border-indigo-500/20 bg-indigo-500/8 px-6 py-2.5 flex items-center gap-3 shrink-0">
-          <span className="text-indigo-300 text-sm font-medium">{selected.size.toLocaleString()} selected</span>
+      {showBulkBar && (
+        <div className="border-b border-indigo-500/20 bg-indigo-500/8 px-6 py-2.5 flex items-center gap-3 shrink-0 flex-wrap">
+          <span className="text-indigo-300 text-sm font-medium">{selectedCount.toLocaleString()} selected</span>
+
+          {/* Select-all-across-pages prompt */}
+          {allOnPageSelected && !selectAll && pages > 1 && (
+            <span className="text-white/40 text-xs">
+              All {leads.length} on this page.{" "}
+              <button
+                onClick={() => setSelectAll(true)}
+                className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"
+              >
+                Select all {total.toLocaleString()} leads
+              </button>
+            </span>
+          )}
+          {selectAll && (
+            <span className="text-white/40 text-xs">
+              All {total.toLocaleString()} leads selected.{" "}
+              <button
+                onClick={() => { setSelectAll(false); setSelected(new Set()); }}
+                className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"
+              >
+                Clear selection
+              </button>
+            </span>
+          )}
+
           <div className="flex items-center gap-2 ml-1">
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="px-3 py-1.5 bg-violet-500/15 hover:bg-violet-500/25 disabled:opacity-50 text-violet-400 text-xs font-semibold rounded-lg border border-violet-500/20 transition-colors flex items-center gap-1.5"
-            >
-              <span>{generating ? "Generating…" : "✨ Generate First Lines"}</span>
-              {selected.size > MAX_GENERATE && !generating && (
-                <span className="text-violet-500/60 font-normal">(first {MAX_GENERATE})</span>
-              )}
-            </button>
+            {!selectAll && (
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="px-3 py-1.5 bg-violet-500/15 hover:bg-violet-500/25 disabled:opacity-50 text-violet-400 text-xs font-semibold rounded-lg border border-violet-500/20 transition-colors flex items-center gap-1.5"
+              >
+                <span>{generating ? "Generating…" : "✨ Generate First Lines"}</span>
+                {selected.size > MAX_GENERATE && !generating && (
+                  <span className="text-violet-500/60 font-normal">(first {MAX_GENERATE})</span>
+                )}
+              </button>
+            )}
             <button
               onClick={handleExport}
-              className="px-3 py-1.5 bg-white/5 hover:bg-white/8 text-white/55 text-xs font-semibold rounded-lg border border-white/8 transition-colors"
+              disabled={exporting}
+              className="px-3 py-1.5 bg-white/5 hover:bg-white/8 disabled:opacity-50 text-white/55 text-xs font-semibold rounded-lg border border-white/8 transition-colors"
             >
-              Export
+              {exporting ? "Exporting…" : "Export"}
             </button>
             <button
               onClick={() => setConfirmDel(true)}
@@ -336,7 +400,7 @@ export default function ListDetailClient({
           </div>
           {genError && <span className="text-red-400 text-xs ml-2">{genError}</span>}
           <button
-            onClick={() => setSelected(new Set())}
+            onClick={() => { setSelected(new Set()); setSelectAll(false); }}
             className="ml-auto text-white/25 hover:text-white/55 transition-colors text-sm"
           >
             ✕
@@ -355,7 +419,7 @@ export default function ListDetailClient({
               <input
                 type="checkbox"
                 checked={allSelected}
-                ref={el => { if (el) el.indeterminate = someSelected; }}
+                ref={el => { if (el) el.indeterminate = someSelected && !selectAll; }}
                 onChange={toggleAll}
                 className="w-3.5 h-3.5 rounded border-white/20 bg-white/5 accent-indigo-500 cursor-pointer"
               />
@@ -520,7 +584,7 @@ export default function ListDetailClient({
       {confirmDel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-4">
-            <h2 className="text-white font-semibold">Remove {selected.size.toLocaleString()} lead{selected.size !== 1 ? "s" : ""}?</h2>
+            <h2 className="text-white font-semibold">Remove {selectedCount.toLocaleString()} lead{selectedCount !== 1 ? "s" : ""}?</h2>
             <p className="text-white/45 text-sm">This permanently removes them from this list. It cannot be undone.</p>
             <div className="flex gap-3 pt-1">
               <button onClick={() => setConfirmDel(false)} className="flex-1 px-4 py-2 text-white/50 hover:text-white/80 text-sm border border-white/10 hover:border-white/20 rounded-xl transition-colors">

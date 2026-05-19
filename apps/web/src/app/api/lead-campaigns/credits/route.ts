@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -10,13 +11,14 @@ export async function GET(req: NextRequest) {
   // Use admin client to bypass RLS on workspaces
   const admin = createAdminClient();
 
-  const [{ data: workspace }, { data: transactions }] = await Promise.all([
+  const [{ data: workspace }, { data: transactions }, rates] = await Promise.all([
     admin.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single(),
     admin.from("lead_credit_transactions")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(50),
+    getCreditRates(),
   ]);
 
   const totalBalance    = workspace?.lead_credits_balance ?? 0;
@@ -28,5 +30,6 @@ export async function GET(req: NextRequest) {
     monthly_credits:  monthlyCredits,
     lifetime_credits: lifetimeCredits,
     transactions:     transactions ?? [],
+    rates,
   });
 }

@@ -189,7 +189,8 @@ type BulkView = "upload" | "running" | "done";
 export default function VerifyEmailPage() {
   const [tab, setTab]         = useState<Tab>("verify");
   const [mode, setMode]       = useState<Mode>("single");
-  const [balance, setBalance] = useState<number | null>(null);
+  const [balance,     setBalance]     = useState<number | null>(null);
+  const [verifyRate,  setVerifyRate]  = useState<number>(1);
   const [creditsModal, setCreditsModal] = useState<{ needed: number; have: number } | null>(null);
 
   // ── Single ──
@@ -217,8 +218,8 @@ export default function VerifyEmailPage() {
   const [dlModal, setDlModal] = useState<{ results: VerifyResult[]; filename: string } | null>(null);
 
   useEffect(() => {
-    wsGet<{ balance: number }>("/api/lead-campaigns/credits")
-      .then(d => setBalance(d.balance)).catch(() => {});
+    wsGet<{ balance: number; rates?: { verify?: number } }>("/api/lead-campaigns/credits")
+      .then(d => { setBalance(d.balance); if (d.rates?.verify) setVerifyRate(d.rates.verify); }).catch(() => {});
   }, []);
 
   const loadJobs = useCallback(async () => {
@@ -302,7 +303,7 @@ export default function VerifyEmailPage() {
       const body = await res.json() as { job_id?: string; error?: string };
       if (!res.ok) { setBulkErr(body.error ?? res.statusText); setBulkView("upload"); return; }
       // Optimistic placeholder while worker starts
-      setActiveJob({ id: body.job_id!, status: "pending", total: bulkEmails.length, processed: 0, safe: 0, invalid: 0, catch_all: 0, risky: 0, dangerous: 0, disposable: 0, unknown: 0, credits_used: bulkEmails.length * 0.5, error: null, results: null, completed_at: null, expires_at: null, created_at: new Date().toISOString(), workspace_id: "" });
+      setActiveJob({ id: body.job_id!, status: "pending", total: bulkEmails.length, processed: 0, safe: 0, invalid: 0, catch_all: 0, risky: 0, dangerous: 0, disposable: 0, unknown: 0, credits_used: bulkEmails.length * verifyRate, error: null, results: null, completed_at: null, expires_at: null, created_at: new Date().toISOString(), workspace_id: "" });
       startPolling(body.job_id!);
     } catch (err) {
       setBulkErr(err instanceof Error ? err.message : "Failed to start job");
@@ -321,7 +322,7 @@ export default function VerifyEmailPage() {
   }
 
   const singleCfg = singleResult ? (STATUS_CFG[singleResult.status] ?? DEFAULT_CFG) : null;
-  const cost      = bulkEmails.length * 0.5;
+  const cost      = bulkEmails.length * verifyRate;
   const pct       = activeJob?.total ? Math.round(((activeJob.processed) / activeJob.total) * 100) : 0;
 
   return (
@@ -338,7 +339,7 @@ export default function VerifyEmailPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-white">Verify Email</h1>
-          <p className="text-white/40 text-sm mt-0.5">Check if addresses are valid and deliverable · 0.5cr each</p>
+          <p className="text-white/40 text-sm mt-0.5">Check if addresses are valid and deliverable · {verifyRate}cr each</p>
         </div>
         {balance !== null && <span className="text-amber-400 text-sm font-medium">{balance.toLocaleString()} credits</span>}
       </div>

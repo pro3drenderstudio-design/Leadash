@@ -435,7 +435,7 @@ function ListModal({ count, onClose, onConfirm }: {
 
 type DrawerTarget = { type: "person"; id: string } | { type: "company"; id: string };
 
-function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAddToList, onAddToSequence }: {
+function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAddToList, onAddToSequence, revealRate }: {
   id: string;
   onClose: () => void;
   onReveal: (id: string) => Promise<void>;
@@ -443,6 +443,7 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAd
   onViewPerson: (id: string) => void;
   onAddToList: (id: string) => void;
   onAddToSequence: (id: string) => void;
+  revealRate: number;
 }) {
   const [data, setData]         = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -557,7 +558,7 @@ function PersonDrawer({ id, onClose, onReveal, onViewCompany, onViewPerson, onAd
             <button onClick={handleReveal} disabled={revealing}
               className="flex items-center gap-1.5 text-[10px] text-orange-400 hover:text-orange-300 font-semibold transition-colors disabled:opacity-50">
               {revealing ? <Spinner sm /> : <LockIcon />}
-              Unlock · 0.25 cr
+              Unlock · {revealRate} cr
             </button>
           ) : (
             <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
@@ -933,6 +934,7 @@ function DiscoverContent() {
   const [bulkProgress,  setBulkProgress]  = useState<{ current: number; total: number; label: string } | null>(null);
   const isInitialRender = useRef(true);
   const [balance,       setBalance]       = useState<number | null>(null);
+  const [discoverRate,  setDiscoverRate]  = useState<number>(0.5);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
   const [showCampaign,  setShowCampaign]  = useState(false);
   const [campaignIds,   setCampaignIds]   = useState<string[] | null>(null);
@@ -976,6 +978,8 @@ function DiscoverContent() {
   useEffect(() => {
     wsGet<{ lead_credits_balance: number }>("/api/settings/workspace")
       .then(d => setBalance(d.lead_credits_balance ?? 0)).catch(() => {});
+    wsGet<{ rates?: { discover?: number } }>("/api/lead-campaigns/credits")
+      .then(d => { if (d.rates?.discover) setDiscoverRate(d.rates.discover); }).catch(() => {});
     wsGet<SavedSearch[]>("/api/discover/saved-searches")
       .then(d => setSavedSearches(d ?? [])).catch(() => {});
     setRecentSearches(loadRecent());
@@ -1401,7 +1405,7 @@ function DiscoverContent() {
   const unrevealed    = results.filter(r => selected.has(r.id) && !r.revealed);
   const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
   const unrevealedCount = selectAllMode ? selectedCount : unrevealed.length;
-  const revealCost  = Math.ceil(unrevealedCount * 0.25 * 10) / 10;
+  const revealCost  = Math.ceil(unrevealedCount * discoverRate * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort, className = "" }: {
     label: string; col: string | null;
@@ -1993,6 +1997,7 @@ function DiscoverContent() {
                 onViewPerson={pid => setDrawer({ type: "person", id: pid })}
                 onAddToSequence={id => { setCampaignIds([id]); setShowCampaign(true); }}
                 onAddToList={id => { setListIds([id]); setShowList(true); }}
+                revealRate={discoverRate}
               />
             ) : drawer?.type === "company" ? (
               <CompanyDrawer

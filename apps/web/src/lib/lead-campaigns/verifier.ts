@@ -11,7 +11,7 @@
 
 export interface VerifyResult {
   email:   string;
-  status:  "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
+  status:  "safe" | "valid" | "invalid" | "catch_all" | "disposable" | "unknown";
   score:   number;
   reason?: string;
 }

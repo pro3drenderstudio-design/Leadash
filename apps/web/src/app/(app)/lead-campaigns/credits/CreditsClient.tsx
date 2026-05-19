@@ -2,6 +2,9 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import type { LeadCreditTransaction } from "@/types/lead-campaigns";
+import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
+
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
 
 // Static display data — no env vars, safe for client bundle
 const CREDIT_PACKS = [
@@ -43,6 +46,7 @@ export default function CreditsClient() {
   const [monthly, setMonthly]           = useState(0);
   const [lifetime, setLifetime]         = useState(0);
   const [transactions, setTransactions] = useState<LeadCreditTransaction[]>([]);
+  const [rates, setRates]               = useState<CreditRates>(DEFAULT_RATES);
   const [loading, setLoading]           = useState(true);
   const [purchasing, setPurchasing]     = useState<string | null>(null);
   const [verifying, setVerifying]       = useState(false);
@@ -54,6 +58,7 @@ export default function CreditsClient() {
     setMonthly(d.monthly_credits ?? 0);
     setLifetime(d.lifetime_credits ?? 0);
     setTransactions(d.transactions ?? []);
+    if (d.rates) setRates(d.rates);
   }
 
   useEffect(() => {
@@ -132,7 +137,7 @@ export default function CreditsClient() {
           </div>
         )}
         <p className="text-white/30 text-xs">
-          Credits are used for scraping (1/lead), verification (1/lead), and personalization (2/lead)
+          Credits are used for scraping ({rates.scrape}/lead), verification ({rates.verify}/lead), and personalization ({rates.first_line}/lead)
         </p>
       </div>
 
@@ -179,12 +184,12 @@ export default function CreditsClient() {
         <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-3">Credit Costs</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
           {[
-            { label: "Scrape only",          cost: "1 cr / lead", color: "text-violet-400" },
-            { label: "Verify + Personalize", cost: "3 cr / lead", color: "text-amber-400"  },
-            { label: "Full Suite",           cost: "4 cr / lead", color: "text-orange-400"   },
+            { label: "Scrape only",          cost: rates.scrape,                                   color: "text-violet-400" },
+            { label: "Verify + Personalize", cost: rates.verify + rates.first_line,                color: "text-amber-400"  },
+            { label: "Full Suite",           cost: rates.scrape + rates.verify + rates.first_line, color: "text-orange-400" },
           ].map(r => (
             <div key={r.label}>
-              <p className={`text-lg font-bold ${r.color}`}>{r.cost}</p>
+              <p className={`text-lg font-bold ${r.color}`}>{r.cost} cr / lead</p>
               <p className="text-white/40 text-xs mt-0.5">{r.label}</p>
             </div>
           ))}

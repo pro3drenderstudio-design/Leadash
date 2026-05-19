@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { LeadCampaign } from "@/types/lead-campaigns";
 import { wsGet } from "@/lib/workspace/client";
 import NewCampaignModal from "./NewCampaignModal";
+import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
+
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   "bg-white/8 text-white/50",
@@ -30,16 +33,19 @@ export default function LeadCampaignsClient() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<LeadCampaign[]>([]);
   const [balance, setBalance]     = useState<number>(0);
+  const [rates, setRates]         = useState<CreditRates>(DEFAULT_RATES);
   const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   async function load() {
     const [campaigns, credits] = await Promise.all([
       wsGet<LeadCampaign[]>("/api/lead-campaigns"),
-      wsGet<{ balance: number }>("/api/lead-campaigns/credits"),
+      wsGet<{ balance: number; rates?: CreditRates }>("/api/lead-campaigns/credits"),
     ]).catch(() => [[], { balance: 0 }] as const);
     setCampaigns(campaigns as LeadCampaign[]);
-    setBalance((credits as { balance: number }).balance ?? 0);
+    const c = credits as { balance: number; rates?: CreditRates };
+    setBalance(c.balance ?? 0);
+    if (c.rates) setRates(c.rates);
     setLoading(false);
   }
 
@@ -177,6 +183,7 @@ export default function LeadCampaignsClient() {
           onClose={() => setShowModal(false)}
           onCreated={() => { setShowModal(false); load(); }}
           balance={balance}
+          rates={rates}
         />
       )}
     </div>

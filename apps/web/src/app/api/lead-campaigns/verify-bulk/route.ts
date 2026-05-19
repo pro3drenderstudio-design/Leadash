@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { enqueueVerifyBulk } from "@/lib/queue";
+import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
 const MAX_EMAILS = 50_000;
-const COST_PER   = 0.5;
 
 // POST /api/lead-campaigns/verify-bulk
 // Validates, deducts credits, inserts a pending job row, enqueues to BullMQ.
@@ -20,7 +20,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Maximum ${MAX_EMAILS.toLocaleString()} emails per batch` }, { status: 400 });
 
   const clean = [...new Set(emails.map((e: string) => e.trim().toLowerCase()).filter(e => e.includes("@")))];
-  const cost  = clean.length * COST_PER;
+  const { verify: rateVerify } = await getCreditRates();
+  const cost  = clean.length * rateVerify;
 
   // Check and deduct credits atomically
   const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
