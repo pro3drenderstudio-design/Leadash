@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { verifyEmails } from "@/lib/lead-campaigns/reoon";
+import { createAdminClient } from "@/lib/supabase/server";
+import { verifyEmails as verifyEmailsReoon } from "@/lib/lead-campaigns/reoon";
+import { verifyEmails as verifyEmailsLeadash } from "@/lib/lead-campaigns/verifier";
 
 // POST /api/lead-campaigns/verify-single
 export async function POST(req: NextRequest) {
@@ -12,10 +14,21 @@ export async function POST(req: NextRequest) {
   if (!email || !email.includes("@"))
     return NextResponse.json({ error: "A valid email address is required" }, { status: 400 });
 
-  const apiKey = process.env.REOON_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "REOON_API_KEY is not configured" }, { status: 500 });
+  const adminDb = createAdminClient();
+  const { data: pvRow } = await adminDb.from("admin_settings").select("value").eq("key", "verifier_provider").maybeSingle();
+  const provider = (pvRow?.value as string | null) ?? "reoon";
 
-  const [result] = await verifyEmails(apiKey, [email.trim().toLowerCase()]);
+  let result: { email: string; status: string; score: number };
+
+  if (provider === "leadash" && process.env.VERIFIER_URL) {
+    const [r] = await verifyEmailsLeadash([email.trim().toLowerCase()]);
+    result = r;
+  } else {
+    const apiKey = process.env.REOON_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: "REOON_API_KEY is not configured" }, { status: 500 });
+    const [r] = await verifyEmailsReoon(apiKey, [email.trim().toLowerCase()]);
+    result = r;
+  }
 
   const cost = 0.5;
   const { data: ws } = await db.from("workspaces").select("lead_credits_balance, subscription_credits_balance").eq("id", workspaceId).single();
