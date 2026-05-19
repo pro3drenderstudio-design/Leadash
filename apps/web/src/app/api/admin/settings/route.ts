@@ -21,6 +21,7 @@ const ALLOWED_KEYS = [
   "support_email",
   "dedicated_ip_price_ngn",
   "dedicated_ip_price_usd",
+  "verifier_provider",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];
@@ -60,6 +61,15 @@ export async function PATCH(req: NextRequest) {
 
   if (updates.length === 0) {
     return NextResponse.json({ error: "No valid keys provided" }, { status: 400 });
+  }
+
+  // Validate enum settings
+  for (const [key, value] of updates) {
+    if (key === "verifier_provider") {
+      if (value !== "reoon" && value !== "leadash") {
+        return NextResponse.json({ error: "verifier_provider must be 'reoon' or 'leadash'" }, { status: 400 });
+      }
+    }
   }
 
   // Validate numeric settings

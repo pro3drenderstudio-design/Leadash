@@ -3,8 +3,9 @@
 //   list mode  — list_id set, streams outreach_leads directly, updates them in-place
 //   email mode — emails[] stored in job row (standalone verify tool)
 //
-// Both modes now use Reoon's bulk API (up to 50k emails per task) instead of
-// individual requests. Progress is polled from Reoon every 15s.
+// Provider is determined at runtime from admin_settings.verifier_provider:
+//   "reoon"   (default) — Reoon's hosted bulk API
+//   "leadash"           — self-hosted verifier on Discover VPS
 
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
@@ -15,7 +16,9 @@ const CREDITS_PER     = 0.5;
 const POLL_MS         = 15_000; // how often to poll Reoon for task progress
 const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown
 
-const REOON_BASE = "https://emailverifier.reoon.com/api/v1";
+const REOON_BASE    = "https://emailverifier.reoon.com/api/v1";
+const LEADASH_BASE  = () => (process.env.VERIFIER_URL ?? "").replace(/\/$/, "");
+const LEADASH_SECRET = () => process.env.VERIFIER_SECRET ?? "";
 
 // Statuses the DB constraint allows; anything else falls back to "unknown"
 const ALLOWED_STATUSES = new Set([
@@ -106,16 +109,61 @@ function freshAccumulators() {
   return { batchSafe: 0, batchCatchAll: 0, batchInvalid: 0, batchRisky: 0, batchDangerous: 0, batchDisposable: 0, batchUnknown: 0 };
 }
 
+// ─── Leadash verifier bulk API ────────────────────────────────────────────────
+
+async function submitLeadashTask(emails: string[]): Promise<string> {
+  const res = await fetch(`${LEADASH_BASE()}/tasks`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "x-agent-secret": LEADASH_SECRET() },
+    body:    JSON.stringify({ emails }),
+    signal:  AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`Leadash verifier submit failed: HTTP ${res.status}`);
+  const d = await res.json() as Record<string, unknown>;
+  const taskId = d.task_id as string | undefined;
+  if (!taskId) throw new Error(`Leadash verifier submit: no task_id in response — ${JSON.stringify(d)}`);
+  return taskId;
+}
+
+async function pollLeadashTask(taskId: string): Promise<BulkPollResult> {
+  const res = await fetch(`${LEADASH_BASE()}/tasks/${encodeURIComponent(taskId)}`, {
+    headers: { "x-agent-secret": LEADASH_SECRET() },
+    signal:  AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`Leadash verifier poll failed: HTTP ${res.status}`);
+  return await res.json() as BulkPollResult;
+}
+
+// Resolve the active provider from admin_settings; falls back to "reoon"
+async function getVerifierProvider(db: ReturnType<typeof createClient>): Promise<"reoon" | "leadash"> {
+  try {
+    const { data } = await db
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "verifier_provider")
+      .maybeSingle();
+    if (data?.value === "leadash") return "leadash";
+  } catch { /* use default */ }
+  return "reoon";
+}
+
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<void> {
   const { job_id, workspace_id } = job.data;
-  const db     = getDb();
-  const apiKey = process.env.REOON_API_KEY;
+  const db       = getDb();
+  const provider = await getVerifierProvider(db);
+  const apiKey   = process.env.REOON_API_KEY;
 
-  if (!apiKey) {
+  if (provider === "reoon" && !apiKey) {
     await db.from("lead_verification_jobs")
       .update({ status: "failed", error: "REOON_API_KEY not configured" })
+      .eq("id", job_id);
+    return;
+  }
+  if (provider === "leadash" && !LEADASH_BASE()) {
+    await db.from("lead_verification_jobs")
+      .update({ status: "failed", error: "VERIFIER_URL not configured" })
       .eq("id", job_id);
     return;
   }
@@ -173,11 +221,13 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         const rows     = leads as LeadRow[];
         const emailMap = new Map(rows.map(r => [r.email.toLowerCase(), r]));
 
-        console.log(`[verify-bulk] ${job_id}: submitting ${rows.length} emails to Reoon bulk API`);
-        const taskId = await submitBulkTask(apiKey, rows.map(r => r.email));
+        console.log(`[verify-bulk] ${job_id}: submitting ${rows.length} emails via ${provider}`);
+        const taskId = provider === "leadash"
+          ? await submitLeadashTask(rows.map(r => r.email))
+          : await submitBulkTask(apiKey!, rows.map(r => r.email));
         console.log(`[verify-bulk] ${job_id}: task_id=${taskId}`);
 
-        // ── Poll until Reoon finishes ──────────────────────────────────────
+        // ── Poll until provider finishes ───────────────────────────────────
         const batchStart = processed;
         let   taskResult: BulkPollResult | null = null;
 
@@ -187,7 +237,9 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
           const { data: cc } = await db.from("lead_verification_jobs").select("status").eq("id", job_id).single();
           if (cc?.status === "cancelled") { console.log(`[verify-bulk] ${job_id}: cancelled during poll`); return; }
 
-          taskResult = await pollBulkTask(apiKey, taskId);
+          taskResult = provider === "leadash"
+            ? await pollLeadashTask(taskId)
+            : await pollBulkTask(apiKey!, taskId);
           console.log(`[verify-bulk] ${job_id}: poll status=${taskResult.status} ${taskResult.count_checked}/${taskResult.count_total} (${taskResult.progress_percentage}%)`);
 
           // Update progress display from Reoon's count
@@ -279,8 +331,10 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
       const emails = (jobRecord.emails as string[]) ?? [];
       if (!emails.length) throw new Error("No emails in job record");
 
-      console.log(`[verify-bulk] ${job_id}: submitting ${emails.length} emails to Reoon bulk API`);
-      const taskId = await submitBulkTask(apiKey, emails);
+      console.log(`[verify-bulk] ${job_id}: submitting ${emails.length} emails via ${provider}`);
+      const taskId = provider === "leadash"
+        ? await submitLeadashTask(emails)
+        : await submitBulkTask(apiKey!, emails);
       console.log(`[verify-bulk] ${job_id}: task_id=${taskId}`);
 
       // Poll until done
@@ -292,7 +346,9 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         const { data: cc } = await db.from("lead_verification_jobs").select("status").eq("id", job_id).single();
         if (cc?.status === "cancelled") { console.log(`[verify-bulk] ${job_id}: cancelled`); return; }
 
-        taskResult = await pollBulkTask(apiKey, taskId);
+        taskResult = provider === "leadash"
+          ? await pollLeadashTask(taskId)
+          : await pollBulkTask(apiKey!, taskId);
         console.log(`[verify-bulk] ${job_id}: poll status=${taskResult.status} ${taskResult.count_checked}/${taskResult.count_total} (${taskResult.progress_percentage}%)`);
 
         processed = taskResult.count_checked ?? 0;

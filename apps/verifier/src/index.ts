@@ -23,6 +23,7 @@ import express, { Request, Response, NextFunction } from "express";
 import { resolveMx } from "dns/promises";
 import { createConnection } from "net";
 import { DISPOSABLE_DOMAINS } from "./disposable";
+import { createTask, getTaskResponse } from "./tasks";
 
 const app  = express();
 const PORT = parseInt(process.env.PORT ?? "3002", 10);
@@ -287,7 +288,7 @@ app.post("/verify", async (req: Request, res: Response) => {
 
 /**
  * POST /verify/batch
- * Verify up to 50 emails with concurrency cap of 5.
+ * Synchronous single-email-style batch — up to 50 emails.
  * Body: { emails: string[] }
  */
 app.post("/verify/batch", async (req: Request, res: Response) => {
@@ -316,6 +317,39 @@ app.post("/verify/batch", async (req: Request, res: Response) => {
   }
 
   res.json({ results });
+});
+
+/**
+ * POST /tasks
+ * Submit a bulk verification task (up to 50 000 emails).
+ * Returns { task_id } immediately; poll GET /tasks/:id for progress.
+ * Body: { emails: string[] }
+ */
+app.post("/tasks", (req: Request, res: Response) => {
+  const { emails } = req.body as { emails: unknown };
+  if (!Array.isArray(emails) || emails.length === 0) {
+    res.status(400).json({ error: "emails must be a non-empty array" });
+    return;
+  }
+  if (emails.length > 50_000) {
+    res.status(400).json({ error: "Max 50 000 emails per task" });
+    return;
+  }
+  const task_id = createTask(emails as string[]);
+  console.log(`[task:${task_id}] created — ${emails.length} emails`);
+  res.json({ task_id });
+});
+
+/**
+ * GET /tasks/:id
+ * Poll bulk verification task status.
+ * Returns Reoon-compatible format:
+ * { status, count_total, count_checked, progress_percentage, results? }
+ */
+app.get("/tasks/:id", (req: Request, res: Response) => {
+  const task = getTaskResponse(req.params.id);
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+  res.json(task);
 });
 
 /**

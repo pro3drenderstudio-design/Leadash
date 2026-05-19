@@ -15,6 +15,7 @@ interface Settings {
   default_plan:           string;
   lead_credits_on_signup: number;
   support_email:          string;
+  verifier_provider:      "reoon" | "leadash";
 }
 
 interface Meta {
@@ -99,6 +100,7 @@ const DEFAULT_SETTINGS: Settings = {
   default_plan:           "free",
   lead_credits_on_signup: 25,
   support_email:          "",
+  verifier_provider:      "reoon",
 };
 
 export default function SettingsPage() {
@@ -358,6 +360,46 @@ export default function SettingsPage() {
             saving={savingSection === "support"}
             saved={savedSection === "support"}
             onClick={() => save("support", { support_email: settings.support_email })}
+          />
+        </div>
+      </div>
+
+      {/* ── Email Verification ── */}
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-6">
+        <SectionHeader
+          title="Email Verification"
+          description="Choose the provider used for bulk email verification jobs."
+        />
+        <FieldRow
+          label="Verification provider"
+          description="Switch to Leadash Verifier (self-hosted) to avoid Reoon API costs. Switch back to Reoon instantly if issues arise."
+        >
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-white/10 rounded-lg">
+            {(["reoon", "leadash"] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => update("verifier_provider", p)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  settings.verifier_provider === p
+                    ? "bg-white dark:bg-white/20 text-slate-800 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60"
+                }`}
+              >
+                {p === "reoon" ? "Reoon" : "Leadash Verifier"}
+              </button>
+            ))}
+          </div>
+        </FieldRow>
+        {settings.verifier_provider === "leadash" && (
+          <div className="mt-3 px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+            Leadash Verifier requires <code className="font-mono">VERIFIER_URL</code> and <code className="font-mono">VERIFIER_SECRET</code> env vars on the worker VPS, and port 25 outbound must be open on the Discover VPS.
+          </div>
+        )}
+        <div className="pt-4 flex justify-end">
+          <SaveButton
+            saving={savingSection === "verifier"}
+            saved={savedSection === "verifier"}
+            onClick={() => save("verifier", { verifier_provider: settings.verifier_provider })}
           />
         </div>
       </div>
