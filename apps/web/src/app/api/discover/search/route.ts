@@ -161,12 +161,24 @@ export async function GET(req: NextRequest) {
 
     if (netNew) {
       const adminDb = createAdminClient();
-      const { data: existingLeads } = await adminDb
-        .from("outreach_leads")
-        .select("email")
-        .eq("workspace_id", workspaceId)
-        .not("email", "is", null);
-      const existingEmails = (existingLeads ?? []).map((r: { email: string }) => r.email.toLowerCase()).filter(Boolean);
+      const [{ data: poolLeads }, { data: campaignLeads }] = await Promise.all([
+        adminDb
+          .from("outreach_leads")
+          .select("email")
+          .eq("workspace_id", workspaceId)
+          .not("email", "is", null)
+          .limit(200000),
+        adminDb
+          .from("lead_campaign_leads")
+          .select("email")
+          .eq("workspace_id", workspaceId)
+          .not("email", "is", null)
+          .limit(200000),
+      ]);
+      const existingEmails = Array.from(new Set([
+        ...(poolLeads     ?? []).map((r: { email: string }) => r.email.toLowerCase()),
+        ...(campaignLeads ?? []).map((r: { email: string }) => r.email.toLowerCase()),
+      ])).filter(Boolean);
       if (existingEmails.length > 0) {
         conditions.push(`lower(p.email) NOT IN (SELECT unnest($${i}::text[]))`);
         params.push(existingEmails);

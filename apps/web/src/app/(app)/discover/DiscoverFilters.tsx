@@ -711,21 +711,17 @@ export function PeopleSidebar({
       <AiFilterBar mode="people" onApply={onAiApply} />
 
       {/* Net New */}
-      <div className="border-b border-white/[0.06] px-4 py-3">
-        <label className="flex items-center justify-between cursor-pointer group">
-          <div>
-            <p className="text-[11px] font-semibold text-white/55 uppercase tracking-wider">Net New Only</p>
-            <p className="text-[10px] text-white/30 mt-0.5">Exclude leads already in your lists</p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={filters.netNew}
-            onClick={() => set("netNew", !filters.netNew)}
-            className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${filters.netNew ? "bg-orange-500" : "bg-white/10"}`}
-          >
-            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${filters.netNew ? "translate-x-4" : "translate-x-0.5"}`} />
-          </button>
-        </label>
+      <div
+        className="border-b border-white/[0.06] px-4 py-3 flex items-center justify-between cursor-pointer"
+        onClick={() => set("netNew", !filters.netNew)}
+      >
+        <div>
+          <p className="text-[11px] font-semibold text-white/55 uppercase tracking-wider">Net New Only</p>
+          <p className="text-[10px] text-white/30 mt-0.5">Exclude leads already in your lists</p>
+        </div>
+        <div className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors flex-shrink-0 ${filters.netNew ? "bg-orange-500" : "bg-white/15"}`}>
+          <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${filters.netNew ? "translate-x-4" : "translate-x-0"}`} />
+        </div>
       </div>
 
       {/* Email Status */}
