@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import LeadDrawer from "./LeadDrawer";
+import { wsFetch } from "@/lib/workspace/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export default function ListDetailClient({
       sort:     sortCol,
       order:    sortOrder,
     });
-    const res = await fetch(`/api/outreach/lists/${listId}/leads?${sp}`);
+    const res = await wsFetch(`/api/outreach/lists/${listId}/leads?${sp}`);
     if (res.ok) {
       const d = await res.json();
       setLeads(d.leads ?? []);
@@ -185,10 +186,9 @@ export default function ListDetailClient({
 
   const handleDelete = async () => {
     const ids = Array.from(selected);
-    await fetch(`/api/outreach/lists/${listId}/leads`, {
-      method:  "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ ids }),
+    await wsFetch(`/api/outreach/lists/${listId}/leads`, {
+      method: "DELETE",
+      body:   JSON.stringify({ ids }),
     });
     setSelected(new Set());
     setConfirmDel(false);
@@ -208,10 +208,9 @@ export default function ListDetailClient({
     const ids = Array.from(selected).slice(0, MAX_GENERATE);
     setGenerating(true);
     setGenError(null);
-    const res = await fetch(`/api/outreach/lists/${listId}/leads/first-lines`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ ids }),
+    const res = await wsFetch(`/api/outreach/lists/${listId}/leads/first-lines`, {
+      method: "POST",
+      body:   JSON.stringify({ ids }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -229,10 +228,9 @@ export default function ListDetailClient({
     if (!firstLineModal) return;
     setSaving(true);
     const updates = firstLineModal.map(r => ({ id: r.id, first_line: editedLines[r.id] ?? r.first_line }));
-    await fetch(`/api/outreach/lists/${listId}/leads/first-lines`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ updates }),
+    await wsFetch(`/api/outreach/lists/${listId}/leads/first-lines`, {
+      method: "PATCH",
+      body:   JSON.stringify({ updates }),
     });
     setSaving(false);
     setFirstLineModal(null);
