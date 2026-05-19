@@ -233,9 +233,31 @@ async function verifySingle(email: string): Promise<VerifyResult> {
     }
   }
 
-  // 3b. Major provider — skip SMTP (it will always be inconclusive from unknown IPs)
+  // 3b. Major provider by direct domain — skip SMTP
   if (MAJOR_PROVIDERS.has(domain)) {
     return { ...base, status: "valid", score: 90, reason: "major_provider_mx_verified" };
+  }
+
+  // 3c. Custom domain hosted by major provider (Google Workspace, Microsoft 365, Zoho, etc.)
+  // Detect via MX host — SMTP probing always fails from unknown IPs for these.
+  function isMajorMx(mx: string): boolean {
+    const h = mx.toLowerCase();
+    return (
+      h === "aspmx.l.google.com"              ||
+      h.endsWith(".aspmx.l.google.com")       ||
+      h.endsWith(".googlemail.com")           ||
+      h.endsWith(".mail.protection.outlook.com") ||
+      h.endsWith(".yahoodns.net")             ||
+      h.endsWith(".zoho.com")                 ||
+      h.endsWith(".zoho.eu")                  ||
+      h.endsWith(".zoho.in")                  ||
+      h.endsWith(".mimecast.com")             ||
+      h.endsWith(".pphosted.com")             ||
+      h.endsWith(".ppe-hosted.com")
+    );
+  }
+  if (isMajorMx(mxHost)) {
+    return { ...base, status: "valid", score: 90, reason: "major_provider_mx_hosted" };
   }
 
   // 4. Catch-all detection (probe with random address)

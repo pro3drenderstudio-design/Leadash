@@ -35,6 +35,25 @@ const MAJOR_PROVIDERS = new Set([
   "yandex.com", "yandex.ru", "mail.ru", "inbox.ru",
 ]);
 
+// Detect custom domains hosted by major providers via their MX host suffix.
+// e.g. malik@proplan-studio.com → MX aspmx.l.google.com → Google Workspace → "safe"
+function isMajorProviderMx(mxHost: string): boolean {
+  const h = mxHost.toLowerCase();
+  return (
+    h === "aspmx.l.google.com"              ||  // Google Workspace primary
+    h.endsWith(".aspmx.l.google.com")       ||  // Google Workspace alt MX
+    h.endsWith(".googlemail.com")           ||  // older Google hosted
+    h.endsWith(".mail.protection.outlook.com") || // Microsoft 365 / Exchange Online
+    h.endsWith(".yahoodns.net")             ||  // Yahoo Business
+    h.endsWith(".zoho.com")                 ||  // Zoho Mail (mx.zoho.com, mx2.zoho.com)
+    h.endsWith(".zoho.eu")                  ||  // Zoho Mail EU
+    h.endsWith(".zoho.in")                  ||  // Zoho Mail India
+    h.endsWith(".mimecast.com")             ||  // Mimecast (blocks SMTP probing)
+    h.endsWith(".pphosted.com")             ||  // Proofpoint (blocks SMTP probing)
+    h.endsWith(".ppe-hosted.com")              // Proofpoint enterprise
+  );
+}
+
 export type BulkResultMap = Record<string, { status: string; overall_score: number }>;
 
 // ─── SMTP multi-RCPT probe ────────────────────────────────────────────────────
@@ -161,8 +180,14 @@ async function verifyDomainGroup(
     return emails.map(e => ({ email: e, status: "invalid", overall_score: 5 }));
   }
 
-  // Major provider — MX verified, skip SMTP probe
+  // Direct domain match (e.g. @gmail.com, @outlook.com)
   if (MAJOR_PROVIDERS.has(domain)) {
+    return emails.map(e => ({ email: e, status: "safe", overall_score: 88 }));
+  }
+
+  // Custom domain hosted by a major provider (Google Workspace, Microsoft 365, etc.)
+  // SMTP probing these always fails from unknown IPs — detect via MX host instead.
+  if (isMajorProviderMx(mxHost)) {
     return emails.map(e => ({ email: e, status: "safe", overall_score: 88 }));
   }
 
