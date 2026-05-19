@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
 
     const { data: insertedLeads, error: insertError } = await adminDb
       .from("outreach_leads")
-      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: false })
+      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: true })
       .select("id, email");
 
     if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }
@@ -282,7 +282,7 @@ export async function POST(req: NextRequest) {
 
     const { data: insertedLeads, error: insertError } = await adminDb
       .from("outreach_leads")
-      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: false })
+      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: true })
       .select("id, email");
 
     if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }

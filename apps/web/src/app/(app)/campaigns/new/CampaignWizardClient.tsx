@@ -1,12 +1,11 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows, getSettings } from "@/lib/outreach/api";
-import AddToSequenceModal from "@/components/AddToSequenceModal";
+import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows, getSettings, enrollLeads } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
-import { getWorkspaceId } from "@/lib/workspace/client";
+import { getWorkspaceId, wsFetch } from "@/lib/workspace/client";
 import RichEmailEditor from "@/components/RichEmailEditor";
 import VariableInput from "@/components/VariableInput";
 import SpamCheckerPanel from "@/components/SpamCheckerPanel";
@@ -68,7 +67,8 @@ export default function CampaignWizardClient() {
 
   // Step 2 fields
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
-  const [enrollModal, setEnrollModal]     = useState<{ campaignId: string; listIds: string[] } | null>(null);
+  const [listTierPrefs,  setListTierPrefs]  = useState<Record<string, Set<string>>>({});
+  const [listStatusCounts, setListStatusCounts] = useState<Record<string, Record<string, number>>>({});
 
   // Inline lead import
   const [showImport, setShowImport]         = useState(false);
@@ -255,7 +255,24 @@ export default function CampaignWizardClient() {
     setSelectedInboxes((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
   function toggleList(id: string) {
+    const adding = !selectedLists.includes(id);
     setSelectedLists((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    if (adding) {
+      // Set default tier prefs and fetch status counts for this list
+      setListTierPrefs(p => ({ ...p, [id]: new Set(["deliverable", "catch_all"]) }));
+      wsFetch(`/api/outreach/lists/${id}/status-counts`)
+        .then(r => r.json())
+        .then(d => setListStatusCounts(p => ({ ...p, [id]: d.counts ?? {} })))
+        .catch(() => {});
+    }
+  }
+
+  function toggleListTier(listId: string, tierId: string) {
+    setListTierPrefs(p => {
+      const next = new Set(p[listId] ?? new Set(["deliverable", "catch_all"]));
+      next.has(tierId) ? next.delete(tierId) : next.add(tierId);
+      return { ...p, [listId]: next };
+    });
   }
   function toggleDay(d: string) {
     setSendDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
@@ -359,7 +376,10 @@ export default function CampaignWizardClient() {
       const list = await createList(listName);
       const result = await importLeadRows(list.id, importParsed);
       setImportResult({ imported: result.imported, skipped: (result.skipped_duplicate ?? 0) + (result.skipped_unsubscribed ?? 0), total: importParsed.length });
-      setSelectedLists(prev => prev.includes(list.id) ? prev : [...prev, list.id]);
+      if (!selectedLists.includes(list.id)) {
+        setSelectedLists(prev => [...prev, list.id]);
+        setListTierPrefs(p => ({ ...p, [list.id]: new Set(["deliverable", "catch_all"]) }));
+      }
       setLists(prev => [{ ...list, lead_count: result.imported }, ...prev]);
       setImportName(""); setImportFile(null); setImportText(""); setImportParsed([]);
       setTimeout(() => { setShowImport(false); setImportResult(null); }, 3000);
@@ -481,10 +501,21 @@ export default function CampaignWizardClient() {
         subject_template_b: s.subject_template_b || null,
       })));
 
-      // Open status-filter modal — user picks which tiers to enroll
-      setSaving(false);
-      setEnrollModal({ campaignId: campaign.id, listIds: selectedLists });
-      return;
+      // Auto-enroll each list with the tier prefs the user chose in Step 1
+      const TIER_STATUSES: Record<string, string[]> = {
+        deliverable: ["safe", "valid", "verified_external"],
+        catch_all:   ["catch_all"],
+        unknown:     ["unknown"],
+        unverified:  ["pending"],
+        risky:       ["risky"],
+      };
+      await Promise.all(selectedLists.map(listId => {
+        const prefs = listTierPrefs[listId] ?? new Set(["deliverable", "catch_all"]);
+        const statuses = Array.from(prefs).flatMap(tid => TIER_STATUSES[tid] ?? []);
+        return statuses.length > 0 ? enrollLeads(campaign.id, [listId], statuses) : Promise.resolve();
+      }));
+
+      router.push(`/campaigns/${campaign.id}?enrolled=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create campaign");
       setSaving(false);
@@ -495,14 +526,6 @@ export default function CampaignWizardClient() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      {enrollModal && (
-        <AddToSequenceModal
-          campaignId={enrollModal.campaignId}
-          listIds={enrollModal.listIds}
-          onClose={() => { setEnrollModal(null); router.push(`/campaigns/${enrollModal.campaignId}?enrolled=1`); }}
-          onEnrolled={() => { setEnrollModal(null); router.push(`/campaigns/${enrollModal.campaignId}?enrolled=1`); }}
-        />
-      )}
       {/* Progress */}
       <div className="flex items-center gap-2 mb-8">
         {STEP_LABELS.map((label, i) => (
@@ -794,18 +817,56 @@ export default function CampaignWizardClient() {
           {/* Existing lists */}
           {lists.length > 0 && (
             <div className="space-y-2">
-              {lists.map((list) => (
-                <label key={list.id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${selectedLists.includes(list.id) ? "border-orange-500/40 bg-orange-500/10" : "border-white/8 bg-white/3 hover:bg-white/5"}`}>
-                  <input type="checkbox" checked={selectedLists.includes(list.id)} onChange={() => toggleList(list.id)} className="accent-orange-500" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm font-medium">{list.name}</div>
-                    <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
+              {lists.map((list) => {
+                const isSelected = selectedLists.includes(list.id);
+                const prefs = listTierPrefs[list.id] ?? new Set(["deliverable", "catch_all"]);
+                const cts   = listStatusCounts[list.id] ?? {};
+                const SELECTABLE_TIERS = [
+                  { id: "deliverable", label: "Deliverable", dot: "bg-emerald-500",  statuses: ["safe","valid","verified_external"] },
+                  { id: "catch_all",   label: "Catch-all",   dot: "bg-amber-400",    statuses: ["catch_all"] },
+                  { id: "unknown",     label: "Unknown",     dot: "bg-white/30",     statuses: ["unknown"] },
+                  { id: "unverified",  label: "Unverified",  dot: "bg-white/20",     statuses: ["pending"] },
+                  { id: "risky",       label: "Risky",       dot: "bg-orange-400",   statuses: ["risky"] },
+                ];
+                return (
+                  <div key={list.id} className={`rounded-xl border transition-all ${isSelected ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}>
+                    <label className="flex items-center gap-3 p-4 cursor-pointer">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleList(list.id)} className="accent-orange-500" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium">{list.name}</div>
+                        <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
+                      </div>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                      )}
+                    </label>
+                    {isSelected && (
+                      <div className="px-4 pb-3 border-t border-white/[0.06] pt-3">
+                        <p className="text-[11px] text-white/30 mb-2">Enroll leads by status:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {SELECTABLE_TIERS.map(tier => {
+                            const count = tier.statuses.reduce((s, st) => s + (cts[st] ?? 0), 0);
+                            if (!count) return null;
+                            const on = prefs.has(tier.id);
+                            return (
+                              <button
+                                key={tier.id}
+                                type="button"
+                                onClick={() => toggleListTier(list.id, tier.id)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${on ? "bg-orange-500/15 border-orange-500/40 text-white" : "bg-white/4 border-white/10 text-white/40 hover:bg-white/8"}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${tier.dot}`} />
+                                {tier.label}
+                                <span className={`tabular-nums ${on ? "text-white/60" : "text-white/25"}`}>{count.toLocaleString()}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {selectedLists.includes(list.id) && (
-                    <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                  )}
-                </label>
-              ))}
+                );
+              })}
             </div>
           )}
 
