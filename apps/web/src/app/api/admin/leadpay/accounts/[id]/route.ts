@@ -19,13 +19,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: account, error } = await db
     .from("leadpay_accounts")
-    .select("*, workspace:workspaces(name), bank_accounts:leadpay_bank_accounts(*)")
+    .select("*, workspace:workspaces(name)")
     .eq("id", id)
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ account });
+
+  const { data: bankAccounts } = await db
+    .from("leadpay_bank_accounts")
+    .select("*")
+    .eq("workspace_id", account.workspace_id)
+    .order("created_at", { ascending: true });
+
+  return NextResponse.json({ account: { ...account, bank_accounts: bankAccounts ?? [] } });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
