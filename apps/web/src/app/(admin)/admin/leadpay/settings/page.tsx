@@ -28,7 +28,7 @@ export default function AdminLeadPaySettingsPage() {
   useEffect(() => {
     fetch("/api/admin/leadpay/settings")
       .then(r => r.json() as Promise<{ settings: Settings }>)
-      .then(d => { setSettings(d.settings); setDraft(d.settings); })
+      .then(d => { setSettings(d.settings ?? {}); setDraft(d.settings ?? {}); })
       .finally(() => setLoading(false));
   }, []);
 

@@ -30,8 +30,8 @@ function TxInner() {
     if (typeFilter !== "all") params.set("type", typeFilter);
     const res  = await fetch(`/api/admin/leadpay/transactions?${params}`);
     const data = await res.json() as { transactions: LeadPayTransaction[]; total: number };
-    setTransactions(data.transactions);
-    setTotal(data.total);
+    setTransactions(data.transactions ?? []);
+    setTotal(data.total ?? 0);
     setLoading(false);
   }, [page, search, typeFilter]);
 

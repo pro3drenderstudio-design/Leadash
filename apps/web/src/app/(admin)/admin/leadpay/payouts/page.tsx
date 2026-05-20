@@ -32,8 +32,8 @@ function PayoutsInner() {
     if (statusFilter !== "all") params.set("status", statusFilter);
     const res  = await fetch(`/api/admin/leadpay/payouts?${params}`);
     const data = await res.json() as { payouts: PayoutWithMeta[]; total: number };
-    setPayouts(data.payouts);
-    setTotal(data.total);
+    setPayouts(data.payouts ?? []);
+    setTotal(data.total ?? 0);
     setLoading(false);
   }, [page, statusFilter]);
 

@@ -46,8 +46,8 @@ function AccountsInner() {
     if (kycFilter !== "all") params.set("kyc_status", kycFilter);
     const res  = await fetch(`/api/admin/leadpay/accounts?${params}`);
     const data = await res.json() as { accounts: Account[]; total: number };
-    setAccounts(data.accounts);
-    setTotal(data.total);
+    setAccounts(data.accounts ?? []);
+    setTotal(data.total ?? 0);
     setLoading(false);
   }, [page, search, kycFilter]);
 
