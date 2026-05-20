@@ -17,14 +17,22 @@ export default function AdminLeadPayAccountDetailPage() {
   const router  = useRouter();
   const [account, setAccount]     = useState<(LeadPayAccount & { workspace?: { name: string }; bank_accounts?: LeadPayBankAccount[] }) | null>(null);
   const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionBusy, setBusy]     = useState(false);
   const [rejectReason, setReject] = useState("");
   const [showReject, setShowReject] = useState(false);
 
   useEffect(() => {
     fetch(`/api/admin/leadpay/accounts/${id}`)
-      .then(r => r.json() as Promise<{ account: LeadPayAccount & { workspace?: { name: string }; bank_accounts?: LeadPayBankAccount[] } }>)
-      .then(d => setAccount(d.account))
+      .then(async r => {
+        const d = await r.json() as { account?: LeadPayAccount & { workspace?: { name: string }; bank_accounts?: LeadPayBankAccount[] }; error?: string };
+        if (!r.ok || !d.account) {
+          setLoadError(d.error ?? `HTTP ${r.status}`);
+        } else {
+          setAccount(d.account);
+        }
+      })
+      .catch(e => setLoadError(String(e)))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -45,7 +53,12 @@ export default function AdminLeadPayAccountDetailPage() {
     return <div className="max-w-3xl mx-auto px-6 py-8 space-y-4">{[1,2,3].map(i => <div key={i} className="h-16 bg-white/4 rounded-xl animate-pulse" />)}</div>;
   }
   if (!account) {
-    return <div className="max-w-3xl mx-auto px-6 py-8 text-center text-white/40">Account not found</div>;
+    return (
+      <div className="max-w-3xl mx-auto px-6 py-8 text-center space-y-2">
+        <p className="text-white/40">Account not found</p>
+        {loadError && <p className="text-red-400/70 text-xs font-mono">{loadError}</p>}
+      </div>
+    );
   }
 
   const name = account.business_name ?? [account.legal_first_name, account.legal_last_name].filter(Boolean).join(" ") ?? "—";
