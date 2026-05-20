@@ -27,6 +27,9 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
+  const { data: acct } = await db.from("leadpay_accounts").select("status").eq("workspace_id", workspaceId).maybeSingle();
+  if (acct?.status === "suspended") return NextResponse.json({ error: "Account suspended" }, { status: 403 });
+
   const body = await req.json() as Record<string, unknown>;
   const usdCents       = parseInt(String(body.usd_amount_cents ?? 0));
   const bankAccountId  = body.bank_account_id as string | undefined;
