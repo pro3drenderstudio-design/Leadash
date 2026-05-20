@@ -16,6 +16,7 @@ export interface ConversationMessage {
   sent_at?: string | null;
   opened_at?: string | null;
   clicked_at?: string | null;
+  bounced_at?: string | null;
   to_email?: string | null;
   // reply fields
   body_text?: string | null;

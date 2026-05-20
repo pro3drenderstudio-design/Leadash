@@ -103,13 +103,19 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
   return (
     <div className="flex flex-col items-end">
       <div className="max-w-[82%] w-full">
-        <div className="flex items-center justify-end gap-2 mb-1">
+        <div className="flex items-center justify-end gap-2 mb-1 flex-wrap">
           {(msg.inbox_label || msg.inbox_email) && (
             <span className="text-white/20 text-[10px]">via {msg.inbox_label || msg.inbox_email}</span>
           )}
           <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
-          {msg.opened_at && <span className="text-white/30 text-[10px]">Opened</span>}
-          {msg.clicked_at && <span className="text-white/30 text-[10px]">Clicked</span>}
+          {msg.status === "bounced" && (
+            <span className="text-red-400/80 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">Bounced</span>
+          )}
+          {msg.status === "failed" && (
+            <span className="text-orange-400/80 text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20">Failed</span>
+          )}
+          {msg.opened_at && <span className="text-emerald-400/60 text-[10px]">Opened</span>}
+          {msg.clicked_at && <span className="text-blue-400/60 text-[10px]">Clicked</span>}
           <span className="text-white/40 text-[10px] font-medium">You</span>
         </div>
         <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>
