@@ -248,9 +248,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         setLoadError(e instanceof Error ? e.message : String(e));
         setLoading(false);
       });
+    // Always load analytics on mount so overview pills (bounced/unsubscribed/clicked/completed) are accurate
+    getCampaignAnalytics(campaignId)
+      .then(a => { setAnalytics(a); setAnalyticsLoading(false); })
+      .catch(e => { setAnalyticsError(e instanceof Error ? e.message : String(e)); setAnalyticsLoading(false); });
   }, [campaignId]);
 
-  // Load analytics when tab changes to analytics/queue
+  // Load analytics when tab changes to analytics/queue (if not already loaded)
   useEffect(() => {
     if ((tab === "analytics" || tab === "queue") && !analytics && !analyticsError) {
       setAnalyticsLoading(true);
@@ -1206,10 +1210,10 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           {/* Secondary pills */}
           <div className="flex flex-wrap gap-2">
             {[
-              { label: "Completed",    value: campaign.total_completed    ?? 0, color: "text-orange-400 bg-orange-500/10" },
-              { label: "Bounced",      value: campaign.total_bounced      ?? 0, color: "text-red-400 bg-red-500/10" },
-              { label: "Unsubscribed", value: campaign.total_unsubscribed ?? 0, color: "text-amber-400 bg-amber-500/10" },
-              { label: "Clicked",      value: campaign.total_clicked      ?? 0, color: "text-violet-400 bg-violet-500/10" },
+              { label: "Completed",    value: analytics?.funnel?.completed        ?? 0, color: "text-orange-400 bg-orange-500/10" },
+              { label: "Bounced",      value: analytics?.funnel?.bounced          ?? 0, color: "text-red-400 bg-red-500/10" },
+              { label: "Unsubscribed", value: analytics?.funnel?.unsubscribed     ?? 0, color: "text-amber-400 bg-amber-500/10" },
+              { label: "Clicked",      value: analytics?.stats?.total_clicked     ?? 0, color: "text-violet-400 bg-violet-500/10" },
             ].map(p => (
               <div key={p.label} className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${p.color}`}>
                 <span className="font-bold">{p.value.toLocaleString()}</span> {p.label}
