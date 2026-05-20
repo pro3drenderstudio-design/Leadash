@@ -70,6 +70,11 @@ export default function CampaignWizardClient() {
   const [listTierPrefs,  setListTierPrefs]  = useState<Record<string, Set<string>>>({});
   const [listStatusCounts, setListStatusCounts] = useState<Record<string, Record<string, number>>>({});
 
+  // Tier selection modal
+  const [tierModalListId, setTierModalListId]   = useState<string | null>(null);
+  const [tierModalPrefs, setTierModalPrefs]     = useState<Set<string>>(new Set(["deliverable", "catch_all"]));
+  const [tierModalLoading, setTierModalLoading] = useState(false);
+
   // Inline lead import
   const [showImport, setShowImport]         = useState(false);
   const [importName, setImportName]         = useState("");
@@ -254,25 +259,27 @@ export default function CampaignWizardClient() {
   function toggleInbox(id: string) {
     setSelectedInboxes((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
-  function toggleList(id: string) {
-    const adding = !selectedLists.includes(id);
-    setSelectedLists((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-    if (adding) {
-      // Set default tier prefs and fetch status counts for this list
-      setListTierPrefs(p => ({ ...p, [id]: new Set(["deliverable", "catch_all"]) }));
-      wsFetch(`/api/outreach/lists/${id}/status-counts`)
+  function openTierModal(listId: string) {
+    const existing = listTierPrefs[listId];
+    setTierModalPrefs(existing ? new Set(existing) : new Set(["deliverable", "catch_all"]));
+    setTierModalListId(listId);
+    if (!listStatusCounts[listId]) {
+      setTierModalLoading(true);
+      wsFetch(`/api/outreach/lists/${listId}/status-counts`)
         .then(r => r.json())
-        .then(d => setListStatusCounts(p => ({ ...p, [id]: d.counts ?? {} })))
-        .catch(() => {});
+        .then(d => setListStatusCounts(p => ({ ...p, [listId]: d.counts ?? {} })))
+        .catch(() => {})
+        .finally(() => setTierModalLoading(false));
     }
   }
 
-  function toggleListTier(listId: string, tierId: string) {
-    setListTierPrefs(p => {
-      const next = new Set(p[listId] ?? new Set(["deliverable", "catch_all"]));
-      next.has(tierId) ? next.delete(tierId) : next.add(tierId);
-      return { ...p, [listId]: next };
-    });
+  function confirmTierModal() {
+    if (!tierModalListId) return;
+    if (!selectedLists.includes(tierModalListId)) {
+      setSelectedLists(prev => [...prev, tierModalListId]);
+    }
+    setListTierPrefs(p => ({ ...p, [tierModalListId]: new Set(tierModalPrefs) }));
+    setTierModalListId(null);
   }
   function toggleDay(d: string) {
     setSendDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
@@ -821,7 +828,7 @@ export default function CampaignWizardClient() {
                 const isSelected = selectedLists.includes(list.id);
                 const prefs = listTierPrefs[list.id] ?? new Set(["deliverable", "catch_all"]);
                 const cts   = listStatusCounts[list.id] ?? {};
-                const SELECTABLE_TIERS = [
+                const TIER_SUMMARY = [
                   { id: "deliverable", label: "Deliverable", dot: "bg-emerald-500",  statuses: ["safe","valid","verified_external"] },
                   { id: "catch_all",   label: "Catch-all",   dot: "bg-amber-400",    statuses: ["catch_all"] },
                   { id: "unknown",     label: "Unknown",     dot: "bg-white/30",     statuses: ["unknown"] },
@@ -829,39 +836,47 @@ export default function CampaignWizardClient() {
                   { id: "risky",       label: "Risky",       dot: "bg-orange-400",   statuses: ["risky"] },
                 ];
                 return (
-                  <div key={list.id} className={`rounded-xl border transition-all ${isSelected ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3"}`}>
-                    <label className="flex items-center gap-3 p-4 cursor-pointer">
-                      <input type="checkbox" checked={isSelected} onChange={() => toggleList(list.id)} className="accent-orange-500" />
+                  <div
+                    key={list.id}
+                    className={`rounded-xl border transition-all cursor-pointer ${isSelected ? "border-orange-500/40 bg-orange-500/8" : "border-white/8 bg-white/3 hover:border-white/15 hover:bg-white/5"}`}
+                    onClick={() => openTierModal(list.id)}
+                  >
+                    <div className="flex items-center gap-3 p-4">
+                      <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-all ${isSelected ? "bg-orange-500 border-orange-500" : "border-white/20 bg-transparent"}`}>
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-white text-sm font-medium">{list.name}</div>
                         <div className="text-white/35 text-xs">{(list.lead_count ?? 0).toLocaleString()} leads</div>
                       </div>
-                      {isSelected && (
-                        <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                      {isSelected ? (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setSelectedLists(p => p.filter(id => id !== list.id)); }}
+                          className="text-white/25 hover:text-white/60 transition-colors p-0.5 ml-1"
+                          title="Remove list"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      ) : (
+                        <svg className="w-4 h-4 text-white/20 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                       )}
-                    </label>
+                    </div>
                     {isSelected && (
-                      <div className="px-4 pb-3 border-t border-white/[0.06] pt-3">
-                        <p className="text-[11px] text-white/30 mb-2">Enroll leads by status:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {SELECTABLE_TIERS.map(tier => {
-                            const count = tier.statuses.reduce((s, st) => s + (cts[st] ?? 0), 0);
-                            if (!count) return null;
-                            const on = prefs.has(tier.id);
-                            return (
-                              <button
-                                key={tier.id}
-                                type="button"
-                                onClick={() => toggleListTier(list.id, tier.id)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${on ? "bg-orange-500/15 border-orange-500/40 text-white" : "bg-white/4 border-white/10 text-white/40 hover:bg-white/8"}`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${tier.dot}`} />
-                                {tier.label}
-                                <span className={`tabular-nums ${on ? "text-white/60" : "text-white/25"}`}>{count.toLocaleString()}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                      <div className="px-4 pb-3 pt-0 flex flex-wrap gap-1.5">
+                        {TIER_SUMMARY.map(tier => {
+                          if (!prefs.has(tier.id)) return null;
+                          const count = tier.statuses.reduce((s, st) => s + (cts[st] ?? 0), 0);
+                          if (!count) return null;
+                          return (
+                            <span key={tier.id} className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-orange-500/10 border border-orange-500/20 text-white/60">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${tier.dot}`} />
+                              {tier.label} <span className="text-white/35 tabular-nums">{count.toLocaleString()}</span>
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -878,11 +893,24 @@ export default function CampaignWizardClient() {
             </div>
           )}
 
-          {selectedLists.length > 0 && (
-            <p className="text-orange-400 text-xs">
-              {selectedLists.reduce((sum, id) => sum + (lists.find(l => l.id === id)?.lead_count ?? 0), 0).toLocaleString()} leads selected
-            </p>
-          )}
+          {selectedLists.length > 0 && (() => {
+            const TIER_STATUSES: Record<string, string[]> = {
+              deliverable: ["safe","valid","verified_external"],
+              catch_all:   ["catch_all"],
+              unknown:     ["unknown"],
+              unverified:  ["pending"],
+              risky:       ["risky"],
+            };
+            const totalLeads = selectedLists.reduce((sum, id) => {
+              const cts = listStatusCounts[id];
+              if (!cts) return sum + (lists.find(l => l.id === id)?.lead_count ?? 0);
+              const prefs = listTierPrefs[id] ?? new Set(["deliverable", "catch_all"]);
+              return sum + [...prefs].reduce((s, tier) => {
+                return s + (TIER_STATUSES[tier] ?? []).reduce((x, st) => x + (cts[st] ?? 0), 0);
+              }, 0);
+            }, 0);
+            return <p className="text-orange-400 text-xs">{totalLeads.toLocaleString()} leads selected</p>;
+          })()}
         </div>
       )}
 
@@ -1574,6 +1602,86 @@ export default function CampaignWizardClient() {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Tier selection modal */}
+      {tierModalListId && (() => {
+        const list = lists.find(l => l.id === tierModalListId);
+        const cts  = listStatusCounts[tierModalListId] ?? {};
+        const WIZARD_TIERS = [
+          { id: "deliverable", label: "Deliverable", sublabel: "Safe & valid — confirmed deliverable",       statuses: ["safe","valid","verified_external"], dot: "bg-emerald-500", ring: "border-emerald-500/30 bg-emerald-500/8" },
+          { id: "catch_all",   label: "Catch-all",   sublabel: "Server accepts all mail — usually delivered", statuses: ["catch_all"],                        dot: "bg-amber-400",  ring: "border-amber-400/30 bg-amber-500/8" },
+          { id: "unknown",     label: "Unknown",     sublabel: "Couldn't be verified — outcome uncertain",   statuses: ["unknown"],                            dot: "bg-white/30",   ring: "border-white/10 bg-white/4" },
+          { id: "unverified",  label: "Unverified",  sublabel: "Verification not yet run on these leads",    statuses: ["pending"],                            dot: "bg-white/20",   ring: "border-white/10 bg-white/4" },
+          { id: "risky",       label: "Risky",       sublabel: "May increase bounce rate",                   statuses: ["risky"],                              dot: "bg-orange-400", ring: "border-orange-500/25 bg-orange-500/6", warning: "May hurt sender reputation" },
+        ];
+        const selectedLeads = WIZARD_TIERS
+          .filter(t => tierModalPrefs.has(t.id))
+          .reduce((sum, t) => sum + t.statuses.reduce((s, st) => s + (cts[st] ?? 0), 0), 0);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={e => { if (e.target === e.currentTarget) setTierModalListId(null); }}
+          >
+            <div className="bg-[#0e1017] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
+              <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/8">
+                <div>
+                  <p className="text-white font-semibold text-base">Add leads to sequence</p>
+                  <p className="text-white/35 text-xs mt-0.5">{list?.name} · {(list?.lead_count ?? 0).toLocaleString()} total leads</p>
+                </div>
+                <button onClick={() => setTierModalListId(null)} className="text-white/30 hover:text-white/60 transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-2.5">
+                {tierModalLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <svg className="w-5 h-5 animate-spin text-white/30" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  </div>
+                ) : (
+                  WIZARD_TIERS.map(tier => {
+                    const count = tier.statuses.reduce((s, st) => s + (cts[st] ?? 0), 0);
+                    if (!count) return null;
+                    const on = tierModalPrefs.has(tier.id);
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => setTierModalPrefs(p => { const n = new Set(p); n.has(tier.id) ? n.delete(tier.id) : n.add(tier.id); return n; })}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${on ? `${tier.ring} border-opacity-100` : "border-white/8 bg-white/2 hover:bg-white/4"}`}
+                      >
+                        <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-all ${on ? "bg-orange-500 border-orange-500" : "border-white/20 bg-transparent"}`}>
+                          {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${tier.dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${on ? "text-white" : "text-white/60"}`}>{tier.label}</span>
+                            {"warning" in tier && on && <span className="text-[10px] text-orange-400/80">⚠ {tier.warning}</span>}
+                          </div>
+                          <p className="text-white/25 text-xs mt-0.5">{tier.sublabel}</p>
+                        </div>
+                        <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${on ? "text-white" : "text-white/40"}`}>{count.toLocaleString()}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <div className="px-6 pb-5 pt-2 border-t border-white/8 flex items-center gap-3">
+                <button onClick={() => setTierModalListId(null)} className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/50 text-sm rounded-xl transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmTierModal}
+                  disabled={selectedLeads === 0}
+                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+                >
+                  {selectedLeads === 0 ? "No leads selected" : `Add ${selectedLeads.toLocaleString()} leads →`}
+                </button>
               </div>
             </div>
           </div>
