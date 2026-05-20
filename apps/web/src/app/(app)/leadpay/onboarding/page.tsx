@@ -98,9 +98,11 @@ export default function OnboardingPage() {
           rc_number: rcNumber || null,
           business_type: bizType || null,
           website: website || null,
-          id_type: idType,
-          id_value: idValue,
-          bank_account: { account_number: accountNumber, account_name: accountName, bank_name: bankName, bank_code: bankCode, is_default: true },
+          bvn_or_nin: idValue,
+          bank_account_number: accountNumber,
+          account_name: accountName,
+          bank_name: bankName,
+          bank_code: bankCode,
         }),
       });
       if (!res.ok) {
@@ -138,7 +140,7 @@ export default function OnboardingPage() {
       {/* Progress */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold text-white">Set up LeadPay</h1>
+          <h1 className="text-xl font-bold text-white">Set up Leadash Pay</h1>
           <span className="text-xs text-white/30">{step} of {totalSteps}</span>
         </div>
         <div className="h-1 bg-white/8 rounded-full overflow-hidden">
