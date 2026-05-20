@@ -161,7 +161,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let insertedCount = 0;
   for (let i = 0; i < rows.length; i += PAGE) {
     const chunk = rows.slice(i, i + PAGE);
-    const { data: ins, error: insErr } = await db.from("outreach_enrollments").insert(chunk).select("id");
+    const { data: ins, error: insErr } = await db
+      .from("outreach_enrollments")
+      .upsert(chunk, { onConflict: "campaign_id,lead_id", ignoreDuplicates: true })
+      .select("id");
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
     insertedCount += ins?.length ?? 0;
   }
