@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 
+type BvnData = { first_name: string; last_name: string; formatted_dob?: string; dob?: string };
+type BvnResult =
+  | { verified: true; data: BvnData }
+  | { verified: false; reason: "not_found" | "api_error" };
+
+async function verifyBvnWithPaystack(bvn: string): Promise<BvnResult> {
+  try {
+    const res = await fetch(`https://api.paystack.co/bank/resolve_bvn/${bvn}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+    });
+    const json = await res.json() as { status: boolean; data?: BvnData; message?: string };
+    if (!res.ok || !json.status || !json.data) return { verified: false, reason: "not_found" };
+    return { verified: true, data: json.data };
+  } catch {
+    return { verified: false, reason: "api_error" };
+  }
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
@@ -37,12 +55,31 @@ export async function POST(req: NextRequest) {
   const dob          = body.date_of_birth as string | undefined;
   const phone        = (body.phone as string | undefined)?.trim();
   const bvnOrNin     = (body.bvn_or_nin as string | undefined)?.trim();
+  const idType       = (body.id_type as string | undefined) ?? "bvn";
 
   if (!firstName) return NextResponse.json({ error: "legal_first_name required" }, { status: 400 });
   if (!lastName)  return NextResponse.json({ error: "legal_last_name required" },  { status: 400 });
   if (!dob)       return NextResponse.json({ error: "date_of_birth required" },    { status: 400 });
   if (!phone)     return NextResponse.json({ error: "phone required" },             { status: 400 });
   if (!bvnOrNin)  return NextResponse.json({ error: "bvn_or_nin required" },       { status: 400 });
+
+  // Auto-verify BVN via Paystack; NIN falls through to manual review
+  let kycStatus = "pending";
+  let storedBvn: string | null = null;
+  let storedNin: string | null = null;
+
+  if (idType === "bvn") {
+    storedBvn = bvnOrNin;
+    const result = await verifyBvnWithPaystack(bvnOrNin);
+    if (result.verified) {
+      kycStatus = "verified";
+    } else if (result.reason === "not_found") {
+      return NextResponse.json({ error: "BVN not found. Please check the number and try again." }, { status: 422 });
+    }
+    // api_error: fall through to manual review, don't block the user
+  } else {
+    storedNin = bvnOrNin;
+  }
 
   const businessFields: Record<string, unknown> = {};
   if (accountType === "business") {
@@ -57,14 +94,15 @@ export async function POST(req: NextRequest) {
     .insert({
       workspace_id:     workspaceId,
       account_type:     accountType === "business" ? "business" : "individual",
-      status:           "pending",
-      kyc_status:       "pending",
+      status:           kycStatus === "verified" ? "active" : "pending",
+      kyc_status:       kycStatus,
       kyc_submitted_at: new Date().toISOString(),
       legal_first_name: firstName,
       legal_last_name:  lastName,
       date_of_birth:    dob,
       phone,
-      // Store BVN/NIN in metadata — not exposed in public API
+      bvn:              storedBvn,
+      nin:              storedNin,
       ...businessFields,
     })
     .select()

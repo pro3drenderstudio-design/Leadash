@@ -98,6 +98,7 @@ export default function OnboardingPage() {
           rc_number: rcNumber || null,
           business_type: bizType || null,
           website: website || null,
+          id_type: idType,
           bvn_or_nin: idValue,
           bank_account_number: accountNumber,
           account_name: accountName,
@@ -252,6 +253,11 @@ export default function OnboardingPage() {
               <input value={idValue} onChange={e => setIdValue(e.target.value.replace(/\D/g, ""))}
                 maxLength={11} placeholder={`Enter your ${idType.toUpperCase()}`}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/50 font-mono tracking-wider" />
+              <p className="text-[11px] mt-1.5 text-white/30">
+                {idType === "bvn"
+                  ? "BVN is verified instantly via Paystack."
+                  : "NIN verification is reviewed manually — usually within 1 business day."}
+              </p>
             </div>
           </div>
         )}
