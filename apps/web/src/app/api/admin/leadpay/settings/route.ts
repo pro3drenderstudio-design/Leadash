@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     .select("key, value")
     .in("key", LEADPAY_KEYS as unknown as string[]);
 
-  const settings = Object.fromEntries((rows ?? []).map(r => [r.key, r.value]));
+  const settings = Object.fromEntries((rows ?? []).map((r: { key: string; value: string }) => [r.key, r.value]));
   return NextResponse.json({ settings });
 }
 
