@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     db.from("leadpay_transactions").select("id", { count: "exact", head: true }).gte("created_at", since24h),
   ]);
 
-  const totalVolumeUsd = (volumeRes.data ?? []).reduce((s, t) => s + ((t.usd_amount_cents ?? 0) / 100), 0);
+  const totalVolumeUsd = (volumeRes.data ?? []).reduce((s: number, t: { usd_amount_cents: number | null }) => s + ((t.usd_amount_cents ?? 0) / 100), 0);
 
   return NextResponse.json({
     total_accounts:   totalAccts.count   ?? 0,
