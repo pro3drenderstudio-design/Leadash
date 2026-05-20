@@ -40,19 +40,21 @@ async function getStats(workspaceId: string) {
   const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [campaigns, inboxes, sends, replies, chartSends, chartReplies, recentReplies] = await Promise.all([
+  const [campaigns, inboxes, sentThisMonth, openedThisMonth, replies, chartReplies, recentReplies] = await Promise.all([
     db.from("outreach_campaigns").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).eq("status", "active"),
     db.from("outreach_inboxes").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).eq("status", "active")
       .or(`warmup_enabled.eq.false,warmup_ends_at.is.null,warmup_ends_at.lte.${now.toISOString()}`),
-    db.from("outreach_sends").select("status")
-      .eq("workspace_id", workspaceId).gte("created_at", startOfMonth),
+    db.from("outreach_sends").select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId).gte("created_at", startOfMonth)
+      .in("status", ["sent", "opened"]),
+    db.from("outreach_sends").select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId).gte("created_at", startOfMonth)
+      .eq("status", "opened"),
     db.from("outreach_replies").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).gte("received_at", startOfMonth)
       .not("enrollment_id", "is", null),
-    db.from("outreach_sends").select("status, created_at")
-      .eq("workspace_id", workspaceId).gte("created_at", thirtyDaysAgo),
     db.from("outreach_replies").select("received_at")
       .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo)
       .not("enrollment_id", "is", null),
@@ -71,10 +73,25 @@ async function getStats(workspaceId: string) {
       .limit(8),
   ]);
 
-  const sentData    = sends.data ?? [];
-  const sentCount   = sentData.filter((s: { status: string }) => s.status === "sent" || s.status === "opened").length;
-  const openedCount = sentData.filter((s: { status: string }) => s.status === "opened").length;
+  const sentCount   = sentThisMonth.count   ?? 0;
+  const openedCount = openedThisMonth.count ?? 0;
   const openRate    = sentCount > 0 ? Math.round((openedCount / sentCount) * 100) : 0;
+
+  // Paginate chart sends — daily cap * 30 days can exceed 1000 rows
+  const allChartSends: { status: string; created_at: string }[] = [];
+  const CHART_PAGE = 1000;
+  let chartFrom = 0;
+  while (true) {
+    const { data: page } = await db.from("outreach_sends")
+      .select("status, created_at")
+      .eq("workspace_id", workspaceId)
+      .gte("created_at", thirtyDaysAgo)
+      .range(chartFrom, chartFrom + CHART_PAGE - 1);
+    if (!page?.length) break;
+    allChartSends.push(...(page as { status: string; created_at: string }[]));
+    if (page.length < CHART_PAGE) break;
+    chartFrom += CHART_PAGE;
+  }
 
   // Build chart
   const dayMap = new Map<string, DailyPoint>();
@@ -83,7 +100,7 @@ async function getStats(workspaceId: string) {
     const key = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     dayMap.set(key, { date: key, sent: 0, opened: 0, replies: 0 });
   }
-  for (const s of chartSends.data ?? []) {
+  for (const s of allChartSends) {
     const key   = new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const point = dayMap.get(key);
     if (!point) continue;

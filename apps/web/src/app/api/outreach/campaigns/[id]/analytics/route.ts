@@ -14,28 +14,54 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq("id", campaignId).eq("workspace_id", workspaceId).single();
   if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [{ data: enrollments }, { data: sends }, { data: seqSteps }] = await Promise.all([
-    db.from("outreach_enrollments").select("id,status,crm_status,lead_id").eq("campaign_id", campaignId),
-    db.from("outreach_sends").select("id,status,opened_at,clicked_at,sent_at,subject,step_order,lead_id,enrollment_id").eq("campaign_id", campaignId),
+  const [{ data: seqSteps }] = await Promise.all([
     db.from("outreach_sequences").select("step_order,type,subject_template,subject_template_b").eq("campaign_id", campaignId).order("step_order"),
   ]);
 
-  const enr = (enrollments ?? []) as Row[];
-  const s   = (sends ?? []) as Row[];
+  // Paginate sends and enrollments — PostgREST caps unpaged queries at 1000 rows
+  const PAGE = 1000;
+  const enr: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: pageErr } = await db
+      .from("outreach_enrollments").select("id,status,crm_status,lead_id")
+      .eq("campaign_id", campaignId).range(from, from + PAGE - 1);
+    if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 });
+    if (!page?.length) break;
+    enr.push(...(page as Row[]));
+    if (page.length < PAGE) break;
+  }
+
+  const s: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: pageErr } = await db
+      .from("outreach_sends").select("id,status,opened_at,clicked_at,sent_at,subject,step_order,lead_id,enrollment_id")
+      .eq("campaign_id", campaignId).range(from, from + PAGE - 1);
+    if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 });
+    if (!page?.length) break;
+    s.push(...(page as Row[]));
+    if (page.length < PAGE) break;
+  }
+
   const steps = (seqSteps ?? []) as Row[];
 
-  // Lead lookup
+  // Lead lookup — chunk .in() calls to stay under PostgREST's 1000-item limit
   const leadIds = [...new Set(s.map(x => x.lead_id as string).filter(Boolean))];
-  const { data: leads } = leadIds.length ? await db.from("outreach_leads").select("id,first_name,last_name,email,company").in("id", leadIds) : { data: [] };
-  const leadMap: Record<string, Row> = Object.fromEntries(((leads ?? []) as Row[]).map(l => [l.id as string, l]));
+  const leads: Row[] = [];
+  for (let i = 0; i < leadIds.length; i += PAGE) {
+    const { data: page } = await db.from("outreach_leads").select("id,first_name,last_name,email,company").in("id", leadIds.slice(i, i + PAGE));
+    if (page) leads.push(...(page as Row[]));
+  }
+  const leadMap: Record<string, Row> = Object.fromEntries(leads.map(l => [l.id as string, l]));
 
-  // First reply per enrollment
+  // First reply per enrollment — chunk .in() calls
   const enrollmentIds = [...new Set(s.map(x => x.enrollment_id as string).filter(Boolean))];
-  const { data: replies } = enrollmentIds.length
-    ? await db.from("outreach_replies").select("enrollment_id,received_at").in("enrollment_id", enrollmentIds).order("received_at")
-    : { data: [] };
+  const replies: Row[] = [];
+  for (let i = 0; i < enrollmentIds.length; i += PAGE) {
+    const { data: page } = await db.from("outreach_replies").select("enrollment_id,received_at").in("enrollment_id", enrollmentIds.slice(i, i + PAGE)).order("received_at");
+    if (page) replies.push(...(page as Row[]));
+  }
   const firstReply: Record<string, string> = {};
-  for (const r of (replies ?? []) as Row[]) {
+  for (const r of replies) {
     const eid = r.enrollment_id as string;
     if (!firstReply[eid]) firstReply[eid] = r.received_at as string;
   }
