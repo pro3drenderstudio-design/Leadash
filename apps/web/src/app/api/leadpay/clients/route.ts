@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       .neq("status", "draft")
       .neq("status", "cancelled");
 
-    const totalBilled  = (invoices ?? []).reduce((s, i) => s + (i.total_cents ?? 0), 0);
+    const totalBilled  = (invoices ?? []).reduce((s: number, i: { total_cents: number | null }) => s + (i.total_cents ?? 0), 0);
     const invoiceCount = (invoices ?? []).length;
     return { ...c, total_billed_cents: totalBilled, invoice_count: invoiceCount };
   }));

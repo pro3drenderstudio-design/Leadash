@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     .from("admin_settings")
     .select("key, value")
     .in("key", ["leadpay_platform_fee_pct", "leadpay_min_fee_cents", "leadpay_max_invoice_usd"]);
-  const feeMap = Object.fromEntries((feeRows ?? []).map(r => [r.key, parseFloat(String(r.value))]));
+  const feeMap = Object.fromEntries((feeRows ?? []).map((r: { key: string; value: string }) => [r.key, parseFloat(String(r.value))]));
   const maxInvoiceUsd = feeMap["leadpay_max_invoice_usd"] ?? 10000;
   const totalUsd = totalCents / 100;
   if (totalUsd > maxInvoiceUsd) {

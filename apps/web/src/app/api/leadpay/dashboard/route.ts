@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
   ]);
 
   const account      = accountRes.data;
-  const receivedMtd  = (receivedMtdRes.data ?? []).reduce((s, i) => s + (i.net_usd_cents ?? 0), 0);
-  const paidOutMtd   = (paidOutMtdRes.data ?? []).reduce((s, p) => s + (p.usd_amount_cents ?? 0), 0);
+  const receivedMtd  = (receivedMtdRes.data ?? []).reduce((s: number, i: { net_usd_cents: number | null }) => s + (i.net_usd_cents ?? 0), 0);
+  const paidOutMtd   = (paidOutMtdRes.data ?? []).reduce((s: number, p: { usd_amount_cents: number | null }) => s + (p.usd_amount_cents ?? 0), 0);
 
   return NextResponse.json({
     usd_balance_cents:   account?.usd_balance_cents   ?? 0,
