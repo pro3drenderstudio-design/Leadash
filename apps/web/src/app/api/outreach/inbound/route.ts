@@ -57,13 +57,15 @@ function isDsnBounce(from: string, subject: string): boolean {
  */
 function extractBouncedEmail(text: string): string | null {
   const patterns = [
-    // RFC 3464 machine-readable DSN: "Final-Recipient: rfc822; user@domain.com"
-    /Final-Recipient:\s*rfc822;\s*([^\s<>]+@[^\s<>]+)/i,
+    // RFC 3464 machine-readable DSN — rfc822 and non-standard rfc/822 (mimecast)
+    /Final-Recipient:\s*rfc\/?822;\s*([^\s<>]+@[^\s<>]+)/i,
+    /Original-Recipient:\s*rfc\/?822;\s*([^\s<>]+@[^\s<>]+)/i,
+    // Mimecast style: "-- email@domain.com" on its own line
+    /^--\s+([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\s*$/im,
     // Common human-readable formats
     /The following address(?:es)? failed:\s*\n?\s*([^\s<>]+@[^\s<>]+)/i,
     /could not be delivered to:\s*([^\s<>]+@[^\s<>]+)/i,
     /message.*?could not.*?delivered.*?([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i,
-    /Original-Recipient:\s*rfc822;\s*([^\s<>]+@[^\s<>]+)/i,
     // Angle-bracket wrapped: <user@domain.com>
     /delivery.*?<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i,
   ];
@@ -129,23 +131,17 @@ async function handleInbound(req: NextRequest) {
   const xLdRef      = (body.x_ld_ref   as string | undefined)?.trim() ?? null;
   const receivedAt  = (body.received_at as string | undefined) ?? new Date().toISOString();
 
-  if (!to || !from) {
-    return NextResponse.json({ error: "to and from are required" }, { status: 400 });
+  if (!to) {
+    return NextResponse.json({ error: "to is required" }, { status: 400 });
   }
 
   const db = createAdminClient();
 
-  // ── Find the inbox this was sent to ──────────────────────────────────────────
-  const { data: inbox } = await db
-    .from("outreach_inboxes")
-    .select("id, workspace_id")
-    .eq("email_address", to)
-    .maybeSingle();
-
-  // ── DSN bounce notification — handle before inbox lookup ─────────────────────
-  // Bounce-back emails arrive addressed TO our sending inbox (the original From:).
-  // We detect them by sender/subject, extract the original recipient, and suppress them.
-  if (to && from && isDsnBounce(from, subject)) {
+  // ── DSN bounce notification — handle BEFORE inbox lookup and from requirement ─
+  // RFC 5321 §4.5.5: bounce notifications always have null/empty Return-Path (<>),
+  // so mail_from is null. We detect them by null from OR matching DSN patterns.
+  const looksLikeDsn = !from || isDsnBounce(from, subject);
+  if (looksLikeDsn) {
     const bouncedEmail = extractBouncedEmail(text);
     if (bouncedEmail) {
       // Suppress the bounced address globally
@@ -191,6 +187,18 @@ async function handleInbound(req: NextRequest) {
     console.warn(`[inbound] DSN bounce from ${from} but could not extract bounced address. Subject: ${subject}`);
     return NextResponse.json({ ok: true, type: "dsn_unresolved" });
   }
+
+  // Non-DSN messages must have a sender
+  if (!from) {
+    return NextResponse.json({ error: "from is required" }, { status: 400 });
+  }
+
+  // ── Find the inbox this was sent to ──────────────────────────────────────────
+  const { data: inbox } = await db
+    .from("outreach_inboxes")
+    .select("id, workspace_id")
+    .eq("email_address", to)
+    .maybeSingle();
 
   // ── Parse referenced message-ids early (needed for workspace resolution) ────────
   const stripBrackets = (id: string) => id.replace(/^<|>$/g, "").trim();
