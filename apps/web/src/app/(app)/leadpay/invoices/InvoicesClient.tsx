@@ -76,7 +76,7 @@ function InvoiceModal({ invoice, clients, onClose, onSaved }: InvoiceModalProps)
         ? await wsFetch(`/api/leadpay/invoices/${invoice!.id}`, { method: "PATCH", body: JSON.stringify(body) })
         : await wsFetch("/api/leadpay/invoices", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json() as { error: string }; setError(d.error); return; }
-      const saved = await res.json() as LeadPayInvoice;
+      const { invoice: saved } = await res.json() as { invoice: LeadPayInvoice };
       onSaved(saved);
     } catch (e) { setError(String(e)); } finally { setSaving(false); }
   }
@@ -204,12 +204,12 @@ export default function InvoicesClient() {
   const [search, setSearch]         = useState("");
 
   const load = useCallback(async () => {
-    const [inv, cl] = await Promise.all([
-      wsGet<LeadPayInvoice[]>("/api/leadpay/invoices"),
-      wsGet<LeadPayClient[]>("/api/leadpay/clients"),
-    ]).catch(() => [[], []]);
-    setInvoices(inv as LeadPayInvoice[]);
-    setClients(cl as LeadPayClient[]);
+    const [invRes, clRes] = await Promise.all([
+      wsGet<{ invoices: LeadPayInvoice[]; total: number }>("/api/leadpay/invoices"),
+      wsGet<{ clients: LeadPayClient[] }>("/api/leadpay/clients"),
+    ]).catch(() => [{ invoices: [], total: 0 }, { clients: [] }]);
+    setInvoices((invRes as { invoices: LeadPayInvoice[] }).invoices ?? []);
+    setClients((clRes as { clients: LeadPayClient[] }).clients ?? []);
     setLoading(false);
   }, []);
 

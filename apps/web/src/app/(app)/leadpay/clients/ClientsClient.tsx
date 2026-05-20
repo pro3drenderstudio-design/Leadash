@@ -28,7 +28,7 @@ function ClientModal({ client, onClose, onSaved }: { client?: LeadPayClient | nu
         ? await wsFetch(`/api/leadpay/clients/${client!.id}`, { method: "PATCH", body: JSON.stringify(body) })
         : await wsFetch("/api/leadpay/clients", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json() as { error: string }; setError(d.error); return; }
-      const saved = await res.json() as LeadPayClient;
+      const { client: saved } = await res.json() as { client: LeadPayClient };
       onSaved(saved);
     } catch (e) { setError(String(e)); } finally { setSaving(false); }
   }
@@ -100,8 +100,8 @@ export default function ClientsClient() {
   const [editing, setEditing]   = useState<LeadPayClient | null>(null);
 
   const load = useCallback(async () => {
-    const data = await wsGet<LeadPayClient[]>("/api/leadpay/clients").catch(() => []);
-    setClients(data);
+    const data = await wsGet<{ clients: LeadPayClient[] }>("/api/leadpay/clients").catch(() => ({ clients: [] }));
+    setClients(data.clients ?? []);
     setLoading(false);
   }, []);
 

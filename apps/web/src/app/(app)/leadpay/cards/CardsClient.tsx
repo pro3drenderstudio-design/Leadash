@@ -80,7 +80,8 @@ function CreateCardModal({ account, onClose, onCreated }: { account: LeadPayAcco
         body: JSON.stringify({ label, initial_fund_cents: fundCents, monthly_limit_cents: monthlyLimit ? Math.round(parseFloat(monthlyLimit) * 100) : null }),
       });
       if (!res.ok) { const d = await res.json() as { error: string }; setError(d.error); return; }
-      onCreated(await res.json() as LeadPayCard);
+      const { card: created } = await res.json() as { card: LeadPayCard };
+      onCreated(created);
     } catch (e) { setError(String(e)); } finally { setCreating(false); }
   }
 
@@ -151,7 +152,8 @@ function FundModal({ card, account, onClose, onFunded }: { card: LeadPayCard; ac
     try {
       const res = await wsFetch(`/api/leadpay/cards/${card.id}/fund`, { method: "POST", body: JSON.stringify({ amount_cents: cents }) });
       if (!res.ok) { const d = await res.json() as { error: string }; setError(d.error); return; }
-      onFunded(await res.json() as LeadPayCard);
+      const { card: funded } = await res.json() as { card: LeadPayCard };
+      onFunded(funded);
     } catch (e) { setError(String(e)); } finally { setFunding(false); }
   }
 
@@ -206,13 +208,14 @@ export default function CardsClient() {
   const [actioning, setActioning] = useState(false);
 
   const load = useCallback(async () => {
-    const [acct, cs] = await Promise.all([
-      wsGet<LeadPayAccount>("/api/leadpay/account"),
-      wsGet<LeadPayCard[]>("/api/leadpay/cards"),
-    ]).catch(() => [null, []]);
-    setAccount(acct as LeadPayAccount);
-    setCards(cs as LeadPayCard[]);
-    if ((cs as LeadPayCard[]).length > 0 && !selectedCard) setSelectedCard((cs as LeadPayCard[])[0]);
+    const [acctRes, csRes] = await Promise.all([
+      wsGet<{ account: LeadPayAccount | null }>("/api/leadpay/account"),
+      wsGet<{ cards: LeadPayCard[] }>("/api/leadpay/cards"),
+    ]).catch(() => [{ account: null }, { cards: [] }]);
+    const csArr = (csRes as { cards: LeadPayCard[] }).cards ?? [];
+    setAccount((acctRes as { account: LeadPayAccount | null }).account ?? null);
+    setCards(csArr);
+    if (csArr.length > 0 && !selectedCard) setSelectedCard(csArr[0]);
     setLoading(false);
   }, []);
 
@@ -220,7 +223,9 @@ export default function CardsClient() {
 
   useEffect(() => {
     if (!selectedCard) return;
-    wsGet<LeadPayCardTransaction[]>(`/api/leadpay/cards/${selectedCard.id}/transactions`).then(setTxns).catch(() => setTxns([]));
+    wsGet<{ transactions: LeadPayCardTransaction[]; total: number }>(`/api/leadpay/cards/${selectedCard.id}/transactions`)
+      .then(d => setTxns(d.transactions ?? []))
+      .catch(() => setTxns([]));
   }, [selectedCard]);
 
   async function toggleFreeze(card: LeadPayCard) {
@@ -230,7 +235,7 @@ export default function CardsClient() {
         method: "PATCH",
         body: JSON.stringify({ action: card.status === "frozen" ? "unfreeze" : "freeze" }),
       });
-      const updated = await res.json() as LeadPayCard;
+      const { card: updated } = await res.json() as { card: LeadPayCard };
       setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
       if (selectedCard?.id === updated.id) setSelectedCard(updated);
     } finally { setActioning(false); }
@@ -318,7 +323,7 @@ export default function CardsClient() {
                     if (!confirm("Terminate this card? This cannot be undone.")) return;
                     setActioning(true);
                     const res = await wsFetch(`/api/leadpay/cards/${selectedCard.id}`, { method: "PATCH", body: JSON.stringify({ action: "terminate" }) });
-                    const updated = await res.json() as LeadPayCard;
+                    const { card: updated } = await res.json() as { card: LeadPayCard };
                     setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
                     setSelectedCard(updated);
                     setActioning(false);

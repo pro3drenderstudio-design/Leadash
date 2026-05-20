@@ -127,7 +127,7 @@ export default function InvoiceDetailClient() {
       const res = await wsFetch(`/api/leadpay/invoices/${id}`, {
         method: "PATCH", body: JSON.stringify({ action: act }),
       });
-      const updated = await res.json() as LeadPayInvoice;
+      const { invoice: updated } = await res.json() as { invoice: LeadPayInvoice };
       setInvoice(updated);
     } finally { setActioning(false); }
   }

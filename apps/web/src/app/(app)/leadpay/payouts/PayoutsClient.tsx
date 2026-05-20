@@ -70,7 +70,7 @@ function WithdrawModal({ account, bankAccounts, fxRate, onClose, onRequested }: 
 
   async function addBank() {
     const res = await wsFetch("/api/leadpay/bank-accounts", { method: "POST", body: JSON.stringify({ account_number: newAccNum, account_name: newAccName, bank_name: newBankName, bank_code: newBankCode, is_default: bankAccounts.length === 0 }) });
-    const b = await res.json() as LeadPayBankAccount;
+    const { bank_account: b } = await res.json() as { bank_account: LeadPayBankAccount };
     bankAccounts.push(b);
     setBankId(b.id);
     setAddingBank(false);
@@ -81,7 +81,7 @@ function WithdrawModal({ account, bankAccounts, fxRate, onClose, onRequested }: 
     try {
       const res = await wsFetch("/api/leadpay/payouts", { method: "POST", body: JSON.stringify({ usd_amount_cents: usdCents, bank_account_id: bankId, pin }) });
       if (!res.ok) { const d = await res.json() as { error: string }; setError(d.error); return; }
-      const p = await res.json() as LeadPayPayout;
+      const { payout: p } = await res.json() as { payout: LeadPayPayout };
       onRequested(p);
     } catch (e) { setError(String(e)); } finally { setRequesting(false); }
   }
@@ -195,16 +195,16 @@ export default function PayoutsClient() {
   const [showWithdraw, setShowWithdraw] = useState(false);
 
   const load = useCallback(async () => {
-    const [acct, po, banks, rates] = await Promise.all([
-      wsGet<LeadPayAccount>("/api/leadpay/account"),
-      wsGet<LeadPayPayout[]>("/api/leadpay/payouts"),
-      wsGet<LeadPayBankAccount[]>("/api/leadpay/bank-accounts"),
-      wsGet<{ usd_ngn: number }>("/api/leadpay/rates"),
-    ]).catch(() => [null, [], [], { usd_ngn: 1600 }]);
-    setAccount(acct as LeadPayAccount);
-    setPayouts(po as LeadPayPayout[]);
-    setBankAccounts(banks as LeadPayBankAccount[]);
-    setFxRate((rates as { usd_ngn: number }).usd_ngn ?? 1600);
+    const [acctRes, poRes, banksRes, ratesRes] = await Promise.all([
+      wsGet<{ account: LeadPayAccount | null }>("/api/leadpay/account"),
+      wsGet<{ payouts: LeadPayPayout[]; total: number }>("/api/leadpay/payouts"),
+      wsGet<{ bank_accounts: LeadPayBankAccount[] }>("/api/leadpay/bank-accounts"),
+      wsGet<{ client_rate: number }>("/api/leadpay/rates"),
+    ]).catch(() => [{ account: null }, { payouts: [], total: 0 }, { bank_accounts: [] }, { client_rate: 1600 }]);
+    setAccount((acctRes as { account: LeadPayAccount | null }).account ?? null);
+    setPayouts((poRes as { payouts: LeadPayPayout[] }).payouts ?? []);
+    setBankAccounts((banksRes as { bank_accounts: LeadPayBankAccount[] }).bank_accounts ?? []);
+    setFxRate((ratesRes as { client_rate: number }).client_rate ?? 1600);
     setLoading(false);
   }, []);
 

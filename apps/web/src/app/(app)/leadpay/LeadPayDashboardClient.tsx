@@ -84,9 +84,13 @@ export default function LeadPayDashboardClient() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await wsGet<{ account: LeadPayAccount; stats: LeadPayDashboardStats }>("/api/leadpay/dashboard");
-        setAccount(data.account);
-        setStats(data.stats);
+        const [acctRes, statsData] = await Promise.all([
+          wsGet<{ account: LeadPayAccount | null }>("/api/leadpay/account"),
+          wsGet<LeadPayDashboardStats>("/api/leadpay/dashboard"),
+        ]);
+        if (!acctRes.account) { setNoAccount(true); return; }
+        setAccount(acctRes.account);
+        setStats(statsData);
       } catch {
         setNoAccount(true);
       } finally {
