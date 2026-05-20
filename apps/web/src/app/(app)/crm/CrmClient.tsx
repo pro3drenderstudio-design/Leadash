@@ -104,6 +104,9 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
     <div className="flex flex-col items-end">
       <div className="max-w-[82%] w-full">
         <div className="flex items-center justify-end gap-2 mb-1">
+          {(msg.inbox_label || msg.inbox_email) && (
+            <span className="text-white/20 text-[10px]">via {msg.inbox_label || msg.inbox_email}</span>
+          )}
           <span className="text-white/25 text-[10px]">{msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}</span>
           {msg.opened_at && <span className="text-white/30 text-[10px]">Opened</span>}
           {msg.clicked_at && <span className="text-white/30 text-[10px]">Clicked</span>}
@@ -146,12 +149,18 @@ function ReplyBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: 
   return (
     <div className="flex flex-col items-start">
       <div className="max-w-[82%] w-full">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="text-white/55 text-[10px] font-medium">{msg.from_name || msg.from_email}</span>
           {isDifferentEmail && <span className="text-white/30 text-[10px]">({msg.from_email})</span>}
           <span className="text-white/25 text-[10px]">{msg.received_at ? new Date(msg.received_at).toLocaleString() : ""}</span>
+          {msg.is_filtered && (
+            <span className="text-amber-400/70 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">OOO</span>
+          )}
           {msg.ai_category && msg.ai_category !== "neutral" && (msg.ai_confidence ?? 0) >= 0.7 && (
             <span className="text-white/30 text-[10px]">AI: {msg.ai_category.replace(/_/g, " ")} {Math.round((msg.ai_confidence ?? 0) * 100)}%</span>
+          )}
+          {(msg.inbox_label || msg.inbox_email) && (
+            <span className="text-white/20 text-[10px]">→ {msg.inbox_label || msg.inbox_email}</span>
           )}
         </div>
         <button className="w-full text-left" onClick={() => setCollapsed(v => !v)}>

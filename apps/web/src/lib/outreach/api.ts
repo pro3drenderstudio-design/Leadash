@@ -25,6 +25,10 @@ export interface ConversationMessage {
   ai_category?: string | null;
   ai_confidence?: number | null;
   attachments?: ReplyAttachment[];
+  is_filtered?: boolean | null;
+  // inbox (both sends and replies)
+  inbox_email?: string | null;
+  inbox_label?: string | null;
 }
 
 const base = "/api/outreach";
