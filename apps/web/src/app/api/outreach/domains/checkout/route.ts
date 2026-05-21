@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
 
   // Use M365-specific price when inbox_provider=microsoft365
   const pricePerInboxNgn = inbox_provider === "microsoft365"
-    ? ((workspacePlan as Record<string, unknown>).ms_inbox_monthly_price_ngn as number ?? 4200)
+    ? ((workspacePlan as unknown as Record<string, unknown>).ms_inbox_monthly_price_ngn as number ?? 4200)
     : workspacePlan.inbox_monthly_price_ngn;
   const inboxMonthlyNgn  = pricePerInboxNgn * mailboxCount * domains.length;
   const domainIdsParam    = insertedIds.join(",");
