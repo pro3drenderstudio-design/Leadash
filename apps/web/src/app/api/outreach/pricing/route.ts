@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const ngnPerUsd = await getUsdToNgn();
 
   return NextResponse.json({
-    inbox_monthly_price_ngn: plan.inbox_monthly_price_ngn,
-    ngn_per_usd:             ngnPerUsd,
+    inbox_monthly_price_ngn:    plan.inbox_monthly_price_ngn,
+    ms_inbox_monthly_price_ngn: (plan as unknown as Record<string, unknown>).ms_inbox_monthly_price_ngn as number ?? 4200,
+    ngn_per_usd:                ngnPerUsd,
   });
 }

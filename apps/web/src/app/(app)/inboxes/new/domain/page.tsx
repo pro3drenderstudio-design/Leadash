@@ -169,16 +169,18 @@ export default function BuyDomainPage() {
   const [payError, setPayError]           = useState<string | null>(null);
 
   // ── Pricing (from plan + live exchange rate) ─────────────────────────────────
-  const [inboxPriceNgn, setInboxPriceNgn] = useState(2500);
-  const [ngnPerUsd, setNgnPerUsd]         = useState(1700);
+  const [inboxPriceNgn,   setInboxPriceNgn]   = useState(2500);
+  const [msInboxPriceNgn, setMsInboxPriceNgn] = useState(4200);
+  const [ngnPerUsd, setNgnPerUsd]             = useState(1700);
 
   useEffect(() => {
     const wsId = getWorkspaceId() ?? "";
     fetch("/api/outreach/pricing", { headers: { "x-workspace-id": wsId } })
       .then(r => r.ok ? r.json() : null)
-      .then((data: { inbox_monthly_price_ngn: number; ngn_per_usd: number } | null) => {
+      .then((data: { inbox_monthly_price_ngn: number; ms_inbox_monthly_price_ngn?: number; ngn_per_usd: number } | null) => {
         if (!data) return;
         setInboxPriceNgn(data.inbox_monthly_price_ngn);
+        setMsInboxPriceNgn(data.ms_inbox_monthly_price_ngn ?? 4200);
         setNgnPerUsd(data.ngn_per_usd);
       })
       .catch(() => {});
@@ -314,7 +316,8 @@ export default function BuyDomainPage() {
   const cap            = domainCapacity(selectedDomains.length, mailboxCount);
 
   const oneTimeUsd    = selectedDomains.reduce((s, d) => s + (d.price > 0 ? d.price + DOMAIN_SERVICE_FEE_USD : 0), 0);
-  const recurringNgn  = inboxPriceNgn * totalInboxes;
+  const activeInboxPriceNgn = isMicrosoft ? msInboxPriceNgn : inboxPriceNgn;
+  const recurringNgn        = activeInboxPriceNgn * totalInboxes;
   const domainOnlyNgn = Math.round(oneTimeUsd * ngnPerUsd);
   const totalNgn      = domainOnlyNgn + recurringNgn;
 
@@ -741,7 +744,7 @@ export default function BuyDomainPage() {
             </div>
             <div className="border-t border-white/8 pt-3">
               <Row label="Monthly subscription" value={`₦${recurringNgn.toLocaleString()}/mo`} highlight />
-              <p className="text-white/30 text-xs mt-1">₦{inboxPriceNgn.toLocaleString()}/inbox × {totalInboxes} inboxes</p>
+              <p className="text-white/30 text-xs mt-1">₦{activeInboxPriceNgn.toLocaleString()}/inbox × {totalInboxes} inboxes</p>
             </div>
             {(redirectUrl || replyForwardTo) && (
               <div className="border-t border-white/8 pt-3 space-y-1">
