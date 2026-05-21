@@ -95,7 +95,9 @@ export async function POST(req: NextRequest) {
         first_name:       first_name ?? null,
         last_name:        last_name  ?? null,
         payment_provider,
-        inbox_provider,
+        // Only set inbox_provider when microsoft365 — omitting it keeps the DB default ('postal')
+        // so this is safe before migration 040 is applied.
+        ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
         domain_price_usd: domainPrice,
         redirect_url:     redirect_url ?? null,
         reply_forward_to: reply_forward_to ?? null,
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
           last_name:         last_name  ?? null,
           daily_send_limit:  15,
           payment_provider,
-          inbox_provider,
+          ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
           domain_price_usd:  domainPrice,
           redirect_url:      redirect_url ?? null,
           reply_forward_to:  reply_forward_to ?? null,
