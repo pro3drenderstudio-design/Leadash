@@ -19,6 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ enro
       .select("id, from_email, from_name, subject, body_text, received_at, ai_category, ai_confidence, attachments, is_filtered, inbox:outreach_inboxes!inbox_id(email_address, label)")
       .eq("enrollment_id", enrollmentId)
       .eq("workspace_id", workspaceId)
+      .not("body_text", "is", null)
       // intentionally no is_filtered filter — OOO/auto-replies must show in the conversation thread
       .order("received_at", { ascending: true }),
     db.from("crm_notes")

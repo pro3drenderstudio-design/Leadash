@@ -153,6 +153,54 @@ export function startSchedulers() {
     }
   });
 
+  // ── Billing reminders: daily at 09:00 UTC ────────────────────────────────
+  // Trial expiry, subscription renewal, grace period, and inbox domain renewal.
+  cron.schedule("0 9 * * *", async () => {
+    if (!APP_URL || !CRON_SECRET) {
+      console.warn("[scheduler:billing-reminders] APP_URL or CRON_SECRET not set — skipping");
+      return;
+    }
+    try {
+      const res = await fetch(`${APP_URL}/api/cron/billing-reminders`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[scheduler:billing-reminders] HTTP ${res.status}: ${text.slice(0, 200)}`);
+        return;
+      }
+      const data = await res.json() as { sent?: number; skipped?: number };
+      console.log(`[scheduler:billing-reminders] sent=${data?.sent ?? 0} skipped=${data?.skipped ?? 0}`);
+    } catch (e) {
+      console.error("[scheduler:billing-reminders] failed:", e);
+    }
+  });
+
+  // ── Billing grace check: daily at 03:30 UTC ──────────────────────────────
+  // Downgrades workspaces whose payment grace period has expired.
+  cron.schedule("30 3 * * *", async () => {
+    if (!APP_URL || !CRON_SECRET) {
+      console.warn("[scheduler:billing-grace] APP_URL or CRON_SECRET not set — skipping");
+      return;
+    }
+    try {
+      const res = await fetch(`${APP_URL}/api/cron/billing-grace`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[scheduler:billing-grace] HTTP ${res.status}: ${text.slice(0, 200)}`);
+        return;
+      }
+      const data = await res.json() as { downgraded?: number };
+      console.log(`[scheduler:billing-grace] downgraded=${data?.downgraded ?? 0}`);
+    } catch (e) {
+      console.error("[scheduler:billing-grace] failed:", e);
+    }
+  });
+
   // ── Infrastructure health snapshot: every 5 minutes ────────────────────
   cron.schedule("*/5 * * * *", async () => {
     try {

@@ -46,8 +46,10 @@ export async function collectPostalMetrics(): Promise<PostalMetrics | null> {
         `SELECT COUNT(*) FROM suppressions WHERE timestamp > UNIX_TIMESTAMP(NOW() - INTERVAL 86400 SECOND)`),
       postalQuery("postal-server-1",
         `SELECT d.details, COUNT(*) as cnt FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE m.status='HardFail' AND m.timestamp > UNIX_TIMESTAMP(NOW() - INTERVAL ${windowSec} SECOND) GROUP BY d.details ORDER BY cnt DESC LIMIT 5`),
+      // Disabled endpoints: Postal sets disabled_until after 5 consecutive failures.
+      // Correct routes point to 172.17.0.1:3001/inbound-relay (Docker bridge), not leadash.com directly.
       postalQuery("postal",
-        `SELECT COUNT(*) FROM routes r JOIN http_endpoints h ON h.id=r.endpoint_id WHERE h.url NOT LIKE '%leadash.com%'`),
+        `SELECT COUNT(*) FROM routes r JOIN http_endpoints h ON h.id=r.endpoint_id WHERE h.disabled_until IS NOT NULL`),
     ]);
 
     let sent = 0, hardFail = 0;
@@ -106,12 +108,13 @@ export async function checkPostalHealth(
     await resolveNotification("postal:hardfail:critical");
   }
 
-  // Dead routes — silent reply killer
+  // Disabled endpoints — Postal disables HTTP endpoints after 5 consecutive failures.
+  // This is the root cause of silent "Invalid endpoint for route" delivery failures.
   if (dead_routes > 0) {
     await upsertNotification({
       type: "postal", severity: "critical",
-      title: `Postal has ${dead_routes} route${dead_routes > 1 ? "s" : ""} pointing to dead endpoints`,
-      body:  "Inbound replies and bounces will silently fail. Go to Postal → Routing and remove routes not pointing to https://leadash.com/api/outreach/inbound.",
+      title: `${dead_routes} Postal HTTP endpoint${dead_routes > 1 ? "s" : ""} disabled after consecutive failures`,
+      body:  "Inbound relay is broken. Check postal-agent is running (pm2 status), verify APP_URL in postal-agent .env points to https://www.leadash.com, then restart postal-agent.",
       metadata: { dead_routes },
       dedup_key: "postal:dead_routes:critical",
     });
@@ -236,7 +239,7 @@ Rules:
 - status=ok: hard_fail_pct < 8 AND dead_routes = 0 AND held < 100 AND suppressions_24h < 20
 - status=warning: any threshold exceeded but not critical
 - status=critical: hard_fail_pct >= 15 OR dead_routes > 0
-- "Invalid endpoint for route" errors are dead-route inbound failures — the fix is to check Postal HTTP endpoint config
+- dead_routes > 0 means Postal disabled HTTP endpoint(s) after consecutive 401/500 failures from the inbound relay — fix is to check postal-agent APP_URL and restart it
 - Microsoft S3140 rejections mean the sending IP is on Hotmail/Outlook blocklist — submit delist at https://sender.office.com
 - Held messages > 100 means emails are queued but not delivered, usually a sending queue backlog`,
     messages: [{ role: "user", content: JSON.stringify(snapshot, null, 2) }],

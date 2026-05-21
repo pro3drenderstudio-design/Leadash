@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
       .from("outreach_replies")
       .select("id, from_email, from_name, subject, body_text, received_at, ai_category, ai_confidence, is_filtered")
       .eq("enrollment_id", row.id as string)
+      .not("body_text", "is", null)
       .order("received_at", { ascending: false })
       .limit(1)
       .maybeSingle();
