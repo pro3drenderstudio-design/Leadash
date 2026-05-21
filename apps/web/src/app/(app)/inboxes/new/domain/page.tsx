@@ -654,11 +654,11 @@ export default function BuyDomainPage() {
                   <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
                 </svg>
                 <div className="space-y-1">
-                  <p className="text-[#60a5fa] text-xs font-semibold">Microsoft 365 — Vendor-provisioned</p>
+                  <p className="text-[#60a5fa] text-xs font-semibold">Microsoft 365</p>
                   <p className="text-white/55 text-xs">
-                    After payment, your domain will be configured and sent to our provisioning partner. Microsoft inboxes are typically ready within <strong className="text-white/70">3–5 business days</strong>. You&apos;ll receive an email notification when inboxes are active.
+                    Microsoft inboxes are typically ready within <strong className="text-white/70">3–5 business days</strong>. You&apos;ll receive an email notification when inboxes are active.
                   </p>
-                  <p className="text-white/40 text-xs">14-day warmup · Up to 50 sends/inbox/day at full capacity</p>
+                  <p className="text-white/40 text-xs">14-day warmup · Up to 30 sends/inbox/day at full capacity</p>
                 </div>
               </div>
             ) : (
@@ -803,7 +803,7 @@ export default function BuyDomainPage() {
           <p className="text-white/40 text-sm mb-8">
             {overallStatus === "active"
               ? (isMicrosoft
-                  ? "Payment confirmed. Your domain is being set up and sent to our Microsoft 365 provisioning partner. Inboxes will be ready within 3–5 business days — we'll email you when they're active."
+                  ? "Payment confirmed. Your Microsoft 365 domain is being set up. Inboxes will be ready within 3–5 business days — we'll email you when they're active."
                   : "Your inboxes are created and warming up. They'll be ready for campaigns in 21 days.")
               : overallStatus === "failed"
               ? "Something went wrong during setup. Contact support if this persists."
