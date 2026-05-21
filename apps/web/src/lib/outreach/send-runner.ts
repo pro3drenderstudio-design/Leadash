@@ -121,10 +121,10 @@ function pickInbox(
   // For unknown: try all OAuth providers first, then smtp
   const tiers: string[][] =
     preferProvider === "outlook"
-      ? [["microsoft365", "outlook"], ["gmail"], ["smtp"]]
+      ? [["microsoft365", "outlook"], ["gmail"], ["smtp", "postal"]]
       : preferProvider === "gmail"
-      ? [["gmail"], ["microsoft365", "outlook"], ["smtp"]]
-      : [["microsoft365", "outlook", "gmail"], ["smtp"]];
+      ? [["gmail"], ["microsoft365", "outlook"], ["smtp", "postal"]]
+      : [["microsoft365", "outlook", "gmail"], ["smtp", "postal"]];
 
   for (const tier of tiers) {
     const avail = slots.filter(s => tier.includes(s.inbox.provider) && s.used < s.remaining);

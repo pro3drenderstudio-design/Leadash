@@ -3,7 +3,7 @@ ALTER TABLE outreach_inboxes
   DROP CONSTRAINT IF EXISTS outreach_inboxes_provider_check;
 ALTER TABLE outreach_inboxes
   ADD CONSTRAINT outreach_inboxes_provider_check
-    CHECK (provider IN ('gmail','outlook','smtp','microsoft365'));
+    CHECK (provider IN ('gmail','outlook','smtp','postal','microsoft365'));
 
 -- Add provisioning status for placeholder inboxes awaiting vendor
 ALTER TABLE outreach_inboxes
