@@ -123,9 +123,11 @@ function downloadTemplate() {
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
-  gmail:   "#ef4444",
-  outlook: "#3b82f6",
-  smtp:    "#a855f7",
+  gmail:        "#ef4444",
+  outlook:      "#3b82f6",
+  smtp:         "#a855f7",
+  postal:       "#34d399",
+  microsoft365: "#0078d4",
 };
 
 // ─── Profile image avatar ─────────────────────────────────────────────────────
@@ -543,7 +545,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
 
   async function handleReconfigure(domainId: string) {
     setReconfiguringId(domainId);
-    setReconfiguringStep("Registering with Postal…");
+    setReconfiguringStep("Registering with Leadash Mail…");
     try {
       setReconfiguringStep("Publishing DNS records…");
       const res = await wsFetch(`/api/outreach/domains/${domainId}/ses-register`, {
