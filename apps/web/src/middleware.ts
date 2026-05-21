@@ -23,6 +23,8 @@ const PUBLIC_PATHS = [
   "/api/auth/forgot-password",
   "/api/cron",
   "/api/beta",
+  "/vendor/login",
+  "/api/vendor/login",
 ];
 
 function isPublic(path: string) {
@@ -65,6 +67,27 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/api/auth/callback";
     return NextResponse.redirect(url);
+  }
+
+  // ── Vendor portal guard (cookie-based shared secret) ─────────────────────────
+  if (pathname.startsWith("/vendor") && !pathname.startsWith("/vendor/login")) {
+    const vendorToken = request.cookies.get("vendor_token")?.value;
+    const expected    = process.env.VENDOR_PORTAL_SECRET;
+    if (!expected || vendorToken !== expected) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/vendor/login";
+      return NextResponse.redirect(url);
+    }
+    return supabaseResponse;
+  }
+
+  if (pathname.startsWith("/api/vendor") && !pathname.startsWith("/api/vendor/login")) {
+    const vendorToken = request.cookies.get("vendor_token")?.value;
+    const expected    = process.env.VENDOR_PORTAL_SECRET;
+    if (!expected || vendorToken !== expected) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return supabaseResponse;
   }
 
   // ── Admin route guard (uses verified identity) ───────────────────────────────

@@ -26,6 +26,7 @@ const EDITABLE_FIELDS = new Set([
   "included_credits",
   "trial_days",
   "inbox_monthly_price_ngn",
+  "ms_inbox_monthly_price_ngn",
   "can_scrape_leads",
   "can_run_campaigns",
   "feat_warmup",

@@ -19,14 +19,19 @@ export async function GET(req: NextRequest) {
   const page    = parseInt(searchParams.get("page")   ?? "1");
   const search  = searchParams.get("search") ?? "";
   const status  = searchParams.get("status") ?? "";
+  const filter  = searchParams.get("filter") ?? "";
   const perPage = 30;
 
   let query = ctx.adminClient
     .from("outreach_domains")
-    .select("id, workspace_id, domain, status, payment_provider, mailgun_domain, mailbox_count, mailbox_prefix, mailbox_prefixes, first_name, last_name, daily_send_limit, warmup_ends_at, error_message, dns_records, domain_price_usd, created_at, updated_at", { count: "exact" })
+    .select("id, workspace_id, domain, status, inbox_provider, payment_provider, mailgun_domain, mailbox_count, mailbox_prefix, mailbox_prefixes, first_name, last_name, daily_send_limit, warmup_ends_at, error_message, dns_records, domain_price_usd, created_at, updated_at", { count: "exact" })
     .order("created_at", { ascending: false });
 
-  if (status) query = query.eq("status", status);
+  if (filter === "ms_pending") {
+    query = query.eq("inbox_provider", "microsoft365").eq("status", "provisioning");
+  } else {
+    if (status) query = query.eq("status", status);
+  }
   if (search) query = query.ilike("domain", `%${search}%`);
 
   const { data: domains, count, error } = await query

@@ -60,3 +60,49 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ url });
 }
+
+// DELETE /api/outreach/inboxes/profile-image?inbox_id=<id>
+// Removes the profile image for an inbox (or the workspace default if inbox_id omitted).
+export async function DELETE(req: NextRequest) {
+  const auth = await requireWorkspace(req);
+  if (!auth.ok) return auth.res;
+  const { workspaceId, db } = auth;
+
+  const { searchParams } = new URL(req.url);
+  const inboxId = searchParams.get("inbox_id");
+
+  if (inboxId) {
+    // Verify inbox belongs to this workspace
+    const { data: inbox } = await db
+      .from("outreach_inboxes")
+      .select("id, profile_image_url")
+      .eq("id", inboxId)
+      .eq("workspace_id", workspaceId)
+      .single();
+
+    if (!inbox) return NextResponse.json({ error: "Inbox not found" }, { status: 404 });
+
+    // Delete from storage
+    const exts = ["jpg", "jpeg", "png", "webp", "gif"];
+    for (const ext of exts) {
+      await db.storage.from("inbox-profiles").remove([`${workspaceId}/inbox-${inboxId}.${ext}`]).catch(() => {});
+    }
+
+    // Clear DB reference
+    await db.from("outreach_inboxes")
+      .update({ profile_image_url: null })
+      .eq("id", inboxId)
+      .eq("workspace_id", workspaceId);
+  } else {
+    // Remove workspace default
+    const exts = ["jpg", "jpeg", "png", "webp", "gif"];
+    for (const ext of exts) {
+      await db.storage.from("inbox-profiles").remove([`${workspaceId}/default.${ext}`]).catch(() => {});
+    }
+    await db.from("workspace_settings")
+      .update({ default_inbox_profile_image_url: null })
+      .eq("workspace_id", workspaceId);
+  }
+
+  return NextResponse.json({ ok: true });
+}

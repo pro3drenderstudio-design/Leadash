@@ -10,7 +10,10 @@ export default async function InboxesPage() {
     max_inboxes: number;
   } | null;
 
+  // Only treat a workspace as trial-expired if it is still on the free plan.
+  // Paid subscribers retain a stale trial_ends_at after upgrading — don't block them.
   const trialExpired =
+    ws?.plan_id === "free" &&
     !!ws?.trial_ends_at &&
     new Date(ws.trial_ends_at) < new Date();
 

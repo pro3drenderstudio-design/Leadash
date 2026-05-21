@@ -35,7 +35,9 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     .eq("id", workspaceId)
     .single();
 
-  if (ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date()) {
+  const trialExpired = ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date();
+  const onPaidPlan   = ws?.plan_id && ws.plan_id !== "free";
+  if (trialExpired && !onPaidPlan) {
     // Disable warmup for all inboxes in this workspace so the flag is accurate
     await db
       .from("outreach_inboxes")

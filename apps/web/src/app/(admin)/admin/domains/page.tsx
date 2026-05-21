@@ -9,7 +9,8 @@ interface Domain {
   workspace_name: string;
   workspace_owner: string;
   domain: string;
-  status: "pending" | "purchasing" | "dns_pending" | "verifying" | "active" | "failed";
+  status: "pending" | "purchasing" | "dns_pending" | "verifying" | "provisioning" | "active" | "failed";
+  inbox_provider: "postal" | "microsoft365" | null;
   payment_provider: "stripe" | "paystack";
   mailgun_domain: string | null;
   mailbox_count: number;
@@ -26,20 +27,21 @@ interface Domain {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:     "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
-  purchasing:  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  dns_pending: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  verifying:   "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
-  active:      "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
-  failed:      "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  pending:      "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40",
+  purchasing:   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  dns_pending:  "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+  verifying:    "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
+  provisioning: "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
+  active:       "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
+  failed:       "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const pulse = status === "dns_pending" || status === "verifying" || status === "purchasing";
+  const pulse = status === "dns_pending" || status === "verifying" || status === "purchasing" || status === "provisioning";
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${STATUS_COLORS[status] ?? STATUS_COLORS.pending}`}>
       {pulse && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
-      {status.replace("_", " ")}
+      {status.replace(/_/g, " ")}
     </span>
   );
 }
@@ -49,6 +51,15 @@ function ProviderBadge({ provider }: { provider: string }) {
     ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
     : "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300";
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${colors}`}>{provider}</span>;
+}
+
+function InboxProviderBadge({ provider }: { provider: string | null }) {
+  if (!provider || provider === "postal") return null;
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 uppercase">
+      M365
+    </span>
+  );
 }
 
 function DnsRecordsExpander({ records }: { records: Record<string, unknown> | null }) {
@@ -115,14 +126,16 @@ function DomainsInner() {
   const page   = parseInt(searchParams.get("page")   ?? "1");
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
+  const filter = searchParams.get("filter") ?? "";
 
   const fetchDomains = useCallback(() => {
     setLoading(true);
     const q = new URLSearchParams({ page: String(page), search, status });
+    if (filter) q.set("filter", filter);
     fetch(`/api/admin/domains?${q}`)
       .then(r => r.json())
       .then(d => { setDomains(d.domains ?? []); setTotal(d.total ?? 0); setLoading(false); });
-  }, [page, search, status]);
+  }, [page, search, status, filter]);
 
   useEffect(() => { fetchDomains(); }, [fetchDomains]);
 
@@ -170,8 +183,24 @@ function DomainsInner() {
         <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total managed domains</p>
       </div>
 
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <button
+          onClick={() => setParam("filter", "")}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${filter === "" ? "bg-slate-800 text-white border-slate-800 dark:bg-white dark:text-slate-900 dark:border-white" : "bg-white dark:bg-white/5 text-slate-600 dark:text-white/60 border-slate-200 dark:border-white/10 hover:border-slate-300"}`}
+        >
+          All Domains
+        </button>
+        <button
+          onClick={() => setParam("filter", filter === "ms_pending" ? "" : "ms_pending")}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${filter === "ms_pending" ? "bg-sky-600 text-white border-sky-600" : "bg-white dark:bg-white/5 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-500/30 hover:border-sky-400"}`}
+        >
+          MS Pending
+        </button>
+      </div>
+
       {/* Status pills */}
-      {!loading && (
+      {!loading && filter === "" && (
         <div className="flex gap-2 flex-wrap">
           {Object.entries(countsByStatus).map(([s, count]) => (
             <button
@@ -179,7 +208,7 @@ function DomainsInner() {
               onClick={() => setParam("status", status === s ? "" : s)}
               className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all ${STATUS_COLORS[s] ?? STATUS_COLORS.pending} ${status === s ? "ring-2 ring-offset-1 ring-current" : ""}`}
             >
-              {count} {s.replace("_", " ")}
+              {count} {s.replace(/_/g, " ")}
             </button>
           ))}
         </div>
@@ -209,6 +238,7 @@ function DomainsInner() {
           <option value="purchasing">Purchasing</option>
           <option value="dns_pending">DNS Pending</option>
           <option value="verifying">Verifying</option>
+          <option value="provisioning">Provisioning (M365)</option>
           <option value="active">Active</option>
           <option value="failed">Failed</option>
         </select>
@@ -251,6 +281,7 @@ function DomainsInner() {
                   <p className="font-mono font-medium text-slate-800 dark:text-white/90">{d.domain}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <ProviderBadge provider={d.payment_provider} />
+                    <InboxProviderBadge provider={d.inbox_provider} />
                     {d.domain_price_usd && (
                       <span className="text-[10px] text-slate-400 dark:text-white/30">${d.domain_price_usd}</span>
                     )}

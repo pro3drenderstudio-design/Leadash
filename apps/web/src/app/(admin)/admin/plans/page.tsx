@@ -15,7 +15,8 @@ interface PlanConfig {
   max_leads_pool:          number;
   included_credits:        number;
   trial_days:              number;
-  inbox_monthly_price_ngn: number;
+  inbox_monthly_price_ngn:    number;
+  ms_inbox_monthly_price_ngn: number;
   can_scrape_leads:        boolean;
   can_run_campaigns:       boolean;
   feat_warmup:             boolean;
@@ -155,8 +156,12 @@ function PlanCard({
               <NumInput value={merged.price_usd} onChange={v => set("price_usd", v)} min={0} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Inbox price (₦/mailbox/mo)</label>
+              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Postal inbox price (₦/mailbox/mo)</label>
               <NumInput value={merged.inbox_monthly_price_ngn} onChange={v => set("inbox_monthly_price_ngn", v)} min={0} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Microsoft 365 inbox price (₦/mailbox/mo)</label>
+              <NumInput value={merged.ms_inbox_monthly_price_ngn ?? 4200} onChange={v => set("ms_inbox_monthly_price_ngn", v)} min={0} />
             </div>
             <div>
               <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Trial days</label>

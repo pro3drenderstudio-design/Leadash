@@ -131,7 +131,7 @@ INSERT_SQL = """
          linkedin_url, country, state, city, company_name, facebook_url, twitter_url,
          github_url, interests, start_date, source)
     VALUES %s
-    ON CONFLICT (email) WHERE email IS NOT NULL AND email <> '' DO NOTHING
+    ON CONFLICT DO NOTHING
 """
 
 

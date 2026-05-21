@@ -326,6 +326,102 @@ export function buildPostalMailDnsRecords(
 }
 
 /**
+ * Build initial DNS records for a Microsoft 365 hybrid domain.
+ *
+ * Hybrid model: MX stays on Postal (inbound replies unchanged), outbound uses M365 SMTP.
+ * M365 DKIM CNAME records and domain-verification TXT are added later by the vendor portal
+ * once the vendor supplies the tenant-specific values.
+ *
+ * postalMxHost: hostname of the Postal MX server (POSTAL_MX_HOST or POSTAL_SMTP_HOST)
+ * postalIp: public IPv4 of the Postal VPS — included in SPF alongside M365
+ */
+export function buildMicrosoftHybridDnsRecords(
+  domain: string,
+  postalMxHost: string,
+  postalIp: string,
+): DnsRecord[] {
+  return [
+    // MX — Postal handles inbound replies (no change from Postal inboxes)
+    {
+      type:     "MX",
+      name:     "@",
+      value:    postalMxHost,
+      priority: 10,
+    },
+    // SPF — authorise both Postal VPS and Microsoft 365 for outbound
+    {
+      type:  "TXT",
+      name:  "@",
+      value: `v=spf1 ip4:${postalIp} include:spf.protection.outlook.com ~all`,
+    },
+    // DMARC
+    {
+      type:  "TXT",
+      name:  "_dmarc",
+      value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}; pct=100`,
+    },
+    // Autodiscover — helps Outlook clients find M365 configuration
+    {
+      type:  "CNAME",
+      name:  "autodiscover",
+      value: "autodiscover.outlook.com",
+    },
+  ];
+}
+
+/**
+ * Build the DNS records added when a vendor provisions an M365 tenant for a domain:
+ * - Domain ownership verification TXT
+ * - Two DKIM CNAME selectors (selector1 and selector2)
+ *
+ * These are pushed to Cloudflare by the vendor provision API route after the vendor
+ * supplies the tenant-specific values.
+ */
+export function buildMicrosoftTenantDnsRecords(opts: {
+  verificationTxt: string;
+  dkimSel1Target: string;
+  dkimSel2Target: string;
+}): DnsRecord[] {
+  return [
+    // M365 domain ownership verification
+    { type: "TXT",   name: "@",                  value: opts.verificationTxt },
+    // DKIM selector CNAMEs
+    { type: "CNAME", name: "selector1._domainkey", value: opts.dkimSel1Target },
+    { type: "CNAME", name: "selector2._domainkey", value: opts.dkimSel2Target },
+  ];
+}
+
+/**
+ * Add specific DNS records to a zone without deleting existing ones.
+ * Used for adding M365 tenant records on top of existing hybrid DNS.
+ */
+export async function addDnsRecords(domain: string, records: DnsRecord[]): Promise<void> {
+  const zoneId = await getZoneId(domain);
+  for (const rec of records) {
+    const name = rec.name === "@" ? domain : `${rec.name}.${domain}`;
+    // Delete any existing record of same type+name before creating
+    const existing = await cfFetch<{ id: string; type: string; name: string }[]>(
+      "GET",
+      `/zones/${zoneId}/dns_records?type=${rec.type}&per_page=100`,
+    ).catch(() => [] as { id: string; type: string; name: string }[]);
+    for (const e of existing ?? []) {
+      const eName = e.name.endsWith(".") ? e.name.slice(0, -1) : e.name;
+      if (eName === name) {
+        await cfFetch("DELETE", `/zones/${zoneId}/dns_records/${e.id}`).catch(() => {});
+      }
+    }
+    await cfFetch("POST", `/zones/${zoneId}/dns_records`, {
+      type:     rec.type,
+      name,
+      content:  rec.value,
+      ttl:      rec.ttl ?? 1,
+      priority: rec.priority,
+      proxied:  false,
+    });
+  }
+}
+
+/**
  * Build the standard set of mail DNS records for a domain + SES DKIM tokens.
  * sesDkimTokens: array of 3 tokens returned by AWS SES verifyDomainDkim()
  */

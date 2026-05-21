@@ -72,10 +72,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // A workspace is "commercially active" if it is on a named paid plan OR has a
   // subscription_renews_at set (starter users who paid — they always have renews_at
   // after backfill; beta starters do not).
-  const PAID_PLANS = ["pro", "scale", "enterprise"];
   const hasActivePaidPlan =
-    (PAID_PLANS.includes(workspace.plan_id) || workspace.subscription_renews_at !== null)
-    && workspace.plan_status === "active";
+    workspace.plan_id !== "free" && workspace.plan_status === "active";
   const trialEndsAt = hasActivePaidPlan ? null : workspace.trial_ends_at;
 
   // Show renewal banner when renewal is within 7 days (or overdue) for paid plans

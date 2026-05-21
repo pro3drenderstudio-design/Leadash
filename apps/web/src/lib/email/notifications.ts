@@ -6,8 +6,12 @@
 const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
+// Always CC'd on admin-facing alerts (tickets, provisioning, domain purchase)
+const OWNER_EMAIL = process.env.OWNER_ALERT_EMAIL ?? "leadash.official@gmail.com";
+
 async function sendEmail(opts: {
   to: string;
+  cc?: string[];
   replyTo?: string;
   subject: string;
   html: string;
@@ -23,6 +27,7 @@ async function sendEmail(opts: {
       body: JSON.stringify({
         from:     `Leadash <${FROM}>`,
         to:       [opts.to],
+        cc:       opts.cc?.length ? opts.cc : undefined,
         reply_to: opts.replyTo,
         subject:  opts.subject,
         html:     opts.html,
@@ -48,6 +53,7 @@ async function sendEmail(opts: {
       plain_body: opts.text,
     };
     if (opts.replyTo) payload.reply_to = opts.replyTo;
+    if (opts.cc?.length) payload.cc = opts.cc;
 
     const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
       method:  "POST",
@@ -75,8 +81,11 @@ export async function sendAdminNewTicketNotification(opts: {
   priority: string;
   ticketId: string;
 }): Promise<void> {
+  // Always CC OWNER_EMAIL so every ticket reaches leadash.official@gmail.com
+  const cc = opts.adminEmail !== OWNER_EMAIL ? [OWNER_EMAIL] : [];
   await sendEmail({
     to: opts.adminEmail,
+    cc: cc.length ? cc : undefined,
     subject: `[New Ticket #${opts.ticketNumber}] ${opts.subject}`,
     text: [
       `New support ticket from ${opts.userEmail}`,
@@ -117,8 +126,10 @@ export async function sendAdminDomainPurchaseRequired(opts: {
   workspaceId: string;
 }): Promise<void> {
   const adminUrl = `${APP_URL}/admin/domains?search=${encodeURIComponent(opts.domain)}`;
+  const cc = opts.adminEmail !== OWNER_EMAIL ? [OWNER_EMAIL] : [];
   await sendEmail({
     to:      opts.adminEmail,
+    cc:      cc.length ? cc : undefined,
     subject: `[Action Required] Manual domain purchase: ${opts.domain}`,
     text: [
       `A user paid for a domain that needs to be manually registered on Porkbun.`,
@@ -953,6 +964,59 @@ export async function sendCancellationConfirmationEmail(opts: {
           <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
         </div>
       </div>
+    `,
+  });
+}
+
+// ─── Microsoft inbox provisioning ────────────────────────────────────────────
+
+export async function sendMicrosoftProvisioningAlert(opts: {
+  domain:         string;
+  inboxCount:     number;
+  inboxEmails:    string[];
+  workspaceId:    string;
+  workspaceEmail: string;
+  orderedAt:      string;
+}): Promise<void> {
+  const vendorUrl  = `${APP_URL}/vendor`;
+  const adminUrl   = `${APP_URL}/admin/domains?filter=ms_pending`;
+  const ordered    = new Date(opts.orderedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
+  const inboxList  = opts.inboxEmails.map(e => `• ${e}`).join("\n");
+  const inboxHtml  = opts.inboxEmails.map(e => `<li style="padding:2px 0">${e}</li>`).join("");
+
+  await sendEmail({
+    to:      OWNER_EMAIL,
+    subject: `[Leadash] New Microsoft Inbox Order — ${opts.domain}`,
+    text: [
+      `New Microsoft 365 inbox order received.`,
+      ``,
+      `Domain:    ${opts.domain}`,
+      `Inboxes:   ${opts.inboxCount}`,
+      `Ordered:   ${ordered}`,
+      `Workspace: ${opts.workspaceId} (${opts.workspaceEmail})`,
+      ``,
+      `Inbox addresses to provision:`,
+      inboxList,
+      ``,
+      `Vendor portal: ${vendorUrl}`,
+      `Admin panel:   ${adminUrl}`,
+    ].join("\n"),
+    html: `
+      <p style="font-family:sans-serif">New Microsoft 365 inbox order received and awaiting vendor provisioning.</p>
+      <table style="border-collapse:collapse;margin:16px 0;font-size:14px;font-family:sans-serif">
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Domain</td><td><strong>${opts.domain}</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Inboxes</td><td>${opts.inboxCount}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Ordered</td><td>${ordered}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Workspace</td><td>${opts.workspaceId}<br><span style="color:#9ca3af">${opts.workspaceEmail}</span></td></tr>
+      </table>
+      <p style="font-family:sans-serif;font-size:14px;font-weight:600;margin-bottom:6px">Inbox addresses to provision:</p>
+      <ul style="font-family:sans-serif;font-size:14px;margin:0 0 16px;padding-left:20px;color:#374151">
+        ${inboxHtml}
+      </ul>
+      <p>
+        <a href="${vendorUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px;margin-right:8px">Open Vendor Portal →</a>
+        <a href="${adminUrl}" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">Admin Panel →</a>
+      </p>
     `,
   });
 }

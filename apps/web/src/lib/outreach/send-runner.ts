@@ -115,21 +115,23 @@ function pickInbox(
   rrIndex: number,
   preferProvider?: "gmail" | "outlook" | null,
 ): { slot: InboxSlot; nextRr: number } | null {
-  const n = slots.length;
-  // First pass: try preferred provider (e.g. gmail inbox for gmail recipient)
-  if (preferProvider) {
-    for (let i = 0; i < n; i++) {
-      const idx  = (rrIndex + i) % n;
-      const slot = slots[idx];
-      if (slot.used < slot.remaining && slot.inbox.provider === preferProvider) {
-        return { slot, nextRr: (idx + 1) % n };
-      }
+  // 3-tier routing: Microsoft → Google → SMTP
+  // For Microsoft recipients: prefer microsoft365/outlook, fall back to gmail, then smtp
+  // For Google recipients: prefer gmail, fall back to microsoft365/outlook, then smtp
+  // For unknown: try all OAuth providers first, then smtp
+  const tiers: string[][] =
+    preferProvider === "outlook"
+      ? [["microsoft365", "outlook"], ["gmail"], ["smtp"]]
+      : preferProvider === "gmail"
+      ? [["gmail"], ["microsoft365", "outlook"], ["smtp"]]
+      : [["microsoft365", "outlook", "gmail"], ["smtp"]];
+
+  for (const tier of tiers) {
+    const avail = slots.filter(s => tier.includes(s.inbox.provider) && s.used < s.remaining);
+    if (avail.length) {
+      const idx = rrIndex % avail.length;
+      return { slot: avail[idx], nextRr: rrIndex + 1 };
     }
-  }
-  // Second pass: any available slot (SMTP fallback)
-  for (let i = 0; i < n; i++) {
-    const slot = slots[(rrIndex + i) % n];
-    if (slot.used < slot.remaining) return { slot, nextRr: (rrIndex + i + 1) % n };
   }
   return null;
 }
@@ -149,7 +151,7 @@ export async function runSendBatch(
     .eq("id", workspaceId)
     .single();
 
-  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  const trialExpired = wsRow?.plan_id === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
   if (trialExpired) {
     // Auto-pause any active campaigns for this workspace
     await db.from("outreach_campaigns")

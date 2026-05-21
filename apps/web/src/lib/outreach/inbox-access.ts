@@ -31,8 +31,8 @@ export async function checkInboxAccess(
 
   if (!ws) return { ok: false, code: "inbox_limit", message: "Workspace not found." };
 
-  // ── 1. Trial check (any plan with an uncleared trial_ends_at) ──────────────
-  if (ws.trial_ends_at) {
+  // ── 1. Trial check — only blocks free-plan workspaces ──────────────────────
+  if (ws.trial_ends_at && ws.plan_id === "free") {
     const trialExpired = new Date(ws.trial_ends_at) < new Date();
     if (trialExpired) {
       return {

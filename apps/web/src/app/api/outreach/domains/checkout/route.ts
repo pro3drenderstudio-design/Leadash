@@ -26,9 +26,10 @@ export async function POST(req: NextRequest) {
     last_name,
     redirect_url,
     reply_forward_to,
-    connect_only = false,
-    cf_auto = false,
+    connect_only    = false,
+    cf_auto         = false,
     payment_provider = "stripe",
+    inbox_provider  = "postal",
   } = body as {
     domains: Array<{ domain: string; price: number }>;
     mailbox_prefixes: string[];
@@ -39,7 +40,12 @@ export async function POST(req: NextRequest) {
     connect_only?: boolean;
     cf_auto?: boolean;
     payment_provider?: "stripe" | "paystack";
+    inbox_provider?: "postal" | "microsoft365";
   };
+
+  if (inbox_provider !== "postal" && inbox_provider !== "microsoft365") {
+    return NextResponse.json({ error: "inbox_provider must be 'postal' or 'microsoft365'" }, { status: 400 });
+  }
 
   if (!domains?.length) return NextResponse.json({ error: "domains is required" }, { status: 400 });
   if (!mailbox_prefixes?.length || mailbox_prefixes.length > 5) {
@@ -89,6 +95,7 @@ export async function POST(req: NextRequest) {
         first_name:       first_name ?? null,
         last_name:        last_name  ?? null,
         payment_provider,
+        inbox_provider,
         domain_price_usd: domainPrice,
         redirect_url:     redirect_url ?? null,
         reply_forward_to: reply_forward_to ?? null,
@@ -110,6 +117,7 @@ export async function POST(req: NextRequest) {
           last_name:         last_name  ?? null,
           daily_send_limit:  15,
           payment_provider,
+          inbox_provider,
           domain_price_usd:  domainPrice,
           redirect_url:      redirect_url ?? null,
           reply_forward_to:  reply_forward_to ?? null,
@@ -125,8 +133,11 @@ export async function POST(req: NextRequest) {
     insertedIds.push(recId);
   }
 
-  // inbox_monthly_price_ngn from plan config (already in NGN, per mailbox)
-  const inboxMonthlyNgn   = workspacePlan.inbox_monthly_price_ngn * mailboxCount * domains.length;
+  // Use M365-specific price when inbox_provider=microsoft365
+  const pricePerInboxNgn = inbox_provider === "microsoft365"
+    ? ((workspacePlan as Record<string, unknown>).ms_inbox_monthly_price_ngn as number ?? 4200)
+    : workspacePlan.inbox_monthly_price_ngn;
+  const inboxMonthlyNgn  = pricePerInboxNgn * mailboxCount * domains.length;
   const domainIdsParam    = insertedIds.join(",");
 
   // ── Stripe ───────────────────────────────────────────────────────────────────
@@ -162,7 +173,7 @@ export async function POST(req: NextRequest) {
             unit_amount: Math.round((inboxMonthlyNgn / ngnPerUsd) * 100),
             recurring:   { interval: "month" },
             product_data: {
-              name:        `Sending inboxes (${domains.length * mailboxCount} total)`,
+              name:        `${inbox_provider === "microsoft365" ? "Microsoft 365" : "Sending"} inboxes (${domains.length * mailboxCount} total)`,
               description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""}/mo`,
             },
           },

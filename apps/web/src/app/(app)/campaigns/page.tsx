@@ -8,7 +8,7 @@ export default async function CampaignsPage() {
   const ws = ctx?.workspace as { plan_id: string; trial_ends_at: string | null } | null;
 
   const planId = ws?.plan_id ?? "free";
-  const trialExpired = !!ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date();
+  const trialExpired = planId === "free" && !!ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date();
   const plan = await getPlanById(planId);
   const canRunCampaigns = !trialExpired && plan.can_run_campaigns;
 

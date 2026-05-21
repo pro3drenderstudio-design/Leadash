@@ -326,6 +326,23 @@ export function buildPostalMailDnsRecords(
 }
 
 /**
+ * Build the DNS records for a domain using Microsoft 365 outbound + Postal inbound.
+ * MX stays on Postal so inbound replies are unchanged; outbound uses smtp.office365.com.
+ */
+export function buildMicrosoftHybridDnsRecords(
+  domain: string,
+  postalMxHost: string,
+  postalIp: string,
+): DnsRecord[] {
+  return [
+    { type: "MX",   name: "@",             value: postalMxHost, priority: 10 },
+    { type: "TXT",  name: "@",             value: `v=spf1 ip4:${postalIp} include:spf.protection.outlook.com ~all` },
+    { type: "TXT",  name: "_dmarc",        value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}; pct=100` },
+    { type: "CNAME", name: "autodiscover", value: "autodiscover.outlook.com" },
+  ];
+}
+
+/**
  * Build the standard set of mail DNS records for a domain + SES DKIM tokens.
  * sesDkimTokens: array of 3 tokens returned by AWS SES verifyDomainDkim()
  */

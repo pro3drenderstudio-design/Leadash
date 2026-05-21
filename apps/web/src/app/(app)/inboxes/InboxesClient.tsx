@@ -130,14 +130,16 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 // ─── Profile image avatar ─────────────────────────────────────────────────────
 function InboxAvatar({
-  inbox, size = 36, onUploaded,
+  inbox, size = 36, onUploaded, onRemoved,
 }: {
   inbox: OutreachInboxSafe;
   size?: number;
   onUploaded?: (url: string) => void;
+  onRemoved?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [removing,  setRemoving]  = useState(false);
   const [preview, setPreview]     = useState<string | null>(inbox.profile_image_url ?? null);
   const color = PROVIDER_COLORS[inbox.provider] ?? "#888";
   const initials = ((inbox.first_name?.[0] ?? "") + (inbox.last_name?.[0] ?? "")) ||
@@ -158,6 +160,17 @@ function InboxAvatar({
     } finally { setUploading(false); e.target.value = ""; }
   }
 
+  async function handleRemove(e: React.MouseEvent) {
+    e.stopPropagation();
+    setRemoving(true);
+    try {
+      const { wsFetch } = await import("@/lib/workspace/client");
+      await wsFetch(`/api/outreach/inboxes/profile-image?inbox_id=${inbox.id}`, { method: "DELETE" });
+      setPreview(null);
+      onRemoved?.();
+    } finally { setRemoving(false); }
+  }
+
   return (
     <div className="relative flex-shrink-0 group" style={{ width: size, height: size }}>
       {preview ? (
@@ -168,19 +181,23 @@ function InboxAvatar({
           {initials}
         </div>
       )}
-      {/* Upload overlay on hover */}
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={uploading}
-        className="absolute inset-0 rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-        title="Upload photo"
-      >
-        {uploading ? (
+      {/* Overlay on hover */}
+      <div className="absolute inset-0 rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+        {(uploading || removing) ? (
           <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
         ) : (
-          <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
+          <>
+            <button onClick={() => fileRef.current?.click()} title="Upload photo" className="p-0.5 rounded hover:bg-white/20">
+              <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
+            </button>
+            {preview && (
+              <button onClick={handleRemove} title="Remove photo" className="p-0.5 rounded hover:bg-white/20">
+                <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+              </button>
+            )}
+          </>
         )}
-      </button>
+      </div>
       <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleFile} />
     </div>
   );
@@ -1109,6 +1126,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                   inbox={inbox}
                   size={36}
                   onUploaded={(url) => setInboxes(prev => prev.map(i => i.id === inbox.id ? { ...i, profile_image_url: url } : i))}
+                  onRemoved={() => setInboxes(prev => prev.map(i => i.id === inbox.id ? { ...i, profile_image_url: null } : i))}
                 />
 
                 {/* Info */}
@@ -1338,6 +1356,10 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                   onUploaded={(url) => {
                     setDrawerEdits(e => ({ ...e, profile_image_url: url }));
                     setInboxes(prev => prev.map(i => i.id === drawerInbox.id ? { ...i, profile_image_url: url } : i));
+                  }}
+                  onRemoved={() => {
+                    setDrawerEdits(e => ({ ...e, profile_image_url: null }));
+                    setInboxes(prev => prev.map(i => i.id === drawerInbox.id ? { ...i, profile_image_url: null } : i));
                   }}
                 />
                 <div>

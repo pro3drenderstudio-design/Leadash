@@ -49,12 +49,13 @@ const PROVISION_STEPS = [
 ];
 
 const STATUS_TO_STEP: Record<string, number> = {
-  pending:     0,
-  purchasing:  1,
-  dns_pending: 2,
-  verifying:   4,
-  active:      6,
-  failed:      -1,
+  pending:      0,
+  purchasing:   1,
+  dns_pending:  2,
+  verifying:    4,
+  provisioning: 6, // M365: DNS done, waiting for vendor — show as "done" in progress UI
+  active:       6,
+  failed:       -1,
 };
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -69,6 +70,10 @@ export default function BuyDomainPage() {
   // Paystack appends ?reference=xxx&trxref=xxx to callback URL
   const returnedRef        = searchParams.get("reference") || searchParams.get("trxref");
   const returnedIdList     = returnedDomainIds ? returnedDomainIds.split(",").filter(Boolean) : [];
+
+  // inbox_provider from URL — set by the provider selector in /inboxes/new
+  const inboxProvider = (searchParams.get("provider") === "microsoft365" ? "microsoft365" : "postal") as "postal" | "microsoft365";
+  const isMicrosoft   = inboxProvider === "microsoft365";
 
   const [step, setStep]   = useState<Step>(returnedIdList.length > 0 ? "provisioning" : "search");
 
@@ -238,6 +243,7 @@ export default function BuyDomainPage() {
           redirect_url:     redirectUrl     || undefined,
           reply_forward_to: replyForwardTo  || undefined,
           payment_provider: currency,
+          inbox_provider:   inboxProvider,
         }),
       });
       const data = await res.json();
@@ -638,13 +644,31 @@ export default function BuyDomainPage() {
               </div>
             )}
 
-            {/* Warmup notice */}
-            <div className="flex gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
-              <span className="text-amber-400 flex-shrink-0 mt-0.5">⚠</span>
-              <p className="text-amber-300/70 text-xs">
-                New inboxes warm up for 21 days (max 15 sends/day) to build sender reputation before campaigns can use them.
-              </p>
-            </div>
+            {/* Warmup / setup notice */}
+            {isMicrosoft ? (
+              <div className="flex gap-3 p-4 rounded-xl bg-[#0078d4]/8 border border-[#0078d4]/25">
+                <svg viewBox="0 0 21 21" className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none">
+                  <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                  <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                  <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                </svg>
+                <div className="space-y-1">
+                  <p className="text-[#60a5fa] text-xs font-semibold">Microsoft 365 — Vendor-provisioned</p>
+                  <p className="text-white/55 text-xs">
+                    After payment, your domain will be configured and sent to our provisioning partner. Microsoft inboxes are typically ready within <strong className="text-white/70">3–5 business days</strong>. You&apos;ll receive an email notification when inboxes are active.
+                  </p>
+                  <p className="text-white/40 text-xs">14-day warmup · Up to 50 sends/inbox/day at full capacity</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
+                <span className="text-amber-400 flex-shrink-0 mt-0.5">⚠</span>
+                <p className="text-amber-300/70 text-xs">
+                  New inboxes warm up for 21 days (max 15 sends/day) to build sender reputation before campaigns can use them.
+                </p>
+              </div>
+            )}
 
             {/* ── Optional: Domain redirect ──────────────────────────────────── */}
             <div className="border border-white/8 rounded-xl p-4 space-y-3">
@@ -778,9 +802,13 @@ export default function BuyDomainPage() {
           </h1>
           <p className="text-white/40 text-sm mb-8">
             {overallStatus === "active"
-              ? "Your inboxes are created and warming up. They'll be ready for campaigns in 21 days."
+              ? (isMicrosoft
+                  ? "Payment confirmed. Your domain is being set up and sent to our Microsoft 365 provisioning partner. Inboxes will be ready within 3–5 business days — we'll email you when they're active."
+                  : "Your inboxes are created and warming up. They'll be ready for campaigns in 21 days.")
               : overallStatus === "failed"
               ? "Something went wrong during setup. Contact support if this persists."
+              : isMicrosoft
+              ? "Setting up your domain DNS for Microsoft 365. This usually takes 2–4 minutes."
               : "This usually takes 2–4 minutes. Don't close this tab."}
           </p>
 
