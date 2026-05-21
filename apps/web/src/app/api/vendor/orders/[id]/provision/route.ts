@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("domain_id", id)
     .eq("status", "provisioning");
 
-  const dbInboxMap = new Map((dbInboxes ?? []).map(i => [i.id, i.email_address]));
+  const dbInboxMap = new Map((dbInboxes ?? []).map((i: { id: string; email_address: string }) => [i.id, i.email_address]));
   for (const cred of creds) {
     if (!dbInboxMap.has(cred.id)) {
       return NextResponse.json({ error: `Inbox ${cred.id} not found in this domain` }, { status: 400 });
