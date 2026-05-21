@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ]),
   ];
 
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const csv = rows.map(r => r.map((v: unknown) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
 
   return new NextResponse(csv, {
     headers: {
