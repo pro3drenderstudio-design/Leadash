@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/server";
+import { requireVendorAuth } from "@/lib/vendor/auth";
 import { addDnsRecords, buildMicrosoftTenantDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
@@ -14,6 +15,7 @@ interface InboxCred {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!requireVendorAuth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id }   = await params;
   const db       = createAdminClient();
 
@@ -128,7 +130,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }).eq("id", id);
   }
 
-  // ── Step 4: Notify admin ──────────────────────────────────────────────────
+  // ── Step 4: Generate/update vendor invoice for today ─────────────────────
+  if (passed > 0) {
+    try {
+      const today      = new Date().toISOString().slice(0, 10);
+      const invNum     = `LDV-${today.replace(/-/g, "")}`;
+      const { data: existingInv } = await db.from("vendor_invoices").select("id, inbox_count, total_usd, inbox_ids")
+        .eq("invoice_number", invNum).maybeSingle();
+      const activatedIds = creds.filter((_c, i) => details[i]?.startsWith("✓")).map(c => c.id);
+      const costRes = await db.from("admin_settings").select("value").eq("key", "vendor_cost_per_inbox_usd").single();
+      const costPerInbox = parseFloat(costRes.data?.value ?? "2.00");
+      if (existingInv) {
+        const newIds   = [...new Set([...(existingInv.inbox_ids ?? []), ...activatedIds])];
+        const newCount = newIds.length;
+        await db.from("vendor_invoices").update({
+          inbox_ids:  newIds,
+          inbox_count: newCount,
+          total_usd:  newCount * costPerInbox,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingInv.id);
+      } else {
+        await db.from("vendor_invoices").insert({
+          invoice_number: invNum,
+          invoice_date:   today,
+          inbox_ids:      activatedIds,
+          inbox_count:    activatedIds.length,
+          cost_per_inbox_usd: costPerInbox,
+          total_usd:      activatedIds.length * costPerInbox,
+        });
+      }
+      // Tag each activated inbox with the invoice
+      const { data: inv } = await db.from("vendor_invoices").select("id").eq("invoice_number", invNum).single();
+      if (inv) {
+        await db.from("outreach_inboxes").update({ vendor_invoice_id: inv.id }).in("id", activatedIds);
+      }
+    } catch { /* invoice generation is non-fatal */ }
+  }
+
+  // ── Step 5: Notify admin ──────────────────────────────────────────────────
   const statusLabel = failed === 0 ? "All inboxes activated" : `${passed} activated, ${failed} failed`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
   try {

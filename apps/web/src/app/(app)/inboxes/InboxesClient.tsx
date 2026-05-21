@@ -130,6 +130,46 @@ const PROVIDER_COLORS: Record<string, string> = {
   microsoft365: "#0078d4",
 };
 
+function ProviderBadge({ provider, size = 14 }: { provider: string; size?: number }) {
+  if (provider === "gmail") return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M22 6C22 4.9 21.1 4 20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6Z" fill="#EA4335"/>
+      <path d="M22 6L12 13L2 6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+  if (provider === "outlook" || provider === "microsoft365") return (
+    <svg width={size} height={size} viewBox="0 0 21 21" fill="none">
+      <rect x="0.5" y="0.5" width="9" height="9" fill="#f25022"/>
+      <rect x="11" y="0.5" width="9" height="9" fill="#7fba00"/>
+      <rect x="0.5" y="11" width="9" height="9" fill="#00a4ef"/>
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+    </svg>
+  );
+  // Leadash Mail (postal) — "L" monogram
+  if (provider === "postal") return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <rect width="20" height="20" rx="4" fill="#34d399"/>
+      <text x="4" y="15" fontSize="12" fontWeight="800" fill="white" fontFamily="system-ui">L</text>
+    </svg>
+  );
+  // SMTP — generic envelope
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <rect width="20" height="20" rx="4" fill="#a855f7"/>
+      <path d="M3 5h14v10H3V5z" stroke="white" strokeWidth="1.2" fill="none"/>
+      <path d="M3 5l7 6 7-6" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  gmail:        "Gmail",
+  outlook:      "Outlook",
+  smtp:         "SMTP",
+  postal:       "Leadash Mail",
+  microsoft365: "Microsoft 365",
+};
+
 // ─── Profile image avatar ─────────────────────────────────────────────────────
 function InboxAvatar({
   inbox, size = 36, onUploaded, onRemoved,
@@ -183,6 +223,11 @@ function InboxAvatar({
           {initials}
         </div>
       )}
+      {/* Overlay on hover */}
+      {/* Provider badge — bottom-right corner */}
+      <div className="absolute -bottom-1 -right-1 rounded shadow-md bg-[#0d0d0d] p-px pointer-events-none z-10">
+        <ProviderBadge provider={inbox.provider} size={12} />
+      </div>
       {/* Overlay on hover */}
       <div className="absolute inset-0 rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
         {(uploading || removing) ? (
@@ -245,8 +290,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [colMapping, setColMapping]     = useState<Record<string, string>>({});
   const [showMapping, setShowMapping]   = useState(false);
   const [page, setPage]                 = useState(0);
-  const [inboxSearch, setInboxSearch]   = useState("");
-  const [inboxStatusFilter, setInboxStatusFilter] = useState<"all" | "active" | "paused" | "error" | "warming">("all");
+  const [inboxSearch, setInboxSearch]       = useState("");
+  const [inboxStatusFilter, setInboxStatusFilter]   = useState<"all" | "active" | "paused" | "error" | "warming">("all");
+  const [inboxProviderFilter, setInboxProviderFilter] = useState<"all" | "postal" | "gmail" | "outlook" | "microsoft365" | "smtp">("all");
 
   const PAGE_SIZE = 10;
 
@@ -293,30 +339,33 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [delivTesting, setDelivTesting]   = useState(false);
   const [delivRecipient, setDelivRecipient] = useState("");
 
-  const filteredInboxes = inboxes.filter((inbox) => {
-    if (inboxStatusFilter !== "all") {
-      if (inboxStatusFilter === "warming") {
-        if (!inbox.warmup_enabled) return false;
-      } else if (inboxStatusFilter === "error") {
-        // Match both status==="error" and any inbox with a last_error set
-        if (inbox.status !== "error" && !inbox.last_error) return false;
-      } else {
-        if (inbox.status !== inboxStatusFilter) return false;
+  const filteredInboxes = inboxes
+    .slice()
+    .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+    .filter((inbox) => {
+      if (inboxProviderFilter !== "all" && inbox.provider !== inboxProviderFilter) return false;
+      if (inboxStatusFilter !== "all") {
+        if (inboxStatusFilter === "warming") {
+          if (!inbox.warmup_enabled) return false;
+        } else if (inboxStatusFilter === "error") {
+          if (inbox.status !== "error" && !inbox.last_error) return false;
+        } else {
+          if (inbox.status !== inboxStatusFilter) return false;
+        }
       }
-    }
-    if (inboxSearch.trim()) {
-      const q = inboxSearch.toLowerCase();
-      return (
-        inbox.email_address.toLowerCase().includes(q) ||
-        (inbox.label ?? "").toLowerCase().includes(q) ||
-        (inbox.first_name ?? "").toLowerCase().includes(q) ||
-        (inbox.last_name ?? "").toLowerCase().includes(q) ||
-        inbox.status.toLowerCase().includes(q) ||
-        inbox.provider.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+      if (inboxSearch.trim()) {
+        const q = inboxSearch.toLowerCase();
+        return (
+          inbox.email_address.toLowerCase().includes(q) ||
+          (inbox.label ?? "").toLowerCase().includes(q) ||
+          (inbox.first_name ?? "").toLowerCase().includes(q) ||
+          (inbox.last_name ?? "").toLowerCase().includes(q) ||
+          inbox.status.toLowerCase().includes(q) ||
+          inbox.provider.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
   const pageInboxes = filteredInboxes.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const allPageSelected = pageInboxes.length > 0 && pageInboxes.every((i) => selected.has(i.id));
   const effectiveCount  = allSelected ? inboxes.length : selected.size;
@@ -1061,18 +1110,37 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
               <button onClick={() => { setInboxSearch(""); setPage(0); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors text-xs">✕</button>
             )}
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             {(["all", "active", "paused", "error", "warming"] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => { setInboxStatusFilter(s); setPage(0); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${inboxStatusFilter === s ? "bg-white/15 text-white" : "bg-white/5 text-white/40 hover:text-white/60"}`}
-              >
+              <button key={s} onClick={() => { setInboxStatusFilter(s); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${inboxStatusFilter === s ? "bg-white/15 text-white" : "bg-white/5 text-white/40 hover:text-white/60"}`}>
                 {s}
               </button>
             ))}
           </div>
-          {(inboxSearch || inboxStatusFilter !== "all") && (
+          {/* Provider filter */}
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { key: "all",          label: "All providers" },
+              { key: "postal",       label: "Leadash Mail" },
+              { key: "gmail",        label: "Gmail" },
+              { key: "outlook",      label: "Outlook" },
+              { key: "microsoft365", label: "M365" },
+              { key: "smtp",         label: "SMTP" },
+            ] as const).map(({ key, label }) => {
+              const count = key === "all" ? inboxes.length : inboxes.filter(i => i.provider === key).length;
+              if (key !== "all" && count === 0) return null;
+              return (
+                <button key={key} onClick={() => { setInboxProviderFilter(key); setPage(0); }}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${inboxProviderFilter === key ? "bg-orange-500/20 text-orange-300 border border-orange-500/30" : "bg-white/5 text-white/40 hover:text-white/60 border border-transparent"}`}>
+                  {key !== "all" && <ProviderBadge provider={key} size={11} />}
+                  {label}
+                  {key !== "all" && <span className="text-white/30 ml-0.5">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {(inboxSearch || inboxStatusFilter !== "all" || inboxProviderFilter !== "all") && (
             <span className="text-white/30 text-xs flex-shrink-0">{filteredInboxes.length} result{filteredInboxes.length !== 1 ? "s" : ""}</span>
           )}
         </div>

@@ -306,6 +306,13 @@ export default function BuyDomainPage() {
     return () => clearInterval(interval);
   }, [step, domainIds, allActive, anyFailed]);
 
+  // Redirect to /inboxes 2s after all domains go active (Postal only — M365 stays on this page)
+  useEffect(() => {
+    if (!allActive || isMicrosoft) return;
+    const t = setTimeout(() => router.push("/inboxes?tab=inboxes"), 2000);
+    return () => clearTimeout(t);
+  }, [allActive, isMicrosoft, router]);
+
   // ─────────────────────────────────────────────────────────────────────────────
 
   const activePrefixes = prefixMode === "custom"

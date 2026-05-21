@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
-import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxSuspendedEmail } from "@/lib/email/notifications";
+import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxSuspendedEmail, sendVendorCancellationAlert } from "@/lib/email/notifications";
 
 export async function POST(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const { data: domains, error } = await db
     .from("outreach_domains")
-    .select("id, domain, workspace_id, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, charge_failure_count")
+    .select("id, domain, workspace_id, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, charge_failure_count")
     .eq("status", "active")
     .eq("payment_provider", "paystack")
     .not("paystack_auth_code",          "is", null)
@@ -104,6 +104,23 @@ export async function POST(req: NextRequest) {
           domain:    domain.domain,
           amountNgn,
         }).catch(e => console.error("[inbox-billing] suspension email failed:", e));
+
+        // Notify vendor if this is a Microsoft 365 domain
+        if ((domain as Record<string, unknown>).inbox_provider === "microsoft365") {
+          const { data: m365Inboxes } = await db.from("outreach_inboxes")
+            .select("email_address, vendor_cancelled_at")
+            .eq("domain_id", domain.id);
+          const emails = (m365Inboxes ?? []).map((i: { email_address: string }) => i.email_address);
+          if (emails.length > 0) {
+            await db.from("outreach_inboxes").update({ vendor_cancelled_at: now })
+              .eq("domain_id", domain.id).is("vendor_cancelled_at", null);
+            sendVendorCancellationAlert({
+              domain:      domain.domain,
+              inboxEmails: emails,
+              reason:      "Payment failed after 3 attempts — subscription suspended",
+            }).catch(e => console.error("[inbox-billing] vendor cancellation email failed:", e));
+          }
+        }
       } else {
         await db.from("outreach_domains").update({ charge_failure_count: newFailureCount }).eq("id", domain.id);
       }

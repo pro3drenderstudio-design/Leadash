@@ -1067,3 +1067,33 @@ export async function sendInboxPaymentFailed(opts: {
     `,
   });
 }
+
+export async function sendVendorCancellationAlert(opts: {
+  domain:      string;
+  inboxEmails: string[];
+  reason:      string;
+}) {
+  const vendorEmail = process.env.VENDOR_ALERT_EMAIL ?? "vendor@example.com";
+  const subject     = `[Leadash] Inbox Subscription Cancelled — ${opts.domain}`;
+  const inboxList   = opts.inboxEmails.map(e => `<li style="font-family:monospace;font-size:13px">${e}</li>`).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Vendor Notification</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#dc2626">Subscription Cancelled</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">The following Microsoft 365 inboxes have been cancelled on <strong>${opts.domain}</strong>:</p>
+    <ul style="margin:0 0 16px;padding-left:20px;line-height:2">${inboxList}</ul>
+    <p style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#991b1b;margin:0 0 16px">
+      Reason: ${opts.reason}
+    </p>
+    <p style="font-size:13px;color:#6b7280;margin:0">
+      Please deactivate these mailboxes in your Microsoft 365 tenant. No further billing will occur for these inboxes.
+    </p>
+  </div>
+</div>`;
+  const text = [`Inbox Cancellation: ${opts.domain}`, `Reason: ${opts.reason}`, ``, ...opts.inboxEmails].join("\n");
+  await sendEmail({ to: vendorEmail, subject, html, text });
+}
