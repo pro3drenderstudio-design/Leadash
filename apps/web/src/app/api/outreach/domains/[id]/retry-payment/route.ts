@@ -14,7 +14,7 @@ export async function POST(
 
   const { data: domain } = await db
     .from("outreach_domains")
-    .select("id, domain, status, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo")
+    .select("id, domain, status, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
@@ -57,6 +57,15 @@ export async function POST(
       paystack_reference: reference,
       status:             "paid",
     }, { onConflict: "paystack_reference", ignoreDuplicates: true });
+
+    // For Microsoft 365 domains, clear vendor_cancelled_at so the vendor portal
+    // stops treating them as cancelled and the inboxes can be re-enabled
+    if ((domain as Record<string, unknown>).inbox_provider === "microsoft365") {
+      await db.from("outreach_inboxes")
+        .update({ vendor_cancelled_at: null })
+        .eq("domain_id", domain.id)
+        .not("vendor_cancelled_at", "is", null);
+    }
 
     const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
     sendInboxPaymentSuccess({

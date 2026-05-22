@@ -131,3 +131,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ charged: results.length, results });
 }
+
+// Vercel crons call GET — delegate to the same handler
+export const GET = POST;
