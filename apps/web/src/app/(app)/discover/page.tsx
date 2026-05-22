@@ -385,7 +385,7 @@ function ListModal({ count, onClose, onConfirm }: {
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: { key: string }) {
     if (e.key === "Enter") handleConfirm();
   }
 
