@@ -4,8 +4,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 // Public (unauthenticated) settings — only non-sensitive keys exposed here.
 const PUBLIC_KEYS = ["support_email", "announcement_banner", "maintenance_mode"] as const;
 
-export const revalidate = 60; // cache for 60 seconds
-
 export async function GET() {
   try {
     const db = createAdminClient();
