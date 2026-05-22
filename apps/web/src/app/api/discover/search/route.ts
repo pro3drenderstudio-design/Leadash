@@ -169,7 +169,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (keyword) {
-      conditions.push(`(p.first_name ILIKE $${i} OR p.last_name ILIKE $${i} OR p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
+      // first_name/last_name excluded until discover_people_first_name_trgm and
+      // discover_people_last_name_trgm GIN indexes finish building (559M rows, ~4h).
+      // title and company_name both have GIN trigram indexes (fast).
+      conditions.push(`(p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
       params.push(`%${keyword}%`); i++;
     }
     addOr("p.title",      titleIncludes,   true);
