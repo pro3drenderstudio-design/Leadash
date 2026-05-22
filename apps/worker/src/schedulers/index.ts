@@ -37,6 +37,16 @@ export function startSchedulers() {
     console.log(`[scheduler:send] Enqueued ${workspaceIds.length} workspaces`);
   });
 
+  // ── Postal suppression sync: every 15 minutes ───────────────────────────
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      const { syncPostalSuppressions } = await import("./postal-suppression-sync");
+      await syncPostalSuppressions();
+    } catch (e) {
+      console.error("[scheduler:suppression-sync] failed:", e);
+    }
+  });
+
   // ── Reply poll: every 15 minutes ─────────────────────────────────────────
   cron.schedule("*/15 * * * *", async () => {
     const workspaceIds = await getActiveWorkspaceIds();
