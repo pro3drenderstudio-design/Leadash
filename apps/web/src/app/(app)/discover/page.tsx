@@ -350,12 +350,13 @@ function ListModal({ count, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (listId: string | null, listName: string | null) => void;
 }) {
-  const [lists, setLists]       = useState<LeadList[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [q, setQ]               = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [newName, setNewName]   = useState("");
-  const [creating, setCreating] = useState(false);
+  const [lists, setLists]         = useState<LeadList[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [q, setQ]                 = useState("");
+  const [selected, setSelected]   = useState<string | null>(null);
+  const [newName, setNewName]     = useState("");
+  const [creating, setCreating]   = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     wsGet<LeadList[]>("/api/outreach/lists")
@@ -366,65 +367,124 @@ function ListModal({ count, onClose, onConfirm }: {
 
   const filtered = lists.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
 
+  // Detect duplicate list name (case-insensitive)
+  const duplicateList = creating && newName.trim()
+    ? lists.find(l => l.name.toLowerCase() === newName.trim().toLowerCase()) ?? null
+    : null;
+
   function handleConfirm() {
-    if (creating && newName.trim()) onConfirm(null, newName.trim());
-    else if (selected) onConfirm(selected, null);
+    if (submitting) return;
+    if (creating) {
+      if (!newName.trim()) return;
+      setSubmitting(true);
+      // If name matches an existing list, add to that one instead
+      onConfirm(duplicateList?.id ?? null, duplicateList ? null : newName.trim());
+    } else if (selected) {
+      setSubmitting(true);
+      onConfirm(selected, null);
+    }
   }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") handleConfirm();
+  }
+
+  const canConfirm = creating ? newName.trim().length > 0 : !!selected;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[520px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[540px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
           <div>
             <h2 className="text-sm font-bold text-white">Add to List</h2>
-            <p className="text-xs text-white/35 mt-0.5">{count} lead{count !== 1 ? "s" : ""} will be added</p>
+            <p className="text-xs text-white/35 mt-0.5">{count.toLocaleString()} lead{count !== 1 ? "s" : ""} selected</p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
         </div>
-        <div className="px-5 py-3 border-b border-white/8">
+
+        <div className="px-5 py-3 border-b border-white/8 space-y-1.5">
           {!creating ? (
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lists…"
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
           ) : (
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New list name…" autoFocus
-              className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
+            <>
+              <input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="New list name…"
+                autoFocus
+                className={`w-full bg-white/5 border rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none transition-colors ${
+                  newName.trim() ? "border-orange-500/60 bg-orange-500/5" : "border-white/15"
+                }`}
+              />
+              {duplicateList && (
+                <p className="text-[11px] text-amber-400/80 flex items-center gap-1">
+                  <span>⚠</span>
+                  <span>"{duplicateList.name}" already exists — leads will be added to it ({duplicateList.lead_count.toLocaleString()} leads)</span>
+                </p>
+              )}
+            </>
           )}
         </div>
+
         <div className="flex-1 overflow-y-auto py-2">
           {!creating && (
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
-              <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">+</div>
-              <span className="text-xs text-blue-400 font-medium">Create new list</span>
+              <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">+</div>
+              <span className="text-xs text-orange-400 font-medium">Create new list</span>
             </button>
           )}
           {creating && (
-            <button onClick={() => setCreating(false)} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
+            <button onClick={() => { setCreating(false); setNewName(""); }} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
               ← Back to existing lists
             </button>
           )}
           {!creating && (loading ? (
             <div className="flex justify-center py-6"><Spinner sm /></div>
+          ) : filtered.length === 0 && !q ? (
+            <p className="text-center text-xs text-white/25 py-6">No lists yet — create one above</p>
           ) : filtered.length === 0 ? (
-            <p className="text-center text-xs text-white/25 py-6">No lists yet</p>
+            <p className="text-center text-xs text-white/25 py-4">No lists match "{q}"</p>
           ) : (
             filtered.map(l => (
               <button key={l.id} onClick={() => setSelected(l.id)}
-                className={`w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left ${selected === l.id ? "bg-blue-500/10" : ""}`}>
+                className={`w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left ${selected === l.id ? "bg-orange-500/10" : ""}`}>
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selected === l.id ? "bg-blue-400" : "bg-white/15"}`} />
-                  <span className="text-xs text-white/70 truncate max-w-[220px]">{l.name}</span>
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${selected === l.id ? "bg-orange-400" : "bg-white/15"}`} />
+                  <span className={`text-xs truncate max-w-[220px] transition-colors ${selected === l.id ? "text-white font-medium" : "text-white/70"}`}>{l.name}</span>
                 </div>
                 <span className="text-[10px] text-white/30 flex-shrink-0">{l.lead_count.toLocaleString()} leads</span>
               </button>
             ))
           ))}
         </div>
-        <div className="px-5 py-3 border-t border-white/8 flex items-center justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
-          <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
-            className="px-4 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/15 border border-white/15 text-white rounded-lg transition-colors disabled:opacity-40">
-            {creating ? "Create & Add" : "Add to List"}
-          </button>
+
+        <div className="px-5 py-3 border-t border-white/8 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-white/25">
+            {!creating && selected && (() => { const l = lists.find(x => x.id === selected); return l ? `Adding to "${l.name}"` : ""; })()}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} disabled={submitting} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors disabled:opacity-40">Cancel</button>
+            <button
+              onClick={handleConfirm}
+              disabled={!canConfirm || submitting}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                submitting
+                  ? "bg-orange-500/30 border-orange-500/30 text-orange-300 cursor-not-allowed"
+                  : canConfirm
+                  ? "bg-orange-500 hover:bg-orange-400 border-orange-400 text-white shadow-sm shadow-orange-500/20"
+                  : "bg-white/6 border-white/10 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {submitting
+                ? <span className="flex items-center gap-1.5"><span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />Adding…</span>
+                : creating
+                ? (duplicateList ? "Add to Existing List" : "Create & Add")
+                : "Add to List"
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1342,6 +1402,7 @@ function DiscoverContent() {
     const EXPORT_BATCH = 2500;
     if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
     let totalAdded = 0;
+    let totalExisting = 0;
     let resolvedListId = listId;
     try {
       for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
@@ -1360,13 +1421,22 @@ function DiscoverContent() {
           setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
           return;
         }
-        const j = await res.json() as { leads_added: number; credits_used: number; list_id?: string };
-        totalAdded += j.leads_added ?? 0;
+        const j = await res.json() as { leads_added: number; already_existed: number; credits_used: number; list_id?: string };
+        totalAdded    += j.leads_added     ?? 0;
+        totalExisting += j.already_existed ?? 0;
         if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
         if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
-      setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added to list` });
+      let msg: string;
+      if (totalAdded === 0 && totalExisting > 0) {
+        msg = `All ${totalExisting.toLocaleString()} leads already in list`;
+      } else {
+        const parts = [`${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added`];
+        if (totalExisting > 0) parts.push(`${totalExisting.toLocaleString()} already existed`);
+        msg = parts.join(" · ");
+      }
+      setExportMsg({ ok: true, text: msg });
       setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed to add to list" });
