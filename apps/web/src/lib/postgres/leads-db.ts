@@ -10,7 +10,7 @@ const leadsDb = postgres(connectionString, {
   idle_timeout:    30,
   connect_timeout: 10,
   prepare:         false,
-  ssl: { rejectUnauthorized: false },
+  ssl: false,
 });
 
 export default leadsDb;
