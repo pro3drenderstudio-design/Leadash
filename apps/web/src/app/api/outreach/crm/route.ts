@@ -11,6 +11,33 @@ export async function GET(req: NextRequest) {
   const page   = parseInt(url.searchParams.get("page") ?? "0");
   const limit  = parseInt(url.searchParams.get("limit") ?? "50");
 
+  // Step 1: Find enrollment IDs that have at least one actual reply
+  const { data: replyRows } = await db
+    .from("outreach_replies")
+    .select("enrollment_id")
+    .not("enrollment_id", "is", null)
+    .not("body_text", "is", null)
+    .order("received_at", { ascending: false })
+    .limit(500);
+
+  const replyEnrollmentIds = [...new Set((replyRows ?? []).map(r => r.enrollment_id as string))];
+
+  // Step 2: Find enrollment IDs with non-neutral CRM status for this workspace
+  const { data: managedRows } = await db
+    .from("outreach_enrollments")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .neq("crm_status", "neutral");
+
+  const managedIds = (managedRows ?? []).map(r => r.id as string);
+
+  // Only show enrollments that have a real reply OR a non-neutral CRM status
+  const allIds = [...new Set([...replyEnrollmentIds, ...managedIds])];
+
+  if (allIds.length === 0) {
+    return NextResponse.json({ threads: [], total: 0 });
+  }
+
   let query = db
     .from("outreach_enrollments")
     .select(`
@@ -23,7 +50,7 @@ export async function GET(req: NextRequest) {
       latest_send:outreach_sends(id, subject, body, status, sent_at, opened_at, replied_at, to_email)
     `, { count: "exact" })
     .eq("workspace_id", workspaceId)
-    .or("status.neq.active,crm_status.neq.neutral")
+    .in("id", allIds)
     .order("enrolled_at", { ascending: false })
     .range(page * limit, page * limit + limit - 1);
 
