@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import RichEmailEditor from "@/components/RichEmailEditor";
@@ -178,6 +178,15 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editSteps, setEditSteps]             = useState<EditStep[]>([]);
   const [loadingTpl, setLoadingTpl]           = useState<number | null>(null);
 
+  // Track inbox count at the time the edit panel was opened so auto-calc
+  // only fires when the user actually changes the selection (not on initial load).
+  const editOpenInboxCount = useRef(0);
+
+  useEffect(() => {
+    if (editInboxes.length === 0 || editInboxes.length === editOpenInboxCount.current) return;
+    setEditDailyCap(editInboxes.length * 15);
+  }, [editInboxes.length]);
+
   // AI generator
   const [showAiGen, setShowAiGen]       = useState(false);
   const [aiProduct, setAiProduct]       = useState("");
@@ -312,6 +321,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
   function openEdit() {
     if (!campaign) return;
+    editOpenInboxCount.current = (campaign.inbox_ids ?? []).length;
     setEditName(campaign.name);
     setEditInboxes(campaign.inbox_ids ?? []);
     setEditTimezone(campaign.timezone ?? "America/New_York");
@@ -584,7 +594,11 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <div className="flex gap-2">{DAYS.map(d => <button key={d} onClick={() => setEditDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${editDays.includes(d) ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase()+d.slice(1,2)}</button>)}</div>
         </div>
 
-        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label><input type="number" value={editDailyCap} onChange={e => setEditDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
+        <div>
+          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label>
+          <input type="number" value={editDailyCap} onChange={e => { const v = parseInt(e.target.value) || 1; const max = Math.max(40, editInboxes.length * 40); setEditDailyCap(Math.min(v, max)); }} min={1} max={Math.max(40, editInboxes.length * 40)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
+          {editInboxes.length > 0 && <p className="text-white/30 text-xs mt-1">Auto: {editInboxes.length} × 15 = {editInboxes.length * 15} &nbsp;·&nbsp; Max: {editInboxes.length} × 40 = {editInboxes.length * 40}</p>}
+        </div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
           <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Sending Pattern</p>
