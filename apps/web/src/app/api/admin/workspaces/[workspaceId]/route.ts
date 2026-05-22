@@ -115,5 +115,49 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ wo
     return NextResponse.json({ ok: true });
   }
 
+  // Grant a temporary trial plan with optional credits
+  if (body.action === "grant_trial") {
+    const { plan_id, duration_days, credits } = body as { plan_id: string; duration_days: number; credits?: number };
+    if (!plan_id || !duration_days) return NextResponse.json({ error: "plan_id and duration_days required" }, { status: 400 });
+
+    const limits: Record<string, { max_inboxes: number; max_monthly_sends: number; max_seats: number }> = {
+      free:    { max_inboxes: 3,   max_monthly_sends: 1000,   max_seats: 1 },
+      starter: { max_inboxes: 5,   max_monthly_sends: 5000,   max_seats: 3 },
+      growth:  { max_inboxes: 15,  max_monthly_sends: 25000,  max_seats: 5 },
+      scale:   { max_inboxes: 50,  max_monthly_sends: 100000, max_seats: 15 },
+    };
+    const planLimits = limits[plan_id] ?? limits.free;
+    const trialEndsAt = new Date(Date.now() + duration_days * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error: planError } = await ctx.adminClient
+      .from("workspaces")
+      .update({ plan_id, plan_status: "trial", trial_ends_at: trialEndsAt, ...planLimits, updated_at: new Date().toISOString() })
+      .eq("id", workspaceId);
+
+    if (planError) return NextResponse.json({ error: planError.message }, { status: 400 });
+
+    if (credits && credits > 0) {
+      const description = `Admin trial grant — ${plan_id} plan for ${duration_days} days`;
+      await ctx.adminClient
+        .from("lead_credit_transactions")
+        .insert({ workspace_id: workspaceId, amount: credits, type: "grant", description });
+
+      const { error: rpcError } = await ctx.adminClient.rpc("increment_credits", {
+        p_workspace_id: workspaceId,
+        p_amount: credits,
+      });
+
+      if (rpcError) {
+        const { data: ws } = await ctx.adminClient.from("workspaces").select("lead_credits_balance").eq("id", workspaceId).single();
+        if (ws) {
+          const newBalance = Math.max(0, (ws.lead_credits_balance ?? 0) + credits);
+          await ctx.adminClient.from("workspaces").update({ lead_credits_balance: newBalance }).eq("id", workspaceId);
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

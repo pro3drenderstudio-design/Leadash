@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .neq("crm_status", "neutral");
 
-  const managedIds = (managedRows ?? []).map(r => r.id as string);
+  const managedIds = (managedRows ?? []).map((r: { id: string }) => r.id);
 
   // Only show enrollments that have a real reply OR a non-neutral CRM status
   const allIds = [...new Set([...replyEnrollmentIds, ...managedIds])];

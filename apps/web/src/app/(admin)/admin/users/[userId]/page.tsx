@@ -63,6 +63,13 @@ export default function UserDetailPage() {
   const [actionMsg, setActionMsg]         = useState<string | null>(null);
   const [showMetadata, setShowMetadata]   = useState(false);
 
+  const [grantWsId, setGrantWsId]       = useState<string | null>(null);
+  const [grantPlan, setGrantPlan]       = useState("starter");
+  const [grantDays, setGrantDays]       = useState(14);
+  const [grantCredits, setGrantCredits] = useState(0);
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantMsg, setGrantMsg]         = useState<string | null>(null);
+
   const fetchUser = useCallback(() => {
     setLoading(true);
     fetch(`/api/admin/users/${userId}`)
@@ -120,6 +127,31 @@ export default function UserDetailPage() {
       window.location.href = data.url;
     } else {
       setActionMsg(`Error: ${data.error ?? "Failed to impersonate"}`);
+    }
+  }
+
+  async function doGrantTrial(wsId: string) {
+    setGrantLoading(true);
+    setGrantMsg(null);
+    const res = await fetch(`/api/admin/workspaces/${wsId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "grant_trial",
+        plan_id: grantPlan,
+        duration_days: grantDays,
+        ...(grantCredits > 0 ? { credits: grantCredits } : {}),
+      }),
+    });
+    const data = await res.json();
+    setGrantLoading(false);
+    if (data.ok) {
+      setGrantMsg(`Trial granted: ${grantPlan} for ${grantDays} days${grantCredits > 0 ? ` + ${grantCredits} credits` : ""}.`);
+      setGrantWsId(null);
+      setGrantCredits(0);
+      fetchUser();
+    } else {
+      setGrantMsg(`Error: ${data.error}`);
     }
   }
 
@@ -253,7 +285,7 @@ export default function UserDetailPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/10">
-                {["Name", "Plan", "Credits", "Sends", "Inboxes", "Created"].map(h => (
+                {["Name", "Plan", "Credits", "Sends", "Inboxes", "Created", ""].map(h => (
                   <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -267,10 +299,83 @@ export default function UserDetailPage() {
                   <td className="px-4 py-3 tabular-nums text-slate-500 dark:text-white/40 text-xs">{ws.sends_this_month} / {ws.max_monthly_sends}</td>
                   <td className="px-4 py-3 tabular-nums text-slate-500 dark:text-white/40 text-xs">{ws.max_inboxes}</td>
                   <td className="px-4 py-3 text-slate-500 dark:text-white/40 text-xs">{new Date(ws.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => { setGrantWsId(grantWsId === ws.id ? null : ws.id); setGrantMsg(null); }}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-500/30 transition-colors"
+                    >
+                      Grant Trial
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Grant trial inline form */}
+        {grantWsId && (
+          <div className="border-t border-slate-100 dark:border-white/10 px-5 py-4 bg-orange-50 dark:bg-orange-500/5">
+            <p className="text-xs font-semibold text-slate-600 dark:text-white/60 mb-3">
+              Grant trial for: <span className="text-orange-600 dark:text-orange-300">{workspaces.find(w => w.id === grantWsId)?.name}</span>
+            </p>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wide">Plan</label>
+                <select
+                  value={grantPlan}
+                  onChange={e => setGrantPlan(e.target.value)}
+                  className="text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-800 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                >
+                  <option value="starter">Starter</option>
+                  <option value="growth">Growth</option>
+                  <option value="scale">Scale</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wide">Duration (days)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={grantDays}
+                  onChange={e => setGrantDays(parseInt(e.target.value) || 1)}
+                  className="w-24 text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-800 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wide">Credits (optional)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={grantCredits}
+                  onChange={e => setGrantCredits(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-24 text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-800 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => doGrantTrial(grantWsId)}
+                  disabled={grantLoading}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors disabled:opacity-50"
+                >
+                  {grantLoading ? "Granting…" : "Confirm Grant"}
+                </button>
+                <button
+                  onClick={() => { setGrantWsId(null); setGrantMsg(null); }}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-600 dark:text-white/60 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            {grantMsg && (
+              <p className={`mt-3 text-xs font-medium ${grantMsg.startsWith("Error") ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                {grantMsg}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
