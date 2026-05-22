@@ -107,6 +107,23 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
+    // For low-cardinality enum-like fields with lower() btree indexes.
+    function addOrExact(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`(${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
+    function addNoneExact(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
     function addNone(field: string, values: string[], substring = false) {
       if (!values.length) return;
       const clauses = values.map((_, j) => `${field} ILIKE $${i + j}`).join(" OR ");
@@ -157,8 +174,8 @@ export async function GET(req: NextRequest) {
     }
     addOr("p.title",      titleIncludes,   true);
     addNone("p.title",    titleExcludes,   true);
-    addOr("p.seniority",   seniorities,        false);
-    addNone("p.seniority", senioritiesExclude, false);
+    addOrExact("p.seniority",   seniorities);
+    addNoneExact("p.seniority", senioritiesExclude);
     addOr("p.department",  departments,        true);
     addNone("p.department", departmentsExclude, true);
     addOrLower("p.country",   countryIncludes);
@@ -169,7 +186,7 @@ export async function GET(req: NextRequest) {
     addNone("p.company_name", companyExcludes, true);
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
-    addOr("c.size_range", companySizes, false);
+    addOrExact("c.size_range", companySizes);
     addOr("c.keywords",  companyKeywordIncludes, true);
     addNone("c.keywords", companyKeywordExcludes, true);
 
