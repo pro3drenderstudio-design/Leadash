@@ -132,7 +132,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ wo
 
     const { error: planError } = await ctx.adminClient
       .from("workspaces")
-      .update({ plan_id, plan_status: "trial", trial_ends_at: trialEndsAt, ...planLimits, updated_at: new Date().toISOString() })
+      .update({ plan_id, plan_status: "trialing", trial_ends_at: trialEndsAt, ...planLimits, updated_at: new Date().toISOString() })
       .eq("id", workspaceId);
 
     if (planError) return NextResponse.json({ error: planError.message }, { status: 400 });
