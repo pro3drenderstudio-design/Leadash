@@ -1,5 +1,5 @@
 import IORedis from "ioredis";
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 let _redis: IORedis | null = null;
 
