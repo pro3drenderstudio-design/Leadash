@@ -1116,6 +1116,119 @@ export async function sendInboxFinalWarningEmail(opts: {
   });
 }
 
+// ─── Admin trial grant ────────────────────────────────────────────────────────
+
+export async function sendUserTrialGrantedEmail(opts: {
+  userEmail:     string;
+  userName:      string | null;
+  workspaceName: string;
+  planName:      string;
+  durationDays:  number;
+  trialEndsAt:   string;
+  credits?:      number;
+}): Promise<void> {
+  const { userEmail, userName, workspaceName, planName, durationDays, trialEndsAt, credits } = opts;
+  const name    = userName ?? userEmail.split("@")[0];
+  const endDate = new Date(trialEndsAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const capPlan = planName.charAt(0).toUpperCase() + planName.slice(1);
+
+  await sendEmail({
+    to: userEmail,
+    subject: `You've been granted a ${durationDays}-day ${capPlan} trial on Leadash`,
+    text: [
+      `Hi ${name},`,
+      ``,
+      `Great news — the Leadash team has activated a free ${durationDays}-day ${capPlan} plan trial on your workspace "${workspaceName}".`,
+      ``,
+      `Your trial expires on: ${endDate}`,
+      ...(credits && credits > 0 ? [`Lead credits added: ${credits.toLocaleString()}`, ``] : [``]),
+      `Head to your dashboard to make the most of your trial:`,
+      `${APP_URL}/dashboard`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:32px 32px 24px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+          <p style="color:#4ade80;font-size:13px;font-weight:600;margin:10px 0 0">Trial Activated</p>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;margin-top:0">Hi ${name},</p>
+          <p style="color:#6b7280">The Leadash team has activated a free trial on your workspace <strong style="color:#111">${workspaceName}</strong>.</p>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:24px 0">
+            <p style="margin:0 0 14px;font-weight:700;color:#15803d;font-size:13px;text-transform:uppercase;letter-spacing:0.5px">What you got</p>
+            <table style="font-size:14px;color:#374151;border-spacing:0;width:100%">
+              <tr>
+                <td style="padding:6px 0;color:#6b7280">Plan</td>
+                <td style="padding:6px 0;font-weight:700;text-align:right">${capPlan}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#6b7280">Duration</td>
+                <td style="padding:6px 0;font-weight:700;text-align:right">${durationDays} days</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#6b7280">Expires</td>
+                <td style="padding:6px 0;text-align:right">${endDate}</td>
+              </tr>
+              ${credits && credits > 0 ? `
+              <tr>
+                <td style="padding:6px 0;color:#6b7280">Credits added</td>
+                <td style="padding:6px 0;font-weight:700;text-align:right;color:#16a34a">+${credits.toLocaleString()}</td>
+              </tr>` : ""}
+            </table>
+          </div>
+          <p><a href="${APP_URL}/dashboard" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Go to Dashboard →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendAdminTrialGrantedNotification(opts: {
+  workspaceName: string;
+  workspaceId:   string;
+  userEmail:     string;
+  planName:      string;
+  durationDays:  number;
+  trialEndsAt:   string;
+  credits?:      number;
+}): Promise<void> {
+  const { workspaceName, workspaceId, userEmail, planName, durationDays, trialEndsAt, credits } = opts;
+  const endDate  = new Date(trialEndsAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const adminUrl = `${APP_URL}/admin/users`;
+
+  await sendEmail({
+    to: OWNER_EMAIL,
+    subject: `[Admin] Trial granted — ${workspaceName} (${planName}, ${durationDays}d)`,
+    text: [
+      `A trial plan has been manually granted from the admin panel.`,
+      ``,
+      `Workspace: ${workspaceName} (${workspaceId})`,
+      `User:      ${userEmail}`,
+      `Plan:      ${planName}`,
+      `Duration:  ${durationDays} days`,
+      `Expires:   ${endDate}`,
+      ...(credits && credits > 0 ? [`Credits:   +${credits.toLocaleString()}`] : []),
+      ``,
+      `${adminUrl}`,
+    ].join("\n"),
+    html: `
+      <p style="font-family:sans-serif">A trial plan was manually granted from the admin panel.</p>
+      <table style="border-collapse:collapse;margin:16px 0;font-size:14px;font-family:sans-serif">
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Workspace</td><td><strong>${workspaceName}</strong><br><span style="color:#9ca3af;font-size:12px">${workspaceId}</span></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">User</td><td>${userEmail}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Plan</td><td>${planName}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Duration</td><td>${durationDays} days</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Expires</td><td>${endDate}</td></tr>
+        ${credits && credits > 0 ? `<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Credits</td><td style="color:#16a34a;font-weight:600">+${credits.toLocaleString()}</td></tr>` : ""}
+      </table>
+      <p><a href="${adminUrl}" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Admin Users →</a></p>
+    `,
+  });
+}
+
 export async function sendVendorCancellationAlert(opts: {
   domain:      string;
   inboxEmails: string[];

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { sendUserTrialGrantedEmail, sendAdminTrialGrantedNotification } from "@/lib/email/notifications";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -135,6 +136,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ wo
       .eq("id", workspaceId);
 
     if (planError) return NextResponse.json({ error: planError.message }, { status: 400 });
+
+    // Send notifications (non-blocking)
+    ;(async () => {
+      try {
+        const { data: ws } = await ctx.adminClient
+          .from("workspaces")
+          .select("name, owner_id")
+          .eq("id", workspaceId)
+          .single();
+        if (ws) {
+          const { data: { user: owner } } = await ctx.adminClient.auth.admin.getUserById(ws.owner_id);
+          const ownerEmail = owner?.email ?? "";
+          const ownerName  = (owner?.user_metadata?.name ?? owner?.user_metadata?.full_name ?? null) as string | null;
+          const emailOpts  = {
+            workspaceName: ws.name as string,
+            workspaceId,
+            userEmail:    ownerEmail,
+            planName:     plan_id,
+            durationDays: duration_days,
+            trialEndsAt,
+            credits:      credits && credits > 0 ? credits : undefined,
+          };
+          await Promise.all([
+            sendUserTrialGrantedEmail({ ...emailOpts, userName: ownerName }),
+            sendAdminTrialGrantedNotification(emailOpts),
+          ]);
+        }
+      } catch (e) {
+        console.error("[grant_trial] notification failed:", e);
+      }
+    })();
 
     if (credits && credits > 0) {
       const description = `Admin trial grant — ${plan_id} plan for ${duration_days} days`;
