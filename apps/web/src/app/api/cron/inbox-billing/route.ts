@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
-import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxSuspendedEmail, sendVendorCancellationAlert } from "@/lib/email/notifications";
+import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxFinalWarningEmail, sendInboxSuspendedEmail, sendVendorCancellationAlert } from "@/lib/email/notifications";
 
 export async function POST(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
@@ -81,16 +81,9 @@ export async function POST(req: NextRequest) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[inbox-billing] charge failed for ${domain.domain}:`, msg);
 
-      // Notify user of failed charge
       const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
-      sendInboxPaymentFailed({
-        userEmail: domain.paystack_billing_email as string,
-        domain: domain.domain,
-        amountNgn,
-        errorMessage: msg,
-      }).catch(e => console.error("[inbox-billing] failure email failed:", e));
 
-      // Increment failure count and suspend after 3 consecutive failures
+      // Increment failure count and pick the right notification
       const newFailureCount = ((domain.charge_failure_count as number | null) ?? 0) + 1;
       if (newFailureCount >= 3) {
         await db.from("outreach_domains").update({
@@ -121,8 +114,23 @@ export async function POST(req: NextRequest) {
             }).catch(e => console.error("[inbox-billing] vendor cancellation email failed:", e));
           }
         }
-      } else {
+      } else if (newFailureCount === 2) {
+        // Final warning — one more failure will suspend the domain
         await db.from("outreach_domains").update({ charge_failure_count: newFailureCount }).eq("id", domain.id);
+        sendInboxFinalWarningEmail({
+          userEmail: domain.paystack_billing_email as string,
+          domain:    domain.domain,
+          amountNgn,
+        }).catch(e => console.error("[inbox-billing] final warning email failed:", e));
+      } else {
+        // First failure — generic payment failed notice
+        await db.from("outreach_domains").update({ charge_failure_count: newFailureCount }).eq("id", domain.id);
+        sendInboxPaymentFailed({
+          userEmail:    domain.paystack_billing_email as string,
+          domain:       domain.domain,
+          amountNgn,
+          errorMessage: msg,
+        }).catch(e => console.error("[inbox-billing] failure email failed:", e));
       }
 
       results.push({ domain: domain.domain, status: "failed", error: msg });

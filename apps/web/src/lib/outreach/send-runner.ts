@@ -83,16 +83,19 @@ async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: Outreac
   if (!campaign.inbox_ids?.length) return [];
   const { data: rows } = await db
     .from("outreach_inboxes")
-    .select("*, outreach_domains(warmup_ends_at)")
+    .select("*, outreach_domains(warmup_ends_at, status)")
     .in("id", campaign.inbox_ids)
     .eq("status", "active");
 
   const slots: InboxSlot[] = [];
   for (const row of rows ?? []) {
+    const domain = (row as Record<string, unknown>).outreach_domains as Record<string, unknown> | null;
+
+    // Block inboxes whose domain is suspended (payment failed)
+    if (domain?.status === "payment_failed") continue;
+
     // Block inboxes still in the 21-day warmup period
-    const domainWarmupEndsAt = (row as Record<string, unknown>).outreach_domains
-      ? ((row as Record<string, unknown>).outreach_domains as Record<string, unknown>).warmup_ends_at as string | null
-      : null;
+    const domainWarmupEndsAt = domain?.warmup_ends_at as string | null ?? null;
     const inboxWarmupEndsAt = (row as Record<string, unknown>).warmup_ends_at as string | null;
     const effectiveWarmupEnd = domainWarmupEndsAt ?? inboxWarmupEndsAt;
     if (effectiveWarmupEnd && new Date(effectiveWarmupEnd) > new Date()) continue;

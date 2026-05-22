@@ -1068,6 +1068,54 @@ export async function sendInboxPaymentFailed(opts: {
   });
 }
 
+export async function sendInboxFinalWarningEmail(opts: {
+  userEmail: string;
+  domain: string;
+  amountNgn: number;
+}): Promise<void> {
+  const { userEmail, domain, amountNgn } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amountNgn);
+
+  await sendEmail({
+    to: userEmail,
+    subject: `Final warning — ${domain} will be suspended tomorrow`,
+    text: [
+      `Hi,`,
+      ``,
+      `This is your final notice. We've failed to charge your card twice for the renewal of ${domain}.`,
+      ``,
+      `Amount due: ${formatted}`,
+      ``,
+      `One more failed attempt will suspend your domain and all associated inboxes. Please update your payment method now:`,
+      ``,
+      `${APP_URL}/inboxes`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;margin-bottom:24px">
+            <p style="margin:0;font-weight:700;color:#9a3412;font-size:15px">⚠️ Final warning — suspension imminent</p>
+            <p style="margin:4px 0 0;color:#c2410c;font-size:13px">2 consecutive payment failures</p>
+          </div>
+          <p style="margin-top:0">Hi,</p>
+          <p style="color:#6b7280">We've failed to charge your card <strong style="color:#111">twice</strong> for <strong style="color:#111">${domain}</strong>. <strong style="color:#dc2626">One more failed attempt will suspend this domain and all its inboxes.</strong></p>
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:14px">
+            <p style="margin:0 0 4px;color:#9ca3af">Amount due</p>
+            <p style="margin:0;font-size:18px;font-weight:700;color:#111">${formatted}</p>
+          </div>
+          <p><a href="${APP_URL}/inboxes" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Update Payment Now →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendVendorCancellationAlert(opts: {
   domain:      string;
   inboxEmails: string[];
