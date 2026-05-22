@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     .order("received_at", { ascending: false })
     .limit(500);
 
-  const replyEnrollmentIds = [...new Set((replyRows ?? []).map(r => r.enrollment_id as string))];
+  const replyEnrollmentIds = [...new Set((replyRows ?? []).map((r: { enrollment_id: string }) => r.enrollment_id))];
 
   // Step 2: Find enrollment IDs with non-neutral CRM status for this workspace
   const { data: managedRows } = await db
