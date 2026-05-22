@@ -269,7 +269,7 @@ export async function runWarmupRamp(workspaceId: string): Promise<void> {
       : 1;
     const remaining = inbox.warmup_target_daily - inbox.warmup_current_daily;
     const rampBy = Math.max(1, Math.ceil(remaining / daysLeft));
-    const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + rampBy);
+    const newVal = Math.min(inbox.warmup_target_daily, inbox.warmup_current_daily + rampBy, 40);
     await db.from("outreach_inboxes").update({
       warmup_current_daily: newVal,
       daily_send_limit:     newVal,

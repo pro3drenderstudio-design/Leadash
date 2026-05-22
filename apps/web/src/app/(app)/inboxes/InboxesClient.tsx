@@ -1501,7 +1501,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs text-white/40 mb-1">Daily send limit</label>
-                    <input type="number" min="1" max="500" value={(df("daily_send_limit") as number) ?? ""} onChange={(e) => setDf("daily_send_limit", parseInt(e.target.value))}
+                    <input type="number" min="1" max="40" value={(df("daily_send_limit") as number) ?? ""} onChange={(e) => setDf("daily_send_limit", parseInt(e.target.value))}
                       className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1553,7 +1553,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                       </div>
                       <div>
                         <label className="block text-xs text-white/40 mb-1">Warmup target (emails/day)</label>
-                        <input type="number" min="1" max="200" value={(df("warmup_target_daily") as number) ?? ""} onChange={(e) => setDf("warmup_target_daily", parseInt(e.target.value))}
+                        <input type="number" min="1" max="40" value={(df("warmup_target_daily") as number) ?? ""} onChange={(e) => setDf("warmup_target_daily", parseInt(e.target.value))}
                           className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50" />
                         <p className="text-white/20 text-[10px] mt-1">Ramps automatically to reach this within 21 days. Raising it restarts the 21-day window.</p>
                       </div>

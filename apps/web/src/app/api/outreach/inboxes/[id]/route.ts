@@ -9,6 +9,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
 
   const body = await req.json();
+  if (body.daily_send_limit != null) body.daily_send_limit = Math.min(40, Math.max(1, parseInt(body.daily_send_limit)));
+  if (body.warmup_target_daily != null) body.warmup_target_daily = Math.min(40, Math.max(1, parseInt(body.warmup_target_daily)));
   const update: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
   delete update.workspace_id;
   delete update.id;

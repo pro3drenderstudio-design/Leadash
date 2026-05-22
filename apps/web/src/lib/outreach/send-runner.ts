@@ -77,7 +77,7 @@ export interface SendRunResult {
 
 interface InboxSlot { inbox: OutreachInbox; remaining: number; used: number; }
 
-const DOMAIN_MAX_DAILY = 15; // hard cap for Leadash-provisioned inboxes
+const MAX_DAILY_SENDS = 40; // hard cap for all inboxes (warmup + campaigns combined)
 
 async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: OutreachCampaign): Promise<InboxSlot[]> {
   if (!campaign.inbox_ids?.length) return [];
@@ -105,7 +105,7 @@ async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: Outreac
     if (rehabEndsAt && new Date(rehabEndsAt) > new Date()) continue;
 
     // Enforce hard cap for Leadash-provisioned inboxes
-    const sendLimit = row.domain_id ? Math.min(row.daily_send_limit, DOMAIN_MAX_DAILY) : row.daily_send_limit;
+    const sendLimit = Math.min(row.daily_send_limit, MAX_DAILY_SENDS);
 
     const remaining = await checkDailyLimits(row.id, sendLimit);
     if (remaining > 0) slots.push({ inbox: row as OutreachInbox, remaining, used: 0 });

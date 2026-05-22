@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
           mailbox_prefixes:  mailbox_prefixes,
           first_name:        first_name ?? null,
           last_name:         last_name  ?? null,
-          daily_send_limit:  15,
+          daily_send_limit:  30,
           payment_provider,
           ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
           domain_price_usd:  domainPrice,
