@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
+import { searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
 const CREDITS_PER_LEAD = 0.5;
@@ -32,6 +33,15 @@ export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId } = auth;
+
+  // ── Rate limit: 60 searches/min per workspace ─────────────────────────────
+  const rl = await checkDiscoverRateLimit(workspaceId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } },
+    );
+  }
 
   const p = new URL(req.url).searchParams;
 
@@ -75,6 +85,14 @@ export async function GET(req: NextRequest) {
   const sortRaw  = p.get("sort") || "created_at";
   const sortCol  = SORT_COLS[sortRaw] ?? "p.created_at";
   const sortDir  = p.get("order") === "asc" ? "ASC" : "DESC";
+
+  // ── Cache lookup (skip for ids_only + net_new — those are user-specific) ──
+  const cacheable = !idsOnly && !netNew;
+  const cKey = cacheable ? searchCacheKey(p) : null;
+  if (cKey) {
+    const hit = await getCachedSearch(cKey);
+    if (hit) return NextResponse.json(hit);
+  }
 
   try {
     const conditions: string[] = [];
@@ -270,10 +288,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    const responseData = {
       results, total, page, limit, credits_per_lead: CREDITS_PER_LEAD,
       ...(capped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
-    } satisfies DiscoverSearchResponse);
+    } satisfies DiscoverSearchResponse;
+
+    // Store in cache (fire-and-forget — don't delay the response)
+    if (cKey) void setCachedSearch(cKey, responseData);
+
+    return NextResponse.json(responseData);
   } catch (err) {
     console.error("[discover/search]", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Search failed. Please try again." }, { status: 500 });

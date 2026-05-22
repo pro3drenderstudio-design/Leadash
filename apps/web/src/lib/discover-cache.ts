@@ -1,0 +1,81 @@
+import IORedis from "ioredis";
+import { createHash } from "crypto";
+
+let _redis: IORedis | null = null;
+
+function getRedis(): IORedis | null {
+  if (!process.env.UPSTASH_REDIS_URL) return null;
+  if (!_redis) {
+    _redis = new IORedis(process.env.UPSTASH_REDIS_URL, {
+      maxRetriesPerRequest: 1,
+      enableReadyCheck:     false,
+      lazyConnect:          true,
+      tls: process.env.UPSTASH_REDIS_URL.startsWith("rediss://") ? {} : undefined,
+    });
+    _redis.on("error", () => {}); // non-fatal — cache misses are fine
+  }
+  return _redis;
+}
+
+// Cache TTL: 2 hours. Search results don't change that frequently.
+const CACHE_TTL_SECS = 7_200;
+
+// Build a stable cache key from search params, excluding pagination (page/limit)
+// and workspace-specific params (net_new, ids_only).
+export function searchCacheKey(params: URLSearchParams): string {
+  const stable = [...params.entries()]
+    .filter(([k]) => !["page", "limit", "skip_count", "net_new", "ids_only"].includes(k))
+    .sort(([a], [b]) => a.localeCompare(b));
+  const hash = createHash("sha256")
+    .update(new URLSearchParams(stable).toString())
+    .digest("hex")
+    .slice(0, 20);
+  return `discover:v1:${hash}`;
+}
+
+export async function getCachedSearch(key: string): Promise<object | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as object) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedSearch(key: string, data: object): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(data), "EX", CACHE_TTL_SECS);
+  } catch {
+    // non-fatal
+  }
+}
+
+// Per-workspace sliding-window rate limiter: 60 requests / 60 seconds.
+// Fails open — if Redis is down, requests go through.
+const RATE_LIMIT   = 60;  // requests
+const RATE_WINDOW  = 60;  // seconds
+
+export async function checkDiscoverRateLimit(
+  workspaceId: string,
+): Promise<{ allowed: boolean; remaining: number; retryAfter?: number }> {
+  const redis = getRedis();
+  if (!redis) return { allowed: true, remaining: RATE_LIMIT };
+
+  const key = `discover:rl:${workspaceId}`;
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, RATE_WINDOW);
+    const remaining = Math.max(0, RATE_LIMIT - count);
+    if (count > RATE_LIMIT) {
+      const ttl = await redis.ttl(key);
+      return { allowed: false, remaining: 0, retryAfter: ttl > 0 ? ttl : RATE_WINDOW };
+    }
+    return { allowed: true, remaining };
+  } catch {
+    return { allowed: true, remaining: RATE_LIMIT };
+  }
+}
