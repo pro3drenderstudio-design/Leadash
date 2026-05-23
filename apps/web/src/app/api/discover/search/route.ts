@@ -233,18 +233,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ids: idRows.map(r => r.id) });
     }
 
-    const [countRows, rows] = await Promise.all([
-      skipCount
-        ? Promise.resolve(null)
-        : leadsDb.unsafe(`
-            SELECT count(*) AS total
-            FROM (
-              SELECT 1 FROM discover_people p
-              ${joinType} discover_companies c ON c.id = p.company_id
-              ${where}
-              LIMIT 100001
-            ) cnt
-          `, params as never[]),
+    const HARD_CAP = 50_000;
+
+    // Count races against a 12s timer — if counting is slow (broad filter, index still
+    // building), the data still loads and the UI shows "50,000+" as the total.
+    // The abandoned DB query finishes in background; PgBouncer cleans it up within 120s.
+    const countPromise = leadsDb.unsafe(`
+        SELECT count(*) AS total
+        FROM (
+          SELECT 1 FROM discover_people p
+          ${joinType} discover_companies c ON c.id = p.company_id
+          ${where}
+          LIMIT 100001
+        ) cnt
+      `, params as never[])
+      .then(rows => parseInt((rows[0] as unknown as { total: string }).total, 10))
+      .catch((): number => HARD_CAP);
+
+    const countWithTimeout = () => Promise.race([
+      countPromise,
+      new Promise<number>(resolve => setTimeout(() => resolve(HARD_CAP), 12_000)),
+    ]);
+
+    const [rawTotal, rows] = await Promise.all([
+      skipCount ? Promise.resolve(-1) : countWithTimeout(),
       leadsDb.unsafe(`
         SELECT
           p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
@@ -261,9 +273,7 @@ export async function GET(req: NextRequest) {
       `, [...params, limit, offset] as never[]),
     ]);
 
-    const rawTotal = skipCount ? -1 : parseInt((countRows![0] as unknown as { total: string }).total, 10);
-    const HARD_CAP = 50_000;
-    const capped   = !skipCount && rawTotal > HARD_CAP;
+    const capped   = !skipCount && rawTotal >= HARD_CAP;
     const total    = capped ? HARD_CAP : rawTotal;
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 
