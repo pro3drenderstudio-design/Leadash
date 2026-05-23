@@ -245,7 +245,7 @@ function LocationIncludeExclude({
         </div>
 
         {open && hasResults && (
-          <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-[#191919] border border-white/10 rounded-md shadow-2xl overflow-hidden">
+          <div className="mt-0.5 bg-[#191919] border border-white/10 rounded-md shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
             {["country", "state", "city"].map(type => {
               const group = grouped[type];
               if (!group?.length) return null;
@@ -338,7 +338,7 @@ function SearchableIncludeExclude({
           className="w-full bg-white/5 border border-white/10 rounded px-2.5 py-1.5 text-[11px] text-white/70 placeholder-white/20 focus:outline-none focus:border-orange-500/40"
         />
         {open && filtered.length > 0 && (
-          <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-[#1a1a1a] border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto">
+          <div className="mt-0.5 bg-[#1a1a1a] border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto">
             {filtered.map(opt => (
               <button key={opt} onClick={() => { select(opt); setOpen(false); }}
                 className="w-full text-left px-3 py-1.5 text-[11px] text-white/60 hover:bg-white/8 hover:text-white transition-colors truncate">
@@ -434,7 +434,7 @@ function CountryIncludeExclude({
           }`}
         />
         {open && (
-          <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-[#1a1a1a] border border-white/10 rounded shadow-xl max-h-52 overflow-y-auto">
+          <div className="mt-0.5 bg-[#1a1a1a] border border-white/10 rounded shadow-xl max-h-52 overflow-y-auto">
             {filtered.length === 0 ? (
               <p className="px-3 py-3 text-[11px] text-white/25 text-center">No countries found</p>
             ) : filtered.map(country => {

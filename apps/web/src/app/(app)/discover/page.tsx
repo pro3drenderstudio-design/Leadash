@@ -1605,7 +1605,7 @@ function DiscoverContent() {
       )}
 
       {/* ── Left sidebar (desktop only) ── */}
-      <div className="hidden lg:flex w-[240px] flex-shrink-0 border-r border-white/8 flex-col overflow-hidden">
+      <div className="hidden lg:flex w-[240px] flex-shrink-0 border-r border-white/8 flex-col">
         {sidebarInner}
       </div>
 
