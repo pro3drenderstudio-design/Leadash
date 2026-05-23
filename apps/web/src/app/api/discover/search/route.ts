@@ -211,13 +211,21 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
+    // Use INNER JOIN when filtering on company attributes — lets the planner start
+    // from the much smaller discover_companies table (industry GIN, size btree) and
+    // then join to discover_people, instead of scanning all 559M people rows first.
+    const hasCompanyFilter = industryIncludes.length > 0 || industryExcludes.length > 0
+      || companySizes.length > 0
+      || companyKeywordIncludes.length > 0 || companyKeywordExcludes.length > 0;
+    const joinType = hasCompanyFilter ? "INNER JOIN" : "LEFT JOIN";
+
     // Lightweight ID-only path — used by the frontend's "select all" bulk operations.
     // Returns raw IDs without reveal lookups or email masking, supporting up to 50k.
     if (idsOnly) {
       const idRows = await leadsDb.unsafe<{ id: string }[]>(`
         SELECT p.id
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.id = p.company_id
+        ${joinType} discover_companies c ON c.id = p.company_id
         ${where}
         ORDER BY p.created_at DESC NULLS LAST
         LIMIT $${i}
@@ -232,7 +240,7 @@ export async function GET(req: NextRequest) {
             SELECT count(*) AS total
             FROM (
               SELECT 1 FROM discover_people p
-              LEFT JOIN discover_companies c ON c.id = p.company_id
+              ${joinType} discover_companies c ON c.id = p.company_id
               ${where}
               LIMIT 100001
             ) cnt
@@ -246,7 +254,7 @@ export async function GET(req: NextRequest) {
           c.industry AS company_industry, c.size_range AS company_size,
           c.keywords AS company_keywords
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.id = p.company_id
+        ${joinType} discover_companies c ON c.id = p.company_id
         ${where}
         ORDER BY ${sortCol} ${sortDir} NULLS LAST
         LIMIT $${i} OFFSET $${i + 1}
