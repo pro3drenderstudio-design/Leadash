@@ -118,12 +118,13 @@ function pickInbox(
   rrIndex: number,
   preferProvider?: "gmail" | "outlook" | null,
 ): { slot: InboxSlot; nextRr: number } | null {
-  // 3-tier routing: Microsoft → Google → SMTP
-  // For Microsoft recipients: prefer microsoft365/outlook, fall back to gmail, then smtp
-  // For Google recipients: prefer gmail, fall back to microsoft365/outlook, then smtp
-  // For unknown: try all OAuth providers first, then smtp
+  // If the workspace has available Microsoft 365 inboxes, always use them first.
+  // Only fall back to recipient-provider-based preference when no M365 slots are left.
+  const hasMicrosoft = slots.some(
+    s => (s.inbox.provider === "microsoft365" || s.inbox.provider === "outlook") && s.used < s.remaining,
+  );
   const tiers: string[][] =
-    preferProvider === "outlook"
+    hasMicrosoft
       ? [["microsoft365", "outlook"], ["gmail"], ["smtp", "postal"]]
       : preferProvider === "gmail"
       ? [["gmail"], ["microsoft365", "outlook"], ["smtp", "postal"]]
