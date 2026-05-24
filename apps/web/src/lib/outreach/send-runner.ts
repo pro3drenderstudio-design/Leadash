@@ -118,16 +118,15 @@ function pickInbox(
   rrIndex: number,
   preferProvider?: "gmail" | "outlook" | null,
 ): { slot: InboxSlot; nextRr: number } | null {
-  // If the workspace has available Microsoft 365 inboxes, always use them first.
-  // Only fall back to recipient-provider-based preference when no M365 slots are left.
-  const hasMicrosoft = slots.some(
-    s => (s.inbox.provider === "microsoft365" || s.inbox.provider === "outlook") && s.used < s.remaining,
-  );
+  // Match sender provider to recipient provider; SMTP is the universal fallback.
+  // Microsoft recipient → M365/Outlook inbox → SMTP
+  // Gmail/Google recipient → Gmail inbox → SMTP
+  // Unknown → any OAuth inbox → SMTP
   const tiers: string[][] =
-    hasMicrosoft
-      ? [["microsoft365", "outlook"], ["gmail"], ["smtp", "postal"]]
+    preferProvider === "outlook"
+      ? [["microsoft365", "outlook"], ["smtp", "postal"]]
       : preferProvider === "gmail"
-      ? [["gmail"], ["microsoft365", "outlook"], ["smtp", "postal"]]
+      ? [["gmail"], ["smtp", "postal"]]
       : [["microsoft365", "outlook", "gmail"], ["smtp", "postal"]];
 
   for (const tier of tiers) {
