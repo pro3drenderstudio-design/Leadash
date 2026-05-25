@@ -51,11 +51,21 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
 
   // Global pool: all active warmup-enabled inboxes across every workspace.
   // Used as the recipient universe so a workspace benefits from all server emails.
-  const { data: globalPool } = await db
+  const { data: rawGlobalPool } = await db
     .from("outreach_inboxes")
     .select("*")
     .eq("status", "active")
     .eq("warmup_enabled", true);
+
+  // Filter out globally suppressed addresses so Postal never holds warmup mail.
+  const poolEmails = (rawGlobalPool ?? []).map((i: OutreachInbox) => i.email_address?.toLowerCase()).filter(Boolean);
+  const { data: suppressedRows } = poolEmails.length
+    ? await db.from("email_suppressions").select("email").in("email", poolEmails)
+    : { data: [] };
+  const suppressedSet = new Set((suppressedRows ?? []).map((r: { email: string }) => r.email.toLowerCase()));
+  const globalPool = (rawGlobalPool ?? []).filter(
+    (i: OutreachInbox) => !suppressedSet.has((i.email_address ?? "").toLowerCase()),
+  );
 
   // Local pool: only this workspace's inboxes — we only send/reply/rescue from
   // inboxes we control (i.e. have credentials for in this workspace).

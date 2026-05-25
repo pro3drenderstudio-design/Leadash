@@ -92,4 +92,14 @@ export async function syncPostalSuppressions(): Promise<void> {
 
     console.log(`[suppression-sync] bounced ${leadIds.length} leads for chunk ${i / BATCH + 1}`);
   }
+
+  // 4. Disable warmup for any inbox whose email_address is suppressed.
+  // Without this, the warmup pool keeps sending to the suppressed address and
+  // Postal holds every message, silently inflating the held-message count.
+  await db
+    .from("outreach_inboxes")
+    .update({ warmup_enabled: false, status: "error", last_error: "Address suppressed — Postal refused delivery" })
+    .in("email_address", newlySuppressed);
+
+  console.log(`[suppression-sync] disabled warmup for ${newlySuppressed.length} suppressed inbox addresses`);
 }
