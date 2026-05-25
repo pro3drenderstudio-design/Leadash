@@ -117,6 +117,16 @@ export function startSchedulers() {
     }
   });
 
+  // ── Inbox DNS health: every 6 hours ──────────────────────────────────────
+  cron.schedule("0 */6 * * *", async () => {
+    try {
+      const { runInboxDnsHealth } = await import("./inbox-dns-health");
+      await runInboxDnsHealth();
+    } catch (e) {
+      console.error("[scheduler:dns-health] failed:", e);
+    }
+  });
+
   // ── Deliverability checks: daily at 06:00 UTC ───────────────────────────
   cron.schedule("0 6 * * *", async () => {
     const { runDeliverabilityChecks } = await import("../../../web/src/lib/outreach/deliverability");

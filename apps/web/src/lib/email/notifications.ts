@@ -1258,3 +1258,79 @@ export async function sendVendorCancellationAlert(opts: {
   const text = [`Inbox Cancellation: ${opts.domain}`, `Reason: ${opts.reason}`, ``, ...opts.inboxEmails].join("\n");
   await sendEmail({ to: vendorEmail, subject, html, text });
 }
+
+export async function sendInboxDnsAlertEmail(opts: {
+  to:      string;
+  domain:  string;
+  failures: string[];
+}): Promise<void> {
+  const subject  = `[Leadash] DNS issue detected on ${opts.domain}`;
+  const failList = opts.failures.map(f => `<li style="font-family:monospace;font-size:13px;color:#991b1b;margin-bottom:4px">${f}</li>`).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Inbox DNS Health</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#dc2626">DNS Misconfiguration Detected</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      One or more required DNS records are missing or incorrect on <strong>${opts.domain}</strong>.
+      Your inboxes have been paused until the records are fixed.
+    </p>
+    <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">Issues found:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">${failList}</ul>
+    <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">How to fix:</p>
+    <ol style="font-size:13px;color:#4b5563;margin:0 0 20px;padding-left:20px;line-height:2">
+      <li>Log in to your domain registrar or DNS provider</li>
+      <li>Verify that the MX record points to <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">postal.leadash.com</code></li>
+      <li>Verify the SPF TXT record includes <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">ip4:209.145.55.138</code></li>
+      <li>Verify all DKIM TXT records are present</li>
+      <li>DNS changes can take up to 24 hours to propagate</li>
+    </ol>
+    <a href="${APP_URL}/inboxes" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Inboxes →</a>
+    <p style="font-size:12px;color:#9ca3af;margin:16px 0 0">
+      We check DNS records every 6 hours. Your inboxes will be automatically re-enabled once the records are correct.
+    </p>
+  </div>
+</div>`;
+  const text = [
+    `DNS issue on ${opts.domain}`,
+    ``,
+    `Issues:`,
+    ...opts.failures.map(f => `  • ${f}`),
+    ``,
+    `Fix your DNS records and your inboxes will be re-enabled automatically.`,
+    `View inboxes: ${APP_URL}/inboxes`,
+  ].join("\n");
+  await sendEmail({ to: opts.to, subject, html, text });
+}
+
+export async function sendInboxDnsRecoveryEmail(opts: {
+  to:     string;
+  domain: string;
+}): Promise<void> {
+  const subject = `[Leadash] DNS restored on ${opts.domain} — inboxes re-enabled`;
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Inbox DNS Health</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#16a34a">DNS Records Verified</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      All required DNS records on <strong>${opts.domain}</strong> are now correct.
+      Your inboxes have been automatically re-enabled.
+    </p>
+    <a href="${APP_URL}/inboxes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Inboxes →</a>
+  </div>
+</div>`;
+  const text = [
+    `DNS restored on ${opts.domain}`,
+    ``,
+    `All DNS records are correct. Your inboxes have been re-enabled.`,
+    `View inboxes: ${APP_URL}/inboxes`,
+  ].join("\n");
+  await sendEmail({ to: opts.to, subject, html, text });
+}
