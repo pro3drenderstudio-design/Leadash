@@ -92,6 +92,16 @@ export async function POST(req: NextRequest) {
           payment_suspended_at: now,
           error_message:        "Suspended after 3 failed payment attempts",
         }).eq("id", domain.id);
+
+        // Mark all inboxes on this domain as error so UI shows the suspension banner
+        await db.from("outreach_inboxes")
+          .update({
+            status:     "error",
+            last_error: "Domain suspended — inbox billing failed. Update your payment method to restore.",
+          })
+          .eq("domain_id", domain.id)
+          .in("status", ["active", "paused"]);
+
         sendInboxSuspendedEmail({
           userEmail: domain.paystack_billing_email as string,
           domain:    domain.domain,

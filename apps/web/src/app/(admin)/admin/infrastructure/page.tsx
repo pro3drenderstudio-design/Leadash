@@ -58,6 +58,14 @@ interface ExternalService {
   details?: Record<string, unknown>;
 }
 
+interface LeadsVpsDetails {
+  latency_ms:      number;
+  db_size_mb:      number;
+  connections:     number;
+  people_count:    number;
+  companies_count: number;
+}
+
 interface Snapshot {
   id:                string;
   captured_at:       string;
@@ -375,6 +383,35 @@ export default function InfrastructurePage() {
         </div>
       </section>
 
+      {/* Leads VPS (Discover DB) */}
+      {(() => {
+        const leadsVps = (snap?.external_services ?? []).find(s => s.name === "Leads VPS");
+        const lv = leadsVps?.details as LeadsVpsDetails | undefined;
+        const dotCls = !leadsVps ? "bg-slate-400"
+          : leadsVps.status === "ok"      ? "bg-green-500"
+          : leadsVps.status === "warning" ? "bg-amber-500"
+          : "bg-red-500";
+        return (
+          <section>
+            <h2 className="text-sm font-semibold text-slate-600 dark:text-white/60 mb-3 flex items-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg>
+              Leads VPS
+              <span className={`w-2 h-2 rounded-full ${dotCls} ${leadsVps?.status === "ok" ? "animate-pulse" : ""}`} />
+              <span className="text-xs font-normal text-slate-400 dark:text-white/30">89.117.51.235 — Discover DB</span>
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatCard label="Latency" value={lv ? `${lv.latency_ms} ms` : leadsVps ? "error" : "—"} />
+              <StatCard label="DB size" value={lv ? `${Math.round(lv.db_size_mb / 1024 * 10) / 10} GB` : "—"} />
+              <StatCard label="People" value={lv ? lv.people_count.toLocaleString() : "—"} />
+              <StatCard label="Companies" value={lv ? lv.companies_count.toLocaleString() : "—"} sub={lv ? `${lv.connections} active conn` : undefined} />
+            </div>
+            {leadsVps?.status === "error" && (
+              <p className="mt-2 text-xs text-red-500 dark:text-red-400">{leadsVps.message}</p>
+            )}
+          </section>
+        );
+      })()}
+
       {/* Postal + DB stats side by side */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {/* Postal */}
@@ -401,14 +438,14 @@ export default function InfrastructurePage() {
       </div>
 
       {/* External Services */}
-      {(snap?.external_services ?? []).length > 0 && (
+      {(snap?.external_services ?? []).filter(s => s.name !== "Leads VPS").length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-slate-600 dark:text-white/60 mb-3 flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
             External Services
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {snap!.external_services!.map(svc => {
+            {snap!.external_services!.filter(s => s.name !== "Leads VPS").map(svc => {
               const dotCls = svc.status === "ok"
                 ? "bg-green-500"
                 : svc.status === "warning"

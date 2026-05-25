@@ -273,6 +273,42 @@ async function checkSupabase(db: ReturnType<typeof adminClient>): Promise<Extern
   }
 }
 
+async function checkLeadsVps(): Promise<ExternalServiceStatus> {
+  try {
+    const { default: leadsDb } = await import("../../../web/src/lib/postgres/leads-db");
+    const start = Date.now();
+    type StatsRow = { db_size_mb: number; connections: number; people_count: number; companies_count: number };
+    const [row] = await leadsDb.unsafe<StatsRow[]>(`
+      SELECT
+        round(pg_database_size(current_database()) / 1024.0 / 1024.0)::bigint AS db_size_mb,
+        (SELECT count(*) FROM pg_stat_activity WHERE state != 'idle')::bigint  AS connections,
+        (SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = 'discover_people')::bigint AS people_count,
+        (SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = 'discover_companies')::bigint AS companies_count
+    `);
+    const latency  = Date.now() - start;
+    const dbSizeGb = Math.round((Number(row.db_size_mb)) / 1024 * 10) / 10;
+    const people   = Number(row.people_count).toLocaleString();
+    return {
+      name:    "Leads VPS",
+      status:  latency > 3000 ? "warning" : "ok",
+      message: `${latency}ms · ${dbSizeGb} GB · ${people} people`,
+      details: {
+        latency_ms:      latency,
+        db_size_mb:      Number(row.db_size_mb),
+        connections:     Number(row.connections),
+        people_count:    Number(row.people_count),
+        companies_count: Number(row.companies_count),
+      },
+    };
+  } catch (e) {
+    return {
+      name:    "Leads VPS",
+      status:  "error",
+      message: e instanceof Error ? e.message.slice(0, 80) : "Connection failed",
+    };
+  }
+}
+
 async function getExternalServiceStats(db: ReturnType<typeof adminClient>): Promise<ExternalServiceStatus[]> {
   const results = await Promise.allSettled([
     checkSupabase(db),
@@ -281,6 +317,7 @@ async function getExternalServiceStats(db: ReturnType<typeof adminClient>): Prom
     checkReoon(),
     checkPaystack(),
     checkCloudflare(),
+    checkLeadsVps(),
   ]);
   return results.map(r =>
     r.status === "fulfilled" ? r.value : { name: "unknown", status: "error" as const, message: "Unexpected error" }
