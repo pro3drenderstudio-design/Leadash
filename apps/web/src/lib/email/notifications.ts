@@ -1334,3 +1334,108 @@ export async function sendInboxDnsRecoveryEmail(opts: {
   ].join("\n");
   await sendEmail({ to: opts.to, subject, html, text });
 }
+
+export async function sendCampaignInboxRemovedEmail(opts: {
+  to:             string;
+  campaignName:   string;
+  campaignId:     string;
+  removedInboxes: { email: string; reason: string }[];
+  remainingCount: number;
+}): Promise<void> {
+  const n       = opts.removedInboxes.length;
+  const subject = `[Leadash] ${n} inbox${n !== 1 ? "es" : ""} removed from "${opts.campaignName}"`;
+  const rows    = opts.removedInboxes.map(i =>
+    `<tr>
+      <td style="padding:6px 12px 6px 0;font-family:monospace;font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6">${i.email}</td>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280;border-bottom:1px solid #f3f4f6">${i.reason}</td>
+    </tr>`
+  ).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Campaign Health</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#d97706">Inboxes Removed from Campaign</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      ${n} inbox${n !== 1 ? "es" : ""} in your campaign <strong>${opts.campaignName}</strong>
+      ${n !== 1 ? "were" : "was"} automatically removed because ${n !== 1 ? "they are" : "it is"} in an error state.
+      Your campaign is still running with <strong>${opts.remainingCount} active inbox${opts.remainingCount !== 1 ? "es" : ""}</strong>.
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      <thead><tr>
+        <th style="text-align:left;font-size:11px;font-weight:600;color:#9ca3af;padding-bottom:6px">Inbox</th>
+        <th style="text-align:left;font-size:11px;font-weight:600;color:#9ca3af;padding-bottom:6px">Reason</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="font-size:13px;color:#6b7280;margin:0 0 16px">
+      Fix the inbox issues, then re-add them to the campaign to resume sending from those addresses.
+    </p>
+    <a href="${APP_URL}/inboxes" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px;margin-right:8px">View Inboxes →</a>
+    <a href="${APP_URL}/campaigns/${opts.campaignId}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Campaign →</a>
+  </div>
+</div>`;
+  const textLines = [
+    `Inboxes removed from campaign "${opts.campaignName}":`,
+    ...opts.removedInboxes.map(i => `  • ${i.email}: ${i.reason}`),
+    ``,
+    `Campaign is still running with ${opts.remainingCount} active inbox${opts.remainingCount !== 1 ? "es" : ""}.`,
+    `View campaign: ${APP_URL}/campaigns/${opts.campaignId}`,
+  ];
+  await sendEmail({ to: opts.to, subject, html, text: textLines.join("\n") });
+}
+
+export async function sendCampaignPausedByInboxEmail(opts: {
+  to:             string;
+  campaignName:   string;
+  campaignId:     string;
+  removedInboxes: { email: string; reason: string }[];
+}): Promise<void> {
+  const subject = `[Leadash] Campaign "${opts.campaignName}" paused — all inboxes offline`;
+  const rows    = opts.removedInboxes.map(i =>
+    `<tr>
+      <td style="padding:6px 12px 6px 0;font-family:monospace;font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6">${i.email}</td>
+      <td style="padding:6px 0;font-size:12px;color:#dc2626;border-bottom:1px solid #f3f4f6">${i.reason}</td>
+    </tr>`
+  ).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Campaign Health</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#dc2626">Campaign Paused — No Active Inboxes</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      Your campaign <strong>${opts.campaignName}</strong> has been automatically paused because all assigned inboxes are now in an error state.
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      <thead><tr>
+        <th style="text-align:left;font-size:11px;font-weight:600;color:#9ca3af;padding-bottom:6px">Inbox</th>
+        <th style="text-align:left;font-size:11px;font-weight:600;color:#9ca3af;padding-bottom:6px">Reason</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">To resume your campaign:</p>
+    <ol style="font-size:13px;color:#4b5563;margin:0 0 20px;padding-left:20px;line-height:2">
+      <li>Fix or replace the inbox issues shown above</li>
+      <li>Re-add at least one active inbox to the campaign</li>
+      <li>Re-activate the campaign</li>
+    </ol>
+    <a href="${APP_URL}/inboxes" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px;margin-right:8px">Fix Inboxes →</a>
+    <a href="${APP_URL}/campaigns/${opts.campaignId}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Campaign →</a>
+  </div>
+</div>`;
+  const textLines = [
+    `Campaign "${opts.campaignName}" has been paused — all inboxes are offline.`,
+    ``,
+    `Affected inboxes:`,
+    ...opts.removedInboxes.map(i => `  • ${i.email}: ${i.reason}`),
+    ``,
+    `Fix the inboxes, re-add them, then re-activate.`,
+    `View campaign: ${APP_URL}/campaigns/${opts.campaignId}`,
+  ];
+  await sendEmail({ to: opts.to, subject, html, text: textLines.join("\n") });
+}

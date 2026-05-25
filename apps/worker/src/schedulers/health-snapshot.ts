@@ -273,6 +273,126 @@ async function checkSupabase(db: ReturnType<typeof adminClient>): Promise<Extern
   }
 }
 
+async function checkCampaignInboxHealth(db: ReturnType<typeof adminClient>): Promise<void> {
+  try {
+    // Load all active campaigns that have at least one inbox assigned
+    const { data: campaigns } = await db
+      .from("outreach_campaigns")
+      .select("id, workspace_id, name, inbox_ids")
+      .eq("status", "active")
+      .not("inbox_ids", "is", null);
+
+    if (!campaigns?.length) return;
+
+    type CampaignRow = { id: string; workspace_id: string; name: string; inbox_ids: string[] };
+    const allInboxIds = [...new Set((campaigns as CampaignRow[]).flatMap(c => c.inbox_ids ?? []))];
+    if (!allInboxIds.length) return;
+
+    // Fetch inbox statuses in a single query
+    const { data: inboxes } = await db
+      .from("outreach_inboxes")
+      .select("id, email_address, status, last_error, workspace_id")
+      .in("id", allInboxIds);
+
+    type InboxRow = { id: string; email_address: string; status: string; last_error: string | null; workspace_id: string };
+    const inboxMap = new Map<string, InboxRow>(
+      ((inboxes ?? []) as InboxRow[]).map(i => [i.id, i])
+    );
+
+    for (const campaign of campaigns as CampaignRow[]) {
+      const inboxIds   = campaign.inbox_ids ?? [];
+      const errorInboxes = inboxIds
+        .map(id => inboxMap.get(id))
+        .filter((i): i is InboxRow => !!i && i.status === "error");
+
+      if (!errorInboxes.length) continue;
+
+      const remainingIds    = inboxIds.filter(id => !errorInboxes.some(e => e.id === id));
+      const remainingActive = remainingIds.filter(id => inboxMap.get(id)?.status === "active").length;
+
+      const removedDetails = errorInboxes.map(i => ({
+        email:  i.email_address,
+        reason: i.last_error ?? "Unknown error",
+      }));
+
+      // Use sorted error inbox IDs as dedup key — fires once per unique incident
+      const dedupKey = `campaign:inbox_removed:${campaign.id}:${errorInboxes.map(i => i.id).sort().join(",")}`;
+
+      const { data: existingNotif } = await db
+        .from("notifications")
+        .select("id")
+        .eq("dedup_key", dedupKey)
+        .is("resolved_at", null)
+        .maybeSingle();
+
+      // Update campaign: remove error inboxes from inbox_ids
+      const updateData: Record<string, unknown> = {
+        inbox_ids:  remainingIds,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (remainingActive === 0) {
+        updateData.status       = "paused";
+        updateData.pause_reason = `All inboxes offline — ${errorInboxes.length} inbox${errorInboxes.length !== 1 ? "es" : ""} in error state. Re-add an active inbox to resume.`;
+      }
+
+      await db.from("outreach_campaigns").update(updateData).eq("id", campaign.id);
+
+      if (!existingNotif) {
+        // First detection — notify user + create dedup record
+        const { data: ws } = await db
+          .from("workspaces")
+          .select("billing_email, owner_id")
+          .eq("id", campaign.workspace_id)
+          .single();
+
+        let toEmail = (ws as { billing_email: string | null } | null)?.billing_email ?? null;
+        if (!toEmail && (ws as { owner_id: string } | null)?.owner_id) {
+          const { data: { user } } = await db.auth.admin.getUserById((ws as { owner_id: string }).owner_id);
+          toEmail = user?.email ?? null;
+        }
+
+        if (toEmail) {
+          if (remainingActive === 0) {
+            const { sendCampaignPausedByInboxEmail } = await import("../../../web/src/lib/email/notifications");
+            await sendCampaignPausedByInboxEmail({
+              to:             toEmail,
+              campaignName:   campaign.name,
+              campaignId:     campaign.id,
+              removedInboxes: removedDetails,
+            }).catch(e => console.error(`[campaign-health] pause email failed for ${campaign.id}:`, e));
+          } else {
+            const { sendCampaignInboxRemovedEmail } = await import("../../../web/src/lib/email/notifications");
+            await sendCampaignInboxRemovedEmail({
+              to:             toEmail,
+              campaignName:   campaign.name,
+              campaignId:     campaign.id,
+              removedInboxes: removedDetails,
+              remainingCount: remainingActive,
+            }).catch(e => console.error(`[campaign-health] removed email failed for ${campaign.id}:`, e));
+          }
+        }
+
+        await upsertNotification({
+          type:         "infra",
+          severity:     remainingActive === 0 ? "critical" : "warning",
+          title:        remainingActive === 0
+            ? `Campaign "${campaign.name}" paused — all inboxes offline`
+            : `${errorInboxes.length} inbox${errorInboxes.length !== 1 ? "es" : ""} removed from "${campaign.name}"`,
+          body:         removedDetails.map(e => `${e.email}: ${e.reason}`).join("; "),
+          workspace_id: campaign.workspace_id,
+          dedup_key:    dedupKey,
+          metadata:     { campaign_id: campaign.id, removed_inboxes: removedDetails, remaining_active: remainingActive },
+        });
+
+        console.log(`[campaign-health] ${remainingActive === 0 ? "PAUSED" : "REMOVED"} ${errorInboxes.length} inbox(es) from campaign ${campaign.id} (${campaign.name})`);
+      }
+    }
+  } catch (e) {
+    console.error("[campaign-health] check failed:", e);
+  }
+}
+
 async function checkLeadsVps(): Promise<ExternalServiceStatus> {
   try {
     const { default: leadsDb } = await import("../../../web/src/lib/postgres/leads-db");
@@ -675,6 +795,7 @@ export async function runHealthSnapshot(): Promise<void> {
     checkWorkspacePlanCaps(db),
     checkTrialExpiry(db),
     checkPostalNodes(db),
+    checkCampaignInboxHealth(db),
   ]);
 
   // Trigger email dispatch on web app (fire-and-forget)
