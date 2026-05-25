@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   // Plan gate
   const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
   const planId = wsRow?.plan_id ?? "free";
-  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  const trialExpired = planId === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
   if (trialExpired) {
     return NextResponse.json(
       { error: "Your free trial has expired. Upgrade to export leads." },
