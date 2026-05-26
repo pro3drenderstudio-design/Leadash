@@ -9,6 +9,26 @@ import { wsFetch, getWorkspaceId } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
 
+// ─── DNS check types ──────────────────────────────────────────────────────────
+interface DnsExpectedRecord {
+  name: string;
+  type: string;
+  value: string;
+  priority?: number;
+}
+interface DnsCheckResult {
+  domain: string;
+  checks: {
+    spf:   { pass: boolean; record?: string; detail: string };
+    dmarc: { pass: boolean; record?: string; detail: string };
+    dkim:  { pass: boolean; selector?: string; detail: string };
+    mx:    { pass: boolean; records?: string[]; detail: string };
+  };
+  score: number;
+  max_score: number;
+  expected_records: DnsExpectedRecord[] | null;
+}
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 interface OutreachDomain {
   id: string;
@@ -338,6 +358,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [delivResult, setDelivResult]     = useState<string | null>(null);
   const [delivTesting, setDelivTesting]   = useState(false);
   const [delivRecipient, setDelivRecipient] = useState("");
+  const [dnsCheckResult, setDnsCheckResult] = useState<DnsCheckResult | null>(null);
+  const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
+  const [copiedDnsIdx, setCopiedDnsIdx] = useState<number | null>(null);
 
   const filteredInboxes = inboxes
     .slice()
@@ -780,6 +803,36 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     setDrawerInbox(inbox);
     setDrawerEdits({});
     setDelivResult(null);
+    setDnsCheckResult(null);
+    if (inbox.status === "error") {
+      void fetchDnsCheck(inbox.id);
+    }
+  }
+
+  async function fetchDnsCheck(inboxId: string) {
+    setDnsCheckLoading(true);
+    try {
+      const r = await wsFetch(`/api/outreach/inboxes/${inboxId}/dns-check`);
+      const d = await r.json();
+      setDnsCheckResult(d.error ? null : (d as DnsCheckResult));
+    } catch {
+      setDnsCheckResult(null);
+    } finally {
+      setDnsCheckLoading(false);
+    }
+  }
+
+  function inferDnsRecordPass(
+    rec: DnsExpectedRecord,
+    checks: DnsCheckResult["checks"],
+  ): boolean {
+    if (rec.type === "MX") return checks.mx.pass;
+    if (rec.type === "TXT") {
+      if (rec.name === "_dmarc" || rec.name.startsWith("_dmarc.")) return checks.dmarc.pass;
+      if (rec.name.includes("_domainkey")) return checks.dkim.pass;
+      if (rec.value.startsWith("v=spf1")) return checks.spf.pass;
+    }
+    return true;
   }
 
   function df<K extends keyof OutreachInboxSafe>(key: K): OutreachInboxSafe[K] {
@@ -1580,6 +1633,115 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                       <p className="text-red-300/60 text-xs">{drawerInbox.last_error}</p>
                     </div>
                   )}
+
+                  {/* DNS Records panel */}
+                  {dnsCheckLoading && (
+                    <div className="flex items-center gap-2 text-white/30 text-xs py-1">
+                      <svg className="w-3 h-3 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      Checking DNS records…
+                    </div>
+                  )}
+                  {!dnsCheckLoading && !dnsCheckResult && (
+                    <button
+                      onClick={() => void fetchDnsCheck(drawerInbox.id)}
+                      className="text-xs text-white/35 hover:text-white/60 underline underline-offset-2 transition-colors"
+                    >
+                      Check DNS records →
+                    </button>
+                  )}
+                  {dnsCheckResult && (
+                    <div className="bg-white/3 border border-white/8 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-white/2 border-b border-white/6">
+                        <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">DNS Records</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold ${dnsCheckResult.score === dnsCheckResult.max_score ? "text-green-400" : dnsCheckResult.score === 0 ? "text-red-400" : "text-amber-400"}`}>
+                            {dnsCheckResult.score}/{dnsCheckResult.max_score} passing
+                          </span>
+                          <button
+                            onClick={() => void fetchDnsCheck(drawerInbox.id)}
+                            disabled={dnsCheckLoading}
+                            title="Re-check DNS"
+                            className="text-white/25 hover:text-white/60 disabled:opacity-40 text-sm leading-none transition-colors"
+                          >↻</button>
+                        </div>
+                      </div>
+
+                      {dnsCheckResult.expected_records ? (
+                        <div>
+                          {dnsCheckResult.expected_records.map((rec, i) => {
+                            const pass = inferDnsRecordPass(rec, dnsCheckResult.checks);
+                            return (
+                              <div key={i} className="flex items-start gap-2 px-3 py-2.5 border-b border-white/5 last:border-0">
+                                <span className={`flex-shrink-0 text-[10px] font-bold w-3.5 mt-0.5 ${pass ? "text-green-400" : "text-red-400"}`}>
+                                  {pass ? "✓" : "✗"}
+                                </span>
+                                <div className="flex-1 min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-mono font-semibold text-white/50 bg-white/8 px-1 py-0.5 rounded uppercase tracking-wider">{rec.type}</span>
+                                    <span className="text-[10px] font-mono text-white/40 truncate">{rec.name === "@" ? `@ (root)` : rec.name}</span>
+                                    {rec.priority !== undefined && <span className="text-[9px] text-white/25">· priority {rec.priority}</span>}
+                                  </div>
+                                  <p className="text-[10px] font-mono text-white/65 break-all leading-relaxed line-clamp-3" title={rec.value}>
+                                    {rec.value}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(rec.value);
+                                    setCopiedDnsIdx(i);
+                                    setTimeout(() => setCopiedDnsIdx(null), 2000);
+                                  }}
+                                  title="Copy value"
+                                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-white/25 hover:text-white/70 hover:bg-white/8 transition-colors mt-0.5"
+                                >
+                                  {copiedDnsIdx === i ? (
+                                    <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                  ) : (
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        // Non-managed domain: show live check summary
+                        <div>
+                          {(Object.entries(dnsCheckResult.checks) as [string, { pass: boolean; detail: string; record?: string }][]).map(([key, check]) => (
+                            <div key={key} className="flex items-start gap-2.5 px-3 py-2.5 border-b border-white/5 last:border-0">
+                              <span className={`flex-shrink-0 text-[10px] font-bold mt-0.5 ${check.pass ? "text-green-400" : "text-red-400"}`}>
+                                {check.pass ? "✓" : "✗"}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] font-semibold text-white/55 uppercase tracking-wide">{key}</span>
+                                <p className="text-[10px] text-white/40 mt-0.5">{check.detail}</p>
+                                {check.record && (
+                                  <div className="flex items-start gap-1 mt-1">
+                                    <p className="text-[10px] font-mono text-white/50 break-all flex-1 line-clamp-2">{check.record}</p>
+                                    <button
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(check.record!);
+                                        setCopiedDnsIdx(-1);
+                                        setTimeout(() => setCopiedDnsIdx(null), 2000);
+                                      }}
+                                      className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-white/25 hover:text-white/70 hover:bg-white/8 transition-colors"
+                                    >
+                                      {copiedDnsIdx === -1 ? (
+                                        <svg className="w-2.5 h-2.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                      ) : (
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <input

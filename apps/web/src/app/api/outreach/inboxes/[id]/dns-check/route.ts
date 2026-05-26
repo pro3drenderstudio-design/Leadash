@@ -23,6 +23,14 @@ export async function GET(
   const domain = (inbox.email_address as string).split("@")[1];
   if (!domain) return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
 
+  // Fetch expected DNS records stored when the domain was provisioned (Leadash-managed domains only)
+  const { data: domainRecord } = await db
+    .from("outreach_domains")
+    .select("dns_records")
+    .eq("domain", domain)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
   type CheckResult = { pass: boolean; record?: string; selector?: string; records?: string[]; detail: string };
 
   const checks: { spf: CheckResult; dmarc: CheckResult; dkim: CheckResult; mx: CheckResult } = {
@@ -83,5 +91,5 @@ export async function GET(
   }
 
   const score = Object.values(checks).filter(c => c.pass).length;
-  return NextResponse.json({ domain, checks, score, max_score: 4 });
+  return NextResponse.json({ domain, checks, score, max_score: 4, expected_records: domainRecord?.dns_records ?? null });
 }
