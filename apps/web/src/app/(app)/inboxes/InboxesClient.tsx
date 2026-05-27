@@ -27,6 +27,8 @@ interface DnsCheckResult {
   score: number;
   max_score: number;
   expected_records: DnsExpectedRecord[] | null;
+  // true = user's own domain (can fix), false = Leadash-managed (contact support), null = custom SMTP
+  user_managed_dns: boolean | null;
 }
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
@@ -804,7 +806,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     setDrawerEdits({});
     setDelivResult(null);
     setDnsCheckResult(null);
-    if (inbox.status === "error") {
+    // DNS checks only apply to postal/SMTP inboxes — not Gmail/Outlook (they use Google/Microsoft infra)
+    const isOAuth = inbox.provider === "gmail" || inbox.provider === "outlook";
+    if (!isOAuth && inbox.status === "error") {
       void fetchDnsCheck(inbox.id);
     }
   }
@@ -1640,14 +1644,14 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                     </div>
                   )}
 
-                  {/* DNS Records panel */}
-                  {dnsCheckLoading && (
+                  {/* DNS Records panel — postal/SMTP only */}
+                  {drawerInbox.provider !== "gmail" && drawerInbox.provider !== "outlook" && dnsCheckLoading && (
                     <div className="flex items-center gap-2 text-white/30 text-xs py-1">
                       <svg className="w-3 h-3 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                       Checking DNS records…
                     </div>
                   )}
-                  {!dnsCheckLoading && !dnsCheckResult && (
+                  {drawerInbox.provider !== "gmail" && drawerInbox.provider !== "outlook" && !dnsCheckLoading && !dnsCheckResult && (
                     <button
                       onClick={() => void fetchDnsCheck(drawerInbox.id)}
                       className="text-xs text-white/35 hover:text-white/60 underline underline-offset-2 transition-colors"
@@ -1658,7 +1662,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                   {dnsCheckResult && (
                     <div className="bg-white/3 border border-white/8 rounded-xl overflow-hidden">
                       <div className="flex items-center justify-between px-3 py-2 bg-white/2 border-b border-white/6">
-                        <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">DNS Records</span>
+                        <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+                          {dnsCheckResult.user_managed_dns === false ? "DNS (Leadash-managed)" : "DNS Records"}
+                        </span>
                         <div className="flex items-center gap-2">
                           <span className={`text-[10px] font-semibold ${dnsCheckResult.score === dnsCheckResult.max_score ? "text-green-400" : dnsCheckResult.score === 0 ? "text-red-400" : "text-amber-400"}`}>
                             {dnsCheckResult.score}/{dnsCheckResult.max_score} passing
@@ -1671,6 +1677,16 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           >↻</button>
                         </div>
                       </div>
+
+                      {/* Leadash-managed domain — user can't edit DNS, direct to support */}
+                      {dnsCheckResult.user_managed_dns === false && (
+                        <div className="px-3 py-3 bg-amber-500/8 border-b border-amber-500/20">
+                          <p className="text-amber-300 text-xs font-semibold mb-0.5">DNS managed by Leadash</p>
+                          <p className="text-amber-300/60 text-[10px]">
+                            Your domain&apos;s DNS is controlled by Leadash via Cloudflare. If records look wrong, contact support — you cannot edit them directly.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Restore banner — DNS now healthy but inbox still in error */}
                       {dnsCheckResult.score === dnsCheckResult.max_score && drawerInbox.status === "error" && (

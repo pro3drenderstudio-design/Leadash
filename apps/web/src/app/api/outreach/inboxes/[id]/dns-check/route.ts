@@ -30,13 +30,21 @@ export async function GET(
   const domain = (inbox.email_address as string).split("@")[1];
   if (!domain) return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
 
-  // Fetch expected DNS records stored when the domain was provisioned (Leadash-managed domains only)
+  // Fetch expected DNS records stored when the domain was provisioned
   const { data: domainRecord } = await db
     .from("outreach_domains")
-    .select("dns_records")
+    .select("dns_records, domain_price_usd")
     .eq("domain", domain)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
+
+  // user_managed_dns:
+  //   true  = user's own domain ($0), they control DNS at their provider → show copy panel
+  //   false = Leadash-purchased domain (price > $0), we manage DNS in Cloudflare → show "contact support"
+  //   null  = no domain record (custom imported SMTP) → show generic check
+  const user_managed_dns: boolean | null = domainRecord
+    ? (Number(domainRecord.domain_price_usd ?? 0) === 0)
+    : null;
 
   const expected = (domainRecord?.dns_records ?? null) as
     Array<{ name: string; type: string; value: string; priority?: number }> | null;
@@ -164,5 +172,5 @@ export async function GET(
   }
 
   const score = Object.values(checks).filter(c => c.pass).length;
-  return NextResponse.json({ domain, checks, score, max_score: 4, expected_records: expected });
+  return NextResponse.json({ domain, checks, score, max_score: 4, expected_records: expected, user_managed_dns });
 }
