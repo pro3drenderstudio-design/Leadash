@@ -809,6 +809,12 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     }
   }
 
+  async function restoreInbox(inboxId: string) {
+    await updateInbox(inboxId, { status: "active", last_error: null });
+    setDrawerInbox(prev => prev ? { ...prev, status: "active", last_error: null } : prev);
+    setInboxes(prev => prev.map(i => i.id === inboxId ? { ...i, status: "active", last_error: null } : i));
+  }
+
   async function fetchDnsCheck(inboxId: string) {
     setDnsCheckLoading(true);
     try {
@@ -1665,6 +1671,19 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           >↻</button>
                         </div>
                       </div>
+
+                      {/* Restore banner — DNS now healthy but inbox still in error */}
+                      {dnsCheckResult.score === dnsCheckResult.max_score && drawerInbox.status === "error" && (
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-green-500/8 border-b border-green-500/20">
+                          <p className="text-green-400 text-xs">DNS is healthy — restore this inbox?</p>
+                          <button
+                            onClick={() => void restoreInbox(drawerInbox.id)}
+                            className="flex-shrink-0 px-3 py-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )}
 
                       {dnsCheckResult.expected_records ? (
                         <div>
