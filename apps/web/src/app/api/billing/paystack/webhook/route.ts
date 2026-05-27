@@ -7,6 +7,31 @@ import { enqueueProvision } from "@/lib/queue";
 import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/pool-quota";
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
 import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
+import {
+  sendSubscriptionRenewalSuccessEmail,
+  sendGracePeriodWarning,
+  sendDowngradeNotification,
+  sendDomainProvisioningStartedEmail,
+} from "@/lib/email/notifications";
+
+async function resolveWorkspaceEmail(
+  db: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+): Promise<{ email: string | null; name: string | null; billingEmail: string | null }> {
+  const { data: ws } = await db
+    .from("workspaces")
+    .select("name, billing_email, workspace_members(user_id)")
+    .eq("id", workspaceId)
+    .single();
+  if (!ws) return { email: null, name: null, billingEmail: null };
+  if (ws.billing_email) return { email: ws.billing_email, name: ws.name, billingEmail: ws.billing_email };
+  const userId = (ws as unknown as { workspace_members: Array<{ user_id: string }> }).workspace_members?.[0]?.user_id;
+  if (!userId) return { email: null, name: ws.name, billingEmail: null };
+  try {
+    const { data: { user } } = await db.auth.admin.getUserById(userId);
+    return { email: user?.email ?? null, name: ws.name, billingEmail: null };
+  } catch { return { email: null, name: ws.name, billingEmail: null }; }
+}
 
 export async function POST(req: NextRequest) {
   const rawBody   = await req.text();
@@ -356,6 +381,15 @@ export async function POST(req: NextRequest) {
     // Enqueue domain provisioning on the VPS worker — avoids Vercel 10s timeout
     await enqueueProvision(domainRecordId, workspaceId);
 
+    // Confirm purchase to user
+    if (billingWs?.billing_email) {
+      sendDomainProvisioningStartedEmail({
+        userEmail:    billingWs.billing_email,
+        domain:       domainRecord.domain,
+        mailboxCount: (domainRecord.mailbox_count as number | null) ?? 1,
+      }).catch(e => console.error("[billing] domain provision email failed:", e));
+    }
+
     return NextResponse.json({ received: true });
   }
 
@@ -457,32 +491,60 @@ export async function POST(req: NextRequest) {
             description:  `Monthly credits — ${plan.name} plan renewal`,
           });
         }
+
+        // Renewal receipt — notify user of successful charge
+        const { email: userEmail, name: wsName } = await resolveWorkspaceEmail(db, ws.id);
+        if (userEmail) {
+          sendSubscriptionRenewalSuccessEmail({
+            userEmail,
+            workspaceName: wsName ?? ws.id,
+            planName:      plan.name,
+            amountNgn:     Math.round((inv.amount ?? plan.price_ngn * 100) / 100),
+            renewsAt:      nextRenewsAt,
+          }).catch(e => console.error("[billing] renewal email failed:", e));
+        }
       }
     }
     return NextResponse.json({ received: true });
   }
 
-  // ── Payment failed — enter 3-day grace period ────────────────────────────────
+  // ── Payment failed — enter grace period ──────────────────────────────────────
   if (event.event === "invoice.payment_failed") {
     const data = event.data as { subscription_code?: string };
     const subCode = data.subscription_code;
     if (subCode) {
       const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const todayKey = `grace_warn_${new Date().toISOString().slice(0, 10)}`;
       const { data: ws } = await db
         .from("workspaces")
         .update({
-          plan_status:  "past_due",
+          plan_status:   "past_due",
           grace_ends_at: graceEndsAt,
-          updated_at:   new Date().toISOString(),
+          updated_at:    new Date().toISOString(),
         })
         .eq("paystack_sub_code", subCode)
-        .select("id")
+        .select("id, name, billing_email, billing_reminders_sent, workspace_members(user_id)")
         .maybeSingle();
 
-      // Pause active campaigns immediately — restored if payment comes through
       if (ws?.id) {
         const paused = await pauseCampaignsForPoolOverage(db, ws.id);
         console.warn(`[billing] Payment failed: workspace=${ws.id} grace_ends_at=${graceEndsAt} campaigns_paused=${paused}`);
+
+        // Send grace period warning immediately; mark key so daily cron doesn't duplicate
+        const sentMap = ((ws as unknown as Record<string, unknown>).billing_reminders_sent ?? {}) as Record<string, boolean>;
+        if (!sentMap[todayKey]) {
+          const { email: userEmail } = await resolveWorkspaceEmail(db, ws.id);
+          if (userEmail) {
+            sendGracePeriodWarning({
+              userEmail,
+              workspaceName: (ws as unknown as { name: string }).name ?? ws.id,
+              graceEndsAt,
+            }).catch(e => console.error("[billing] grace warning email failed:", e));
+          }
+          await db.from("workspaces")
+            .update({ billing_reminders_sent: { ...sentMap, [todayKey]: true } })
+            .eq("id", ws.id);
+        }
       }
     }
     return NextResponse.json({ received: true });
@@ -495,7 +557,7 @@ export async function POST(req: NextRequest) {
     if (subCode) {
       const { data: ws } = await db
         .from("workspaces")
-        .select("id")
+        .select("id, name")
         .eq("paystack_sub_code", subCode)
         .maybeSingle();
 
@@ -503,15 +565,24 @@ export async function POST(req: NextRequest) {
         await db.from("workspaces").update({ subscription_renews_at: null }).eq("id", ws.id);
         const { paused, creditsExpired } = await downgradeWorkspaceToFree(db, ws.id, "subscription_disabled");
         console.warn(`[billing] Subscription disabled: workspace=${ws.id} campaigns_paused=${paused} credits_expired=${creditsExpired}`);
-        const { data: wsName } = await db.from("workspaces").select("name").eq("id", ws.id).single();
         await logActivity({
           workspace_id:   ws.id,
-          workspace_name: wsName?.name,
+          workspace_name: ws.name,
           type:           "subscription_cancelled",
           title:          "Subscription cancelled",
-          description:    `${wsName?.name ?? ws.id} — downgraded to Free (Paystack)`,
+          description:    `${ws.name ?? ws.id} — downgraded to Free (Paystack)`,
           metadata:       { subscription_code: subCode },
         });
+
+        // Notify user their account has been downgraded
+        const { email: userEmail } = await resolveWorkspaceEmail(db, ws.id);
+        if (userEmail) {
+          sendDowngradeNotification({
+            userEmail,
+            workspaceName: ws.name ?? ws.id,
+            reason: "subscription_disabled",
+          }).catch(e => console.error("[billing] disable downgrade email failed:", e));
+        }
       }
     }
     return NextResponse.json({ received: true });

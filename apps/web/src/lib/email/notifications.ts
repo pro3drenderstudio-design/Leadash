@@ -654,13 +654,20 @@ export async function sendGracePeriodWarning(opts: {
 export async function sendDowngradeNotification(opts: {
   userEmail: string;
   workspaceName: string;
-  reason: "grace_period_expired" | "trial_expired";
+  reason: "grace_period_expired" | "trial_expired" | "subscription_disabled" | "subscription_cancelled";
 }): Promise<void> {
   const { userEmail, workspaceName, reason } = opts;
-  const isGrace = reason === "grace_period_expired";
+  const isGrace = reason === "grace_period_expired" || reason === "subscription_disabled" || reason === "subscription_cancelled";
   const subject = isGrace
     ? "Your Leadash account has been downgraded to Free"
     : "Your trial has ended — account downgraded to Free";
+  const bodyLine = reason === "subscription_disabled"
+    ? `Your Leadash account (${workspaceName}) has been downgraded to the free plan because Paystack was unable to collect payment after multiple attempts.`
+    : reason === "subscription_cancelled"
+    ? `Your Leadash subscription for ${workspaceName} has been cancelled and your account has been moved to the free plan.`
+    : reason === "grace_period_expired"
+    ? `Your Leadash account (${workspaceName}) has been downgraded to the free plan because your grace period ended without a successful payment.`
+    : `Your free trial for ${workspaceName} has ended and your account has been moved to the free plan.`;
 
   await sendEmail({
     to: userEmail,
@@ -668,9 +675,7 @@ export async function sendDowngradeNotification(opts: {
     text: [
       `Hi,`,
       ``,
-      isGrace
-        ? `Your Leadash account (${workspaceName}) has been downgraded to the free plan because your grace period ended without a successful payment.`
-        : `Your free trial for ${workspaceName} has ended and your account has been moved to the free plan.`,
+      bodyLine,
       ``,
       `Your campaigns have been paused and subscription credits have expired. Your purchased credits and data are safe.`,
       ``,
@@ -686,18 +691,165 @@ export async function sendDowngradeNotification(opts: {
         </div>
         <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
           <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">Account downgraded to Free plan</p>
-          <p style="color:#6b7280">
-            ${isGrace
-              ? `Your grace period ended without a successful payment, so <strong style="color:#111">${workspaceName}</strong> has been moved to the free plan.`
-              : `Your trial for <strong style="color:#111">${workspaceName}</strong> has ended and your account is now on the free plan.`
-            }
-          </p>
+          <p style="color:#6b7280">${bodyLine}</p>
           <ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px">
             <li>Campaigns have been <strong style="color:#374151">paused</strong></li>
             <li>Subscription credits have <strong style="color:#374151">expired</strong></li>
             <li>Your data and purchased credits are <strong style="color:#16a34a">safe</strong></li>
           </ul>
           <p><a href="${APP_URL}/settings?tab=billing" style="display:inline-block;background:#f97316;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Upgrade to Reactivate →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendSubscriptionRenewalSuccessEmail(opts: {
+  userEmail: string;
+  workspaceName: string;
+  planName: string;
+  amountNgn: number;
+  renewsAt: string;
+}): Promise<void> {
+  const { userEmail, workspaceName, planName, amountNgn, renewsAt } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amountNgn);
+  const nextDate  = new Date(renewsAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  await sendEmail({
+    to: userEmail,
+    subject: `Your ${planName} subscription has been renewed`,
+    text: [
+      `Hi,`,
+      ``,
+      `Your ${planName} subscription for ${workspaceName} has been renewed successfully.`,
+      ``,
+      `Amount charged: ${formatted}`,
+      `Next renewal date: ${nextDate}`,
+      ``,
+      `View billing history: ${APP_URL}/settings?tab=billing`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">✅ Subscription renewed</p>
+          <p style="color:#6b7280;margin-bottom:24px">Your <strong style="color:#111">${planName}</strong> plan for <strong style="color:#111">${workspaceName}</strong> has been renewed.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Plan</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${planName}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Amount charged</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${formatted}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#9ca3af">Next renewal</td>
+              <td style="padding:10px 0;color:#111;text-align:right">${nextDate}</td>
+            </tr>
+          </table>
+          <p><a href="${APP_URL}/settings?tab=billing" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View Billing →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendInboxReactivatedEmail(opts: {
+  userEmail: string;
+  domain: string;
+  inboxCount: number;
+  amountNgn: number;
+  nextBillingDate: string;
+}): Promise<void> {
+  const { userEmail, domain, inboxCount, amountNgn, nextBillingDate } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amountNgn);
+  const nextDate  = new Date(nextBillingDate).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const plural    = inboxCount === 1 ? "inbox is" : "inboxes are";
+  await sendEmail({
+    to: userEmail,
+    subject: `Your inboxes on ${domain} are back online`,
+    text: [
+      `Hi,`,
+      ``,
+      `Payment cleared! Your ${inboxCount} ${plural} back online on ${domain}.`,
+      ``,
+      `Amount charged: ${formatted}`,
+      `Next billing date: ${nextDate}`,
+      ``,
+      `Manage your inboxes at: ${APP_URL}/inboxes`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">✅ Inboxes back online</p>
+          <p style="color:#6b7280;margin-bottom:24px">Payment cleared — your <strong style="color:#111">${inboxCount} ${plural}</strong> back online on <strong style="color:#111">${domain}</strong>.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Domain</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${domain}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">Amount charged</td>
+              <td style="padding:10px 0;color:#111;font-weight:600;text-align:right">${formatted}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#9ca3af">Next billing date</td>
+              <td style="padding:10px 0;color:#111;text-align:right">${nextDate}</td>
+            </tr>
+          </table>
+          <p><a href="${APP_URL}/inboxes" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View Inboxes →</a></p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendDomainProvisioningStartedEmail(opts: {
+  userEmail: string;
+  domain: string;
+  mailboxCount: number;
+}): Promise<void> {
+  const { userEmail, domain, mailboxCount } = opts;
+  const plural = mailboxCount === 1 ? "inbox" : "inboxes";
+  await sendEmail({
+    to: userEmail,
+    subject: `Domain purchase confirmed — provisioning ${domain}`,
+    text: [
+      `Hi,`,
+      ``,
+      `Your payment was received and we're now setting up ${domain} with ${mailboxCount} ${plural}.`,
+      ``,
+      `This usually takes 5–15 minutes. We'll notify you once your inboxes are ready.`,
+      ``,
+      `Track progress at: ${APP_URL}/inboxes`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">🔧 Domain provisioning started</p>
+          <p style="color:#6b7280;margin-bottom:24px">Payment confirmed — we're setting up <strong style="color:#111">${domain}</strong> with <strong style="color:#111">${mailboxCount} ${plural}</strong>.</p>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:14px;color:#166534">
+            <p style="margin:0;font-weight:600">Estimated setup time: 5–15 minutes</p>
+            <p style="margin:6px 0 0;color:#16a34a">You'll receive another email when your inboxes are ready to use.</p>
+          </div>
+          <p><a href="${APP_URL}/inboxes" style="display:inline-block;background:#f97316;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Track Progress →</a></p>
           <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">— The Leadash Team</p>
         </div>
       </div>
