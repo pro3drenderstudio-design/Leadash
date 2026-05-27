@@ -1260,12 +1260,18 @@ export async function sendVendorCancellationAlert(opts: {
 }
 
 export async function sendInboxDnsAlertEmail(opts: {
-  to:      string;
-  domain:  string;
+  to:       string;
+  domain:   string;
   failures: string[];
+  warnings?: string[];
 }): Promise<void> {
   const subject  = `[Leadash] DNS issue detected on ${opts.domain}`;
   const failList = opts.failures.map(f => `<li style="font-family:monospace;font-size:13px;color:#991b1b;margin-bottom:4px">${f}</li>`).join("");
+  const warnSection = opts.warnings?.length ? `
+    <p style="font-size:13px;font-weight:600;margin:16px 0 8px;color:#92400e">Advisories (not blocking):</p>
+    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">
+      ${opts.warnings.map(w => `<li style="font-family:monospace;font-size:13px;color:#92400e;margin-bottom:4px">${w}</li>`).join("")}
+    </ul>` : "";
   const html = `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
   <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
@@ -1279,7 +1285,7 @@ export async function sendInboxDnsAlertEmail(opts: {
       Your inboxes have been paused until the records are fixed.
     </p>
     <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">Issues found:</p>
-    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">${failList}</ul>
+    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">${failList}</ul>${warnSection}
     <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">How to fix:</p>
     <ol style="font-size:13px;color:#4b5563;margin:0 0 20px;padding-left:20px;line-height:2">
       <li>Log in to your domain registrar or DNS provider</li>
@@ -1299,8 +1305,47 @@ export async function sendInboxDnsAlertEmail(opts: {
     ``,
     `Issues:`,
     ...opts.failures.map(f => `  • ${f}`),
+    ...(opts.warnings?.length ? [``, `Advisories:`, ...opts.warnings.map(w => `  • ${w}`)] : []),
     ``,
     `Fix your DNS records and your inboxes will be re-enabled automatically.`,
+    `View inboxes: ${APP_URL}/inboxes`,
+  ].join("\n");
+  await sendEmail({ to: opts.to, subject, html, text });
+}
+
+export async function sendInboxDnsAdvisoryEmail(opts: {
+  to:       string;
+  domain:   string;
+  warnings: string[];
+}): Promise<void> {
+  const subject  = `[Leadash] DNS advisory on ${opts.domain}`;
+  const warnList = opts.warnings.map(w => `<li style="font-family:monospace;font-size:13px;color:#92400e;margin-bottom:4px">${w}</li>`).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Inbox DNS Health</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#b45309">DNS Advisory</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      Your DNS records for <strong>${opts.domain}</strong> are mostly correct, but we noticed the following advisories.
+      Your inboxes are still active — these are non-blocking issues.
+    </p>
+    <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">Advisories:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">${warnList}</ul>
+    <a href="${APP_URL}/inboxes" style="display:inline-block;background:#d97706;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Inboxes →</a>
+    <p style="font-size:12px;color:#9ca3af;margin:16px 0 0">
+      We check DNS records every 6 hours. This advisory will be sent at most once per week.
+    </p>
+  </div>
+</div>`;
+  const text = [
+    `DNS advisory on ${opts.domain}`,
+    ``,
+    `Advisories (your inboxes are still active):`,
+    ...opts.warnings.map(w => `  • ${w}`),
+    ``,
     `View inboxes: ${APP_URL}/inboxes`,
   ].join("\n");
   await sendEmail({ to: opts.to, subject, html, text });

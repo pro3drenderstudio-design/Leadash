@@ -33,22 +33,23 @@ export async function GET(
   // Fetch expected DNS records stored when the domain was provisioned
   const { data: domainRecord } = await db
     .from("outreach_domains")
-    .select("dns_records, domain_price_usd")
+    .select("dns_records, domain_source")
     .eq("domain", domain)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   // user_managed_dns:
-  //   true  = user's own domain ($0), they control DNS at their provider → show copy panel
-  //   false = Leadash-purchased domain (price > $0), we manage DNS in Cloudflare → show "contact support"
+  //   true  = external domain, user controls DNS at their provider → show copy panel
+  //   false = Leadash-purchased domain, we manage DNS in Cloudflare → show "contact support"
   //   null  = no domain record (custom imported SMTP) → show generic check
   const user_managed_dns: boolean | null = domainRecord
-    ? (Number(domainRecord.domain_price_usd ?? 0) === 0)
+    ? (domainRecord.domain_source !== "leadash")
     : null;
 
   const expected = (domainRecord?.dns_records ?? null) as
     Array<{ name: string; type: string; value: string; priority?: number }> | null;
 
+  const warnings: string[] = [];
   const checks: { spf: CheckResult; dmarc: CheckResult; dkim: CheckResult; mx: CheckResult } = {
     spf:   { pass: false, detail: "" },
     dmarc: { pass: false, detail: "" },
@@ -113,9 +114,17 @@ export async function GET(
           try {
             const txt = await dns.resolveTxt(`_dmarc.${domain}`);
             const dmarc = txt.flat().find(r => r.toLowerCase().startsWith("v=dmarc1"));
-            checks.dmarc = dmarc
-              ? { pass: true, record: dmarc, detail: "DMARC record found" }
-              : { pass: false, detail: `No DMARC record at _dmarc.${domain}` };
+            if (dmarc) {
+              checks.dmarc = { pass: true, record: dmarc, detail: "DMARC record found" };
+              // Advisory: check rua matches expected (non-blocking)
+              const expectedRua = (rec.value.match(/rua=([^\s;"]+)/i)?.[1] ?? "").toLowerCase();
+              const liveRua     = (dmarc.match(/rua=([^\s;"]+)/i)?.[1] ?? "").toLowerCase();
+              if (expectedRua && liveRua && expectedRua !== liveRua) {
+                warnings.push(`DMARC rua mismatch — reports are going to ${liveRua} instead of ${expectedRua}. Update rua= in your DMARC record.`);
+              }
+            } else {
+              checks.dmarc = { pass: false, detail: `No DMARC record at _dmarc.${domain}` };
+            }
           } catch {
             checks.dmarc = { pass: false, detail: `No DMARC record — add TXT on _dmarc.${domain}` };
           }
@@ -172,5 +181,5 @@ export async function GET(
   }
 
   const score = Object.values(checks).filter(c => c.pass).length;
-  return NextResponse.json({ domain, checks, score, max_score: 4, expected_records: expected, user_managed_dns });
+  return NextResponse.json({ domain, checks, score, max_score: 4, expected_records: expected, user_managed_dns, warnings });
 }

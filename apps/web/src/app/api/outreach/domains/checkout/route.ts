@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
         // so this is safe before migration 040 is applied.
         ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
         domain_price_usd: domainPrice,
+        domain_source:    domainPrice > 0 ? "leadash" : "external",
         redirect_url:     redirect_url ?? null,
         reply_forward_to: reply_forward_to ?? null,
         error_message:    null,
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
           payment_provider,
           ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
           domain_price_usd:  domainPrice,
+          domain_source:     domainPrice > 0 ? "leadash" : "external",
           redirect_url:      redirect_url ?? null,
           reply_forward_to:  reply_forward_to ?? null,
         })

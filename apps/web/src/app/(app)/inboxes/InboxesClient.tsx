@@ -29,6 +29,7 @@ interface DnsCheckResult {
   expected_records: DnsExpectedRecord[] | null;
   // true = user's own domain (can fix), false = Leadash-managed (contact support), null = custom SMTP
   user_managed_dns: boolean | null;
+  warnings?: string[];
 }
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
@@ -1698,6 +1699,16 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           >
                             Restore
                           </button>
+                        </div>
+                      )}
+
+                      {/* Advisory warnings — non-blocking issues like DMARC rua mismatch */}
+                      {dnsCheckResult.warnings && dnsCheckResult.warnings.length > 0 && (
+                        <div className="px-3 py-2.5 bg-amber-500/8 border-b border-amber-500/20 space-y-1">
+                          <p className="text-amber-300 text-[10px] font-semibold uppercase tracking-wider">Advisory</p>
+                          {dnsCheckResult.warnings.map((w, i) => (
+                            <p key={i} className="text-amber-200/80 text-xs leading-snug">{w}</p>
+                          ))}
                         </div>
                       )}
 
