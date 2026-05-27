@@ -31,8 +31,18 @@ async function checkDomainDns(domain: string, expected: DnsRecord[]): Promise<{ 
       const expectedVal = rec.value.toLowerCase();
 
       if (expectedVal.startsWith("v=spf1")) {
-        const hasSPF = answers.some(v => v.includes("v=spf1"));
-        if (!hasSPF) failures.push(`SPF TXT missing on ${fqdn} (got: ${answers.join(", ") || "none"})`);
+        const liveSPF = answers.find(v => v.includes("v=spf1")) ?? "";
+        if (!liveSPF) {
+          failures.push(`SPF TXT missing on ${fqdn} (got: ${answers.join(", ") || "none"})`);
+        } else {
+          // Verify all required mechanisms (ip4:/ip6:/include:) from expected are in live SPF
+          const required = rec.value.toLowerCase().split(/\s+/)
+            .filter(m => m.startsWith("ip4:") || m.startsWith("ip6:") || m.startsWith("include:"));
+          const missing = required.filter(m => !liveSPF.includes(m));
+          if (missing.length > 0) {
+            failures.push(`SPF missing required mechanisms: ${missing.join(", ")} (live: ${liveSPF})`);
+          }
+        }
       } else if (expectedVal.startsWith("v=dkim1")) {
         const hasDKIM = answers.some(v => v.includes("v=dkim1"));
         if (!hasDKIM) failures.push(`DKIM TXT missing on ${fqdn}`);
