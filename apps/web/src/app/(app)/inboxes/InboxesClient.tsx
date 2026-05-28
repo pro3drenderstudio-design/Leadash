@@ -46,6 +46,9 @@ interface OutreachDomain {
   redirect_url: string | null;
   reply_forward_to: string | null;
   forward_verified: boolean;
+  inbox_next_billing_date: string | null;
+  charge_failure_count: number | null;
+  payment_provider: string | null;
 }
 
 // ─── CSV column mapping ────────────────────────────────────────────────────────
@@ -989,41 +992,53 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           </span>
                           <span className="text-amber-400 text-[10px] font-medium">Awaiting DNS…</span>
                         </div>
-                      ) : (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          d.status === "active"                     ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
-                          d.status === "failed"                     ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "payment_failed"             ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "dns_pending"                ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          d.status === "purchasing"                 ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          d.status === "awaiting_manual_purchase"   ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          "text-white/40 bg-white/5 border-white/10"
-                        }`}>{
-                          d.status === "dns_pending"                ? "DNS pending" :
-                          d.status === "payment_failed"             ? "Payment failed" :
-                          d.status === "purchasing"                 ? "Setting up…" :
-                          d.status === "awaiting_manual_purchase"   ? "Setting up…" :
-                          d.status
-                        }</span>
-                      )}
+                      ) : (() => {
+                        const isOverdue = d.status === "active"
+                          && d.payment_provider === "paystack"
+                          && !!d.inbox_next_billing_date
+                          && new Date(d.inbox_next_billing_date) < new Date();
+                        return (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            isOverdue                                    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "active"                        ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                            d.status === "failed"                        ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                            d.status === "payment_failed"                ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                            d.status === "dns_pending"                   ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "purchasing"                    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "awaiting_manual_purchase"      ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            "text-white/40 bg-white/5 border-white/10"
+                          }`}>{
+                            isOverdue                                    ? "Overdue" :
+                            d.status === "dns_pending"                   ? "DNS pending" :
+                            d.status === "payment_failed"                ? "Payment failed" :
+                            d.status === "purchasing"                    ? "Setting up…" :
+                            d.status === "awaiting_manual_purchase"      ? "Setting up…" :
+                            d.status
+                          }</span>
+                        );
+                      })()}
                     </div>
                     <div className="text-white/50 text-xs">
                       {warmupDaysLeft !== null ? (warmupDaysLeft > 0 ? `${warmupDaysLeft}d left` : "Done") : "—"}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {d.status === "payment_failed" && (
+                      {(d.status === "payment_failed" || (d.status === "active" && d.payment_provider === "paystack" && !!d.inbox_next_billing_date && new Date(d.inbox_next_billing_date) < new Date())) && (
                         <button
                           onClick={() => handleRetryPayment(d.id)}
                           disabled={retryingPaymentId === d.id}
-                          className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 disabled:opacity-50 disabled:cursor-wait border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5"
-                          title="Retry payment to reactivate this domain"
+                          className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                            d.status === "payment_failed"
+                              ? "bg-red-500/15 hover:bg-red-500/25 border-red-500/30 text-red-400 hover:text-red-300"
+                              : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-400 hover:text-amber-300"
+                          }`}
+                          title={d.status === "payment_failed" ? "Retry payment to reactivate this domain" : "Billing is overdue — pay now to avoid suspension"}
                         >
                           {retryingPaymentId === d.id ? (
                             <>
                               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                               Retrying…
                             </>
-                          ) : "↻ Retry Payment"}
+                          ) : d.status === "payment_failed" ? "↻ Retry Payment" : "↻ Pay Now"}
                         </button>
                       )}
                       {canAddMore && (

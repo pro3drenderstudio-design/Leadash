@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db
     .from("outreach_domains")
-    .select("id, domain, status, mailbox_count, mailbox_prefixes, warmup_ends_at, error_message, created_at, redirect_url, reply_forward_to, forward_verified")
+    .select("id, domain, status, mailbox_count, mailbox_prefixes, warmup_ends_at, error_message, created_at, redirect_url, reply_forward_to, forward_verified, inbox_next_billing_date, charge_failure_count, payment_provider")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
 

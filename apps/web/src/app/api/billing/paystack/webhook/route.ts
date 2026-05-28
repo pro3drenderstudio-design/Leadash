@@ -356,11 +356,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    const { data: billingWs } = await db
-      .from("workspaces")
-      .select("billing_email")
-      .eq("id", workspaceId)
-      .single();
+    // Resolve billing email — use workspace billing_email if set, else fall back to owner auth email
+    const { email: resolvedBillingEmail } = await resolveWorkspaceEmail(db, workspaceId);
 
     const { paid, authorizationCode } = await verifyPaystackPayment(data.reference);
     if (!paid) return NextResponse.json({ received: true });
@@ -372,7 +369,7 @@ export async function POST(req: NextRequest) {
         .from("outreach_domains")
         .update({
           paystack_auth_code:      authorizationCode,
-          paystack_billing_email:  billingWs?.billing_email ?? null,
+          paystack_billing_email:  resolvedBillingEmail ?? null,
           inbox_next_billing_date: nextBillingDate,
         })
         .eq("id", domainRecordId);
@@ -382,9 +379,9 @@ export async function POST(req: NextRequest) {
     await enqueueProvision(domainRecordId, workspaceId);
 
     // Confirm purchase to user
-    if (billingWs?.billing_email) {
+    if (resolvedBillingEmail) {
       sendDomainProvisioningStartedEmail({
-        userEmail:    billingWs.billing_email,
+        userEmail:    resolvedBillingEmail,
         domain:       domainRecord.domain,
         mailboxCount: (domainRecord.mailbox_count as number | null) ?? 1,
       }).catch(e => console.error("[billing] domain provision email failed:", e));

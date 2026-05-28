@@ -14,14 +14,17 @@ export async function POST(
 
   const { data: domain } = await db
     .from("outreach_domains")
-    .select("id, domain, status, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo")
+    .select("id, domain, status, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, inbox_next_billing_date")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .single();
 
   if (!domain) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (domain.status !== "payment_failed") {
-    return NextResponse.json({ error: "Domain is not in a failed payment state" }, { status: 400 });
+  const isOverdue = domain.status === "active"
+    && (domain as Record<string, unknown>).inbox_next_billing_date
+    && new Date((domain as Record<string, unknown>).inbox_next_billing_date as string) < new Date();
+  if (domain.status !== "payment_failed" && !isOverdue) {
+    return NextResponse.json({ error: "Domain is not in a failed or overdue payment state" }, { status: 400 });
   }
   if (!domain.paystack_auth_code || !domain.paystack_billing_email || !domain.paystack_inbox_monthly_kobo) {
     return NextResponse.json({ error: "Payment details not configured for this domain" }, { status: 400 });
