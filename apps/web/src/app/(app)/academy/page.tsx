@@ -201,10 +201,10 @@ export default function AcademyPage() {
         <div className="text-center py-20 text-white/25 text-sm">No courses available yet.</div>
       )}
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .badge-emerald { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(52,211,153,0.1); color:#34d399; border:1px solid rgba(52,211,153,0.2); }
         .badge-orange  { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(249,115,22,0.1); color:#fb923c; border:1px solid rgba(249,115,22,0.2); }
-      `}</style>
+      ` }} />
     </div>
   );
 }
