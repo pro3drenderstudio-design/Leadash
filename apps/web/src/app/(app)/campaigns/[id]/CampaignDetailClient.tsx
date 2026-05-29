@@ -173,6 +173,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editTextOnly, setEditTextOnly]                         = useState(false);
   const [editFirstEmailTextOnly, setEditFirstEmailTextOnly]     = useState(false);
   const [editInsertUnsubHeader, setEditInsertUnsubHeader]       = useState(true);
+  const [editIncludeFooter, setEditIncludeFooter]               = useState<boolean | null>(null);
   const [editCustomTags, setEditCustomTags]                     = useState<string[]>([]);
   const [editTagInput, setEditTagInput]                         = useState("");
   const [editSteps, setEditSteps]             = useState<EditStep[]>([]);
@@ -339,6 +340,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     setEditTextOnly(campaign.text_only ?? false);
     setEditFirstEmailTextOnly(campaign.first_email_text_only ?? false);
     setEditInsertUnsubHeader(campaign.insert_unsubscribe_header ?? true);
+    setEditIncludeFooter(campaign.include_unsubscribe_footer ?? null);
     setEditCustomTags(campaign.custom_tags ?? []);
     setEditSteps(steps.map(s => ({ id: s.id, type: s.type, wait_days: s.wait_days ?? 0, subject_template: s.subject_template ?? "", subject_template_b: s.subject_template_b ?? "", body_template: s.body_template ?? "" })));
     setEditing(true);
@@ -358,6 +360,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         verified_only: editVerifiedOnly,
         text_only: editTextOnly, first_email_text_only: editFirstEmailTextOnly,
         insert_unsubscribe_header: editInsertUnsubHeader,
+        include_unsubscribe_footer: editIncludeFooter,
         custom_tags: editCustomTags,
       }),
       saveSequence(campaign.id, editSteps.map(s => ({ ...s, subject_template_b: s.subject_template_b || null }))),
@@ -643,6 +646,17 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <div className="flex items-center justify-between">
             <div><p className="text-white/80 text-sm font-medium">Insert Unsubscribe Header</p><p className="text-white/35 text-xs">Adds List-Unsubscribe header for one-click unsubscribe in supporting clients</p></div>
             <Toggle value={editInsertUnsubHeader} onChange={setEditInsertUnsubHeader} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white/80 text-sm font-medium">Unsubscribe Footer</p>
+              <p className="text-white/35 text-xs">
+                {editIncludeFooter === null ? "Using workspace default" : editIncludeFooter ? "Footer shown" : "Footer hidden"}
+                {" · "}
+                <button type="button" onClick={() => setEditIncludeFooter(null)} className={`underline transition-colors ${editIncludeFooter === null ? "text-orange-400/60" : "text-white/30 hover:text-white/50"}`}>Reset to default</button>
+              </p>
+            </div>
+            <Toggle value={editIncludeFooter ?? true} onChange={v => setEditIncludeFooter(v)} />
           </div>
         </div>
 

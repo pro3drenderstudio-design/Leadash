@@ -26,6 +26,9 @@ const ALLOWED_KEYS = [
   "credit_rate_discover",
   "credit_rate_first_line",
   "credit_rate_scrape",
+  "domain_markup_type",
+  "domain_markup_value",
+  "domain_registrar",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];
@@ -74,6 +77,16 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "verifier_provider must be 'reoon' or 'leadash'" }, { status: 400 });
       }
     }
+    if (key === "domain_markup_type") {
+      if (value !== "none" && value !== "flat" && value !== "percent") {
+        return NextResponse.json({ error: "domain_markup_type must be 'none', 'flat', or 'percent'" }, { status: 400 });
+      }
+    }
+    if (key === "domain_registrar") {
+      if (value !== "namecheap" && value !== "porkbun") {
+        return NextResponse.json({ error: "domain_registrar must be 'namecheap' or 'porkbun'" }, { status: 400 });
+      }
+    }
   }
 
   // Validate numeric settings
@@ -100,6 +113,12 @@ export async function PATCH(req: NextRequest) {
       const n = Number(value);
       if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
         return NextResponse.json({ error: "lead_credits_on_signup must be between 0 and 1,000,000" }, { status: 400 });
+      }
+    }
+    if (key === "domain_markup_value") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0 || n > 10_000) {
+        return NextResponse.json({ error: "domain_markup_value must be between 0 and 10,000" }, { status: 400 });
       }
     }
     if (["credit_rate_verify","credit_rate_discover","credit_rate_first_line","credit_rate_scrape"].includes(key)) {

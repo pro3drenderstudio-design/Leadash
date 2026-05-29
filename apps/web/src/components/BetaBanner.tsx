@@ -5,6 +5,7 @@ import Link from "next/link";
 export default function BetaBanner() {
   const [status, setStatus]       = useState<"approved" | null | undefined>(undefined);
   const [trialEndsAt, setTrial]   = useState<string | null>(null);
+  const [hasPaidPlan, setHasPaid] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -17,6 +18,7 @@ export default function BetaBanner() {
         if (d.enrollment?.status === "approved") {
           setStatus("approved");
           setTrial(d.trialEndsAt ?? null);
+          setHasPaid(!!d.hasPaidPlan);
         } else {
           setStatus(null);
         }
@@ -31,12 +33,15 @@ export default function BetaBanner() {
 
   if (dismissed || status !== "approved") return null;
 
+  // Hide once user has chosen a paid plan
+  if (hasPaidPlan) return null;
+
   // Compute days left
   const msLeft   = trialEndsAt ? new Date(trialEndsAt).getTime() - Date.now() : null;
   const daysLeft = msLeft !== null ? Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24))) : null;
   const expired  = daysLeft !== null && daysLeft === 0;
 
-  // Auto-hide the banner once beta access has fully expired — nothing useful to show
+  // Auto-hide once the 30-day beta period has elapsed
   if (expired) return null;
 
   const daysLabel = daysLeft !== null

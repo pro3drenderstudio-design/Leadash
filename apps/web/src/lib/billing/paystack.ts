@@ -83,6 +83,7 @@ export async function verifyPaystackPayment(reference: string): Promise<{
   metadata: Record<string, unknown>;
   authorizationCode: string | null;
   customerCode: string | null;
+  customerEmail: string | null;
 }> {
   const data = await paystackFetch<VerifyResponse>("GET", `/transaction/verify/${encodeURIComponent(reference)}`);
   return {
@@ -90,6 +91,7 @@ export async function verifyPaystackPayment(reference: string): Promise<{
     metadata:          data.metadata ?? {},
     authorizationCode: data.authorization?.authorization_code ?? null,
     customerCode:      data.customer?.customer_code ?? null,
+    customerEmail:     data.customer?.email ?? data.authorization?.email ?? null,
   };
 }
 

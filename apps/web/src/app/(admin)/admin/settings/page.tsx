@@ -20,6 +20,9 @@ interface Settings {
   credit_rate_discover:   number;
   credit_rate_first_line: number;
   credit_rate_scrape:     number;
+  domain_markup_type:     "none" | "flat" | "percent";
+  domain_markup_value:    number;
+  domain_registrar:       "namecheap" | "porkbun";
 }
 
 interface Meta {
@@ -109,6 +112,9 @@ const DEFAULT_SETTINGS: Settings = {
   credit_rate_discover:   0.5,
   credit_rate_first_line: 1.0,
   credit_rate_scrape:     1.0,
+  domain_markup_type:     "flat",
+  domain_markup_value:    1,
+  domain_registrar:       "namecheap",
 };
 
 export default function SettingsPage() {
@@ -450,6 +456,84 @@ export default function SettingsPage() {
               credit_rate_discover:   settings.credit_rate_discover,
               credit_rate_first_line: settings.credit_rate_first_line,
               credit_rate_scrape:     settings.credit_rate_scrape,
+            })}
+          />
+        </div>
+      </div>
+
+      {/* ── Domain Pricing ── */}
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-6">
+        <SectionHeader
+          title="Domain Pricing"
+          description="Markup applied on top of at-cost domain registration prices charged to users."
+        />
+        <FieldRow label="Markup type" description="How the markup is calculated.">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-white/10 rounded-lg">
+            {(["none", "flat", "percent"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => update("domain_markup_type", t)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  settings.domain_markup_type === t
+                    ? "bg-white dark:bg-white/20 text-slate-800 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60"
+                }`}
+              >
+                {t === "none" ? "No markup" : t === "flat" ? "Flat fee ($)" : "Percentage (%)"}
+              </button>
+            ))}
+          </div>
+        </FieldRow>
+        {settings.domain_markup_type !== "none" && (
+          <FieldRow
+            label={settings.domain_markup_type === "flat" ? "Flat fee (USD)" : "Percentage (%)"}
+            description={
+              settings.domain_markup_type === "flat"
+                ? `Added per domain purchased. Currently: +$${settings.domain_markup_value} per domain.`
+                : `Added as % of domain price. Currently: +${settings.domain_markup_value}% per domain.`
+            }
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={settings.domain_markup_type === "percent" ? 500 : 100}
+                step={settings.domain_markup_type === "percent" ? 1 : 0.5}
+                value={settings.domain_markup_value}
+                onChange={e => update("domain_markup_value", parseFloat(e.target.value) || 0)}
+                className="w-24 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-right"
+              />
+              <span className="text-sm text-slate-400 dark:text-white/30">
+                {settings.domain_markup_type === "flat" ? "USD / domain" : "% of price"}
+              </span>
+            </div>
+          </FieldRow>
+        )}
+        <FieldRow label="Domain registrar" description="Registrar used to purchase domains during provisioning.">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-white/10 rounded-lg">
+            {(["namecheap", "porkbun"] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => update("domain_registrar", r)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  settings.domain_registrar === r
+                    ? "bg-white dark:bg-white/20 text-slate-800 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60"
+                }`}
+              >
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </button>
+            ))}
+          </div>
+        </FieldRow>
+        <div className="pt-4 flex justify-end">
+          <SaveButton
+            saving={savingSection === "domain_pricing"}
+            saved={savedSection === "domain_pricing"}
+            onClick={() => save("domain_pricing", {
+              domain_markup_type:  settings.domain_markup_type,
+              domain_markup_value: settings.domain_markup_value,
+              domain_registrar:    settings.domain_registrar,
             })}
           />
         </div>

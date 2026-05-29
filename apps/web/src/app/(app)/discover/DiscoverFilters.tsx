@@ -495,7 +495,7 @@ function CheckboxGroup({
   return (
     <div className="space-y-0.5">
       {options.map(o => (
-        <label key={o.value} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
+        <div key={o.value} role="checkbox" aria-checked={selected.includes(o.value)} onClick={() => toggle(o.value)} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
           <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
             selected.includes(o.value) ? "bg-orange-500 border-orange-500" : "border-white/20 group-hover:border-white/40"
           }`}>
@@ -506,8 +506,7 @@ function CheckboxGroup({
             )}
           </div>
           <span className="text-[11px] text-white/55 group-hover:text-white/80 transition-colors">{o.label}</span>
-          <input type="checkbox" className="sr-only" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} />
-        </label>
+        </div>
       ))}
     </div>
   );
@@ -555,7 +554,7 @@ function CheckboxIncludeExclude({
           const checked = isChecked(o.value);
           const otherMode = mode === "include" ? excludes.includes(o.value) : includes.includes(o.value);
           return (
-            <label key={o.value} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
+            <div key={o.value} role="checkbox" aria-checked={checked} onClick={() => toggle(o.value)} className="flex items-center gap-2.5 py-1 px-1 rounded hover:bg-white/4 cursor-pointer group">
               <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
                 checked
                   ? mode === "include" ? "bg-orange-500 border-orange-500" : "bg-rose-500 border-rose-500"
@@ -572,8 +571,7 @@ function CheckboxIncludeExclude({
                   ? mode === "include" ? "text-orange-300" : "text-rose-300"
                   : otherMode ? "text-white/30" : "text-white/55 group-hover:text-white/80"
               }`}>{o.label}</span>
-              <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggle(o.value)} />
-            </label>
+            </div>
           );
         })}
       </div>

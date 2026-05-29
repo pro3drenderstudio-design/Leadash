@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { chargePaystackAuthorization } from "@/lib/billing/paystack";
 import { sendInboxPaymentSuccess, sendInboxPaymentFailed, sendInboxFinalWarningEmail, sendInboxSuspendedEmail, sendVendorCancellationAlert } from "@/lib/email/notifications";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   // Allow Vercel cron (no Authorization header) or manual calls with the cron secret
   const authHeader = req.headers.get("authorization");
@@ -93,11 +95,13 @@ export async function POST(req: NextRequest) {
           error_message:        "Suspended after 3 failed payment attempts",
         }).eq("id", domain.id);
 
-        // Mark all inboxes on this domain as error so UI shows the suspension banner
+        // Mark all inboxes on this domain as error and stop warmup so they
+        // don't get added to Postal's suppression list while suspended
         await db.from("outreach_inboxes")
           .update({
-            status:     "error",
-            last_error: "Domain suspended — inbox billing failed. Update your payment method to restore.",
+            status:         "error",
+            last_error:     "Domain suspended — inbox billing failed. Update your payment method to restore.",
+            warmup_enabled: false,
           })
           .eq("domain_id", domain.id)
           .in("status", ["active", "paused"]);

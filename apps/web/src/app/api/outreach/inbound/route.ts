@@ -331,9 +331,23 @@ async function handleInbound(req: NextRequest) {
     }
   }
 
-  // ── AI classify (skip for warmup and filtered) ───────────────────────────────
+  // ── Unsubscribe detection ─────────────────────────────────────────────────────
+  // Check before AI classify so we can skip the Claude call and act immediately.
+  const UNSUB_PATTERNS = [
+    /\bunsubscribe\b/i,
+    /\bopt[\s-]?out\b/i,
+    /\bremove me\b/i,
+    /\btake me off\b/i,
+    /\bstop emailing\b/i,
+    /\bdon'?t (contact|email) me\b/i,
+    /\bplease remove\b/i,
+  ];
+  const isUnsubscribe = !isFiltered && !isWarmup &&
+    UNSUB_PATTERNS.some(p => p.test(text) || p.test(subject));
+
+  // ── AI classify (skip for warmup, filtered, and unsubscribes) ────────────────
   let aiCategory = "neutral", aiConfidence = 0;
-  if (!isFiltered && !isWarmup) {
+  if (!isFiltered && !isWarmup && !isUnsubscribe) {
     const r = await aiClassify(subject, text);
     aiCategory   = r.category;
     aiConfidence = r.confidence;
@@ -371,6 +385,44 @@ async function handleInbound(req: NextRequest) {
 
   // ── Update enrollment + send if matched ──────────────────────────────────────
   if (enrollmentId) {
+    // Always record send replied_at (factual event regardless of stop setting)
+    if (matchedSendId) {
+      await db
+        .from("outreach_sends")
+        .update({ replied_at: receivedAt })
+        .eq("id", matchedSendId);
+    }
+
+    // Unsubscribe: hard-stop enrollment + lead regardless of campaign settings
+    if (isUnsubscribe) {
+      await db
+        .from("outreach_enrollments")
+        .update({ status: "unsubscribed", crm_status: "not_interested" })
+        .eq("id", enrollmentId);
+
+      // Fetch lead_id to unsubscribe the lead too
+      const { data: enrUnsub } = await db
+        .from("outreach_enrollments")
+        .select("lead_id")
+        .eq("id", enrollmentId)
+        .single();
+
+      if (enrUnsub?.lead_id) {
+        await db
+          .from("outreach_leads")
+          .update({ status: "unsubscribed" })
+          .eq("id", enrUnsub.lead_id);
+
+        // Record in global unsubscribe list so future campaigns skip this address
+        await db.from("outreach_unsubscribes").upsert(
+          { workspace_id: workspaceId, email: from.toLowerCase(), source: "reply" },
+          { onConflict: "workspace_id,email", ignoreDuplicates: true },
+        );
+      }
+
+      return NextResponse.json({ ok: true, type: "unsubscribed" });
+    }
+
     // Fetch campaign flags (stop_on_reply, stop_on_auto_reply)
     const { data: enrRow } = await db
       .from("outreach_enrollments")
@@ -400,14 +452,6 @@ async function handleInbound(req: NextRequest) {
     const shouldStop = !isFiltered
       ? stopOnReply
       : (isFiltered && stopOnAutoReply && stopOnReply);
-
-    // Always record send replied_at (factual event regardless of stop setting)
-    if (matchedSendId) {
-      await db
-        .from("outreach_sends")
-        .update({ replied_at: receivedAt })
-        .eq("id", matchedSendId);
-    }
 
     if (shouldStop) {
       await db

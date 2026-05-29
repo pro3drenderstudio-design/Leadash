@@ -231,6 +231,26 @@ export function startSchedulers() {
     }
   });
 
+  // ── Scheduled CRM replies: every 5 minutes ──────────────────────────────
+  cron.schedule("*/5 * * * *", async () => {
+    if (!APP_URL || !CRON_SECRET) return;
+    try {
+      const res = await fetch(`${APP_URL}/api/cron/scheduled-replies`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[scheduler:sched-reply] HTTP ${res.status}: ${text.slice(0,200)}`);
+      } else {
+        const data = await res.json() as { sent?: number };
+        if ((data?.sent ?? 0) > 0) console.log(`[scheduler:sched-reply] sent=${data.sent}`);
+      }
+    } catch (e) {
+      console.error("[scheduler:sched-reply] failed:", e);
+    }
+  });
+
   // ── Data cleanup: every Sunday at 03:00 UTC ──────────────────────────────
   // Deletes lead campaign records older than 60 days.
   cron.schedule("0 3 * * 0", async () => {

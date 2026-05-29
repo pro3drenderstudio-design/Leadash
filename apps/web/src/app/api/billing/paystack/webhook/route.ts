@@ -356,20 +356,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // Resolve billing email — use workspace billing_email if set, else fall back to owner auth email
-    const { email: resolvedBillingEmail } = await resolveWorkspaceEmail(db, workspaceId);
-
-    const { paid, authorizationCode } = await verifyPaystackPayment(data.reference);
+    const { paid, authorizationCode, customerEmail } = await verifyPaystackPayment(data.reference);
     if (!paid) return NextResponse.json({ received: true });
 
+    // Resolve workspace email for sending the confirmation email
+    const { email: resolvedBillingEmail } = await resolveWorkspaceEmail(db, workspaceId);
+
     // Store authorization code + billing metadata for monthly recurring charges
+    // Use the actual Paystack customer email (tied to the auth code) for future charges
     if (authorizationCode) {
       const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       await db
         .from("outreach_domains")
         .update({
           paystack_auth_code:      authorizationCode,
-          paystack_billing_email:  resolvedBillingEmail ?? null,
+          paystack_billing_email:  customerEmail ?? resolvedBillingEmail ?? null,
           inbox_next_billing_date: nextBillingDate,
         })
         .eq("id", domainRecordId);
@@ -379,12 +380,13 @@ export async function POST(req: NextRequest) {
     await enqueueProvision(domainRecordId, workspaceId);
 
     // Confirm purchase to user
-    if (resolvedBillingEmail) {
+    const notifyEmail = customerEmail ?? resolvedBillingEmail;
+    if (notifyEmail) {
       sendDomainProvisioningStartedEmail({
-        userEmail:    resolvedBillingEmail,
+        userEmail:    notifyEmail,
         domain:       domainRecord.domain,
         mailboxCount: (domainRecord.mailbox_count as number | null) ?? 1,
-      }).catch(e => console.error("[billing] domain provision email failed:", e));
+      }).catch((e: unknown) => console.error("[billing] domain provision email failed:", e));
     }
 
     return NextResponse.json({ received: true });

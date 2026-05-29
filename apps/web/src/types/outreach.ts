@@ -57,6 +57,7 @@ export interface OutreachList {
   workspace_id: string;
   name: string;
   description?: string | null;
+  tags?: string[];
   created_at: string;
   lead_count?: number;
   // Verification stats (computed)
@@ -109,6 +110,7 @@ export interface OutreachCampaign {
   text_only: boolean;
   first_email_text_only: boolean;
   insert_unsubscribe_header: boolean;
+  include_unsubscribe_footer: boolean | null;
   custom_tags: string[];
   created_at: string;
   updated_at: string;
@@ -254,6 +256,10 @@ export interface CrmThread {
   latest_reply: OutreachReply | null;
   replied_at: string | null;
   crm_status: CrmStatus;
+  is_starred: boolean;
+  remind_at?: string | null;
+  scheduled_reply_at?: string | null;
+  scheduled_reply_body?: string | null;
   notes?: CrmNote[];
 }
 

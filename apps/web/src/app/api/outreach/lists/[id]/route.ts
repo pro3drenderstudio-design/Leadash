@@ -66,11 +66,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
 
   const body = await req.json();
-  const { name, description } = body;
+  const { name, description, tags } = body;
 
   const { data, error } = await db
     .from("outreach_lists")
-    .update({ ...(name !== undefined ? { name } : {}), ...(description !== undefined ? { description } : {}) })
+    .update({
+      ...(name        !== undefined ? { name }        : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(tags        !== undefined ? { tags }        : {}),
+    })
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .select()

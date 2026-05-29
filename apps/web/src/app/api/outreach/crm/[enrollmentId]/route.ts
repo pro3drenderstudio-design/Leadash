@@ -65,10 +65,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
   const { workspaceId, db } = auth;
   const { enrollmentId } = await params;
 
-  const { crm_status } = await req.json();
+  const body = await req.json() as { crm_status?: string; is_starred?: boolean; remind_at?: string | null; scheduled_reply_at?: string | null; scheduled_reply_body?: string | null };
+  const patch: Record<string, unknown> = {};
+  if (body.crm_status          !== undefined) patch.crm_status          = body.crm_status;
+  if (body.is_starred          !== undefined) patch.is_starred          = body.is_starred;
+  if (body.remind_at           !== undefined) patch.remind_at           = body.remind_at;
+  if (body.scheduled_reply_at  !== undefined) patch.scheduled_reply_at  = body.scheduled_reply_at;
+  if (body.scheduled_reply_body !== undefined) patch.scheduled_reply_body = body.scheduled_reply_body;
+
   const { data, error } = await db
     .from("outreach_enrollments")
-    .update({ crm_status })
+    .update(patch)
     .eq("id", enrollmentId)
     .eq("workspace_id", workspaceId)
     .select()

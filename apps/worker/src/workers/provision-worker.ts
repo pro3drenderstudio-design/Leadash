@@ -1,7 +1,31 @@
 import type { Job } from "bullmq";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient } from "../lib/supabase";
-import { purchaseDomain, updateNameservers } from "../lib/namecheap";
+import { purchaseDomain as purchaseDomainNamecheap, updateNameservers as updateNameserversNamecheap } from "../lib/namecheap";
+import { purchaseDomain as purchaseDomainPorkbun, updateNameservers as updateNameserversPorkbun } from "../lib/porkbun";
+
+async function getRegistrar(): Promise<"namecheap" | "porkbun"> {
+  try {
+    const db = adminClient();
+    const { data } = await db.from("admin_settings").select("value").eq("key", "domain_registrar").maybeSingle();
+    const val = data?.value as string | undefined;
+    return val === "porkbun" ? "porkbun" : "namecheap";
+  } catch { return "namecheap"; }
+}
+
+type RegistrantInfo = Parameters<typeof purchaseDomainNamecheap>[1];
+
+async function purchaseDomain(domain: string, registrant: RegistrantInfo): Promise<void> {
+  const r = await getRegistrar();
+  if (r === "porkbun") return purchaseDomainPorkbun(domain);
+  return purchaseDomainNamecheap(domain, registrant!);
+}
+
+async function updateNameservers(domain: string, nameservers: string[]): Promise<void> {
+  const r = await getRegistrar();
+  if (r === "porkbun") return updateNameserversPorkbun(domain, nameservers);
+  return updateNameserversNamecheap(domain, nameservers);
+}
 import {
   registerDomain,
   isDomainVerified,

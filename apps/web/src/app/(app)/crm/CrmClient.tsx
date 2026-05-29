@@ -1,10 +1,11 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
-  getCrmThreads, addNote, updateCrmStatus, suggestReply,
+  getCrmThreads, addNote, updateCrmStatus, toggleCrmStar, getCrmLeadProfile, suggestReply,
   getCrmUnmatched, getCrmWarmup, CrmWarmupRow, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
   triggerSendBatch, sendCrmReply, getConversation,
+  setReminder, setScheduledReply,
 } from "@/lib/outreach/api";
 import type { ConversationMessage } from "@/lib/outreach/api";
 import type { CrmUnmatchedRow } from "@/lib/outreach/api";
@@ -232,6 +233,7 @@ export default function CrmClient() {
   const [refreshing, setRefreshing]     = useState(false);
   const [selected, setSelected]         = useState<CrmThread | null>(null);
   const [filterStatus, setFilterStatus] = useState<CrmStatus | "all">("all");
+  const [filterStarred, setFilterStarred] = useState(false);
   const [search, setSearch]             = useState("");
   const [statusDropdown, setStatusDropdown] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -292,6 +294,25 @@ export default function CrmClient() {
   const [warmup, setWarmup]               = useState<CrmWarmupRow[]>([]);
   const [warmupLoading, setWarmupLoading] = useState(false);
   const [selectedWarmup, setSelectedWarmup] = useState<CrmWarmupRow | null>(null);
+
+  // ── Lead profile panel state ──────────────────────────────────────────────
+  const [leadPanel, setLeadPanel]   = useState<{ lead: Record<string, unknown>; enrollments: unknown[] } | null>(null);
+  const [leadPanelLoading, setLeadPanelLoading] = useState(false);
+
+  // ── Reminder modal state ──────────────────────────────────────────────────
+  const [reminderModal, setReminderModal] = useState<"reminder" | "scheduled" | null>(null);
+  const [reminderDate, setReminderDate]   = useState("");
+  const [reminderTime, setReminderTime]   = useState("09:00");
+  const [scheduledBody, setScheduledBody] = useState("");
+  const [savingReminder, setSavingReminder] = useState(false);
+
+  const openLeadPanel = async (leadId: string) => {
+    setLeadPanelLoading(true);
+    setLeadPanel(null);
+    const data = await getCrmLeadProfile(leadId);
+    setLeadPanel(data);
+    setLeadPanelLoading(false);
+  };
 
   // ── Filters state ──────────────────────────────────────────────────────────
   const [filters, setFilters]       = useState<OutreachCrmFilter[]>([]);
@@ -428,6 +449,52 @@ export default function CrmClient() {
     setThreads((ts) => ts.map(update));
     setSelected((prev) => prev ? { ...prev, crm_status: status } : prev);
     setUpdatingStatus(false);
+  }
+
+  async function handleToggleStar(enrollmentId: string, currentStarred: boolean, e: React.MouseEvent) {
+    e.stopPropagation();
+    const newVal = !currentStarred;
+    setThreads((ts) => ts.map(t => t.enrollment_id === enrollmentId ? { ...t, is_starred: newVal } : t));
+    if (selected?.enrollment_id === enrollmentId) setSelected(prev => prev ? { ...prev, is_starred: newVal } : prev);
+    await toggleCrmStar(enrollmentId, newVal);
+  }
+
+  async function handleSaveReminder() {
+    if (!selected || !reminderDate) return;
+    setSavingReminder(true);
+    const isoTs = new Date(`${reminderDate}T${reminderTime}:00`).toISOString();
+    await setReminder(selected.enrollment_id, isoTs);
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, remind_at: isoTs } : t));
+    setSelected(prev => prev ? { ...prev, remind_at: isoTs } : prev);
+    setReminderModal(null);
+    setSavingReminder(false);
+  }
+
+  async function handleClearReminder() {
+    if (!selected) return;
+    await setReminder(selected.enrollment_id, null);
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, remind_at: null } : t));
+    setSelected(prev => prev ? { ...prev, remind_at: null } : prev);
+    setReminderModal(null);
+  }
+
+  async function handleSaveScheduledReply() {
+    if (!selected || !reminderDate || !scheduledBody.trim()) return;
+    setSavingReminder(true);
+    const isoTs = new Date(`${reminderDate}T${reminderTime}:00`).toISOString();
+    await setScheduledReply(selected.enrollment_id, isoTs, scheduledBody.trim());
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, scheduled_reply_at: isoTs, scheduled_reply_body: scheduledBody.trim() } : t));
+    setSelected(prev => prev ? { ...prev, scheduled_reply_at: isoTs, scheduled_reply_body: scheduledBody.trim() } : prev);
+    setReminderModal(null);
+    setSavingReminder(false);
+  }
+
+  async function handleClearScheduledReply() {
+    if (!selected) return;
+    await setScheduledReply(selected.enrollment_id, null, null);
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, scheduled_reply_at: null, scheduled_reply_body: null } : t));
+    setSelected(prev => prev ? { ...prev, scheduled_reply_at: null, scheduled_reply_body: null } : prev);
+    setReminderModal(null);
   }
 
   async function handleSuggestReply() {
@@ -605,12 +672,22 @@ export default function CrmClient() {
   }
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const filteredThreads = threads.filter((t) => {
-    const matchesStatus = filterStatus === "all" || t.crm_status === filterStatus;
-    const q = search.toLowerCase();
-    const matchesSearch = !q || [t.lead.first_name, t.lead.last_name, t.lead.email, t.lead.company].filter(Boolean).join(" ").toLowerCase().includes(q);
-    return matchesStatus && matchesSearch;
-  });
+  const filteredThreads = threads
+    .filter((t) => {
+      const matchesStatus  = filterStatus === "all" || t.crm_status === filterStatus;
+      const matchesStarred = !filterStarred || t.is_starred;
+      const q = search.toLowerCase();
+      const matchesSearch  = !q || [t.lead.first_name, t.lead.last_name, t.lead.email, t.lead.company].filter(Boolean).join(" ").toLowerCase().includes(q);
+      return matchesStatus && matchesStarred && matchesSearch;
+    })
+    .sort((a, b) => {
+      // Starred always at top when not filtering by starred
+      if (!filterStarred) {
+        if (a.is_starred && !b.is_starred) return -1;
+        if (!a.is_starred && b.is_starred) return 1;
+      }
+      return 0;
+    });
 
   const matchSearchResults = matchSearch.length >= 2
     ? threads.filter((t) => {
@@ -715,7 +792,13 @@ export default function CrmClient() {
                 </button>
               </div>
               <div className="flex gap-1 flex-wrap">
-                <button onClick={() => setFilterStatus("all")} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${filterStatus === "all" ? "bg-white/15 text-white border-white/20" : "text-white/30 border-white/10 hover:border-white/20"}`}>All</button>
+                <button onClick={() => setFilterStatus("all")} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${filterStatus === "all" && !filterStarred ? "bg-white/15 text-white border-white/20" : "text-white/30 border-white/10 hover:border-white/20"}`}>All</button>
+                <button
+                  onClick={() => setFilterStarred(v => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors flex items-center gap-1 ${filterStarred ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : "text-white/30 border-white/10 hover:border-white/20"}`}
+                >
+                  ★ Starred
+                </button>
                 {CRM_STATUSES.filter((s) => s.value !== "neutral").map((s) => (
                   <button key={s.value} onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${filterStatus === s.value ? s.color : "text-white/30 border-white/10 hover:border-white/20"}`}>{s.label}</button>
                 ))}
@@ -753,7 +836,16 @@ export default function CrmClient() {
                         {t.lead.company && <p className="text-white/25 text-xs truncate">{t.lead.company}</p>}
                       </div>
                       <div className="text-right flex-shrink-0 space-y-1">
-                        <p className="text-white/30 text-[10px]">{timeAgo(t.replied_at)}</p>
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <p className="text-white/30 text-[10px]">{timeAgo(t.replied_at)}</p>
+                          <button
+                            onClick={(e) => handleToggleStar(t.enrollment_id, t.is_starred, e)}
+                            className={`text-sm leading-none transition-colors ${t.is_starred ? "text-amber-400" : "text-white/15 hover:text-white/40"}`}
+                            title={t.is_starred ? "Unstar" : "Star"}
+                          >
+                            {t.is_starred ? "★" : "☆"}
+                          </button>
+                        </div>
                         <div className="flex items-center gap-1 justify-end">
                           <AiBadge category={t.latest_reply?.ai_category ?? null} confidence={t.latest_reply?.ai_confidence ?? null} />
                           <StatusBadge status={t.crm_status ?? "neutral"} />
@@ -789,7 +881,12 @@ export default function CrmClient() {
                     <span className="text-xs font-bold text-white uppercase">{(selected.lead.first_name?.[0] ?? selected.lead.email[0]).toUpperCase()}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-white font-semibold text-base">{[selected.lead.first_name, selected.lead.last_name].filter(Boolean).join(" ") || selected.lead.email}</h2>
+                    <button
+                      onClick={() => openLeadPanel(selected.lead.id)}
+                      className="text-white font-semibold text-base hover:text-orange-300 transition-colors text-left"
+                    >
+                      {[selected.lead.first_name, selected.lead.last_name].filter(Boolean).join(" ") || selected.lead.email}
+                    </button>
                     <p className="text-white/40 text-xs">{selected.lead.email}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {(selected.lead.company || selected.lead.title) && (
@@ -799,6 +896,30 @@ export default function CrmClient() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Star button */}
+                    <button
+                      onClick={(e) => handleToggleStar(selected.enrollment_id, selected.is_starred, e)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors text-base ${selected.is_starred ? "bg-amber-500/20 border-amber-500/30 text-amber-300" : "bg-white/6 border-white/10 text-white/30 hover:text-amber-300 hover:bg-amber-500/10"}`}
+                      title={selected.is_starred ? "Unstar" : "Star"}
+                    >
+                      {selected.is_starred ? "★" : "☆"}
+                    </button>
+                    {/* Bell / Reminder button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setReminderModal("reminder"); setReminderDate(""); setReminderTime("09:00"); }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors text-sm ${selected.remind_at && new Date(selected.remind_at) > new Date() ? "bg-blue-500/20 border-blue-500/30 text-blue-300" : "bg-white/6 border-white/10 text-white/30 hover:text-blue-300 hover:bg-blue-500/10"}`}
+                      title={selected.remind_at ? `Reminder: ${new Date(selected.remind_at).toLocaleString()}` : "Set reminder"}
+                    >
+                      🔔
+                    </button>
+                    {/* Schedule reply button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setReminderModal("scheduled"); setReminderDate(""); setReminderTime("09:00"); setScheduledBody(selected.scheduled_reply_body ?? ""); }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors text-xs font-semibold ${selected.scheduled_reply_at && new Date(selected.scheduled_reply_at) > new Date() ? "bg-violet-500/20 border-violet-500/30 text-violet-300" : "bg-white/6 border-white/10 text-white/30 hover:text-violet-300 hover:bg-violet-500/10"}`}
+                      title={selected.scheduled_reply_at ? `Scheduled: ${new Date(selected.scheduled_reply_at).toLocaleString()}` : "Schedule reply"}
+                    >
+                      ⏰
+                    </button>
                     {/* Notes drawer button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowNotesDrawer((v) => !v); }}
@@ -960,6 +1081,97 @@ export default function CrmClient() {
                     </div>
                   </div>
                 </div>
+
+                {/* Lead profile panel */}
+                {(leadPanel || leadPanelLoading) && (
+                  <div className="absolute inset-0 z-20 md:relative md:inset-auto md:z-auto md:w-72 md:flex-shrink-0 border-l border-white/8 bg-[#0a0a0a] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
+                      <h3 className="text-white/70 text-sm font-semibold">Lead Profile</h3>
+                      <button onClick={() => { setLeadPanel(null); setLeadPanelLoading(false); }} className="text-white/30 hover:text-white/60 transition-colors">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      </button>
+                    </div>
+                    {leadPanelLoading ? (
+                      <div className="p-4 space-y-3">
+                        {[1,2,3,4].map(i => <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />)}
+                      </div>
+                    ) : leadPanel ? (
+                      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+                        {/* Contact info */}
+                        <div className="space-y-2.5">
+                          <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">Contact</p>
+                          {[
+                            { label: "Email",   value: leadPanel.lead.email as string },
+                            { label: "Title",   value: leadPanel.lead.title as string | null },
+                            { label: "Company", value: leadPanel.lead.company as string | null },
+                            { label: "Website", value: leadPanel.lead.website as string | null },
+                          ].filter(f => f.value).map(f => (
+                            <div key={f.label} className="flex gap-2">
+                              <span className="text-white/25 text-xs w-16 shrink-0 pt-0.5">{f.label}</span>
+                              {f.label === "Email" ? (
+                                <button onClick={() => navigator.clipboard.writeText(f.value!)} className="text-white/70 text-xs hover:text-orange-300 transition-colors text-left truncate" title="Copy">
+                                  {f.value}
+                                </button>
+                              ) : f.label === "Website" && f.value ? (
+                                <a href={f.value.startsWith("http") ? f.value : `https://${f.value}`} target="_blank" rel="noopener noreferrer" className="text-blue-400/70 text-xs hover:text-blue-300 truncate transition-colors">{f.value}</a>
+                              ) : (
+                                <span className="text-white/70 text-xs truncate">{f.value}</span>
+                              )}
+                            </div>
+                          ))}
+                          {/* Custom fields — LinkedIn, Twitter, phone etc. */}
+                          {leadPanel.lead.custom_fields && Object.entries(leadPanel.lead.custom_fields as Record<string, string>).map(([k, v]) => {
+                            if (!v) return null;
+                            const lk = k.toLowerCase();
+                            const isLinkedIn = lk.includes("linkedin");
+                            const isTwitter  = lk.includes("twitter");
+                            const isPhone    = lk.includes("phone");
+                            return (
+                              <div key={k} className="flex gap-2">
+                                <span className="text-white/25 text-xs w-16 shrink-0 pt-0.5 capitalize">{k.replace(/_/g, " ")}</span>
+                                {(isLinkedIn || isTwitter) ? (
+                                  <a href={v.startsWith("http") ? v : `https://${v}`} target="_blank" rel="noopener noreferrer" className="text-blue-400/70 text-xs hover:text-blue-300 truncate transition-colors">{v}</a>
+                                ) : isPhone ? (
+                                  <a href={`tel:${v}`} className="text-white/70 text-xs hover:text-orange-300 truncate">{v}</a>
+                                ) : (
+                                  <span className="text-white/70 text-xs truncate">{v}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Campaign history */}
+                        {(leadPanel.enrollments as unknown[]).length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">Campaign History</p>
+                            {(leadPanel.enrollments as Array<Record<string, unknown>>).map((enr) => {
+                              const camp = enr.campaign as Record<string, string> | null;
+                              return (
+                                <div key={enr.id as string} className="bg-white/4 border border-white/8 rounded-xl p-2.5">
+                                  <p className="text-white/70 text-xs font-medium truncate">{camp?.name ?? "Unknown"}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                      enr.status === "replied"    ? "bg-emerald-500/15 text-emerald-400" :
+                                      enr.status === "completed"  ? "bg-blue-500/15 text-blue-400" :
+                                      enr.status === "bounced"    ? "bg-red-500/15 text-red-400" :
+                                      enr.status === "active"     ? "bg-white/10 text-white/50" :
+                                      "bg-white/6 text-white/35"
+                                    }`}>{enr.status as string}</span>
+                                    {enr.crm_status && enr.crm_status !== "neutral" && (
+                                      <span className="text-white/30 text-[9px]">{(enr.crm_status as string).replace(/_/g, " ")}</span>
+                                    )}
+                                    <span className="text-white/20 text-[9px] ml-auto">{new Date(enr.enrolled_at as string).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {/* Notes drawer */}
                 {showNotesDrawer && (
@@ -1332,6 +1544,93 @@ export default function CrmClient() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Reminder / Scheduled Reply Modal ────────────────────────────────── */}
+      {reminderModal && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setReminderModal(null)}>
+          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            {reminderModal === "reminder" ? (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center flex-shrink-0 text-xl">🔔</div>
+                  <div>
+                    <h3 className="text-white font-bold text-base">Set Reminder</h3>
+                    <p className="text-white/40 text-xs">You'll be alerted when this reminder fires.</p>
+                  </div>
+                </div>
+                {selected.remind_at && new Date(selected.remind_at) > new Date() && (
+                  <div className="mb-4 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-between">
+                    <span className="text-blue-300 text-xs">Active: {new Date(selected.remind_at).toLocaleString()}</span>
+                    <button onClick={handleClearReminder} className="text-white/30 hover:text-red-400 text-xs transition-colors">Clear</button>
+                  </div>
+                )}
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">Date</label>
+                    <input type="date" value={reminderDate} onChange={e => setReminderDate(e.target.value)} min={new Date().toISOString().slice(0,10)}
+                      className="w-full px-3 py-2 bg-white/6 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/40" />
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">Time</label>
+                    <input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)}
+                      className="w-full px-3 py-2 bg-white/6 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/40" />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setReminderModal(null)} className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors">Cancel</button>
+                  <button onClick={handleSaveReminder} disabled={savingReminder || !reminderDate}
+                    className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                    {savingReminder ? "Saving…" : "Set Reminder"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center flex-shrink-0 text-xl">⏰</div>
+                  <div>
+                    <h3 className="text-white font-bold text-base">Schedule Reply</h3>
+                    <p className="text-white/40 text-xs">Reply will be sent automatically at the chosen time.</p>
+                  </div>
+                </div>
+                {selected.scheduled_reply_at && new Date(selected.scheduled_reply_at) > new Date() && (
+                  <div className="mb-4 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg flex items-center justify-between">
+                    <span className="text-violet-300 text-xs">Scheduled: {new Date(selected.scheduled_reply_at).toLocaleString()}</span>
+                    <button onClick={handleClearScheduledReply} className="text-white/30 hover:text-red-400 text-xs transition-colors">Clear</button>
+                  </div>
+                )}
+                <div className="space-y-3 mb-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-white/40 text-xs block mb-1">Date</label>
+                      <input type="date" value={reminderDate} onChange={e => setReminderDate(e.target.value)} min={new Date().toISOString().slice(0,10)}
+                        className="w-full px-3 py-2 bg-white/6 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-violet-500/40" />
+                    </div>
+                    <div>
+                      <label className="text-white/40 text-xs block mb-1">Time</label>
+                      <input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)}
+                        className="w-full px-3 py-2 bg-white/6 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-violet-500/40" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">Reply body</label>
+                    <textarea value={scheduledBody} onChange={e => setScheduledBody(e.target.value)} rows={4}
+                      placeholder={`Write your reply to ${selected.lead.first_name || selected.lead.email}…`}
+                      className="w-full px-3 py-2 bg-white/6 border border-white/10 rounded-xl text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-violet-500/40 resize-none" />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setReminderModal(null)} className="px-4 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm rounded-xl transition-colors">Cancel</button>
+                  <button onClick={handleSaveScheduledReply} disabled={savingReminder || !reminderDate || !scheduledBody.trim()}
+                    className="flex-1 py-2.5 bg-violet-500 hover:bg-violet-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                    {savingReminder ? "Saving…" : "Schedule Reply"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

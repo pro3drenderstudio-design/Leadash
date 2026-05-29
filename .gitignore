@@ -31,3 +31,5 @@ scripts/migrate-bubble/exports/*.csv
 
 .vercel
 .env.prod
+
+.vercel

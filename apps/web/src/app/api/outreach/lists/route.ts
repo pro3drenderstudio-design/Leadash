@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db
     .from("outreach_lists")
-    .select("id, name, description, created_at")
+    .select("id, name, description, tags, created_at")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
 

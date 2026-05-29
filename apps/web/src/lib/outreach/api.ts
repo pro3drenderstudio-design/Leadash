@@ -54,8 +54,9 @@ export async function importInboxes(rows: Record<string, string>[]): Promise<Imp
 }
 
 // ─── Lists ────────────────────────────────────────────────────────────────────
-export const getLists    = ()                             => get<OutreachList[]>(`${base}/lists`);
-export const createList  = (name: string, description?: string) => post<OutreachList>(`${base}/lists`, { name, description });
+export const getLists        = ()                                          => get<OutreachList[]>(`${base}/lists`);
+export const createList      = (name: string, description?: string)        => post<OutreachList>(`${base}/lists`, { name, description });
+export const updateListTags  = (id: string, tags: string[])                => patch<OutreachList>(`${base}/lists/${id}`, { tags });
 export const deleteList  = (id: string, force = false)    => del(`${base}/lists/${id}${force ? "?force=1" : ""}`);
 export const getVerifyPreview = (id: string) =>
   get<{ count: number; already_verified: number; credits_required: number; balance: number }>(`${base}/lists/${id}/verify`);
@@ -150,6 +151,10 @@ export const getCrmThreads    = (page = 0, status?: string) =>
   get<{ threads: CrmThread[]; total: number }>(`${base}/crm?page=${page}${status ? `&status=${status}` : ""}`);
 export const updateCrmStatus  = (enrollmentId: string, crm_status: string) =>
   patch(`${base}/crm/${enrollmentId}`, { crm_status });
+export const toggleCrmStar    = (enrollmentId: string, is_starred: boolean) =>
+  patch(`${base}/crm/${enrollmentId}`, { is_starred });
+export const getCrmLeadProfile = (leadId: string) =>
+  get<{ lead: Record<string, unknown>; enrollments: unknown[] }>(`${base}/crm/lead-profile?lead_id=${leadId}`);
 export type CrmUnmatchedRow = OutreachReply & { inbox: { id: string; label: string | null; email_address: string } | null };
 export const getCrmUnmatched  = (page = 1, limit = 50) =>
   get<{ data: CrmUnmatchedRow[]; total: number; page: number; limit: number }>(`${base}/crm/unmatched?page=${page}&limit=${limit}`);
@@ -256,6 +261,12 @@ export const getConversation   = (enrollmentId: string) =>
   get<{ messages: ConversationMessage[]; notes: import("@/types/outreach").CrmNote[] }>(`${base}/crm/${enrollmentId}`);
 export const promoteUnmatched  = (replyId: string) =>
   post<{ ok: boolean; enrollment_id: string; error?: string }>(`${base}/crm/unmatched/${replyId}/promote`, {});
+
+// ─── Reminders ────────────────────────────────────────────────────────────────
+export const setReminder = (enrollmentId: string, remind_at: string | null) =>
+  patch(`${base}/crm/${enrollmentId}`, { remind_at });
+export const setScheduledReply = (enrollmentId: string, scheduled_reply_at: string | null, scheduled_reply_body: string | null) =>
+  patch(`${base}/crm/${enrollmentId}`, { scheduled_reply_at, scheduled_reply_body });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 export const getSettings    = () => get<Record<string, unknown>>(`${base}/settings`);

@@ -31,6 +31,36 @@ export async function syncPostalSuppressions(): Promise<void> {
   const rows = await postalQuery(
     "SELECT address FROM suppressions WHERE type = 'recipient'",
   );
+
+  const db = adminClient();
+
+  // ── Reverse sync: unsuppress inboxes that have been restored ────────────────
+  // If a suppressed address belongs to an active inbox on an active domain (e.g.
+  // billing was restored), remove it from Postal's suppression list so it can
+  // send and receive warmup mail again.
+  if (rows.length) {
+    const allSuppressedAddresses = rows.map(r => r[0]?.toLowerCase()).filter(Boolean);
+    const { data: restoredInboxes } = await db
+      .from("outreach_inboxes")
+      .select("email_address, outreach_domains(status)")
+      .in("email_address", allSuppressedAddresses)
+      .eq("status", "active");
+
+    const toUnsuppress = ((restoredInboxes ?? []) as Array<{ email_address: string; outreach_domains: { status: string } | null }>)
+      .filter(i => i.outreach_domains?.status === "active")
+      .map(i => i.email_address.toLowerCase());
+
+    if (toUnsuppress.length) {
+      console.log(`[suppression-sync] unsuppressing ${toUnsuppress.length} restored inbox(es):`, toUnsuppress);
+      for (const addr of toUnsuppress) {
+        // Remove from Postal's suppression list (non-fatal — may not exist)
+        await postalQuery(`DELETE FROM suppressions WHERE address = '${addr.replace(/'/g, "\\'")}'`);
+      }
+      // Remove from Supabase email_suppressions so they're not treated as bounced leads
+      await db.from("email_suppressions").delete().in("email", toUnsuppress);
+    }
+  }
+
   if (!rows.length) return;
 
   const postalEmails = rows.map(r => r[0]?.toLowerCase()).filter(Boolean);

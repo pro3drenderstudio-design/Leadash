@@ -355,7 +355,8 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [addMsg, setAddMsg]                     = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // ── Retry payment ─────────────────────────────────────────────────────────
-  const [retryingPaymentId, setRetryingPaymentId] = useState<string | null>(null);
+  const [retryingPaymentId, setRetryingPaymentId]   = useState<string | null>(null);
+  const [newPaymentWorking, setNewPaymentWorking]   = useState<string | null>(null);
 
   // ── Inbox drawer ──────────────────────────────────────────────────────────
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
@@ -473,6 +474,39 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (success === "admin_consent") showToast("Admin consent granted — you can now connect individual inboxes");
     if (error)                       showToast(`Error: ${decodeURIComponent(error)}`, true);
 
+    // Post-payment: update card for failed/overdue inbox billing
+    const updatePaymentDomain = params.get("update_payment_domain");
+    const updateRef           = params.get("reference") || params.get("trxref");
+    if (updatePaymentDomain && updateRef) {
+      setActiveTab("domains");
+      void (async () => {
+        showToast("Payment received — updating card details…");
+        try {
+          const res = await wsFetch(`/api/outreach/domains/${updatePaymentDomain}/update-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reference: updateRef }),
+          });
+          const d = await res.json();
+          if (d.ok) {
+            showToast("Card updated — domain and inboxes reactivated");
+            loadDomains();
+            load();
+          } else {
+            showToast(`Error: ${d.error ?? "Update failed"}`, true);
+          }
+        } catch {
+          showToast("Error: failed to update payment details", true);
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("update_payment_domain");
+        url.searchParams.delete("reference");
+        url.searchParams.delete("trxref");
+        window.history.replaceState({}, "", url.toString());
+      })();
+      return;
+    }
+
     // Post-payment: provision new inboxes added to an existing domain
     const addDomainId    = params.get("add_inboxes_domain");
     const prefixesB64    = params.get("prefixes");
@@ -587,6 +621,24 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
       showToast("Payment retry failed. Please check your connection.");
     } finally {
       setRetryingPaymentId(null);
+    }
+  }
+
+  async function handleNewPayment(domainId: string) {
+    setNewPaymentWorking(domainId);
+    try {
+      const res = await wsFetch(`/api/outreach/domains/${domainId}/new-payment`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? "Could not start payment flow. Please try again.");
+        return;
+      }
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      }
+    } catch {
+      showToast("Could not start payment flow. Please check your connection.");
+      setNewPaymentWorking(null);
     }
   }
 
@@ -1023,23 +1075,40 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                     </div>
                     <div className="flex items-center gap-1.5">
                       {(d.status === "payment_failed" || (d.status === "active" && d.payment_provider === "paystack" && !!d.inbox_next_billing_date && new Date(d.inbox_next_billing_date) < new Date())) && (
-                        <button
-                          onClick={() => handleRetryPayment(d.id)}
-                          disabled={retryingPaymentId === d.id}
-                          className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                            d.status === "payment_failed"
-                              ? "bg-red-500/15 hover:bg-red-500/25 border-red-500/30 text-red-400 hover:text-red-300"
-                              : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-400 hover:text-amber-300"
-                          }`}
-                          title={d.status === "payment_failed" ? "Retry payment to reactivate this domain" : "Billing is overdue — pay now to avoid suspension"}
-                        >
-                          {retryingPaymentId === d.id ? (
-                            <>
-                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                              Retrying…
-                            </>
-                          ) : d.status === "payment_failed" ? "↻ Retry Payment" : "↻ Pay Now"}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleRetryPayment(d.id)}
+                            disabled={retryingPaymentId === d.id}
+                            className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                              d.status === "payment_failed"
+                                ? "bg-red-500/15 hover:bg-red-500/25 border-red-500/30 text-red-400 hover:text-red-300"
+                                : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-400 hover:text-amber-300"
+                            }`}
+                            title={d.status === "payment_failed" ? "Retry payment to reactivate this domain" : "Billing is overdue — pay now to avoid suspension"}
+                          >
+                            {retryingPaymentId === d.id ? (
+                              <>
+                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                Retrying…
+                              </>
+                            ) : d.status === "payment_failed" ? "↻ Retry Payment" : "↻ Pay Now"}
+                          </button>
+                          {d.payment_provider === "paystack" && (
+                            <button
+                              onClick={() => handleNewPayment(d.id)}
+                              disabled={newPaymentWorking === d.id || retryingPaymentId === d.id}
+                              className="px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border-white/15 text-white/60 hover:text-white/80"
+                              title="Pay with a different card"
+                            >
+                              {newPaymentWorking === d.id ? (
+                                <>
+                                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                  Loading…
+                                </>
+                              ) : "New card"}
+                            </button>
+                          )}
+                        </>
                       )}
                       {canAddMore && (
                         <button

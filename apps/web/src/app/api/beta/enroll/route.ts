@@ -85,16 +85,18 @@ export async function GET() {
     .or(`user_id.eq.${user.id},email.eq.${user.email}`)
     .maybeSingle();
 
-  // Fetch trial_ends_at from workspace so the banner can show days remaining
+  // Fetch workspace fields needed for banner visibility
   let trialEndsAt: string | null = null;
+  let hasPaidPlan = false;
   if (data?.workspace_id) {
     const { data: ws } = await db
       .from("workspaces")
-      .select("trial_ends_at")
+      .select("trial_ends_at, subscription_renews_at")
       .eq("id", data.workspace_id)
       .single();
     trialEndsAt = ws?.trial_ends_at ?? null;
+    hasPaidPlan = !!ws?.subscription_renews_at;
   }
 
-  return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null, trialEndsAt });
+  return NextResponse.json({ enrollment: data ?? null, email: user.email ?? null, trialEndsAt, hasPaidPlan });
 }

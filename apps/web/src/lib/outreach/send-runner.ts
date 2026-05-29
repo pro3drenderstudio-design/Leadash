@@ -381,6 +381,11 @@ export async function runSendBatch(
       const isFirstEmail = seqStep.step_order === 0;
       const sendTextOnly = campaign.text_only || (campaign.first_email_text_only && isFirstEmail);
 
+      // Campaign-level footer setting overrides workspace default (null = inherit workspace)
+      const campaignFooterEnabled = campaign.include_unsubscribe_footer === null || campaign.include_unsubscribe_footer === undefined
+        ? footerEnabled
+        : campaign.include_unsubscribe_footer;
+
       const rendered = renderEmail({
         subjectTemplate,
         bodyTemplate:    seqStep.body_template ?? "",
@@ -390,7 +395,7 @@ export async function runSendBatch(
         signature:       slot.inbox.signature,
         trackOpens:      sendTextOnly ? false : campaign.track_opens,
         trackClicks:     sendTextOnly ? false : campaign.track_clicks,
-        footerEnabled,
+        footerEnabled:   campaignFooterEnabled,
         footerText,
         physicalAddress: footerAddress,
       });

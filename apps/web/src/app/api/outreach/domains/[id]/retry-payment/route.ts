@@ -61,9 +61,9 @@ export async function POST(
       status:             "paid",
     }, { onConflict: "paystack_reference", ignoreDuplicates: true });
 
-    // Reactivate inboxes that were set to error on suspension
+    // Reactivate inboxes that were set to error on suspension and resume warmup
     await db.from("outreach_inboxes")
-      .update({ status: "active", last_error: null })
+      .update({ status: "active", last_error: null, warmup_enabled: true })
       .eq("domain_id", domain.id)
       .eq("status", "error");
 

@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
       id,
       crm_status,
       status,
+      is_starred,
+      remind_at,
+      scheduled_reply_at,
+      scheduled_reply_body,
       enrolled_at,
       lead:outreach_leads!lead_id(id, email, first_name, last_name, company, title),
       campaign:outreach_campaigns!campaign_id(id, name),
@@ -80,15 +84,19 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: true });
 
     return {
-      enrollment_id: row.id,
-      crm_status:    row.crm_status,
-      enrolled_at:   row.enrolled_at as string,
-      lead:          row.lead,
-      campaign:      row.campaign,
-      latest_send:   latestSend,
-      latest_reply:  reply ?? null,
-      replied_at:    (reply as { received_at?: string } | null)?.received_at ?? null,
-      notes:         notes ?? [],
+      enrollment_id:        row.id,
+      crm_status:           row.crm_status,
+      is_starred:           row.is_starred ?? false,
+      remind_at:            row.remind_at ?? null,
+      scheduled_reply_at:   row.scheduled_reply_at ?? null,
+      scheduled_reply_body: row.scheduled_reply_body ?? null,
+      enrolled_at:          row.enrolled_at as string,
+      lead:                 row.lead,
+      campaign:             row.campaign,
+      latest_send:          latestSend,
+      latest_reply:         reply ?? null,
+      replied_at:           (reply as { received_at?: string } | null)?.received_at ?? null,
+      notes:                notes ?? [],
     };
   }));
 

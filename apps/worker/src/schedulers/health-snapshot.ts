@@ -288,13 +288,13 @@ async function checkCampaignInboxHealth(db: ReturnType<typeof adminClient>): Pro
     const allInboxIds = [...new Set((campaigns as CampaignRow[]).flatMap(c => c.inbox_ids ?? []))];
     if (!allInboxIds.length) return;
 
-    // Fetch inbox statuses in a single query
+    // Fetch inbox statuses + domain billing state in a single query
     const { data: inboxes } = await db
       .from("outreach_inboxes")
-      .select("id, email_address, status, last_error, workspace_id")
+      .select("id, email_address, status, last_error, workspace_id, domain_id, outreach_domains(status)")
       .in("id", allInboxIds);
 
-    type InboxRow = { id: string; email_address: string; status: string; last_error: string | null; workspace_id: string };
+    type InboxRow = { id: string; email_address: string; status: string; last_error: string | null; workspace_id: string; domain_id: string | null; outreach_domains: { status: string } | null };
     const inboxMap = new Map<string, InboxRow>(
       ((inboxes ?? []) as InboxRow[]).map(i => [i.id, i])
     );
@@ -303,7 +303,15 @@ async function checkCampaignInboxHealth(db: ReturnType<typeof adminClient>): Pro
       const inboxIds   = campaign.inbox_ids ?? [];
       const errorInboxes = inboxIds
         .map(id => inboxMap.get(id))
-        .filter((i): i is InboxRow => !!i && i.status === "error");
+        .filter((i): i is InboxRow => {
+          if (!i || i.status !== "error") return false;
+          // Don't remove billing-suspended inboxes — the send-runner already skips
+          // payment_failed domains, and the inbox will auto-resume once payment is restored.
+          // Only remove inboxes with auth/DNS/other errors that require user action.
+          const domainStatus = i.outreach_domains?.status;
+          if (domainStatus === "payment_failed") return false;
+          return true;
+        });
 
       if (!errorInboxes.length) continue;
 
