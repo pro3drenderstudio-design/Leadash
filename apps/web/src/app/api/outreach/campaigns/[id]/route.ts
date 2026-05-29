@@ -51,6 +51,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .eq("workspace_id", workspaceId)
     .single();
 
+  // Clear pause reason when reactivating
+  if (update.status === "active" && before?.status !== "active") {
+    update.pause_reason = null;
+  }
+
   // Validate campaign state before activation
   if (update.status === "active" && before?.status !== "active") {
     const inboxIds = (before?.inbox_ids ?? []) as string[];
