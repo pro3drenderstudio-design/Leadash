@@ -36,6 +36,7 @@ export default function SiteNav() {
               ["Features",     "/#features"],
               ["How it works", "/#how-it-works"],
               ["Pricing",      "/#pricing"],
+              ["Extension",    "/extension"],
               ["About",        "/about"],
             ].map(([label, href]) => (
               <a key={label} href={href} className="text-sm text-white/50 hover:text-white transition-colors">
