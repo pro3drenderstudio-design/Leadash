@@ -1253,7 +1253,7 @@ export default function CrmClient() {
                             </div>
                           ))}
                           {/* Custom fields — LinkedIn, Twitter, phone etc. */}
-                          {leadPanel.lead.custom_fields && Object.entries(leadPanel.lead.custom_fields as Record<string, string>).map(([k, v]) => {
+                          {!!leadPanel.lead.custom_fields && Object.entries(leadPanel.lead.custom_fields as Record<string, string>).map(([k, v]) => {
                             if (!v) return null;
                             const lk = k.toLowerCase();
                             const isLinkedIn = lk.includes("linkedin");
@@ -1291,7 +1291,7 @@ export default function CrmClient() {
                                       enr.status === "active"     ? "bg-white/10 text-white/50" :
                                       "bg-white/6 text-white/35"
                                     }`}>{enr.status as string}</span>
-                                    {enr.crm_status && enr.crm_status !== "neutral" && (
+                                    {!!enr.crm_status && (enr.crm_status as string) !== "neutral" && (
                                       <span className="text-white/30 text-[9px]">{(enr.crm_status as string).replace(/_/g, " ")}</span>
                                     )}
                                     <span className="text-white/20 text-[9px] ml-auto">{new Date(enr.enrolled_at as string).toLocaleDateString()}</span>
