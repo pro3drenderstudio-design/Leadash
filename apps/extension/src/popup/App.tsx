@@ -27,11 +27,17 @@ const s = {
     padding: "12px 16px 0",
     borderBottom: "1px solid #1e1e1e",
   },
-  logo: {
+  logoRow: {
+    display: "flex" as const,
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  logoText: {
     fontSize: 14,
     fontWeight: 700,
-    color: "#22c55e",
-    marginBottom: 10,
+    color: "#fff",
+    letterSpacing: "-0.02em",
   },
   tabs: {
     display: "flex" as const,
@@ -42,7 +48,7 @@ const s = {
     padding: "7px 0",
     background: active ? "#1a1a1a" : "transparent",
     border: "none",
-    borderBottom: active ? "2px solid #22c55e" : "2px solid transparent",
+    borderBottom: active ? "2px solid #f97316" : "2px solid transparent",
     color: active ? "#fff" : "#666",
     cursor: "pointer",
     fontSize: 12,
@@ -493,7 +499,10 @@ export default function App() {
   return (
     <div style={s.container}>
       <div style={s.header}>
-        <div style={s.logo}>Leadash LinkedIn Studio</div>
+        <div style={s.logoRow}>
+          <img src="/icons/icon48.png" width={22} height={22} alt="" style={{ borderRadius: 6 }} />
+          <span style={s.logoText}>Leadash</span>
+        </div>
         <div style={s.tabs}>
           {(["import", "comment", "settings"] as Tab[]).map((t) => (
             <button
