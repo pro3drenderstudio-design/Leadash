@@ -1040,13 +1040,13 @@ export default function AdminAcademyPage() {
       </div>
 
       {/* Global CSS helpers (inline so no separate file needed) */}
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .label-xs { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
         .input-base { background: #111827; border: 1px solid #374151; border-radius: 6px; padding: 7px 10px; font-size: 13px; color: #e5e7eb; outline: none; }
         .input-base:focus { border-color: #6366f1; }
         .th-left { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
         .td { padding: 10px 16px; }
-      `}</style>
+      ` }} />
     </div>
   );
 }
