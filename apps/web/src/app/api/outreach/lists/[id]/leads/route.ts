@@ -34,7 +34,7 @@ export async function GET(
 
   let q = db
     .from("outreach_leads")
-    .select("id,email,first_name,last_name,company,title,website,status,verification_status,verification_score,verified_at,first_line,custom_fields,created_at", { count: "exact" })
+    .select("id,email,first_name,last_name,company,title,website,linkedin_url,city,country,status,verification_status,verification_score,verified_at,first_line,custom_fields,created_at", { count: "exact" })
     .eq("list_id", listId)
     .eq("workspace_id", workspaceId);
 

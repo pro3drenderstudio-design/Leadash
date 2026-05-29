@@ -27,6 +27,36 @@ const MICROSOFT_DOMAINS = new Set([
 // Per-invocation MX cache — avoids redundant lookups for the same domain
 const _mxCache = new Map<string, "gmail" | "outlook" | null>();
 
+// ── Smart send window helpers ─────────────────────────────────────────────────
+const COUNTRY_TO_TZ: Record<string, string> = {
+  "US": "America/New_York", "GB": "Europe/London", "DE": "Europe/Berlin",
+  "FR": "Europe/Paris", "AU": "Australia/Sydney", "CA": "America/Toronto",
+  "IN": "Asia/Kolkata", "JP": "Asia/Tokyo", "NG": "Africa/Lagos",
+  "GH": "Africa/Accra", "KE": "Africa/Nairobi", "ZA": "Africa/Johannesburg",
+  "AE": "Asia/Dubai", "SG": "Asia/Singapore", "BR": "America/Sao_Paulo",
+  "MX": "America/Mexico_City", "NL": "Europe/Amsterdam", "SE": "Europe/Stockholm",
+  "NO": "Europe/Oslo", "DK": "Europe/Copenhagen", "IT": "Europe/Rome",
+  "ES": "Europe/Madrid", "PL": "Europe/Warsaw", "CH": "Europe/Zurich",
+};
+
+function detectRecipientTimezone(lead: Record<string, unknown>): string | null {
+  const cf = lead.custom_fields as Record<string, unknown> | null;
+  if (cf?.timezone && typeof cf.timezone === "string") return cf.timezone;
+  const country = (lead.country as string | null)?.toUpperCase();
+  if (country && COUNTRY_TO_TZ[country]) return COUNTRY_TO_TZ[country];
+  return null;
+}
+
+function isWithinBusinessHours(timezone: string): boolean {
+  try {
+    const hourStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, hour: "numeric", hour12: false,
+    }).format(new Date());
+    const hour = parseInt(hourStr, 10);
+    return hour >= 8 && hour < 18;
+  } catch { return true; }
+}
+
 async function resolveMx(domain: string, timeoutMs = 1500): Promise<MxRecord[] | null> {
   return new Promise(resolve => {
     const t = setTimeout(() => resolve(null), timeoutMs);
@@ -309,6 +339,17 @@ export async function runSendBatch(
       if (unsub) {
         await db.from("outreach_enrollments").update({ status: "unsubscribed" }).eq("id", enrollment.id);
         result.skipped++; continue;
+      }
+
+      // Smart send window: skip if outside recipient's business hours
+      if (campaign.smart_send_window) {
+        const recipientTz = detectRecipientTimezone(lead);
+        if (recipientTz && !isWithinBusinessHours(recipientTz)) {
+          result.skipped++;
+          // Release the claim by restoring next_send_at to current time
+          await db.from("outreach_enrollments").update({ next_send_at: new Date().toISOString() }).eq("id", enrollment.id);
+          continue;
+        }
       }
 
       // Blacklist domain check

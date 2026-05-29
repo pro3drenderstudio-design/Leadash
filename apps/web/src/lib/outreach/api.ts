@@ -252,8 +252,10 @@ export const generateFollowups = (opts: {
 // ─── CRM extras ───────────────────────────────────────────────────────────────
 export const addNote           = (enrollmentId: string, note: string) =>
   post(`${base}/crm/${enrollmentId}/notes`, { note });
+export const updateCrmLabels   = (enrollmentId: string, crm_labels: string[]) =>
+  patch(`${base}/crm/${enrollmentId}`, { crm_labels });
 export const suggestReply      = (enrollmentId: string) =>
-  post<{ suggestion: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
+  post<{ suggestion: string; next_action?: string; action_reason?: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
 export const sendCrmReply      = (enrollmentId: string, body: string, html_body?: string) =>
   post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body, html_body });

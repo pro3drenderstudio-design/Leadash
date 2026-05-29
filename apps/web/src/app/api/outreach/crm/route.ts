@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id,
       crm_status,
+      crm_labels,
       status,
       is_starred,
       remind_at,
@@ -86,6 +87,7 @@ export async function GET(req: NextRequest) {
     return {
       enrollment_id:        row.id,
       crm_status:           row.crm_status,
+      crm_labels:           (row.crm_labels as string[] | null) ?? [],
       is_starred:           row.is_starred ?? false,
       remind_at:            row.remind_at ?? null,
       scheduled_reply_at:   row.scheduled_reply_at ?? null,

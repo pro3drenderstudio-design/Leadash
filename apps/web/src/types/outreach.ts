@@ -125,6 +125,7 @@ export interface OutreachCampaign {
   total_clicked?: number;
   pause_reason?: string | null;
   verified_only: boolean;
+  smart_send_window?: boolean;
   sequence_steps?: OutreachSequenceStep[];
 }
 
@@ -261,6 +262,7 @@ export interface CrmThread {
   scheduled_reply_at?: string | null;
   scheduled_reply_body?: string | null;
   notes?: CrmNote[];
+  crm_labels?: string[];
 }
 
 export interface CampaignEnrollmentRow {

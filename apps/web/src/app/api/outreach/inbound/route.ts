@@ -485,5 +485,25 @@ async function handleInbound(req: NextRequest) {
     }
   }
 
+  // Fire webhook for campaign replies
+  if (enrollmentId && !isWarmup && !isUnsubscribe) {
+    try {
+      const { fireWebhooks } = await import("@/lib/outreach/webhooks");
+      // Fetch lead email for payload
+      const { data: enrForWebhook } = await db
+        .from("outreach_enrollments")
+        .select("lead:outreach_leads!lead_id(email)")
+        .eq("id", enrollmentId)
+        .single();
+      const leadEmail = (enrForWebhook?.lead as { email?: string } | null)?.email ?? from ?? "";
+      await fireWebhooks(workspaceId, "reply.received", {
+        enrollment_id: enrollmentId,
+        lead_email: leadEmail,
+        from_email: from,
+        subject: subject,
+      });
+    } catch { /* non-fatal */ }
+  }
+
   return NextResponse.json({ ok: true, type: enrollmentId ? "campaign" : isWarmup ? "warmup" : "unmatched" });
 }

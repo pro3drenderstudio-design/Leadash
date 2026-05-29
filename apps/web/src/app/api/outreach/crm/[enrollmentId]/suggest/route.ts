@@ -56,11 +56,15 @@ export async function POST(
     ...replies.map((r: Record<string, string | null>) => `[${r.from_name || r.from_email} replied]\n${r.body_text ?? "(no body)"}`),
   ].filter(Boolean).join("\n\n");
 
-  const prompt = `You are a professional sales assistant. Based on the conversation below, write a concise, natural reply that continues the conversation in a helpful and professional tone. Do not include a subject line, greeting prefix, or signature — just the reply body text.
+  const prompt = `You are a professional sales assistant. Based on the conversation below:
+1. Write a concise, natural reply body (no subject line, greeting prefix, or signature).
+2. Suggest the best CRM next-action status from: interested, meeting_booked, follow_up, not_interested.
+3. Provide a one-sentence reason for your status suggestion.
 
-${context}
+Respond ONLY with valid JSON in this exact format:
+{"suggestion":"<reply body>","next_action":"<status>","action_reason":"<reason>"}
 
-Write the reply now:`;
+${context}`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -69,7 +73,7 @@ Write the reply now:`;
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are a professional sales assistant. Write concise, natural reply bodies. Never include a subject line, greeting prefix, or signature — just the reply body text." },
+          { role: "system", content: "You are a professional sales assistant. Respond only with valid JSON containing suggestion, next_action, and action_reason fields. The suggestion should be a concise reply body with no subject line, greeting, or signature." },
           { role: "user", content: prompt },
         ],
         max_tokens: 400,
@@ -82,9 +86,25 @@ Write the reply now:`;
       return NextResponse.json({ error: `OpenAI error ${res.status}${detail ? `: ${detail}` : ""}` }, { status: 500 });
     }
     const data = await res.json();
-    const suggestion = (data?.choices?.[0]?.message?.content ?? "").trim();
-    if (!suggestion) return NextResponse.json({ error: "No suggestion generated" }, { status: 500 });
-    return NextResponse.json({ suggestion });
+    const raw = (data?.choices?.[0]?.message?.content ?? "").trim();
+    if (!raw) return NextResponse.json({ error: "No suggestion generated" }, { status: 500 });
+
+    // Try to parse JSON response
+    let suggestion = raw;
+    let next_action: string | undefined;
+    let action_reason: string | undefined;
+    try {
+      // Extract JSON even if the model wraps it in markdown code fences
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { suggestion?: string; next_action?: string; action_reason?: string };
+        suggestion    = parsed.suggestion    ?? raw;
+        next_action   = parsed.next_action   ?? undefined;
+        action_reason = parsed.action_reason ?? undefined;
+      }
+    } catch { /* fall back to raw text as suggestion */ }
+
+    return NextResponse.json({ suggestion, next_action, action_reason });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });

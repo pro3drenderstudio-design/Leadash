@@ -1,7 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { type Lead, VERIFY_BADGE } from "./ListDetailClient";
+import { wsFetch } from "@/lib/workspace/client";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Campaign {
+  id:     string;
+  name:   string;
+  status: string;
+}
+
+interface Enrollment {
+  id:           string;
+  status:       string;
+  crm_status:   string | null;
+  enrolled_at:  string;
+  completed_at: string | null;
+  campaign:     Campaign;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -11,6 +32,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function EnrollmentStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    active:    "bg-emerald-500/15 text-emerald-400",
+    completed: "bg-indigo-500/15 text-indigo-400",
+    paused:    "bg-amber-500/15 text-amber-400",
+    stopped:   "bg-red-500/15 text-red-400",
+    bounced:   "bg-red-500/15 text-red-400",
+  };
+  const cls = map[status] ?? "bg-white/8 text-white/40";
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize whitespace-nowrap ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LeadDrawer({
   lead,
@@ -25,11 +64,13 @@ export default function LeadDrawer({
   onDelete: () => void;
   onUpdate: (updated: Lead) => void;
 }) {
-  const [editFL,    setEditFL]    = useState(lead.first_line ?? "");
-  const [savingFL,  setSavingFL]  = useState(false);
-  const [savedFL,   setSavedFL]   = useState(false);
-  const [copied,    setCopied]    = useState(false);
-  const [delConfirm,setDelConfirm]= useState(false);
+  const [editFL,      setEditFL]      = useState(lead.first_line ?? "");
+  const [savingFL,    setSavingFL]    = useState(false);
+  const [savedFL,     setSavedFL]     = useState(false);
+  const [copied,      setCopied]      = useState(false);
+  const [delConfirm,  setDelConfirm]  = useState(false);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [histLoading, setHistLoading] = useState(true);
 
   // Sync first_line when lead changes (e.g. after table refresh)
   useEffect(() => { setEditFL(lead.first_line ?? ""); }, [lead.id, lead.first_line]);
@@ -41,17 +82,44 @@ export default function LeadDrawer({
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
 
+  // Fetch enrollment history when lead changes
+  useEffect(() => {
+    let cancelled = false;
+    setHistLoading(true);
+    setEnrollments([]);
+    wsFetch(`/api/outreach/crm/lead-profile?lead_id=${lead.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!cancelled) {
+          setEnrollments(d?.enrollments ?? []);
+          setHistLoading(false);
+        }
+      })
+      .catch(() => { if (!cancelled) setHistLoading(false); });
+    return () => { cancelled = true; };
+  }, [lead.id]);
+
   const name     = [lead.first_name, lead.last_name].filter(Boolean).join(" ") || "—";
   const initials = [lead.first_name?.[0], lead.last_name?.[0]].filter(Boolean).join("").toUpperCase()
                    || lead.email[0].toUpperCase();
   const badge    = VERIFY_BADGE[lead.verification_status ?? ""];
 
-  // Extract phone/linkedin from custom_fields
+  // Resolve LinkedIn URL: prefer top-level field, then custom_fields
+  const linkedinUrl =
+    lead.linkedin_url ||
+    (lead.custom_fields?.linkedin_url as string | undefined) ||
+    (lead.custom_fields?.linkedin as string | undefined) ||
+    null;
+
+  // Location: city / country
+  const location = [lead.city, lead.country].filter(Boolean).join(", ") || null;
+
+  // Extra custom fields (phone, twitter, instagram — excluding linkedin since shown separately)
   const extraFields: { key: string; value: string }[] = [];
   if (lead.custom_fields) {
     for (const [k, v] of Object.entries(lead.custom_fields)) {
       const lk = k.toLowerCase();
-      if (["phone","linkedin","linkedin_url","twitter","instagram"].includes(lk) && v) {
+      if (["phone","twitter","instagram"].includes(lk) && v) {
         extraFields.push({ key: k, value: String(v) });
       }
     }
@@ -133,6 +201,17 @@ export default function LeadDrawer({
           <div className="space-y-3">
             {lead.title && <Field label="Title">{lead.title}</Field>}
             {lead.company && <Field label="Company">{lead.company}</Field>}
+            {location && (
+              <Field label="Location">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-white/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {location}
+                </span>
+              </Field>
+            )}
             {lead.website && (
               <Field label="Website">
                 <a
@@ -142,6 +221,21 @@ export default function LeadDrawer({
                   className="text-indigo-400 hover:text-indigo-300 hover:underline truncate block transition-colors"
                 >
                   {lead.website}
+                </a>
+              </Field>
+            )}
+            {linkedinUrl && (
+              <Field label="LinkedIn">
+                <a
+                  href={linkedinUrl.startsWith("http") ? linkedinUrl : `https://${linkedinUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[#0077B5] hover:text-[#0093e0] hover:underline truncate transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  </svg>
+                  View profile
                 </a>
               </Field>
             )}
@@ -212,6 +306,35 @@ export default function LeadDrawer({
             )}
           </div>
 
+          {/* Enrollment History */}
+          <div className="space-y-2">
+            <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">Campaign History</p>
+            <div className="bg-white/[0.03] rounded-xl overflow-hidden">
+              {histLoading ? (
+                <p className="p-4 text-white/25 text-xs">Loading history…</p>
+              ) : enrollments.length === 0 ? (
+                <p className="p-4 text-white/25 text-xs">No campaigns yet</p>
+              ) : (
+                <div className="divide-y divide-white/[0.05]">
+                  {enrollments.map(en => (
+                    <div key={en.id} className="p-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white/65 text-xs font-medium truncate">{en.campaign.name}</p>
+                        <p className="text-white/25 text-[10px] mt-0.5">
+                          Enrolled {new Date(en.enrolled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {en.completed_at && (
+                            <> · Completed {new Date(en.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</>
+                          )}
+                        </p>
+                      </div>
+                      <EnrollmentStatusBadge status={en.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Meta */}
           <div className="space-y-2">
             <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">Details</p>
@@ -237,14 +360,20 @@ export default function LeadDrawer({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer — Quick Actions */}
         <div className="p-4 border-t border-white/8 flex items-center gap-2 shrink-0">
           <button
             onClick={copyEmail}
             className="flex-1 px-3 py-2 bg-white/[0.04] hover:bg-white/[0.07] text-white/55 hover:text-white/80 text-sm rounded-xl border border-white/8 hover:border-white/15 transition-colors"
           >
-            {copied ? "✓ Copied" : "Copy email"}
+            {copied ? "✓ Copied" : "Copy Email"}
           </button>
+          <Link
+            href={`/campaigns?addLead=${lead.id}`}
+            className="px-3 py-2 bg-indigo-500/10 hover:bg-indigo-500/18 text-indigo-400/80 hover:text-indigo-400 text-sm rounded-xl border border-indigo-500/15 hover:border-indigo-500/25 transition-colors whitespace-nowrap"
+          >
+            Add to Campaign
+          </Link>
           {delConfirm ? (
             <div className="flex gap-1.5">
               <button onClick={() => setDelConfirm(false)} className="px-3 py-2 text-white/40 hover:text-white/70 text-sm border border-white/8 rounded-xl transition-colors">

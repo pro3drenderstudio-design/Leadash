@@ -5,7 +5,7 @@ import {
   getCrmUnmatched, getCrmWarmup, CrmWarmupRow, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
   triggerSendBatch, sendCrmReply, getConversation,
-  setReminder, setScheduledReply,
+  setReminder, setScheduledReply, updateCrmLabels,
 } from "@/lib/outreach/api";
 import type { ConversationMessage } from "@/lib/outreach/api";
 import type { CrmUnmatchedRow } from "@/lib/outreach/api";
@@ -268,6 +268,17 @@ export default function CrmClient() {
   const initialLoadDoneRef = useRef(false);
   const [notifications, setNotifications] = useState<Array<{ id: string; text: string; enrollment_id: string }>>([]);
 
+  // ── Bulk selection state ──────────────────────────────────────────────────
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+  const [bulkActing, setBulkActing] = useState(false);
+
+  // ── AI suggest result state ───────────────────────────────────────────────
+  const [suggestResult, setSuggestResult] = useState<{ suggestion: string; next_action?: string; action_reason?: string } | null>(null);
+
+  // ── Label editor state ────────────────────────────────────────────────────
+  const [showLabelInput, setShowLabelInput] = useState(false);
+  const [labelInput, setLabelInput]         = useState("");
+
   // Auto-dismiss notifications after 7 seconds
   useEffect(() => {
     if (!notifications.length) return;
@@ -500,14 +511,16 @@ export default function CrmClient() {
   async function handleSuggestReply() {
     if (!selected) return;
     setSuggesting(true);
+    setSuggestResult(null);
     try {
-      const { suggestion: text, error } = await suggestReply(selected.enrollment_id);
+      const { suggestion: text, next_action, action_reason, error } = await suggestReply(selected.enrollment_id);
       if (error) {
         setSendError(`AI suggestion failed: ${error}`);
       } else if (text && composeRef.current) {
         composeRef.current.innerText = text;
         setComposeBody(text);
         setComposeHtml(composeRef.current.innerHTML);
+        setSuggestResult({ suggestion: text, next_action, action_reason });
         // Move cursor to end
         const range = document.createRange();
         const sel = window.getSelection();
@@ -671,6 +684,45 @@ export default function CrmClient() {
     setFilters((prev) => prev.filter((f) => f.id !== id));
   }
 
+  // ── Bulk action handlers ──────────────────────────────────────────────────
+  async function handleBulkStar(star: boolean) {
+    setBulkActing(true);
+    await Promise.all([...selectedThreadIds].map(id => toggleCrmStar(id, star)));
+    setThreads(ts => ts.map(t => selectedThreadIds.has(t.enrollment_id) ? { ...t, is_starred: star } : t));
+    setSelectedThreadIds(new Set());
+    setBulkActing(false);
+  }
+
+  async function handleBulkStatus(status: CrmStatus) {
+    setBulkActing(true);
+    await Promise.all([...selectedThreadIds].map(id => updateCrmStatus(id, status)));
+    setThreads(ts => ts.map(t => selectedThreadIds.has(t.enrollment_id) ? { ...t, crm_status: status } : t));
+    setSelectedThreadIds(new Set());
+    setBulkActing(false);
+  }
+
+  // ── Label handlers ────────────────────────────────────────────────────────
+  async function handleAddLabel(label: string) {
+    if (!selected || !label.trim()) return;
+    const trimmed = label.trim();
+    const current = selected.crm_labels ?? [];
+    if (current.includes(trimmed)) return;
+    const updated = [...current, trimmed];
+    await updateCrmLabels(selected.enrollment_id, updated);
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, crm_labels: updated } : t));
+    setSelected(prev => prev ? { ...prev, crm_labels: updated } : prev);
+    setLabelInput("");
+    setShowLabelInput(false);
+  }
+
+  async function handleRemoveLabel(label: string) {
+    if (!selected) return;
+    const updated = (selected.crm_labels ?? []).filter(l => l !== label);
+    await updateCrmLabels(selected.enrollment_id, updated);
+    setThreads(ts => ts.map(t => t.enrollment_id === selected.enrollment_id ? { ...t, crm_labels: updated } : t));
+    setSelected(prev => prev ? { ...prev, crm_labels: updated } : prev);
+  }
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const filteredThreads = threads
     .filter((t) => {
@@ -805,6 +857,16 @@ export default function CrmClient() {
               </div>
             </div>
 
+            {selectedThreadIds.size > 0 && (
+              <div className="px-3 py-2 border-b border-white/8 flex items-center gap-2 bg-violet-500/8">
+                <span className="text-violet-300 text-xs font-semibold">{selectedThreadIds.size} selected</span>
+                <button onClick={() => handleBulkStar(true)} disabled={bulkActing} className="px-2 py-1 text-xs text-white/60 hover:text-white/90 bg-white/6 hover:bg-white/10 disabled:opacity-40 rounded border border-white/10 transition-colors">Star all</button>
+                {CRM_STATUSES.slice(1, 4).map(s => (
+                  <button key={s.value} onClick={() => handleBulkStatus(s.value as CrmStatus)} disabled={bulkActing} className={`px-2 py-1 text-xs rounded border transition-colors disabled:opacity-40 ${s.color}`}>{s.label}</button>
+                ))}
+                <button onClick={() => setSelectedThreadIds(new Set())} className="ml-auto text-white/30 hover:text-white/60 text-xs transition-colors">✕ Clear</button>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto divide-y divide-white/5">
               {loading ? (
                 [1,2,3,4,5].map((i) => <div key={i} className="h-16 bg-white/4 m-3 rounded-xl animate-pulse" />)
@@ -817,23 +879,49 @@ export default function CrmClient() {
                 const replyFrom = t.latest_reply?.from_email;
                 const differentEmail = replyFrom && replyFrom.toLowerCase() !== t.lead.email.toLowerCase();
                 return (
-                  <button
+                  <div
                     key={t.enrollment_id}
-                    onClick={() => {
-                      setSelected(t);
-                      setComposeBody(""); setComposeHtml(""); setSendError(null); setSendSuccess(false);
-                      setAttachments([]); setShowNotesDrawer(false); setShowEmojiPicker(false); setShowLinkDialog(false);
-                      if (composeRef.current) composeRef.current.innerHTML = "";
-                      loadConversation(t.enrollment_id);
-                    }}
-                    className={`w-full text-left px-4 py-3.5 hover:bg-white/4 transition-colors ${selected?.enrollment_id === t.enrollment_id ? "bg-white/6 border-r-2 border-white/30" : ""}`}
+                    className={`w-full flex items-start gap-2 px-3 py-3.5 hover:bg-white/4 transition-colors cursor-pointer ${selected?.enrollment_id === t.enrollment_id ? "bg-white/6 border-r-2 border-white/30" : ""}`}
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedThreadIds.has(t.enrollment_id)}
+                      onChange={e => {
+                        e.stopPropagation();
+                        setSelectedThreadIds(prev => {
+                          const n = new Set(prev);
+                          e.target.checked ? n.add(t.enrollment_id) : n.delete(t.enrollment_id);
+                          return n;
+                        });
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      className="w-3.5 h-3.5 mt-0.5 rounded border-white/20 bg-transparent accent-violet-500 shrink-0"
+                    />
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => {
+                        setSelected(t);
+                        setSuggestResult(null);
+                        setComposeBody(""); setComposeHtml(""); setSendError(null); setSendSuccess(false);
+                        setAttachments([]); setShowNotesDrawer(false); setShowEmojiPicker(false); setShowLinkDialog(false);
+                        setShowLabelInput(false); setLabelInput("");
+                        if (composeRef.current) composeRef.current.innerHTML = "";
+                        loadConversation(t.enrollment_id);
+                      }}
+                    >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-white text-sm font-medium truncate">{[t.lead.first_name, t.lead.last_name].filter(Boolean).join(" ") || t.lead.email}</p>
                         <p className="text-white/40 text-xs truncate">{t.lead.email}</p>
                         {differentEmail && <p className="text-amber-400/60 text-[10px] truncate">replied from {replyFrom}</p>}
                         {t.lead.company && <p className="text-white/25 text-xs truncate">{t.lead.company}</p>}
+                        {(t.crm_labels ?? []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {(t.crm_labels ?? []).map(l => (
+                              <span key={l} className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/20">{l}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right flex-shrink-0 space-y-1">
                         <div className="flex items-center gap-1.5 justify-end">
@@ -857,7 +945,8 @@ export default function CrmClient() {
                     ) : (
                       <p className="text-white/30 text-xs mt-1.5 line-clamp-1">{t.latest_send?.subject}</p>
                     )}
-                  </button>
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -895,7 +984,38 @@ export default function CrmClient() {
                       <p className="text-white/20 text-xs">{selected.campaign?.name ?? "Direct inbound"} · {timeAgo(selected.replied_at)}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                    {/* Label chips + editor */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(selected.crm_labels ?? []).map(l => (
+                        <span key={l} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/20">
+                          {l}
+                          <button onClick={() => handleRemoveLabel(l)} className="text-violet-300/60 hover:text-violet-200 transition-colors leading-none">×</button>
+                        </span>
+                      ))}
+                      {showLabelInput ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={labelInput}
+                          onChange={e => setLabelInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") { handleAddLabel(labelInput); }
+                            if (e.key === "Escape") { setShowLabelInput(false); setLabelInput(""); }
+                          }}
+                          onBlur={() => { if (!labelInput.trim()) { setShowLabelInput(false); } }}
+                          placeholder="label…"
+                          className="w-20 px-1.5 py-0.5 bg-white/8 border border-violet-500/30 rounded text-[10px] text-white placeholder-white/30 focus:outline-none"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setShowLabelInput(true)}
+                          className="px-1.5 py-0.5 text-[10px] text-violet-400/60 hover:text-violet-300 bg-violet-500/8 hover:bg-violet-500/15 rounded border border-violet-500/15 transition-colors"
+                        >
+                          + label
+                        </button>
+                      )}
+                    </div>
                     {/* Star button */}
                     <button
                       onClick={(e) => handleToggleStar(selected.enrollment_id, selected.is_starred, e)}
@@ -1031,6 +1151,19 @@ export default function CrmClient() {
                         ) : <>✦ Generate Reply</>}
                       </button>
                     </div>
+
+                    {/* AI next-action card */}
+                    {suggestResult?.next_action && (
+                      <div className="mt-2 p-3 bg-violet-500/8 border border-violet-500/20 rounded-xl flex items-center gap-3">
+                        <span className="text-violet-300 text-xs">AI suggests: <strong>{suggestResult.next_action.replace(/_/g, " ")}</strong></span>
+                        {suggestResult.action_reason && <span className="text-white/35 text-xs flex-1">{suggestResult.action_reason}</span>}
+                        <button
+                          onClick={() => { handleStatusChange(suggestResult.next_action as CrmStatus); setSuggestResult(null); }}
+                          className="px-2.5 py-1 text-xs bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-lg border border-violet-500/30 transition-colors shrink-0"
+                        >Apply</button>
+                        <button onClick={() => setSuggestResult(null)} className="text-white/20 hover:text-white/50 text-xs transition-colors">✕</button>
+                      </div>
+                    )}
 
                     {/* Compose area */}
                     <div className="relative bg-white/4 border border-white/10 rounded-xl overflow-hidden focus-within:border-orange-500/40 transition-colors">

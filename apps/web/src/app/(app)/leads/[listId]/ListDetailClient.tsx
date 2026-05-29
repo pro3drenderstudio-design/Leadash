@@ -15,6 +15,9 @@ export interface Lead {
   company:             string | null;
   title:               string | null;
   website:             string | null;
+  linkedin_url?:       string | null;
+  city?:               string | null;
+  country?:            string | null;
   status:              string;
   verification_status: string | null;
   verification_score:  number | null;
