@@ -8,7 +8,7 @@ import type { PlanConfig } from "@/lib/billing/getActivePlans";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tab = "profile" | "security" | "team" | "billing" | "outreach" | "infrastructure";
+type Tab = "profile" | "security" | "team" | "billing" | "outreach" | "infrastructure" | "api-keys";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile",        label: "Profile"        },
@@ -17,6 +17,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "billing",        label: "Billing & Plans"},
   { id: "outreach",       label: "Outreach"       },
   { id: "infrastructure", label: "Infrastructure" },
+  { id: "api-keys",       label: "API Keys"       },
 ];
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -1543,6 +1544,177 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
   );
 }
 
+// ── API Keys Tab ───────────────────────────────────────────────────────────────
+
+type ApiKey = { id: string; name: string; last_used_at: string | null; created_at: string };
+
+function ApiKeysTab() {
+  const [keys, setKeys]         = useState<ApiKey[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [newName, setNewName]   = useState("");
+  const [creating, setCreating] = useState(false);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [copied, setCopied]     = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [msg, setMsg]           = useState<{ text: string; ok: boolean } | null>(null);
+
+  function flash(text: string, ok = true) {
+    setMsg({ text, ok });
+    setTimeout(() => setMsg(null), 4000);
+  }
+
+  function load() {
+    wsGet<ApiKey[]>("/api/settings/api-keys")
+      .then(setKeys)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, []);
+
+  async function create() {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const data = await wsPost<ApiKey & { raw_key: string }>("/api/settings/api-keys", { name: newName.trim() });
+      setRevealed(data.raw_key);
+      setCopied(false);
+      setNewName("");
+      load();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to create key", false);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revoke(id: string) {
+    setRevoking(id);
+    try {
+      await wsDelete("/api/settings/api-keys/" + id, {});
+      setKeys(prev => prev.filter(k => k.id !== id));
+      flash("API key revoked.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Failed to revoke key", false);
+    } finally {
+      setRevoking(null);
+    }
+  }
+
+  async function copy() {
+    if (!revealed) return;
+    await navigator.clipboard.writeText(revealed).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="space-y-6">
+      {msg && (
+        <div className={`p-3 rounded-xl border text-sm ${msg.ok ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300" : "bg-red-500/10 border-red-500/25 text-red-300"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Revealed key banner */}
+      {revealed && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <p className="text-amber-300 font-semibold text-sm">Copy your key now — it won&apos;t be shown again.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 font-mono text-xs bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-amber-200 break-all select-all">
+              {revealed}
+            </code>
+            <button
+              onClick={copy}
+              className="flex-shrink-0 px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-colors"
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+          <button
+            onClick={() => setRevealed(null)}
+            className="text-xs text-amber-400/60 hover:text-amber-400 transition-colors"
+          >
+            I&apos;ve saved it — dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Create new key */}
+      <Section title="Create API Key" description="Use API keys to connect the Leadash Chrome extension or external integrations.">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && create()}
+            placeholder='e.g. "Chrome Extension" or "Zapier"'
+            maxLength={64}
+            className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+          />
+          <button
+            onClick={create}
+            disabled={creating || !newName.trim()}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+          >
+            {creating ? "Creating…" : "Create Key"}
+          </button>
+        </div>
+      </Section>
+
+      {/* Existing keys */}
+      <Section title="Your API Keys" description="Revoke any key immediately to cut off access.">
+        {loading ? (
+          <div className="space-y-2">{[1, 2].map(i => <div key={i} className="h-12 bg-white/4 rounded-xl animate-pulse" />)}</div>
+        ) : keys.length === 0 ? (
+          <p className="text-white/25 text-sm py-2 text-center">No API keys yet. Create one above.</p>
+        ) : (
+          <div className="divide-y divide-white/6">
+            {keys.map(k => (
+              <div key={k.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/>
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{k.name}</p>
+                    <p className="text-white/30 text-xs mt-0.5">
+                      Created {new Date(k.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      {k.last_used_at && ` · Last used ${new Date(k.last_used_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => revoke(k.id)}
+                  disabled={revoking === k.id}
+                  className="flex-shrink-0 text-xs text-white/25 hover:text-red-400 disabled:opacity-40 transition-colors"
+                >
+                  {revoking === k.id ? "…" : "Revoke"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Usage note */}
+      <div className="px-4 py-3 bg-white/3 border border-white/6 rounded-xl">
+        <p className="text-white/40 text-xs leading-relaxed">
+          Paste your key into the <strong className="text-white/60">Leadash Chrome Extension</strong> under Settings → Leadash API Key.
+          Keys have workspace-level access — treat them like passwords.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Root settings page ─────────────────────────────────────────────────────────
 
 function SettingsInner() {
@@ -1598,6 +1770,7 @@ function SettingsInner() {
         {active === "billing"        && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} creditPurchaseSuccess={creditPurchaseSuccess} />}
         {active === "outreach"       && <OutreachTab />}
         {active === "infrastructure" && <InfrastructureTab dedicatedIpSuccess={dedicatedIpSuccess} />}
+        {active === "api-keys"       && <ApiKeysTab />}
       </div>
     </div>
   );
