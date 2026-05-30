@@ -140,33 +140,40 @@ function SettingsTab() {
       if (res.persona) setPersona(res.persona);
       if (res.defaultTone)   setTone(res.defaultTone);
       if (res.defaultLength) setLength(res.defaultLength);
+
+      // Resume polling if popup was closed mid-auth
+      if (!res.apiKey) {
+        chrome.storage.local.get(["pendingAuthToken"], (local) => {
+          if (local.pendingAuthToken) {
+            tokenRef.current = local.pendingAuthToken;
+            setPolling(true);
+            setLoginMsg("Finishing connection…");
+            beginPolling(local.pendingAuthToken);
+          }
+        });
+      }
     });
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function startLogin() {
-    const token = crypto.randomUUID();
-    tokenRef.current = token;
-    setPolling(true);
-    setLoginMsg("Waiting for you to connect in the browser tab…");
-
-    chrome.tabs.create({ url: `${AUTH_URL}?token=${token}` });
-
+  function beginPolling(token: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts++;
       if (attempts > 150) { // 5 min
         clearInterval(pollRef.current!);
+        chrome.storage.local.remove("pendingAuthToken");
         setPolling(false);
         setLoginMsg("Connection timed out. Please try again.");
         return;
       }
-
       try {
         const res = await fetch(`${API_BASE}/api/extension/auth-poll?token=${token}`);
         const data = await res.json() as { status: string; key?: string };
         if (data.status === "connected" && data.key) {
           clearInterval(pollRef.current!);
+          chrome.storage.local.remove("pendingAuthToken");
           chrome.storage.sync.set({ apiKey: data.key });
           setApiKey(data.key);
           setConnected(true);
@@ -174,11 +181,23 @@ function SettingsTab() {
           setLoginMsg("Connected successfully!");
         } else if (data.status === "expired") {
           clearInterval(pollRef.current!);
+          chrome.storage.local.remove("pendingAuthToken");
           setPolling(false);
           setLoginMsg("Connection expired. Please try again.");
         }
       } catch { /* network hiccup, retry */ }
     }, 2000);
+  }
+
+  function startLogin() {
+    const token = crypto.randomUUID();
+    tokenRef.current = token;
+    // Persist token so polling can resume if popup closes
+    chrome.storage.local.set({ pendingAuthToken: token });
+    setPolling(true);
+    setLoginMsg("Waiting for you to connect in the browser tab…");
+    chrome.tabs.create({ url: `${AUTH_URL}?token=${token}` });
+    beginPolling(token);
   }
 
   function disconnect() {
@@ -215,7 +234,7 @@ function SettingsTab() {
             <div style={{ marginTop: 6 }}>
               <button
                 style={{ ...s.btn("ghost"), width: "auto", padding: "4px 12px", fontSize: 11 }}
-                onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setPolling(false); setLoginMsg(""); }}
+                onClick={() => { if (pollRef.current) clearInterval(pollRef.current); chrome.storage.local.remove("pendingAuthToken"); setPolling(false); setLoginMsg(""); }}
               >
                 Cancel
               </button>
