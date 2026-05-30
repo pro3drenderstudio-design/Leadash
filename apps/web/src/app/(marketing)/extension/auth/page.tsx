@@ -91,7 +91,7 @@ function ConnectInner() {
         </div>
       )}
 
-      {token && status !== "done" && (
+      {token && (
         <button
           onClick={connect}
           disabled={status === "connecting"}
