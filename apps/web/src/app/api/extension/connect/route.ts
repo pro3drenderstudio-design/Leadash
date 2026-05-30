@@ -19,9 +19,9 @@ export async function POST(req: NextRequest) {
     .from("workspace_members")
     .select("workspace_id")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
+    .order("joined_at", { ascending: true })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (!member) {
     return NextResponse.json({ error: "No workspace found for this account." }, { status: 403 });
