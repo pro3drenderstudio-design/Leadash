@@ -1,22 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireWorkspace } from "@/lib/api/workspace";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { hashApiKey } from "@/lib/api/extension-auth";
-import { randomBytes, randomUUID } from "crypto";
+import { randomBytes } from "crypto";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireWorkspace(req);
-  if (!auth.ok) return auth.res;
-  const { workspaceId, db } = auth;
+  // Authenticate via session cookie (no x-workspace-id header required)
+  const supabase = await createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const { token } = await req.json();
+  const db = createAdminClient();
+
+  // Find the user's workspace (first owned workspace)
+  const { data: member } = await db
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (!member) {
+    return NextResponse.json({ error: "No workspace found for this account." }, { status: 403 });
+  }
+
+  const { token } = await req.json().catch(() => ({}));
   if (!token || typeof token !== "string") {
     return NextResponse.json({ error: "token required" }, { status: 400 });
   }
 
+  const workspaceId = member.workspace_id;
   const rawKey = `ld_live_${randomBytes(32).toString("hex")}`;
   const keyHash = hashApiKey(rawKey);
 
-  // Upsert API key named "Chrome Extension" (replace if exists with same name)
+  // Upsert "Chrome Extension" API key for this workspace
   const { data: existingKey } = await db
     .from("api_keys")
     .select("id")
@@ -26,37 +46,25 @@ export async function POST(req: NextRequest) {
 
   let apiKeyId: string;
   if (existingKey) {
-    // Rotate existing key
     await db.from("api_keys").update({ key_hash: keyHash }).eq("id", existingKey.id);
     apiKeyId = existingKey.id;
   } else {
-    // Determine created_by from workspace owner
-    const { data: member } = await db
-      .from("workspace_members")
-      .select("user_id")
-      .eq("workspace_id", workspaceId)
-      .eq("role", "owner")
-      .maybeSingle();
-    const created_by = member?.user_id ?? "00000000-0000-0000-0000-000000000000";
-
     const { data: newKey } = await db
       .from("api_keys")
-      .insert({ workspace_id: workspaceId, name: "Chrome Extension", key_hash: keyHash, created_by })
+      .insert({ workspace_id: workspaceId, name: "Chrome Extension", key_hash: keyHash, created_by: user.id })
       .select("id")
       .single();
     if (!newKey) return NextResponse.json({ error: "Failed to create key" }, { status: 500 });
     apiKeyId = newKey.id;
   }
 
-  // Delete any stale pending auth for this workspace
+  // Clear any stale pending auth for this workspace + store new token
   await db.from("extension_pending_auth").delete().eq("workspace_id", workspaceId);
-
-  // Store the raw key against the connect token (expires 10 min)
   const { error } = await db.from("extension_pending_auth").insert({
     token,
     workspace_id: workspaceId,
-    api_key_raw: rawKey,
-    api_key_id: apiKeyId,
+    api_key_raw:  rawKey,
+    api_key_id:   apiKeyId,
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

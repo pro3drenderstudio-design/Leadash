@@ -9,33 +9,62 @@ function scrapeLeads(): ScrapedLead[] {
   const results: ScrapedLead[] = [];
   const seen = new Set<string>();
 
-  document.querySelectorAll(
-    ".entity-result__item, .reusable-search__result-container, li.reusable-search__result-container"
-  ).forEach((card) => {
-    const nameEl =
-      card.querySelector(".entity-result__title-text a span[aria-hidden='true']") ||
-      card.querySelector(".entity-result__title-text") ||
-      card.querySelector("a.app-aware-link span[aria-hidden='true']");
-    const name = nameEl?.textContent?.trim() ?? "";
-    if (!name || name.toLowerCase() === "linkedin member") return;
-
-    const linkEl = card.querySelector<HTMLAnchorElement>(
-      ".entity-result__title-text a[href], a.app-aware-link[href*='/in/']"
-    );
-    let linkedin_url = linkEl?.href ?? "";
-    const match = linkedin_url.match(/https:\/\/www\.linkedin\.com\/in\/[^/?#]+/);
-    if (match) linkedin_url = match[0];
-    if (!linkedin_url || seen.has(linkedin_url)) return;
+  function pushResult(card: Element, linkedin_url: string, name: string) {
+    if (seen.has(linkedin_url)) return;
     seen.add(linkedin_url);
+    const title    = card.querySelector(".entity-result__primary-subtitle, [class*='primary-subtitle']")?.textContent?.trim()   || undefined;
+    const company  = card.querySelector(".entity-result__secondary-subtitle, [class*='secondary-subtitle']")?.textContent?.trim() || undefined;
+    const location = card.querySelector(".entity-result__tertiary-subtitle, [class*='tertiary-subtitle']")?.textContent?.trim()  || undefined;
+    results.push({ name, title, company, location, linkedin_url });
+  }
 
-    results.push({
-      name,
-      title:       card.querySelector(".entity-result__primary-subtitle")?.textContent?.trim()   || undefined,
-      company:     card.querySelector(".entity-result__secondary-subtitle")?.textContent?.trim() || undefined,
-      location:    card.querySelector(".entity-result__tertiary-subtitle")?.textContent?.trim()  || undefined,
-      linkedin_url,
+  // Strategy A: known LinkedIn search result container classes
+  const cards = document.querySelectorAll(
+    "li.reusable-search__result-container, .entity-result__item, [data-view-name='search-entity-result-universal-template']"
+  );
+
+  if (cards.length > 0) {
+    cards.forEach((card) => {
+      const nameEl =
+        card.querySelector(".entity-result__title-text a span[aria-hidden='true']") ||
+        card.querySelector("a.app-aware-link span[aria-hidden='true']") ||
+        card.querySelector("[class*='title'] a span[aria-hidden='true']");
+      const name = nameEl?.textContent?.trim() ?? "";
+      if (!name || name.toLowerCase() === "linkedin member") return;
+
+      const linkEl = card.querySelector<HTMLAnchorElement>("a[href*='/in/']");
+      const match  = linkEl?.href?.match(/linkedin\.com\/in\/([^/?#]+)/);
+      if (!match) return;
+      pushResult(card, `https://www.linkedin.com/in/${match[1]}`, name);
     });
-  });
+  }
+
+  // Strategy B: if no cards found (LinkedIn DOM changed), find all /in/ profile links directly
+  if (results.length === 0) {
+    document.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']").forEach((link) => {
+      const match = link.href.match(/linkedin\.com\/in\/([^/?#]+)/);
+      if (!match) return;
+      const linkedin_url = `https://www.linkedin.com/in/${match[1]}`;
+      if (seen.has(linkedin_url)) return;
+
+      // Name is in an aria-hidden span inside the link
+      const nameSpan = link.querySelector("span[aria-hidden='true']");
+      const name = nameSpan?.textContent?.trim() ?? "";
+      if (!name || name.toLowerCase() === "linkedin member" || name.length < 2) return;
+
+      // Walk up to find a card-like container (li or large div with single profile)
+      let card: Element = link;
+      for (let i = 0; i < 10; i++) {
+        const p = card.parentElement;
+        if (!p || p === document.body) break;
+        // Stop at a natural card boundary: li elements, or div with data-urn
+        if (card.tagName === "LI" || card.hasAttribute("data-urn") || card.hasAttribute("data-chameleon-result-urn")) break;
+        card = p;
+      }
+
+      pushResult(card, linkedin_url, name);
+    });
+  }
 
   return results;
 }

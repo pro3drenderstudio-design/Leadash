@@ -1,11 +1,9 @@
 "use client";
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { wsPost } from "@/lib/workspace/client";
+import { useSearchParams } from "next/navigation";
 
 function ConnectInner() {
   const params   = useSearchParams();
-  const router   = useRouter();
   const token    = params.get("token");
   const [status, setStatus] = useState<"idle" | "connecting" | "done" | "error" | "noauth">("idle");
   const [err,    setErr]    = useState("");
@@ -21,7 +19,14 @@ function ConnectInner() {
     if (!token) { setErr("Missing connection token. Please try again from the extension."); return; }
     setStatus("connecting");
     try {
-      await wsPost("/api/extension/connect", { token });
+      const res  = await fetch("/api/extension/connect", {
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify({ token }),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? res.statusText);
       setStatus("done");
     } catch (e) {
       setStatus("error");
