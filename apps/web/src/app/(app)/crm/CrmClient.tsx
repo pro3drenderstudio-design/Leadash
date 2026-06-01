@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   getCrmThreads, addNote, updateCrmStatus, toggleCrmStar, getCrmLeadProfile, suggestReply,
   getCrmUnmatched, getCrmWarmup, CrmWarmupRow, ignoreCrmUnmatched, matchReply, promoteUnmatched,
@@ -225,6 +226,8 @@ function timeAgo(ts: string | null | undefined): string {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CrmClient() {
+  const searchParams = useSearchParams();
+  const initialThreadId = searchParams.get("thread");
   const [mainTab, setMainTab] = useState<MainTab>("inbox");
 
   // ── Inbox state ────────────────────────────────────────────────────────────
@@ -363,10 +366,17 @@ export default function CrmClient() {
     }
 
     prevThreadsRef.current = data.threads;
+    const isFirstLoad = !initialLoadDoneRef.current;
     initialLoadDoneRef.current = true;
     setThreads(data.threads);
     if (!silent) setLoading(false); else setRefreshing(false);
-  }, []);
+
+    // Auto-select thread from URL param on first load
+    if (isFirstLoad && initialThreadId) {
+      const target = data.threads.find(t => t.enrollment_id === initialThreadId);
+      if (target) setSelected(target);
+    }
+  }, [initialThreadId]);
 
   useEffect(() => {
     loadThreads();
