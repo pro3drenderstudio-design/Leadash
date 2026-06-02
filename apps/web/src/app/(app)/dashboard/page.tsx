@@ -69,6 +69,7 @@ async function getStats(workspaceId: string) {
         )
       `)
       .eq("workspace_id", workspaceId)
+      .not("enrollment_id", "is", null)
       .order("received_at", { ascending: false })
       .limit(8),
   ]);
