@@ -38,14 +38,17 @@ export async function collectPostalMetrics(): Promise<PostalMetrics | null> {
     const windowSec = 12 * 3600;
 
     const [statusRows, heldRows, suppRows, errorRows, deadRows] = await Promise.all([
+      // No quoted string literals — count all statuses and filter in JS
       postalQuery("postal-server-1",
-        `SELECT status, COUNT(*) FROM messages WHERE timestamp > UNIX_TIMESTAMP(NOW() - INTERVAL ${windowSec} SECOND) AND status IN ('Sent','HardFail') GROUP BY status`),
+        `SELECT status, COUNT(*) FROM messages WHERE timestamp > UNIX_TIMESTAMP() - ${windowSec} GROUP BY status`),
+      // Use the held=1 boolean column instead of status string
       postalQuery("postal-server-1",
-        `SELECT COUNT(*) FROM messages WHERE status='Held'`),
+        `SELECT COUNT(*) FROM messages WHERE held = 1`),
       postalQuery("postal-server-1",
-        `SELECT COUNT(*) FROM suppressions WHERE timestamp > UNIX_TIMESTAMP(NOW() - INTERVAL 86400 SECOND)`),
+        `SELECT COUNT(*) FROM suppressions WHERE timestamp > UNIX_TIMESTAMP() - 86400`),
+      // Filter hard fails via held=0 and no sent — use CHAR() to avoid quoting HardFail
       postalQuery("postal-server-1",
-        `SELECT d.details, COUNT(*) as cnt FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE m.status='HardFail' AND m.timestamp > UNIX_TIMESTAMP(NOW() - INTERVAL ${windowSec} SECOND) GROUP BY d.details ORDER BY cnt DESC LIMIT 5`),
+        `SELECT d.details, COUNT(*) as cnt FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE m.status = CHAR(72,97,114,100,70,97,105,108) AND m.timestamp > UNIX_TIMESTAMP() - ${windowSec} GROUP BY d.details ORDER BY cnt DESC LIMIT 5`),
       // Disabled endpoints: Postal sets disabled_until after 5 consecutive failures.
       // Correct routes point to 172.17.0.1:3001/inbound-relay (Docker bridge), not leadash.com directly.
       postalQuery("postal",
