@@ -1671,14 +1671,24 @@ function DiscoverContent() {
             {loading ? <Spinner sm /> : (
               <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
             )}
-            {hasSearched && total > 0 && !loading && (
+          </div>
+
+          {(selected.size > 0 || selectAllMode) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
               <div className="relative" ref={selectNRef}>
                 <button
                   onClick={() => setShowSelectNPicker(s => !s)}
                   disabled={selectingN}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-white/35 hover:text-white/65 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white/50 hover:text-white/80 hover:bg-white/6 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {selectingN ? <Spinner sm /> : "Select N…"}
+                  {selectingN ? <Spinner sm /> : (
+                    <>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16"/>
+                      </svg>
+                      Custom select
+                    </>
+                  )}
                 </button>
                 {showSelectNPicker && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-[#15182a] border border-white/12 rounded-xl shadow-2xl z-30 py-1.5">
@@ -1700,7 +1710,7 @@ function DiscoverContent() {
                               if (n > 0) handleSelectN(n);
                             }
                           }}
-                          placeholder="Custom…"
+                          placeholder="Custom number…"
                           className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40"
                         />
                         <button
@@ -1718,11 +1728,6 @@ function DiscoverContent() {
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {(selected.size > 0 || selectAllMode) && (
-            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
               {mode === "people" ? (
                 <>
