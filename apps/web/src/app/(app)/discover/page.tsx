@@ -1008,7 +1008,7 @@ function DiscoverContent() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [showSelectNPicker, setShowSelectNPicker] = useState(false);
   const [selectNCustom,     setSelectNCustom]     = useState("");
-  const [selectingN,        setSelectingN]        = useState(false);
+  const [selectNCount,      setSelectNCount]      = useState<number | null>(null);
 
   const limit      = 25;
   const SEARCH_CAP = 50_000;
@@ -1060,7 +1060,7 @@ function DiscoverContent() {
   }, []);
 
   const searchPeople = useCallback(async (p = 1, skipCount = false) => {
-    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); setExportMsg(null);
     try {
       const f = peopleFilters;
       const params = new URLSearchParams();
@@ -1096,7 +1096,7 @@ function DiscoverContent() {
   }, [peopleFilters, peopleSortBy, peopleSortDir]);
 
   const searchCompanies = useCallback(async (p = 1, skipCount = false) => {
-    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); setExportMsg(null);
     try {
       const f = companyFilters;
       const params = new URLSearchParams();
@@ -1187,11 +1187,11 @@ function DiscoverContent() {
 
   const visibleResults = mode === "people" ? results : companyResults;
   function toggleSelect(id: string) {
-    setSelectAllMode(false);
+    setSelectAllMode(false); setSelectNCount(null);
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
   function toggleAll() {
-    if (selectAllMode) { setSelectAllMode(false); setSelected(new Set()); return; }
+    if (selectAllMode || selectNCount !== null) { setSelectAllMode(false); setSelectNCount(null); setSelected(new Set()); return; }
     setSelected(selected.size === visibleResults.length ? new Set() : new Set(visibleResults.map(r => r.id)));
   }
 
@@ -1251,22 +1251,16 @@ function DiscoverContent() {
     return data.ids ?? [];
   }
 
-  async function handleSelectN(n: number) {
+  function handleSelectN(n: number) {
     setShowSelectNPicker(false);
     setSelectNCustom("");
     setSelectAllMode(false);
-    setSelectingN(true);
-    try {
-      const ids = mode === "people"
-        ? await fetchAllMatchingIds(n)
-        : await fetchAllMatchingCompanyIds(n);
-      setSelected(new Set(ids));
-    } catch { /* ignore */ }
-    finally { setSelectingN(false); }
+    setSelected(new Set());
+    setSelectNCount(Math.min(n, total));
   }
 
   async function handleFindPeopleAtSelected() {
-    const ids = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const ids = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
     const names = companyResults.filter(c => ids.includes(c.id)).map(c => c.name).filter(Boolean);
     setSelectAllMode(false);
     setSelected(new Set());
@@ -1278,7 +1272,7 @@ function DiscoverContent() {
   }
 
   async function handleCompanyExport() {
-    const allIds = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const allIds = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null);
     const COMPANY_BATCH = 5000;
@@ -1351,12 +1345,12 @@ function DiscoverContent() {
   }
 
   async function revealSelected() {
-    const ids = selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
+    const ids = selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
     await revealIds(ids);
   }
 
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
     const EXPORT_BATCH = 2500;
@@ -1424,7 +1418,7 @@ function DiscoverContent() {
   }
 
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
     const EXPORT_BATCH = 2500;
@@ -1501,8 +1495,8 @@ function DiscoverContent() {
   }
 
   const unrevealed    = results.filter(r => selected.has(r.id) && !r.revealed);
-  const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
-  const unrevealedCount = selectAllMode ? selectedCount : unrevealed.length;
+  const selectedCount = selectNCount !== null ? selectNCount : selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
+  const unrevealedCount = (selectNCount !== null || selectAllMode) ? selectedCount : unrevealed.length;
   const revealCost  = Math.ceil(unrevealedCount * discoverRate * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort, className = "" }: {
@@ -1671,24 +1665,16 @@ function DiscoverContent() {
             {loading ? <Spinner sm /> : (
               <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
             )}
-          </div>
-
-          {(selected.size > 0 || selectAllMode) && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {hasSearched && total > 0 && !loading && (
               <div className="relative" ref={selectNRef}>
                 <button
                   onClick={() => setShowSelectNPicker(s => !s)}
-                  disabled={selectingN}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white/50 hover:text-white/80 hover:bg-white/6 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-white/45 hover:text-white/75 hover:bg-white/6 border border-white/10 rounded-lg transition-colors"
                 >
-                  {selectingN ? <Spinner sm /> : (
-                    <>
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16"/>
-                      </svg>
-                      Custom select
-                    </>
-                  )}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16"/>
+                  </svg>
+                  Custom select
                 </button>
                 {showSelectNPicker && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-[#15182a] border border-white/12 rounded-xl shadow-2xl z-30 py-1.5">
@@ -1728,6 +1714,11 @@ function DiscoverContent() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+
+          {(selected.size > 0 || selectAllMode || selectNCount !== null) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
               {mode === "people" ? (
                 <>
@@ -1802,8 +1793,17 @@ function DiscoverContent() {
           />
         )}
 
+        {/* ── Select-N banner ── */}
+        {selectNCount !== null && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-orange-300 font-semibold">First {selectNCount.toLocaleString()} matching {mode} selected.</span>
+            <button onClick={() => { setSelectNCount(null); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
+              Clear selection
+            </button>
+          </div>
+        )}
         {/* ── Select-all banner ── */}
-        {mode === "people" && !selectAllMode && selected.size === results.length && results.length > 0 && total > results.length && (
+        {mode === "people" && !selectAllMode && selectNCount === null && selected.size === results.length && results.length > 0 && total > results.length && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {results.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
@@ -1819,7 +1819,7 @@ function DiscoverContent() {
             </button>
           </div>
         )}
-        {mode === "companies" && !selectAllMode && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
+        {mode === "companies" && !selectAllMode && selectNCount === null && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {companyResults.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
@@ -1843,7 +1843,7 @@ function DiscoverContent() {
               <thead className="sticky top-0 z-10 bg-[#0a0f1e] border-b border-white/8">
                 <tr>
                   <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#0a0f1e]">
-                    <input type="checkbox" checked={results.length > 0 && (selectAllMode || selected.size === results.length)}
+                    <input type="checkbox" checked={results.length > 0 && (selectAllMode || selectNCount !== null || selected.size === results.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Name" col="name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort}
