@@ -1866,7 +1866,7 @@ function DiscoverContent() {
                 {results.map(r => {
                   const liUrl = normalizeUrl(r.linkedin_url);
                   const isHovered = hoveredRow === r.id;
-                  const isSelected = selected.has(r.id);
+                  const isSelected = selectAllMode || selectNCount !== null || selected.has(r.id);
                   const isActive = drawer?.type === "person" && drawer.id === r.id;
                   return (
                     <tr key={r.id}
@@ -2015,7 +2015,7 @@ function DiscoverContent() {
                 {companyResults.map(c => {
                   const liUrl = normalizeUrl(c.linkedin_url);
                   const isHovered  = hoveredRow === c.id;
-                  const isSelected = selected.has(c.id);
+                  const isSelected = selectAllMode || selectNCount !== null || selected.has(c.id);
                   const isActive   = drawer?.type === "company" && drawer.id === c.id;
                   return (
                     <tr key={c.id}
