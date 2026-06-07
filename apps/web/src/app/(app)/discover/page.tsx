@@ -993,6 +993,7 @@ function DiscoverContent() {
   const [exportMsg,     setExportMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkProgress,  setBulkProgress]  = useState<{ current: number; total: number; label: string } | null>(null);
   const isInitialRender = useRef(true);
+  const selectNRef      = useRef<HTMLDivElement>(null);
   const [balance,       setBalance]       = useState<number | null>(null);
   const [discoverRate,  setDiscoverRate]  = useState<number>(0.5);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
@@ -1005,6 +1006,9 @@ function DiscoverContent() {
   const [saveNameVal,   setSaveNameVal]   = useState("");
   const [showSaveInput,    setShowSaveInput]    = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [showSelectNPicker, setShowSelectNPicker] = useState(false);
+  const [selectNCustom,     setSelectNCustom]     = useState("");
+  const [selectingN,        setSelectingN]        = useState(false);
 
   const limit      = 25;
   const SEARCH_CAP = 50_000;
@@ -1034,6 +1038,16 @@ function DiscoverContent() {
     (companyFilters.coHasPeople ? 1 : 0);
 
   const activeFilterCount = mode === "people" ? activePeopleFilterCount : activeCoFilterCount;
+
+  useEffect(() => {
+    if (!showSelectNPicker) return;
+    function onOutsideClick(e: MouseEvent) {
+      if (selectNRef.current && !selectNRef.current.contains(e.target as Node))
+        setShowSelectNPicker(false);
+    }
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, [showSelectNPicker]);
 
   useEffect(() => {
     wsGet<{ lead_credits_balance: number }>("/api/settings/workspace")
@@ -1183,7 +1197,7 @@ function DiscoverContent() {
 
   const SELECT_ALL_CAP = 50_000;
 
-  async function fetchAllMatchingIds(): Promise<string[]> {
+  async function fetchAllMatchingIds(limitOverride?: number): Promise<string[]> {
     const f = peopleFilters;
     const params = new URLSearchParams();
     if (f.keyword)                       params.set("q",               f.keyword);
@@ -1207,12 +1221,12 @@ function DiscoverContent() {
     params.set("email_status", f.emailStatus);
     if (f.netNew) params.set("net_new", "true");
     params.set("ids_only", "true");
-    params.set("limit", String(SELECT_ALL_CAP));
+    params.set("limit", String(limitOverride ?? SELECT_ALL_CAP));
     const data = await wsGet<{ ids?: string[]; results?: { id: string }[] }>(`/api/discover/search?${params}`);
     return data.ids ?? (data.results ?? []).map(r => r.id);
   }
 
-  async function fetchAllMatchingCompanyIds(): Promise<string[]> {
+  async function fetchAllMatchingCompanyIds(limitOverride?: number): Promise<string[]> {
     const f = companyFilters;
     const params = new URLSearchParams();
     if (f.coKeyword)                 params.set("q",               f.coKeyword);
@@ -1232,9 +1246,23 @@ function DiscoverContent() {
     if (f.coRevenueRange?.max)       params.set("revenue_max",      String(f.coRevenueRange.max));
     params.set("has_people", String(f.coHasPeople));
     params.set("ids_only", "true");
-    params.set("limit", String(SELECT_ALL_CAP));
+    params.set("limit", String(limitOverride ?? SELECT_ALL_CAP));
     const data = await wsGet<{ ids?: string[] }>(`/api/discover/companies/search?${params}`);
     return data.ids ?? [];
+  }
+
+  async function handleSelectN(n: number) {
+    setShowSelectNPicker(false);
+    setSelectNCustom("");
+    setSelectAllMode(false);
+    setSelectingN(true);
+    try {
+      const ids = mode === "people"
+        ? await fetchAllMatchingIds(n)
+        : await fetchAllMatchingCompanyIds(n);
+      setSelected(new Set(ids));
+    } catch { /* ignore */ }
+    finally { setSelectingN(false); }
   }
 
   async function handleFindPeopleAtSelected() {
@@ -1642,6 +1670,54 @@ function DiscoverContent() {
             </div>
             {loading ? <Spinner sm /> : (
               <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
+            )}
+            {hasSearched && total > 0 && !loading && (
+              <div className="relative" ref={selectNRef}>
+                <button
+                  onClick={() => setShowSelectNPicker(s => !s)}
+                  disabled={selectingN}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-white/35 hover:text-white/65 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {selectingN ? <Spinner sm /> : "Select N…"}
+                </button>
+                {showSelectNPicker && (
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-[#15182a] border border-white/12 rounded-xl shadow-2xl z-30 py-1.5">
+                    {([100, 500, 1000, 5000] as const).map(n => (
+                      <button key={n} onClick={() => handleSelectN(n)}
+                        disabled={n > total}
+                        className="w-full text-left px-3 py-1.5 text-xs text-white/60 hover:bg-white/6 hover:text-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
+                        {n.toLocaleString()} {mode}
+                      </button>
+                    ))}
+                    <div className="border-t border-white/8 mt-1 pt-1.5 px-2 pb-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          value={selectNCustom}
+                          onChange={e => setSelectNCustom(e.target.value.replace(/\D/g, ""))}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              const n = Math.min(parseInt(selectNCustom) || 0, SELECT_ALL_CAP);
+                              if (n > 0) handleSelectN(n);
+                            }
+                          }}
+                          placeholder="Custom…"
+                          className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40"
+                        />
+                        <button
+                          onClick={() => {
+                            const n = Math.min(parseInt(selectNCustom) || 0, SELECT_ALL_CAP);
+                            if (n > 0) handleSelectN(n);
+                          }}
+                          disabled={!selectNCustom || parseInt(selectNCustom) <= 0}
+                          className="px-2.5 py-1 text-[10px] font-bold bg-orange-500 hover:bg-orange-400 text-white rounded-lg disabled:opacity-40 transition-colors"
+                        >
+                          Go
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
