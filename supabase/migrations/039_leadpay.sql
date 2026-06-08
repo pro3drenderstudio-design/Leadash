@@ -98,7 +98,7 @@ CREATE TABLE leadpay_invoices (
   paid_at         timestamptz,
 
   -- Public payment URL token
-  payment_token   text    UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  payment_token   text    UNIQUE DEFAULT encode(extensions.gen_random_bytes(24), 'hex'),
 
   -- Snapshot of client email at send time
   client_email    text,
@@ -152,7 +152,7 @@ CREATE TABLE leadpay_payouts (
   approved_at         timestamptz,
   rejection_reason    text,
 
-  reference           text    UNIQUE DEFAULT 'LP-' || upper(encode(gen_random_bytes(6), 'hex')),
+  reference           text    UNIQUE DEFAULT 'LP-' || upper(encode(extensions.gen_random_bytes(6), 'hex')),
 
   created_at          timestamptz DEFAULT now(),
   updated_at          timestamptz DEFAULT now()
@@ -229,7 +229,7 @@ CREATE TABLE leadpay_transactions (
   -- completed | pending | failed | reversed
   status        text    NOT NULL DEFAULT 'completed',
 
-  reference     text    UNIQUE DEFAULT 'TX-' || upper(encode(gen_random_bytes(8), 'hex')),
+  reference     text    UNIQUE DEFAULT 'TX-' || upper(encode(extensions.gen_random_bytes(8), 'hex')),
 
   created_at    timestamptz DEFAULT now()
 );

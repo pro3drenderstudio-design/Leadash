@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS vendor_invoices_status_idx ON vendor_invoices (status
 -- Vendor config in admin_settings
 INSERT INTO admin_settings (key, value) VALUES
   ('vendor_cost_per_inbox_usd', '2.00'),
-  ('vendor_email',              'vendor@example.com'),
+  ('vendor_email',              '"vendor@example.com"'),
   ('vendor_portal_enabled',     'true')
 ON CONFLICT (key) DO NOTHING;
 
