@@ -3,6 +3,7 @@ import { getWorkspaceContext } from "@/lib/workspace/context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import AppHeader from "@/components/AppHeader";
+import SectionTabs from "@/components/SectionTabs";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
 import CreditsProvider from "@/components/CreditsProvider";
 import { CurrencyProvider } from "@/lib/currency";
@@ -118,6 +119,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               trialEndsAt={trialEndsAt}
               subscriptionRenewsAt={workspace.subscription_renews_at}
             />
+            {/* Top tab strip — renders the current section's sub-pages, hides on sections w/ <2 tabs */}
+            <SectionTabs />
           </div>
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
             {children}

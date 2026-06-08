@@ -6,6 +6,10 @@
 }
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
 
+/* Hide scrollbars while keeping scroll behavior — used by the mobile top-tab strip */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 * {
   box-sizing: border-box;
 }

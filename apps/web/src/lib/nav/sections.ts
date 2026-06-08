@@ -1,0 +1,143 @@
+/**
+ * Canonical navigation structure. Owned by the sidebar AND the top tab bar so
+ * both stay in lock-step — change a label or icon here once and it propagates
+ * everywhere. The sidebar shows section entry-points; the top tab bar shows
+ * the sub-pages of whichever section is active.
+ *
+ * Active-section detection (used by both components) finds the tab whose
+ * `href` is the longest prefix of the current pathname, then walks back to
+ * its parent section. Dashboard has no sub-tabs and matches by exact path.
+ */
+
+export type NavBadge = "New" | "Beta";
+
+export type NavTab = {
+  href: string;
+  label: string;
+  badge?: NavBadge;
+};
+
+export type NavSection = {
+  id: string;
+  label: string;
+  /** SVG path string used inside <path d="..."/> in the sidebar icon. */
+  icon: string;
+  /** The default route the sidebar links to (usually the first tab's href). */
+  href: string;
+  tabs: NavTab[];
+  badge?: NavBadge;
+};
+
+// Icons reuse the strokes from the previous flat sidebar — same shapes the team is used to.
+const ICON_DASHBOARD = "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6";
+const ICON_OUTREACH  = "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z";
+const ICON_LEADGEN   = "M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253M3 12a8.96 8.96 0 00.284 2.253";
+const ICON_LEADPAY   = "M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z";
+const ICON_ACADEMY   = "M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5";
+const ICON_WORKSPACE = "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z";
+
+/** Primary sections shown in the top of the sidebar. */
+export const SECTIONS: NavSection[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: ICON_DASHBOARD,
+    href: "/dashboard",
+    tabs: [],
+  },
+  {
+    id: "outreach",
+    label: "Outreach",
+    icon: ICON_OUTREACH,
+    href: "/campaigns",
+    badge: "New",
+    tabs: [
+      { href: "/campaigns",  label: "Sequences" },
+      { href: "/inboxes",    label: "Inboxes" },
+      { href: "/leads",      label: "Leads Pool" },
+      { href: "/crm",        label: "CRM" },
+    ],
+  },
+  {
+    id: "leadgen",
+    label: "Leadgen",
+    icon: ICON_LEADGEN,
+    href: "/discover",
+    tabs: [
+      { href: "/discover",              label: "Discover", badge: "New" },
+      { href: "/lead-campaigns",        label: "Lead Campaigns" },
+      { href: "/lead-campaigns/verify", label: "Verify Email" },
+      { href: "/lead-campaigns/enrich", label: "AI Enrichment" },
+    ],
+  },
+  {
+    id: "leadpay",
+    label: "Leadash Pay",
+    icon: ICON_LEADPAY,
+    href: "/leadpay",
+    badge: "New",
+    tabs: [
+      { href: "/leadpay",              label: "Overview" },
+      { href: "/leadpay/invoices",     label: "Invoices" },
+      { href: "/leadpay/clients",      label: "Clients" },
+      { href: "/leadpay/payouts",      label: "Payouts" },
+      { href: "/leadpay/transactions", label: "Transactions" },
+    ],
+  },
+  {
+    id: "academy",
+    label: "Academy",
+    icon: ICON_ACADEMY,
+    href: "/academy",
+    badge: "New",
+    tabs: [],
+  },
+];
+
+/** Workspace section is pinned to the bottom of the sidebar, separate from SECTIONS. */
+export const WORKSPACE_SECTION: NavSection = {
+  id: "workspace",
+  label: "Workspace",
+  icon: ICON_WORKSPACE,
+  href: "/settings",
+  tabs: [
+    { href: "/settings", label: "Settings" },
+    { href: "/support",  label: "Support" },
+    { href: "/help",     label: "Help" },
+  ],
+};
+
+const ALL_SECTIONS: NavSection[] = [...SECTIONS, WORKSPACE_SECTION];
+
+/**
+ * Find the active section + tab for the given pathname.
+ * Picks the tab whose href is the longest prefix match — so /campaigns/new
+ * resolves to the Sequences tab under Outreach, not just /campaigns.
+ */
+export function findActiveSection(pathname: string): { section: NavSection | null; tab: NavTab | null } {
+  let bestSection: NavSection | null = null;
+  let bestTab: NavTab | null = null;
+  let bestLen = -1;
+
+  for (const section of ALL_SECTIONS) {
+    // Section with no tabs (e.g. Dashboard) matches its own href
+    if (section.tabs.length === 0) {
+      if ((pathname === section.href || pathname.startsWith(section.href + "/")) && section.href.length > bestLen) {
+        bestSection = section;
+        bestTab     = null;
+        bestLen     = section.href.length;
+      }
+      continue;
+    }
+    for (const tab of section.tabs) {
+      const matches = pathname === tab.href || pathname.startsWith(tab.href + "/");
+      if (matches && tab.href.length > bestLen) {
+        bestSection = section;
+        bestTab     = tab;
+        bestLen     = tab.href.length;
+      }
+    }
+  }
+
+  return { section: bestSection, tab: bestTab };
+}

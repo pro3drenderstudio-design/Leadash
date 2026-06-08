@@ -4,52 +4,7 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/components/SidebarContext";
 import { useCredits } from "@/components/CreditsProvider";
-
-const NAV = [
-  {
-    label: "Outreach",
-    items: [
-      { href: "/dashboard",         label: "Dashboard",  icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
-      { href: "/campaigns",         label: "Sequences",  icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
-      { href: "/inboxes",           label: "Inboxes",    icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" },
-      { href: "/leads",             label: "Leads Pool", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" },
-      { href: "/crm",               label: "CRM",        icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" },
-    ],
-  },
-  {
-    label: "Lead Gen",
-    items: [
-      { href: "/discover",              label: "Discover",       icon: "M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253M3 12a8.96 8.96 0 00.284 2.253", badge: "New" },
-      { href: "/lead-campaigns",        label: "Lead Campaigns", icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" },
-      { href: "/lead-campaigns/verify", label: "Verify Email",   icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-      { href: "/lead-campaigns/enrich", label: "AI Enrichment",  icon: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" },
-    ],
-  },
-  {
-    label: "Leadash Pay",
-    items: [
-      { href: "/leadpay",              label: "Overview",     icon: "M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z", badge: "New" },
-      { href: "/leadpay/invoices",     label: "Invoices",     icon: "M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" },
-      { href: "/leadpay/clients",      label: "Clients",      icon: "M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" },
-      { href: "/leadpay/payouts",      label: "Payouts",      icon: "M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" },
-      { href: "/leadpay/transactions", label: "Transactions", icon: "M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" },
-    ],
-  },
-  {
-    label: "Academy",
-    items: [
-      { href: "/academy", label: "Academy", icon: "M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5", badge: "New" },
-    ],
-  },
-  {
-    label: "Workspace",
-    items: [
-      { href: "/settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
-      { href: "/support",  label: "Support",  icon: "M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" },
-      { href: "/help",     label: "Help",     icon: "M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" },
-    ],
-  },
-];
+import { SECTIONS, WORKSPACE_SECTION, findActiveSection, type NavSection } from "@/lib/nav/sections";
 
 interface Props {
   workspaceName: string;
@@ -61,6 +16,40 @@ export default function Sidebar({ workspaceName, plan }: Props) {
   const { isOpen, close } = useSidebar();
   // Credits flow through context so they update in real-time after any spend action.
   const { credits, monthlyCredits } = useCredits();
+  const { section: activeSection } = findActiveSection(pathname);
+
+  function isSectionActive(s: NavSection): boolean {
+    return activeSection?.id === s.id;
+  }
+
+  function SectionLink({ section }: { section: NavSection }) {
+    const active = isSectionActive(section);
+    return (
+      <Link
+        href={section.href}
+        onClick={close}
+        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
+          active
+            ? "bg-orange-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
+            : "text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5"
+        }`}
+      >
+        <svg
+          className={`w-4 h-4 flex-shrink-0 ${active ? "text-orange-500 dark:text-orange-400" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d={section.icon} />
+        </svg>
+        {section.label}
+        {section.badge && (
+          <span className="ml-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/25 leading-none">
+            {section.badge}
+          </span>
+        )}
+        {active && <span className="ml-auto w-1 h-4 rounded-full bg-orange-400/60" />}
+      </Link>
+    );
+  }
 
   async function signOut() {
     const supabase = createClient();
@@ -103,62 +92,20 @@ export default function Sidebar({ workspaceName, plan }: Props) {
         </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-        {NAV.map(group => (
-          <div key={group.label}>
-            <div className="px-2 mb-1.5 flex items-center gap-2">
-              <p className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-[0.15em]">
-                {group.label}
-              </p>
-              {group.label === "Outreach" && (
-                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 leading-none">
-                  New
-                </span>
-              )}
-            </div>
-            <div className="space-y-0.5">
-              {group.items.map(item => {
-                const allHrefs = NAV.flatMap(g => g.items.map(i => i.href));
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" &&
-                    item.href !== "/leadpay" &&
-                    pathname.startsWith(item.href + "/") &&
-                    !allHrefs.some(h => h !== item.href && pathname.startsWith(h)));
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={close}
-                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
-                      active
-                        ? "bg-orange-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
-                        : "text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    <svg
-                      className={`w-4 h-4 flex-shrink-0 ${active ? "text-orange-500 dark:text-orange-400" : ""}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                    </svg>
-                    {item.label}
-                    {"badge" in item && item.badge && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/25 leading-none">
-                        {item.badge as string}
-                      </span>
-                    )}
-                    {active && <span className="ml-auto w-1 h-4 rounded-full bg-orange-400/60" />}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      {/* Primary nav — top-level sections */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+        {SECTIONS.map(section => <SectionLink key={section.id} section={section} />)}
       </nav>
 
-      {/* Bottom */}
+      {/* Workspace — sticky bottom group, separated from the main nav so it stays put */}
+      <div
+        className="px-2 py-2"
+        style={{ borderTop: "1px solid var(--sidebar-border)" }}
+      >
+        <SectionLink section={WORKSPACE_SECTION} />
+      </div>
+
+      {/* Bottom utility row — credits + sign out */}
       <div
         className="px-2 py-3 space-y-1"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
