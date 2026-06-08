@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/components/SidebarContext";
+import { useCredits } from "@/components/CreditsProvider";
 
 const NAV = [
   {
@@ -53,13 +54,13 @@ const NAV = [
 interface Props {
   workspaceName: string;
   plan: string;
-  credits: number;
-  monthlyCredits: number;
 }
 
-export default function Sidebar({ workspaceName, plan, credits, monthlyCredits }: Props) {
+export default function Sidebar({ workspaceName, plan }: Props) {
   const pathname = usePathname();
   const { isOpen, close } = useSidebar();
+  // Credits flow through context so they update in real-time after any spend action.
+  const { credits, monthlyCredits } = useCredits();
 
   async function signOut() {
     const supabase = createClient();

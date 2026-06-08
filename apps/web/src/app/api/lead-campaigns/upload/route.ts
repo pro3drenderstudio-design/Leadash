@@ -35,6 +35,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "File too large. Maximum size is 20 MB." }, { status: 413 });
   }
 
+  // Reject anything that isn't a CSV. Client-side `accept=".csv"` is just a hint
+  // (users can bypass it via "All files"), so we re-check here by extension + MIME.
+  const ALLOWED_CSV_MIME = new Set(["text/csv", "application/csv", "text/plain", "application/vnd.ms-excel", ""]);
+  const filename = (file.name ?? "").toLowerCase();
+  if (!filename.endsWith(".csv") || !ALLOWED_CSV_MIME.has(file.type)) {
+    return NextResponse.json(
+      { error: `Only CSV files are supported. Received "${file.name || "unknown"}" (${file.type || "unknown type"}).` },
+      { status: 400 },
+    );
+  }
+
   // Check credit balance — compute dynamically based on which operations are enabled
   const costPerLead =
     (mode === "scrape" || mode === "full_suite" ? CREDIT_COSTS.scrape : 0) +

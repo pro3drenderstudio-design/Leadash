@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import AppHeader from "@/components/AppHeader";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
+import CreditsProvider from "@/components/CreditsProvider";
 import { CurrencyProvider } from "@/lib/currency";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
@@ -85,13 +86,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
     <CurrencyProvider>
+    <CreditsProvider
+      initialCredits={workspace.lead_credits_balance ?? 0}
+      initialMonthlyCredits={workspace.subscription_credits_balance ?? 0}
+    >
     <SidebarProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar
           workspaceName={workspace.name}
           plan={workspace.plan_id}
-          credits={workspace.lead_credits_balance ?? 0}
-          monthlyCredits={workspace.subscription_credits_balance ?? 0}
         />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Banners + header as a single sticky-top block */}
@@ -122,6 +125,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
     </SidebarProvider>
+    </CreditsProvider>
     </CurrencyProvider>
     </WorkspaceProvider>
   );

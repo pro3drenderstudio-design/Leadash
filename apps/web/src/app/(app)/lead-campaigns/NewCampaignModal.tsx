@@ -10,6 +10,7 @@ import {
 } from "@/types/lead-campaigns";
 import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
+import { emitCreditsChanged } from "@/lib/credits/events";
 
 const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
 
@@ -564,6 +565,8 @@ export default function NewCampaignModal({ onClose, onCreated, balance, rates = 
           personalize_depth:      form.personalizationDepth,
         });
       }
+      // Credits debited server-side when the campaign job is created
+      emitCreditsChanged();
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create campaign");
