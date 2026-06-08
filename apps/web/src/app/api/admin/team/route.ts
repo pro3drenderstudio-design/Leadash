@@ -1,38 +1,43 @@
 /**
- * GET  /api/admin/team — list current admins + pending invites
- * POST /api/admin/team — send invite to a new team member
- * DELETE /api/admin/team — remove a team member (body: { user_id })
+ * GET    /api/admin/team — list current admins + pending invites + presets
+ * POST   /api/admin/team — invite a new team member (built-in role OR preset)
+ * DELETE /api/admin/team — remove a team member or revoke an invite
+ *
+ * Gated by the `team_config` module. Previously this required super_admin,
+ * but with the new module-based permissions an admin granted team_config
+ * via a custom preset can also manage the team.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAdminContext, requireAdminModule } from "@/lib/admin/auth";
+import {
+  BUILTIN_ROLES, ALL_MODULE_KEYS, isAlwaysOnModule,
+  resolveModules, type AdminModuleKey, type AdminRole,
+} from "@/lib/admin/modules";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 const FROM    = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
 
-async function requireSuperAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const db = createAdminClient();
-  const { data: admin } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
-  if (!admin || admin.role !== "super_admin") return null;
-  return { user, db };
+function sanitizeModules(input: unknown): AdminModuleKey[] {
+  if (!Array.isArray(input)) return [];
+  const allowed = new Set<string>(ALL_MODULE_KEYS);
+  const out: AdminModuleKey[] = [];
+  for (const m of input) {
+    if (typeof m === "string" && allowed.has(m)) out.push(m as AdminModuleKey);
+  }
+  return out.filter(m => !isAlwaysOnModule(m));
 }
 
-export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const db = createAdminClient();
-  const { data: me } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
-  if (!me) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function GET() {
+  // Any admin can see the team list. Mutation routes (POST/DELETE) require team_config.
+  const ctx = await getAdminContext();
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Fetch all admins
-  const { data: admins } = await db.from("admins").select("user_id, role, added_by, added_at");
-  const adminIds = (admins ?? []).map((a: { user_id: string }) => a.user_id);
+  const { data: admins } = await ctx.db
+    .from("admins")
+    .select("user_id, role, preset_id, permissions, added_at");
 
-  // Enrich with user data
-  const { data: { users: allUsers } } = await db.auth.admin.listUsers({ perPage: 1000 });
+  // Enrich admin rows with email/name from auth.users
+  const { data: { users: allUsers } } = await ctx.db.auth.admin.listUsers({ perPage: 1000 });
   const userMap = new Map<string, { email: string; name: string | null }>(
     allUsers.map((u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) => [
       u.id,
@@ -40,64 +45,114 @@ export async function GET(req: NextRequest) {
     ])
   );
 
-  const enriched = (admins ?? []).map((a: { user_id: string; role: string; added_at: string }) => ({
-    ...a,
-    email: userMap.get(a.user_id)?.email ?? "",
-    name:  userMap.get(a.user_id)?.name  ?? null,
-    is_you: a.user_id === user.id,
+  const enriched = (admins ?? []).map((a: { user_id: string; role: string; preset_id: string | null; permissions: unknown; added_at: string }) => ({
+    user_id:     a.user_id,
+    role:        a.role,
+    preset_id:   a.preset_id,
+    permissions: Array.isArray(a.permissions) ? a.permissions : [],
+    added_at:    a.added_at,
+    email:       userMap.get(a.user_id)?.email ?? "",
+    name:        userMap.get(a.user_id)?.name  ?? null,
+    is_you:      a.user_id === ctx.user.id,
   }));
 
-  // Fetch pending invites (not yet accepted, not expired)
-  const { data: invites } = await db
+  // Pending invites — open and not yet expired
+  const { data: invites } = await ctx.db
     .from("admin_invites")
-    .select("id, email, role, permissions, invited_at, expires_at")
+    .select("id, email, role, preset_id, permissions, invited_at, expires_at")
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .order("invited_at", { ascending: false });
 
-  return NextResponse.json({ admins: enriched, invites: invites ?? [], myRole: me.role });
+  // Custom presets — useful both for displaying preset names on admin rows
+  // and for populating the invite role dropdown.
+  const { data: presets } = await ctx.db
+    .from("admin_role_presets")
+    .select("id, name, modules")
+    .order("created_at", { ascending: false });
+
+  return NextResponse.json({
+    admins:  enriched,
+    invites: invites ?? [],
+    presets: presets ?? [],
+    myRole:  ctx.role,
+    myModules: Array.from(ctx.modules),
+    canManageTeam: ctx.modules.has("team_config"),
+  });
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireSuperAdmin();
-  if (!ctx) return NextResponse.json({ error: "Forbidden — super_admin only" }, { status: 403 });
+  const ctx = await requireAdminModule("team_config");
+  if (!ctx) return NextResponse.json({ error: "Forbidden — team_config required" }, { status: 403 });
 
-  const body = await req.json() as { email?: string; role?: string; permissions?: Record<string, boolean> };
-  const { email, role = "support", permissions = {} } = body;
+  const body = await req.json() as {
+    email?: string;
+    role?: string;
+    preset_id?: string | null;
+    permissions?: unknown;
+  };
+  const email     = body.email?.trim();
+  const role      = (body.role ?? "readonly") as AdminRole;
+  const presetId  = body.preset_id ?? null;
 
-  if (!email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
   }
-
-  const validRoles = ["super_admin", "support", "billing", "readonly"];
-  if (!validRoles.includes(role)) {
-    return NextResponse.json({ error: `role must be one of: ${validRoles.join(", ")}` }, { status: 400 });
+  if (!BUILTIN_ROLES.includes(role)) {
+    return NextResponse.json({ error: `role must be one of: ${BUILTIN_ROLES.join(", ")}` }, { status: 400 });
   }
 
-  // Delete any existing pending invite for this email
+  // Resolve the permissions stored on the invite:
+  //  - built-in role: derived live at admin context time, so we store an empty list
+  //  - custom + preset: lookup the preset's modules now (the preset_id is the source of truth)
+  //  - custom + no preset: caller must pass explicit modules
+  let permissions: AdminModuleKey[] = [];
+  let resolvedPresetId: string | null = null;
+
+  if (role === "custom") {
+    if (presetId) {
+      const { data: preset } = await ctx.db
+        .from("admin_role_presets")
+        .select("modules")
+        .eq("id", presetId)
+        .maybeSingle();
+      if (!preset) return NextResponse.json({ error: "Preset not found" }, { status: 404 });
+      resolvedPresetId = presetId;
+      permissions      = sanitizeModules(preset.modules);
+    } else {
+      permissions = sanitizeModules(body.permissions);
+      if (!permissions.length) {
+        return NextResponse.json({ error: "Pick at least one module or choose a preset" }, { status: 400 });
+      }
+    }
+  }
+
+  // Cancel any existing open invite for the same email so the latest wins
   await ctx.db.from("admin_invites").delete()
-    .eq("email", email.toLowerCase().trim())
+    .eq("email", email.toLowerCase())
     .is("accepted_at", null);
 
   const { data: invite, error } = await ctx.db
     .from("admin_invites")
     .insert({
-      email:       email.toLowerCase().trim(),
+      email:       email.toLowerCase(),
       role,
+      preset_id:   resolvedPresetId,
       permissions,
       invited_by:  ctx.user.id,
     })
-    .select("id, email, role, token, permissions, expires_at")
+    .select("id, email, role, token, permissions, preset_id, expires_at")
     .single();
 
   if (error || !invite) {
     return NextResponse.json({ error: error?.message ?? "Failed to create invite" }, { status: 500 });
   }
 
-  // Send invite email
+  // Send the invite email if Resend is configured (best-effort)
   const apiKey = process.env.RESEND_API_KEY;
   if (apiKey) {
     const acceptUrl = `${APP_URL}/admin/accept-invite?token=${invite.token}`;
+    const roleLabel = role === "custom" ? "custom" : role;
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -111,7 +166,7 @@ export async function POST(req: NextRequest) {
               <p style="margin:0;font-size:20px;font-weight:700;color:#fff">Leadash Admin</p>
             </div>
             <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:32px">
-              <p style="font-size:15px;color:#1e293b">You've been invited to join the Leadash admin panel as <strong>${role}</strong>.</p>
+              <p style="font-size:15px;color:#1e293b">You've been invited to join the Leadash admin panel as <strong>${roleLabel}</strong>.</p>
               <p style="font-size:14px;color:#64748b">Click the button below to accept your invitation. This link expires in 7 days.</p>
               <a href="${acceptUrl}" style="display:inline-block;margin:16px 0;background:#f97316;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
                 Accept Invitation →
@@ -122,18 +177,18 @@ export async function POST(req: NextRequest) {
             </div>
           </div>
         `,
-        text: `You've been invited to the Leadash admin panel as ${role}.\n\nAccept your invitation:\n${acceptUrl}\n\nThis link expires in 7 days.`,
+        text: `You've been invited to the Leadash admin panel as ${roleLabel}.\n\nAccept your invitation:\n${acceptUrl}\n\nThis link expires in 7 days.`,
       }),
     }).catch(() => null);
   }
 
-  const { token: _, ...safeInvite } = invite;
+  const { token: _token, ...safeInvite } = invite;
   return NextResponse.json({ ok: true, invite: safeInvite });
 }
 
 export async function DELETE(req: NextRequest) {
-  const ctx = await requireSuperAdmin();
-  if (!ctx) return NextResponse.json({ error: "Forbidden — super_admin only" }, { status: 403 });
+  const ctx = await requireAdminModule("team_config");
+  if (!ctx) return NextResponse.json({ error: "Forbidden — team_config required" }, { status: 403 });
 
   const body = await req.json() as { user_id?: string; invite_id?: string };
 
@@ -143,9 +198,21 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (body.user_id) {
-    // Prevent removing yourself
     if (body.user_id === ctx.user.id) {
       return NextResponse.json({ error: "You cannot remove yourself" }, { status: 400 });
+    }
+    // Refuse to remove the last super_admin so the platform can't be locked out
+    const { count: superCount } = await ctx.db
+      .from("admins")
+      .select("user_id", { count: "exact", head: true })
+      .eq("role", "super_admin");
+    const { data: target } = await ctx.db
+      .from("admins")
+      .select("role")
+      .eq("user_id", body.user_id)
+      .maybeSingle();
+    if (target?.role === "super_admin" && (superCount ?? 0) <= 1) {
+      return NextResponse.json({ error: "Cannot remove the last super_admin" }, { status: 400 });
     }
     await ctx.db.from("admins").delete().eq("user_id", body.user_id);
     return NextResponse.json({ ok: true });
@@ -153,3 +220,7 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ error: "user_id or invite_id required" }, { status: 400 });
 }
+
+// Suppress unused warning for the unused intermediate resolveModules import
+// (kept for future per-action enforcement; safe to remove later).
+void resolveModules;
