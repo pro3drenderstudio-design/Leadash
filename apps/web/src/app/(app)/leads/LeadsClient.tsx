@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getLists, createList, deleteList, importLeads, getVerifyPreview } from "@/lib/outreach/api";
+import { getLists, createList, deleteList, importLeads, getVerifyPreview, updateListTags } from "@/lib/outreach/api";
 import { wsFetch } from "@/lib/workspace/client";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
@@ -45,6 +45,21 @@ function VerificationBadge({ status, count }: { status: "verified" | "pending" |
   );
 }
 
+const TAG_COLORS = [
+  "bg-violet-500/15 text-violet-300 border-violet-500/20",
+  "bg-blue-500/15 text-blue-300 border-blue-500/20",
+  "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
+  "bg-amber-500/15 text-amber-300 border-amber-500/20",
+  "bg-pink-500/15 text-pink-300 border-pink-500/20",
+  "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
+];
+
+function tagColor(tag: string) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xff;
+  return TAG_COLORS[h % TAG_COLORS.length];
+}
+
 function ListCard({
   list,
   isImporting,
@@ -52,6 +67,7 @@ function ListCard({
   onDelete,
   onVerify,
   verifying,
+  onTagsChange,
 }: {
   list: OutreachList;
   isImporting: boolean;
@@ -59,7 +75,10 @@ function ListCard({
   onDelete: () => void;
   onVerify: () => void;
   verifying: boolean;
+  onTagsChange: (id: string, tags: string[]) => void;
 }) {
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagInput, setTagInput] = useState("");
   const count    = list.lead_count    ?? 0;
   const verified = list.verified_count ?? 0;
   const pending  = list.pending_count  ?? 0;
@@ -120,6 +139,66 @@ function ListCard({
             <VerificationBadge status="unknown"  count={unknown}  />
           </div>
         )}
+
+        {/* Tags */}
+        <div className="mb-3">
+          <div className="flex flex-wrap gap-1.5 items-center min-h-[24px]">
+            {(list.tags ?? []).map(tag => (
+              <span
+                key={tag}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${tagColor(tag)}`}
+              >
+                {tag}
+                <button
+                  onClick={() => onTagsChange(list.id, (list.tags ?? []).filter(t => t !== tag))}
+                  className="opacity-50 hover:opacity-100 transition-opacity leading-none ml-0.5"
+                  title="Remove tag"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {editingTags ? (
+              <input
+                autoFocus
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    const t = tagInput.trim().replace(/,/g, "");
+                    if (t && !(list.tags ?? []).includes(t)) {
+                      onTagsChange(list.id, [...(list.tags ?? []), t]);
+                    }
+                    setTagInput("");
+                    setEditingTags(false);
+                  } else if (e.key === "Escape") {
+                    setTagInput("");
+                    setEditingTags(false);
+                  }
+                }}
+                onBlur={() => {
+                  const t = tagInput.trim().replace(/,/g, "");
+                  if (t && !(list.tags ?? []).includes(t)) {
+                    onTagsChange(list.id, [...(list.tags ?? []), t]);
+                  }
+                  setTagInput("");
+                  setEditingTags(false);
+                }}
+                placeholder="Add tag…"
+                className="bg-transparent border border-white/15 rounded-md px-2 py-0.5 text-[11px] text-white placeholder:text-white/25 focus:outline-none focus:border-orange-500/50 w-24"
+              />
+            ) : (
+              <button
+                onClick={() => setEditingTags(true)}
+                className="text-white/20 hover:text-white/50 transition-colors text-[11px] px-1.5 py-0.5 rounded-md hover:bg-white/5 border border-transparent hover:border-white/10"
+                title="Add tag"
+              >
+                + tag
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
@@ -222,6 +301,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     stopping?: boolean;
   } | null>(null);
   const [verifiedExternal, setVerifiedExternal] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [deleteWarning, setDeleteWarning] = useState<{
     listId: string; listName: string;
     enrolledCount: number;
@@ -321,6 +401,11 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       return;
     }
     if (res.ok) load();
+  }
+
+  async function handleTagsChange(listId: string, tags: string[]) {
+    setLists(prev => prev.map(l => l.id === listId ? { ...l, tags } : l));
+    await updateListTags(listId, tags);
   }
 
   async function handleForceDelete(listId: string) {
@@ -494,6 +579,9 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
     }
   }
 
+  const allTags = Array.from(new Set(lists.flatMap(l => l.tags ?? []))).sort();
+  const filteredLists = tagFilter ? lists.filter(l => (l.tags ?? []).includes(tagFilter)) : lists;
+
   const isOverPool   = poolMax > 0 && poolUsed > poolMax;
   const isAtPool     = poolMax > 0 && !isOverPool && poolUsed >= poolMax;
   const poolPct      = poolMax > 0 ? Math.min(100, Math.round((poolUsed / poolMax) * 100)) : 0;
@@ -651,8 +739,38 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
           </button>
         </div>
       ) : (
+        <>
+        {/* Tag filter bar */}
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap mb-5">
+            <span className="text-white/25 text-xs font-semibold uppercase tracking-wider">Filter:</span>
+            <button
+              onClick={() => setTagFilter(null)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                tagFilter === null
+                  ? "bg-white/12 text-white border-white/20"
+                  : "bg-white/4 text-white/40 border-white/8 hover:text-white/70 hover:bg-white/8"
+              }`}
+            >
+              All
+            </button>
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  tagFilter === tag
+                    ? tagColor(tag) + " opacity-100"
+                    : "bg-white/4 text-white/40 border-white/8 hover:text-white/70 hover:bg-white/8"
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {lists.map((list) => (
+          {filteredLists.map((list) => (
             <div key={list.id} className="flex flex-col gap-3">
               <ListCard
                 list={list}
@@ -661,6 +779,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
                 onDelete={() => handleDelete(list.id, list.name)}
                 onVerify={() => handleVerify(list.id, list.name)}
                 verifying={verifyPreviewLoading === list.id}
+                onTagsChange={handleTagsChange}
               />
 
               {/* Import panel */}
@@ -880,6 +999,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Delete warning modal — shown when list has active enrollments */}

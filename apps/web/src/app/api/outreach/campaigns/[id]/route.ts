@@ -51,6 +51,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .eq("workspace_id", workspaceId)
     .single();
 
+  // Clear pause reason when reactivating
+  if (update.status === "active" && before?.status !== "active") {
+    update.pause_reason = null;
+  }
+
   // Validate campaign state before activation
   if (update.status === "active" && before?.status !== "active") {
     const inboxIds = (before?.inbox_ids ?? []) as string[];
@@ -60,14 +65,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         { status: 400 },
       );
     }
-    const { count: activeInboxCount } = await db
+    const { data: inboxDetails } = await db
       .from("outreach_inboxes")
-      .select("id", { count: "exact", head: true })
-      .in("id", inboxIds)
-      .eq("status", "active");
-    if (!activeInboxCount) {
+      .select("id, email_address, status, last_error")
+      .in("id", inboxIds);
+
+    type InboxDetail = { id: string; email_address: string; status: string; last_error: string | null };
+    const details      = (inboxDetails ?? []) as InboxDetail[];
+    const activeCount  = details.filter(i => i.status === "active").length;
+    const errorInboxes = details.filter(i => i.status === "error");
+    const pausedInboxes = details.filter(i => i.status === "paused");
+
+    if (!activeCount) {
+      let errorMsg: string;
+      if (errorInboxes.length > 0) {
+        const names = errorInboxes.map(i => i.email_address).join(", ");
+        const firstReason = errorInboxes[0].last_error;
+        errorMsg = errorInboxes.length === 1
+          ? `Cannot activate: inbox "${names}" is in error state${firstReason ? ` — ${firstReason}` : ""}. Fix the inbox issue first.`
+          : `Cannot activate: ${errorInboxes.length} inboxes are in error state (${names}). Fix the inbox issues first.`;
+      } else if (pausedInboxes.length > 0) {
+        errorMsg = "Cannot activate campaign: all assigned inboxes are paused. Enable at least one inbox first.";
+      } else {
+        errorMsg = "Cannot activate campaign: no inboxes assigned or all inboxes have been removed. Add an active inbox first.";
+      }
       return NextResponse.json(
-        { error: "Cannot activate campaign: none of the assigned inboxes are active. Check inbox status first." },
+        { error: errorMsg, inbox_errors: errorInboxes.map(i => ({ email_address: i.email_address, last_error: i.last_error })) },
         { status: 400 },
       );
     }

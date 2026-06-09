@@ -9,6 +9,29 @@ import { wsFetch, getWorkspaceId } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
 
+// ─── DNS check types ──────────────────────────────────────────────────────────
+interface DnsExpectedRecord {
+  name: string;
+  type: string;
+  value: string;
+  priority?: number;
+}
+interface DnsCheckResult {
+  domain: string;
+  checks: {
+    spf:   { pass: boolean; record?: string; detail: string };
+    dmarc: { pass: boolean; record?: string; detail: string };
+    dkim:  { pass: boolean; selector?: string; detail: string };
+    mx:    { pass: boolean; records?: string[]; detail: string };
+  };
+  score: number;
+  max_score: number;
+  expected_records: DnsExpectedRecord[] | null;
+  // true = user's own domain (can fix), false = Leadash-managed (contact support), null = custom SMTP
+  user_managed_dns: boolean | null;
+  warnings?: string[];
+}
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 interface OutreachDomain {
   id: string;
@@ -23,6 +46,9 @@ interface OutreachDomain {
   redirect_url: string | null;
   reply_forward_to: string | null;
   forward_verified: boolean;
+  inbox_next_billing_date: string | null;
+  charge_failure_count: number | null;
+  payment_provider: string | null;
 }
 
 // ─── CSV column mapping ────────────────────────────────────────────────────────
@@ -329,7 +355,8 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [addMsg, setAddMsg]                     = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // ── Retry payment ─────────────────────────────────────────────────────────
-  const [retryingPaymentId, setRetryingPaymentId] = useState<string | null>(null);
+  const [retryingPaymentId, setRetryingPaymentId]   = useState<string | null>(null);
+  const [newPaymentWorking, setNewPaymentWorking]   = useState<string | null>(null);
 
   // ── Inbox drawer ──────────────────────────────────────────────────────────
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
@@ -338,6 +365,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
   const [delivResult, setDelivResult]     = useState<string | null>(null);
   const [delivTesting, setDelivTesting]   = useState(false);
   const [delivRecipient, setDelivRecipient] = useState("");
+  const [dnsCheckResult, setDnsCheckResult] = useState<DnsCheckResult | null>(null);
+  const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
+  const [copiedDnsIdx, setCopiedDnsIdx] = useState<number | null>(null);
 
   const filteredInboxes = inboxes
     .slice()
@@ -443,6 +473,39 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     if (success === "microsoft")     showToast("Microsoft inbox connected successfully");
     if (success === "admin_consent") showToast("Admin consent granted — you can now connect individual inboxes");
     if (error)                       showToast(`Error: ${decodeURIComponent(error)}`, true);
+
+    // Post-payment: update card for failed/overdue inbox billing
+    const updatePaymentDomain = params.get("update_payment_domain");
+    const updateRef           = params.get("reference") || params.get("trxref");
+    if (updatePaymentDomain && updateRef) {
+      setActiveTab("domains");
+      void (async () => {
+        showToast("Payment received — updating card details…");
+        try {
+          const res = await wsFetch(`/api/outreach/domains/${updatePaymentDomain}/update-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reference: updateRef }),
+          });
+          const d = await res.json();
+          if (d.ok) {
+            showToast("Card updated — domain and inboxes reactivated");
+            loadDomains();
+            load();
+          } else {
+            showToast(`Error: ${d.error ?? "Update failed"}`, true);
+          }
+        } catch {
+          showToast("Error: failed to update payment details", true);
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("update_payment_domain");
+        url.searchParams.delete("reference");
+        url.searchParams.delete("trxref");
+        window.history.replaceState({}, "", url.toString());
+      })();
+      return;
+    }
 
     // Post-payment: provision new inboxes added to an existing domain
     const addDomainId    = params.get("add_inboxes_domain");
@@ -558,6 +621,24 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
       showToast("Payment retry failed. Please check your connection.");
     } finally {
       setRetryingPaymentId(null);
+    }
+  }
+
+  async function handleNewPayment(domainId: string) {
+    setNewPaymentWorking(domainId);
+    try {
+      const res = await wsFetch(`/api/outreach/domains/${domainId}/new-payment`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? "Could not start payment flow. Please try again.");
+        return;
+      }
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      }
+    } catch {
+      showToast("Could not start payment flow. Please check your connection.");
+      setNewPaymentWorking(null);
     }
   }
 
@@ -780,6 +861,44 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
     setDrawerInbox(inbox);
     setDrawerEdits({});
     setDelivResult(null);
+    setDnsCheckResult(null);
+    // DNS checks only apply to postal/SMTP inboxes — not Gmail/Outlook (they use Google/Microsoft infra)
+    const isOAuth = inbox.provider === "gmail" || inbox.provider === "outlook";
+    if (!isOAuth && inbox.status === "error") {
+      void fetchDnsCheck(inbox.id);
+    }
+  }
+
+  async function restoreInbox(inboxId: string) {
+    await updateInbox(inboxId, { status: "active", last_error: null });
+    setDrawerInbox(prev => prev ? { ...prev, status: "active", last_error: null } : prev);
+    setInboxes(prev => prev.map(i => i.id === inboxId ? { ...i, status: "active", last_error: null } : i));
+  }
+
+  async function fetchDnsCheck(inboxId: string) {
+    setDnsCheckLoading(true);
+    try {
+      const r = await wsFetch(`/api/outreach/inboxes/${inboxId}/dns-check`);
+      const d = await r.json();
+      setDnsCheckResult(d.error ? null : (d as DnsCheckResult));
+    } catch {
+      setDnsCheckResult(null);
+    } finally {
+      setDnsCheckLoading(false);
+    }
+  }
+
+  function inferDnsRecordPass(
+    rec: DnsExpectedRecord,
+    checks: DnsCheckResult["checks"],
+  ): boolean {
+    if (rec.type === "MX") return checks.mx.pass;
+    if (rec.type === "TXT") {
+      if (rec.name === "_dmarc" || rec.name.startsWith("_dmarc.")) return checks.dmarc.pass;
+      if (rec.name.includes("_domainkey")) return checks.dkim.pass;
+      if (rec.value.startsWith("v=spf1")) return checks.spf.pass;
+    }
+    return true;
   }
 
   function df<K extends keyof OutreachInboxSafe>(key: K): OutreachInboxSafe[K] {
@@ -925,42 +1044,71 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                           </span>
                           <span className="text-amber-400 text-[10px] font-medium">Awaiting DNS…</span>
                         </div>
-                      ) : (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          d.status === "active"                     ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
-                          d.status === "failed"                     ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "payment_failed"             ? "text-red-400 bg-red-500/15 border-red-500/30" :
-                          d.status === "dns_pending"                ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          d.status === "purchasing"                 ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          d.status === "awaiting_manual_purchase"   ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
-                          "text-white/40 bg-white/5 border-white/10"
-                        }`}>{
-                          d.status === "dns_pending"                ? "DNS pending" :
-                          d.status === "payment_failed"             ? "Payment failed" :
-                          d.status === "purchasing"                 ? "Setting up…" :
-                          d.status === "awaiting_manual_purchase"   ? "Setting up…" :
-                          d.status
-                        }</span>
-                      )}
+                      ) : (() => {
+                        const isOverdue = d.status === "active"
+                          && d.payment_provider === "paystack"
+                          && !!d.inbox_next_billing_date
+                          && new Date(d.inbox_next_billing_date) < new Date();
+                        return (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            isOverdue                                    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "active"                        ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" :
+                            d.status === "failed"                        ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                            d.status === "payment_failed"                ? "text-red-400 bg-red-500/15 border-red-500/30" :
+                            d.status === "dns_pending"                   ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "purchasing"                    ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            d.status === "awaiting_manual_purchase"      ? "text-amber-400 bg-amber-500/15 border-amber-500/30" :
+                            "text-white/40 bg-white/5 border-white/10"
+                          }`}>{
+                            isOverdue                                    ? "Overdue" :
+                            d.status === "dns_pending"                   ? "DNS pending" :
+                            d.status === "payment_failed"                ? "Payment failed" :
+                            d.status === "purchasing"                    ? "Setting up…" :
+                            d.status === "awaiting_manual_purchase"      ? "Setting up…" :
+                            d.status
+                          }</span>
+                        );
+                      })()}
                     </div>
                     <div className="text-white/50 text-xs">
                       {warmupDaysLeft !== null ? (warmupDaysLeft > 0 ? `${warmupDaysLeft}d left` : "Done") : "—"}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {d.status === "payment_failed" && (
-                        <button
-                          onClick={() => handleRetryPayment(d.id)}
-                          disabled={retryingPaymentId === d.id}
-                          className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 disabled:opacity-50 disabled:cursor-wait border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5"
-                          title="Retry payment to reactivate this domain"
-                        >
-                          {retryingPaymentId === d.id ? (
-                            <>
-                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                              Retrying…
-                            </>
-                          ) : "↻ Retry Payment"}
-                        </button>
+                      {(d.status === "payment_failed" || (d.status === "active" && d.payment_provider === "paystack" && !!d.inbox_next_billing_date && new Date(d.inbox_next_billing_date) < new Date())) && (
+                        <>
+                          <button
+                            onClick={() => handleRetryPayment(d.id)}
+                            disabled={retryingPaymentId === d.id}
+                            className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                              d.status === "payment_failed"
+                                ? "bg-red-500/15 hover:bg-red-500/25 border-red-500/30 text-red-400 hover:text-red-300"
+                                : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-400 hover:text-amber-300"
+                            }`}
+                            title={d.status === "payment_failed" ? "Retry payment to reactivate this domain" : "Billing is overdue — pay now to avoid suspension"}
+                          >
+                            {retryingPaymentId === d.id ? (
+                              <>
+                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                Retrying…
+                              </>
+                            ) : d.status === "payment_failed" ? "↻ Retry Payment" : "↻ Pay Now"}
+                          </button>
+                          {d.payment_provider === "paystack" && (
+                            <button
+                              onClick={() => handleNewPayment(d.id)}
+                              disabled={newPaymentWorking === d.id || retryingPaymentId === d.id}
+                              className="px-3 py-1.5 disabled:opacity-50 disabled:cursor-wait border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border-white/15 text-white/60 hover:text-white/80"
+                              title="Pay with a different card"
+                            >
+                              {newPaymentWorking === d.id ? (
+                                <>
+                                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                  Loading…
+                                </>
+                              ) : "New card"}
+                            </button>
+                          )}
+                        </>
                       )}
                       {canAddMore && (
                         <button
@@ -1580,6 +1728,150 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                       <p className="text-red-300/60 text-xs">{drawerInbox.last_error}</p>
                     </div>
                   )}
+
+                  {/* DNS Records panel — postal/SMTP only */}
+                  {drawerInbox.provider !== "gmail" && drawerInbox.provider !== "outlook" && dnsCheckLoading && (
+                    <div className="flex items-center gap-2 text-white/30 text-xs py-1">
+                      <svg className="w-3 h-3 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      Checking DNS records…
+                    </div>
+                  )}
+                  {drawerInbox.provider !== "gmail" && drawerInbox.provider !== "outlook" && !dnsCheckLoading && !dnsCheckResult && (
+                    <button
+                      onClick={() => void fetchDnsCheck(drawerInbox.id)}
+                      className="text-xs text-white/35 hover:text-white/60 underline underline-offset-2 transition-colors"
+                    >
+                      Check DNS records →
+                    </button>
+                  )}
+                  {dnsCheckResult && (
+                    <div className="bg-white/3 border border-white/8 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-white/2 border-b border-white/6">
+                        <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+                          {dnsCheckResult.user_managed_dns === false ? "DNS (Leadash-managed)" : "DNS Records"}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold ${dnsCheckResult.score === dnsCheckResult.max_score ? "text-green-400" : dnsCheckResult.score === 0 ? "text-red-400" : "text-amber-400"}`}>
+                            {dnsCheckResult.score}/{dnsCheckResult.max_score} passing
+                          </span>
+                          <button
+                            onClick={() => void fetchDnsCheck(drawerInbox.id)}
+                            disabled={dnsCheckLoading}
+                            title="Re-check DNS"
+                            className="text-white/25 hover:text-white/60 disabled:opacity-40 text-sm leading-none transition-colors"
+                          >↻</button>
+                        </div>
+                      </div>
+
+                      {/* Leadash-managed domain — user can't edit DNS, direct to support */}
+                      {dnsCheckResult.user_managed_dns === false && (
+                        <div className="px-3 py-3 bg-amber-500/8 border-b border-amber-500/20">
+                          <p className="text-amber-300 text-xs font-semibold mb-0.5">DNS managed by Leadash</p>
+                          <p className="text-amber-300/60 text-[10px]">
+                            Your domain&apos;s DNS is controlled by Leadash via Cloudflare. If records look wrong, contact support — you cannot edit them directly.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Restore banner — DNS now healthy but inbox still in error */}
+                      {dnsCheckResult.score === dnsCheckResult.max_score && drawerInbox.status === "error" && (
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-green-500/8 border-b border-green-500/20">
+                          <p className="text-green-400 text-xs">DNS is healthy — restore this inbox?</p>
+                          <button
+                            onClick={() => void restoreInbox(drawerInbox.id)}
+                            className="flex-shrink-0 px-3 py-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Advisory warnings — non-blocking issues like DMARC rua mismatch */}
+                      {dnsCheckResult.warnings && dnsCheckResult.warnings.length > 0 && (
+                        <div className="px-3 py-2.5 bg-amber-500/8 border-b border-amber-500/20 space-y-1">
+                          <p className="text-amber-300 text-[10px] font-semibold uppercase tracking-wider">Advisory</p>
+                          {dnsCheckResult.warnings.map((w, i) => (
+                            <p key={i} className="text-amber-200/80 text-xs leading-snug">{w}</p>
+                          ))}
+                        </div>
+                      )}
+
+                      {dnsCheckResult.expected_records ? (
+                        <div>
+                          {dnsCheckResult.expected_records.map((rec, i) => {
+                            const pass = inferDnsRecordPass(rec, dnsCheckResult.checks);
+                            return (
+                              <div key={i} className="flex items-start gap-2 px-3 py-2.5 border-b border-white/5 last:border-0">
+                                <span className={`flex-shrink-0 text-[10px] font-bold w-3.5 mt-0.5 ${pass ? "text-green-400" : "text-red-400"}`}>
+                                  {pass ? "✓" : "✗"}
+                                </span>
+                                <div className="flex-1 min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-mono font-semibold text-white/50 bg-white/8 px-1 py-0.5 rounded uppercase tracking-wider">{rec.type}</span>
+                                    <span className="text-[10px] font-mono text-white/40 truncate">{rec.name === "@" ? `@ (root)` : rec.name}</span>
+                                    {rec.priority !== undefined && <span className="text-[9px] text-white/25">· priority {rec.priority}</span>}
+                                  </div>
+                                  <p className="text-[10px] font-mono text-white/65 break-all leading-relaxed line-clamp-3" title={rec.value}>
+                                    {rec.value}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(rec.value);
+                                    setCopiedDnsIdx(i);
+                                    setTimeout(() => setCopiedDnsIdx(null), 2000);
+                                  }}
+                                  title="Copy value"
+                                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-white/25 hover:text-white/70 hover:bg-white/8 transition-colors mt-0.5"
+                                >
+                                  {copiedDnsIdx === i ? (
+                                    <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                  ) : (
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        // Non-managed domain: show live check summary
+                        <div>
+                          {(Object.entries(dnsCheckResult.checks) as [string, { pass: boolean; detail: string; record?: string }][]).map(([key, check]) => (
+                            <div key={key} className="flex items-start gap-2.5 px-3 py-2.5 border-b border-white/5 last:border-0">
+                              <span className={`flex-shrink-0 text-[10px] font-bold mt-0.5 ${check.pass ? "text-green-400" : "text-red-400"}`}>
+                                {check.pass ? "✓" : "✗"}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] font-semibold text-white/55 uppercase tracking-wide">{key}</span>
+                                <p className="text-[10px] text-white/40 mt-0.5">{check.detail}</p>
+                                {check.record && (
+                                  <div className="flex items-start gap-1 mt-1">
+                                    <p className="text-[10px] font-mono text-white/50 break-all flex-1 line-clamp-2">{check.record}</p>
+                                    <button
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(check.record!);
+                                        setCopiedDnsIdx(-1);
+                                        setTimeout(() => setCopiedDnsIdx(null), 2000);
+                                      }}
+                                      className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-white/25 hover:text-white/70 hover:bg-white/8 transition-colors"
+                                    >
+                                      {copiedDnsIdx === -1 ? (
+                                        <svg className="w-2.5 h-2.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                      ) : (
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <input

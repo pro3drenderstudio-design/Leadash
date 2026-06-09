@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       plan_status:   "trialing",
       max_inboxes:   3,
       trial_ends_at: trialEndsAt,
+      billing_email: user.email ?? null,
     })
     .select()
     .single();

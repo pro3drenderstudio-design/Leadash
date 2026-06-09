@@ -5,9 +5,30 @@ import { checkDomains } from "@/lib/outreach/porkbun";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { getUsdToNgn } from "@/lib/billing/exchangeRate";
+import { createAdminClient } from "@/lib/supabase/server";
 
-// $1 service fee on top of the at-cost domain price
-const DOMAIN_SERVICE_FEE_USD = 1;
+async function getDomainMarkup(): Promise<{ type: "none" | "flat" | "percent"; value: number }> {
+  try {
+    const adminDb = createAdminClient();
+    const { data } = await adminDb
+      .from("admin_settings")
+      .select("key, value")
+      .in("key", ["domain_markup_type", "domain_markup_value"]);
+    const map = Object.fromEntries((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]));
+    const type = (map.domain_markup_type as string) ?? "flat";
+    const value = Number(map.domain_markup_value ?? 1);
+    return { type: type as "none" | "flat" | "percent", value: Number.isFinite(value) ? value : 1 };
+  } catch {
+    return { type: "flat", value: 1 };
+  }
+}
+
+function applyMarkup(domainPriceUsd: number, markup: { type: "none" | "flat" | "percent"; value: number }): number {
+  if (markup.type === "none")    return 0;
+  if (markup.type === "flat")    return markup.value;
+  if (markup.type === "percent") return domainPriceUsd * (markup.value / 100);
+  return 0;
+}
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -52,6 +73,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "mailbox_prefixes must have 1–5 entries" }, { status: 400 });
   }
 
+  const markup = await getDomainMarkup();
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const mailboxCount = mailbox_prefixes.length;
   const cfSuffix    = connect_only && cf_auto ? "&cf=1" : "";
@@ -71,7 +94,8 @@ export async function POST(req: NextRequest) {
   let totalOneTimeUsd = 0;
 
   for (const { domain, price: domainPrice } of domains) {
-    const oneTimePriceUsd = domainPrice > 0 ? domainPrice + DOMAIN_SERVICE_FEE_USD : 0;
+    const markupUsd = domainPrice > 0 ? applyMarkup(domainPrice, markup) : 0;
+    const oneTimePriceUsd = domainPrice > 0 ? domainPrice + markupUsd : 0;
     totalOneTimeUsd += oneTimePriceUsd;
 
     // Reuse existing failed or pending record for same domain to avoid duplicates
@@ -99,6 +123,7 @@ export async function POST(req: NextRequest) {
         // so this is safe before migration 040 is applied.
         ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
         domain_price_usd: domainPrice,
+        domain_source:    domainPrice > 0 ? "leadash" : "external",
         redirect_url:     redirect_url ?? null,
         reply_forward_to: reply_forward_to ?? null,
         error_message:    null,
@@ -121,6 +146,7 @@ export async function POST(req: NextRequest) {
           payment_provider,
           ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
           domain_price_usd:  domainPrice,
+          domain_source:     domainPrice > 0 ? "leadash" : "external",
           redirect_url:      redirect_url ?? null,
           reply_forward_to:  reply_forward_to ?? null,
         })

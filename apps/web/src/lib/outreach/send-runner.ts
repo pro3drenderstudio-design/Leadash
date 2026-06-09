@@ -27,6 +27,36 @@ const MICROSOFT_DOMAINS = new Set([
 // Per-invocation MX cache — avoids redundant lookups for the same domain
 const _mxCache = new Map<string, "gmail" | "outlook" | null>();
 
+// ── Smart send window helpers ─────────────────────────────────────────────────
+const COUNTRY_TO_TZ: Record<string, string> = {
+  "US": "America/New_York", "GB": "Europe/London", "DE": "Europe/Berlin",
+  "FR": "Europe/Paris", "AU": "Australia/Sydney", "CA": "America/Toronto",
+  "IN": "Asia/Kolkata", "JP": "Asia/Tokyo", "NG": "Africa/Lagos",
+  "GH": "Africa/Accra", "KE": "Africa/Nairobi", "ZA": "Africa/Johannesburg",
+  "AE": "Asia/Dubai", "SG": "Asia/Singapore", "BR": "America/Sao_Paulo",
+  "MX": "America/Mexico_City", "NL": "Europe/Amsterdam", "SE": "Europe/Stockholm",
+  "NO": "Europe/Oslo", "DK": "Europe/Copenhagen", "IT": "Europe/Rome",
+  "ES": "Europe/Madrid", "PL": "Europe/Warsaw", "CH": "Europe/Zurich",
+};
+
+function detectRecipientTimezone(lead: Record<string, unknown>): string | null {
+  const cf = lead.custom_fields as Record<string, unknown> | null;
+  if (cf?.timezone && typeof cf.timezone === "string") return cf.timezone;
+  const country = (lead.country as string | null)?.toUpperCase();
+  if (country && COUNTRY_TO_TZ[country]) return COUNTRY_TO_TZ[country];
+  return null;
+}
+
+function isWithinBusinessHours(timezone: string): boolean {
+  try {
+    const hourStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, hour: "numeric", hour12: false,
+    }).format(new Date());
+    const hour = parseInt(hourStr, 10);
+    return hour >= 8 && hour < 18;
+  } catch { return true; }
+}
+
 async function resolveMx(domain: string, timeoutMs = 1500): Promise<MxRecord[] | null> {
   return new Promise(resolve => {
     const t = setTimeout(() => resolve(null), timeoutMs);
@@ -118,15 +148,15 @@ function pickInbox(
   rrIndex: number,
   preferProvider?: "gmail" | "outlook" | null,
 ): { slot: InboxSlot; nextRr: number } | null {
-  // 3-tier routing: Microsoft → Google → SMTP
-  // For Microsoft recipients: prefer microsoft365/outlook, fall back to gmail, then smtp
-  // For Google recipients: prefer gmail, fall back to microsoft365/outlook, then smtp
-  // For unknown: try all OAuth providers first, then smtp
+  // Match sender provider to recipient provider; SMTP is the universal fallback.
+  // Microsoft recipient → M365/Outlook inbox → SMTP
+  // Gmail/Google recipient → Gmail inbox → SMTP
+  // Unknown → any OAuth inbox → SMTP
   const tiers: string[][] =
     preferProvider === "outlook"
-      ? [["microsoft365", "outlook"], ["gmail"], ["smtp", "postal"]]
+      ? [["microsoft365", "outlook"], ["smtp", "postal"]]
       : preferProvider === "gmail"
-      ? [["gmail"], ["microsoft365", "outlook"], ["smtp", "postal"]]
+      ? [["gmail"], ["smtp", "postal"]]
       : [["microsoft365", "outlook", "gmail"], ["smtp", "postal"]];
 
   for (const tier of tiers) {
@@ -150,13 +180,16 @@ export async function runSendBatch(
   // ── Plan gate: block sends for free-plan or expired-trial workspaces ─────────
   const { data: wsRow } = await db
     .from("workspaces")
-    .select("plan_id, trial_ends_at, max_monthly_sends")
+    .select("plan_id, plan_status, trial_ends_at, max_monthly_sends")
     .eq("id", workspaceId)
     .single();
 
-  const trialExpired = wsRow?.plan_id === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  // plan_status is authoritative — if active/trialing, always allow sends
+  const planStatus = wsRow?.plan_status as string | null | undefined;
+  const isPaidActive = planStatus === "active" || planStatus === "trialing";
+
+  const trialExpired = !isPaidActive && wsRow?.plan_id === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
   if (trialExpired) {
-    // Auto-pause any active campaigns for this workspace
     await db.from("outreach_campaigns")
       .update({ status: "paused", pause_reason: "Trial expired — upgrade to resume", updated_at: new Date().toISOString() })
       .eq("workspace_id", workspaceId)
@@ -166,20 +199,22 @@ export async function runSendBatch(
   }
 
   const planId = wsRow?.plan_id ?? "free";
-  if (planId !== "free") {
-    // Paid plan — check can_run_campaigns from DB config
-    const { getPlanById } = await import("@/lib/billing/getActivePlans");
-    const plan = await getPlanById(planId);
-    if (!plan.can_run_campaigns) {
-      await db.from("outreach_campaigns")
-        .update({ status: "paused", pause_reason: "Plan does not include campaigns — upgrade to resume", updated_at: new Date().toISOString() })
-        .eq("workspace_id", workspaceId)
-        .eq("status", "active");
-      console.log(`[send-runner] ws=${workspaceId} plan=${planId} cannot run campaigns — blocked`);
-      return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+  if (isPaidActive || planId !== "free") {
+    // Paid/trialing plan — check can_run_campaigns from DB config (skip check for active paid plans to avoid false-blocking)
+    if (planId !== "free" && !isPaidActive) {
+      const { getPlanById } = await import("@/lib/billing/getActivePlans");
+      const plan = await getPlanById(planId);
+      if (!plan.can_run_campaigns) {
+        await db.from("outreach_campaigns")
+          .update({ status: "paused", pause_reason: "Plan does not include campaigns — upgrade to resume", updated_at: new Date().toISOString() })
+          .eq("workspace_id", workspaceId)
+          .eq("status", "active");
+        console.log(`[send-runner] ws=${workspaceId} plan=${planId} cannot run campaigns — blocked`);
+        return { processed: 0, sent: 0, skipped: 0, errors: 0 };
+      }
     }
   } else {
-    // Free plan always blocked
+    // Free plan with no active subscription — block
     await db.from("outreach_campaigns")
       .update({ status: "paused", pause_reason: "Free plan — upgrade to run campaigns", updated_at: new Date().toISOString() })
       .eq("workspace_id", workspaceId)
@@ -311,6 +346,17 @@ export async function runSendBatch(
         result.skipped++; continue;
       }
 
+      // Smart send window: skip if outside recipient's business hours
+      if (campaign.smart_send_window) {
+        const recipientTz = detectRecipientTimezone(lead);
+        if (recipientTz && !isWithinBusinessHours(recipientTz)) {
+          result.skipped++;
+          // Release the claim by restoring next_send_at to current time
+          await db.from("outreach_enrollments").update({ next_send_at: new Date().toISOString() }).eq("id", enrollment.id);
+          continue;
+        }
+      }
+
       // Blacklist domain check
       const domain = lead.email.split("@")[1]?.toLowerCase();
       if (domain) {
@@ -381,6 +427,11 @@ export async function runSendBatch(
       const isFirstEmail = seqStep.step_order === 0;
       const sendTextOnly = campaign.text_only || (campaign.first_email_text_only && isFirstEmail);
 
+      // Campaign-level footer setting overrides workspace default (null = inherit workspace)
+      const campaignFooterEnabled = campaign.include_unsubscribe_footer === null || campaign.include_unsubscribe_footer === undefined
+        ? footerEnabled
+        : campaign.include_unsubscribe_footer;
+
       const rendered = renderEmail({
         subjectTemplate,
         bodyTemplate:    seqStep.body_template ?? "",
@@ -390,7 +441,7 @@ export async function runSendBatch(
         signature:       slot.inbox.signature,
         trackOpens:      sendTextOnly ? false : campaign.track_opens,
         trackClicks:     sendTextOnly ? false : campaign.track_clicks,
-        footerEnabled,
+        footerEnabled:   campaignFooterEnabled,
         footerText,
         physicalAddress: footerAddress,
       });

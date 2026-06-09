@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
+import { searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
 const CREDITS_PER_LEAD = 0.5;
@@ -32,6 +33,15 @@ export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
   const { workspaceId } = auth;
+
+  // ── Rate limit: 60 searches/min per workspace ─────────────────────────────
+  const rl = await checkDiscoverRateLimit(workspaceId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } },
+    );
+  }
 
   const p = new URL(req.url).searchParams;
 
@@ -76,6 +86,14 @@ export async function GET(req: NextRequest) {
   const sortCol  = SORT_COLS[sortRaw] ?? "p.created_at";
   const sortDir  = p.get("order") === "asc" ? "ASC" : "DESC";
 
+  // ── Cache lookup (skip for ids_only + net_new — those are user-specific) ──
+  const cacheable = !idsOnly && !netNew;
+  const cKey = cacheable ? searchCacheKey(p) : null;
+  if (cKey) {
+    const hit = await getCachedSearch(cKey);
+    if (hit) return NextResponse.json(hit);
+  }
+
   try {
     const conditions: string[] = [];
     const params: unknown[]    = [];
@@ -86,6 +104,23 @@ export async function GET(req: NextRequest) {
       const clauses = values.map((_, j) => `${field} ILIKE $${i + j}`).join(" OR ");
       conditions.push(`(${clauses})`);
       params.push(...values.map(v => substring ? `%${v}%` : v));
+      i += values.length;
+    }
+
+    // For low-cardinality enum-like fields with lower() btree indexes.
+    function addOrExact(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`(${clauses})`);
+      params.push(...values);
+      i += values.length;
+    }
+
+    function addNoneExact(field: string, values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `lower(${field}) = lower($${i + j})`).join(" OR ");
+      conditions.push(`NOT (${clauses})`);
+      params.push(...values);
       i += values.length;
     }
 
@@ -134,13 +169,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (keyword) {
-      conditions.push(`(p.first_name ILIKE $${i} OR p.last_name ILIKE $${i} OR p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
+      // first_name/last_name excluded until discover_people_first_name_trgm and
+      // discover_people_last_name_trgm GIN indexes finish building (559M rows, ~4h).
+      // title and company_name both have GIN trigram indexes (fast).
+      conditions.push(`(p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
       params.push(`%${keyword}%`); i++;
     }
     addOr("p.title",      titleIncludes,   true);
     addNone("p.title",    titleExcludes,   true);
-    addOr("p.seniority",   seniorities,        false);
-    addNone("p.seniority", senioritiesExclude, false);
+    addOrExact("p.seniority",   seniorities);
+    addNoneExact("p.seniority", senioritiesExclude);
     addOr("p.department",  departments,        true);
     addNone("p.department", departmentsExclude, true);
     addOrLower("p.country",   countryIncludes);
@@ -151,7 +189,7 @@ export async function GET(req: NextRequest) {
     addNone("p.company_name", companyExcludes, true);
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
-    addOr("c.size_range", companySizes, false);
+    addOrExact("c.size_range", companySizes);
     addOr("c.keywords",  companyKeywordIncludes, true);
     addNone("c.keywords", companyKeywordExcludes, true);
 
@@ -173,13 +211,21 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
+    // Use INNER JOIN when filtering on company attributes — lets the planner start
+    // from the much smaller discover_companies table (industry GIN, size btree) and
+    // then join to discover_people, instead of scanning all 559M people rows first.
+    const hasCompanyFilter = industryIncludes.length > 0 || industryExcludes.length > 0
+      || companySizes.length > 0
+      || companyKeywordIncludes.length > 0 || companyKeywordExcludes.length > 0;
+    const joinType = hasCompanyFilter ? "INNER JOIN" : "LEFT JOIN";
+
     // Lightweight ID-only path — used by the frontend's "select all" bulk operations.
     // Returns raw IDs without reveal lookups or email masking, supporting up to 50k.
     if (idsOnly) {
       const idRows = await leadsDb.unsafe<{ id: string }[]>(`
         SELECT p.id
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.id = p.company_id
+        ${joinType} discover_companies c ON c.id = p.company_id
         ${where}
         ORDER BY p.created_at DESC NULLS LAST
         LIMIT $${i}
@@ -187,18 +233,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ids: idRows.map(r => r.id) });
     }
 
-    const [countRows, rows] = await Promise.all([
-      skipCount
-        ? Promise.resolve(null)
-        : leadsDb.unsafe(`
-            SELECT count(*) AS total
-            FROM (
-              SELECT 1 FROM discover_people p
-              LEFT JOIN discover_companies c ON c.id = p.company_id
-              ${where}
-              LIMIT 100001
-            ) cnt
-          `, params as never[]),
+    const HARD_CAP = 50_000;
+
+    // Count races against a 12s timer — if counting is slow (broad filter, index still
+    // building), the data still loads and the UI shows "50,000+" as the total.
+    // The abandoned DB query finishes in background; PgBouncer cleans it up within 120s.
+    const countPromise = leadsDb.unsafe(`
+        SELECT count(*) AS total
+        FROM (
+          SELECT 1 FROM discover_people p
+          ${joinType} discover_companies c ON c.id = p.company_id
+          ${where}
+          LIMIT 100001
+        ) cnt
+      `, params as never[])
+      .then(rows => parseInt((rows[0] as unknown as { total: string }).total, 10))
+      .catch((): number => HARD_CAP);
+
+    const countWithTimeout = () => Promise.race([
+      countPromise,
+      new Promise<number>(resolve => setTimeout(() => resolve(HARD_CAP), 12_000)),
+    ]);
+
+    const [rawTotal, rows] = await Promise.all([
+      skipCount ? Promise.resolve(-1) : countWithTimeout(),
       leadsDb.unsafe(`
         SELECT
           p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
@@ -208,16 +266,14 @@ export async function GET(req: NextRequest) {
           c.industry AS company_industry, c.size_range AS company_size,
           c.keywords AS company_keywords
         FROM discover_people p
-        LEFT JOIN discover_companies c ON c.id = p.company_id
+        ${joinType} discover_companies c ON c.id = p.company_id
         ${where}
         ORDER BY ${sortCol} ${sortDir} NULLS LAST
         LIMIT $${i} OFFSET $${i + 1}
       `, [...params, limit, offset] as never[]),
     ]);
 
-    const rawTotal = skipCount ? -1 : parseInt((countRows![0] as unknown as { total: string }).total, 10);
-    const HARD_CAP = 50_000;
-    const capped   = !skipCount && rawTotal > HARD_CAP;
+    const capped   = !skipCount && rawTotal >= HARD_CAP;
     const total    = capped ? HARD_CAP : rawTotal;
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 
@@ -270,10 +326,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    const responseData = {
       results, total, page, limit, credits_per_lead: CREDITS_PER_LEAD,
       ...(capped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
-    } satisfies DiscoverSearchResponse);
+    } satisfies DiscoverSearchResponse;
+
+    // Store in cache (fire-and-forget — don't delay the response)
+    if (cKey) void setCachedSearch(cKey, responseData);
+
+    return NextResponse.json(responseData);
   } catch (err) {
     console.error("[discover/search]", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Search failed. Please try again." }, { status: 500 });

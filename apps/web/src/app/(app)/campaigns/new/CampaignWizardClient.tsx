@@ -60,7 +60,7 @@ export default function CampaignWizardClient() {
   const [sendDays, setSendDays]     = useState<string[]>(["mon","tue","wed","thu","fri"]);
   const [startTime, setStartTime]   = useState("09:00");
   const [endTime, setEndTime]       = useState("17:00");
-  const [dailyCap, setDailyCap]     = useState(100);
+  const [dailyCap, setDailyCap]     = useState(15);
   const [minDelay, setMinDelay]     = useState(30);
   const [maxDelay, setMaxDelay]     = useState(120);
   const [stopOnReply, setStopOnReply]                     = useState(true);
@@ -380,6 +380,11 @@ export default function CampaignWizardClient() {
       setAutosaving(false);
     }
   }
+
+  // Auto-calc daily cap = 15 × inbox count whenever selection changes
+  useEffect(() => {
+    if (selectedInboxes.length > 0) setDailyCap(selectedInboxes.length * 15);
+  }, [selectedInboxes.length]);
 
   function toggleInbox(id: string) {
     setSelectedInboxes((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -743,7 +748,8 @@ export default function CampaignWizardClient() {
 
           <div>
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label>
-            <input type="number" value={dailyCap} onChange={(e) => setDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
+            <input type="number" value={dailyCap} onChange={(e) => { const v = parseInt(e.target.value) || 1; const max = Math.max(40, selectedInboxes.length * 40); setDailyCap(Math.min(v, max)); }} min={1} max={Math.max(40, selectedInboxes.length * 40)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
+            {selectedInboxes.length > 0 && <p className="text-white/30 text-xs mt-1">Auto: {selectedInboxes.length} × 15 = {selectedInboxes.length * 15} &nbsp;·&nbsp; Max: {selectedInboxes.length} × 40 = {selectedInboxes.length * 40}</p>}
           </div>
 
           {/* Sending Pattern */}

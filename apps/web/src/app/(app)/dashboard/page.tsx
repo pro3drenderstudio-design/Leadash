@@ -69,6 +69,7 @@ async function getStats(workspaceId: string) {
         )
       `)
       .eq("workspace_id", workspaceId)
+      .not("enrollment_id", "is", null)
       .order("received_at", { ascending: false })
       .limit(8),
   ]);
@@ -282,7 +283,7 @@ export default async function DashboardPage() {
                   return (
                     <Link
                       key={t.enrollment_id}
-                      href="/crm"
+                      href={`/crm?thread=${t.enrollment_id}`}
                       className="flex items-start gap-3 px-4 py-3.5 hover:bg-white/4 transition-colors group"
                       style={{ borderColor: "var(--card-border)" }}
                     >

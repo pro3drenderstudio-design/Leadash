@@ -5,6 +5,26 @@ import { PLANS } from "@/lib/billing/plans";
 import { getPlanById, getActivePlans } from "@/lib/billing/getActivePlans";
 import { logActivity } from "@/lib/activity";
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
+import { sendSubscriptionRenewalSuccessEmail, sendDowngradeNotification } from "@/lib/email/notifications";
+
+async function resolveStripeEmail(
+  db: ReturnType<typeof createAdminClient>,
+  customerId: string,
+): Promise<{ email: string | null; name: string | null }> {
+  const { data: ws } = await db
+    .from("workspaces")
+    .select("id, name, billing_email, workspace_members(user_id)")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  if (!ws) return { email: null, name: null };
+  if (ws.billing_email) return { email: ws.billing_email, name: ws.name };
+  const userId = (ws as unknown as { workspace_members: Array<{ user_id: string }> }).workspace_members?.[0]?.user_id;
+  if (!userId) return { email: null, name: ws.name };
+  try {
+    const { data: { user } } = await db.auth.admin.getUserById(userId);
+    return { email: user?.email ?? null, name: ws.name };
+  } catch { return { email: null, name: ws.name }; }
+}
 
 export async function POST(req: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -111,6 +131,21 @@ export async function POST(req: NextRequest) {
         amount:       planConfig.included_credits,
         description:  `Monthly credits — ${planConfig.name} plan${isRenewal ? " renewal" : ""}`,
       });
+
+      // Send renewal receipt on recurring invoices
+      if (isRenewal) {
+        const renewsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { email: userEmail, name: wsName } = await resolveStripeEmail(db, inv.customer as string);
+        if (userEmail) {
+          sendSubscriptionRenewalSuccessEmail({
+            userEmail,
+            workspaceName: wsName ?? ws.id,
+            planName:      planConfig.name,
+            amountNgn:     Math.round(((inv as unknown as Record<string, number>).amount_paid ?? 0) / 100),
+            renewsAt,
+          }).catch(e => console.error("[billing] stripe renewal email failed:", e));
+        }
+      }
       break;
     }
     case "customer.subscription.deleted": {
@@ -139,6 +174,16 @@ export async function POST(req: NextRequest) {
           description:    `${wsCancel.name} cancelled — downgraded to Free (Stripe)`,
           metadata:       { stripe_sub_id: sub.id },
         });
+
+        // Notify user their account has been downgraded
+        const { email: userEmail } = await resolveStripeEmail(db, sub.customer as string);
+        if (userEmail) {
+          sendDowngradeNotification({
+            userEmail,
+            workspaceName: wsCancel.name ?? wsCancel.id,
+            reason: "subscription_cancelled",
+          }).catch(e => console.error("[billing] stripe cancellation email failed:", e));
+        }
       }
       break;
     }

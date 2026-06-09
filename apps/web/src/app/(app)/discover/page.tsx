@@ -358,12 +358,13 @@ function ListModal({ count, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (listId: string | null, listName: string | null) => void;
 }) {
-  const [lists, setLists]       = useState<LeadList[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [q, setQ]               = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [newName, setNewName]   = useState("");
-  const [creating, setCreating] = useState(false);
+  const [lists, setLists]         = useState<LeadList[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [q, setQ]                 = useState("");
+  const [selected, setSelected]   = useState<string | null>(null);
+  const [newName, setNewName]     = useState("");
+  const [creating, setCreating]   = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     wsGet<LeadList[]>("/api/outreach/lists")
@@ -374,65 +375,124 @@ function ListModal({ count, onClose, onConfirm }: {
 
   const filtered = lists.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
 
+  // Detect duplicate list name (case-insensitive)
+  const duplicateList = creating && newName.trim()
+    ? lists.find(l => l.name.toLowerCase() === newName.trim().toLowerCase()) ?? null
+    : null;
+
   function handleConfirm() {
-    if (creating && newName.trim()) onConfirm(null, newName.trim());
-    else if (selected) onConfirm(selected, null);
+    if (submitting) return;
+    if (creating) {
+      if (!newName.trim()) return;
+      setSubmitting(true);
+      // If name matches an existing list, add to that one instead
+      onConfirm(duplicateList?.id ?? null, duplicateList ? null : newName.trim());
+    } else if (selected) {
+      setSubmitting(true);
+      onConfirm(selected, null);
+    }
   }
+
+  function handleKeyDown(e: { key: string }) {
+    if (e.key === "Enter") handleConfirm();
+  }
+
+  const canConfirm = creating ? newName.trim().length > 0 : !!selected;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[520px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl w-[420px] max-h-[540px] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
           <div>
             <h2 className="text-sm font-bold text-white">Add to List</h2>
-            <p className="text-xs text-white/35 mt-0.5">{count} lead{count !== 1 ? "s" : ""} will be added</p>
+            <p className="text-xs text-white/35 mt-0.5">{count.toLocaleString()} lead{count !== 1 ? "s" : ""} selected</p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><XIcon /></button>
         </div>
-        <div className="px-5 py-3 border-b border-white/8">
+
+        <div className="px-5 py-3 border-b border-white/8 space-y-1.5">
           {!creating ? (
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lists…"
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40" />
           ) : (
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New list name…" autoFocus
-              className="w-full bg-white/5 border border-orange-500/40 rounded-lg px-3 py-1.5 text-xs text-white/70 placeholder-white/25 focus:outline-none" />
+            <>
+              <input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="New list name…"
+                autoFocus
+                className={`w-full bg-white/5 border rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none transition-colors ${
+                  newName.trim() ? "border-orange-500/60 bg-orange-500/5" : "border-white/15"
+                }`}
+              />
+              {duplicateList && (
+                <p className="text-[11px] text-amber-400/80 flex items-center gap-1">
+                  <span>⚠</span>
+                  <span>"{duplicateList.name}" already exists — leads will be added to it ({duplicateList.lead_count.toLocaleString()} leads)</span>
+                </p>
+              )}
+            </>
           )}
         </div>
+
         <div className="flex-1 overflow-y-auto py-2">
           {!creating && (
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2.5 px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
-              <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">+</div>
-              <span className="text-xs text-blue-400 font-medium">Create new list</span>
+              <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">+</div>
+              <span className="text-xs text-orange-400 font-medium">Create new list</span>
             </button>
           )}
           {creating && (
-            <button onClick={() => setCreating(false)} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
+            <button onClick={() => { setCreating(false); setNewName(""); }} className="w-full flex items-center gap-2 px-5 py-2 hover:bg-white/4 transition-colors text-left text-xs text-white/40">
               ← Back to existing lists
             </button>
           )}
           {!creating && (loading ? (
             <div className="flex justify-center py-6"><Spinner sm /></div>
+          ) : filtered.length === 0 && !q ? (
+            <p className="text-center text-xs text-white/25 py-6">No lists yet — create one above</p>
           ) : filtered.length === 0 ? (
-            <p className="text-center text-xs text-white/25 py-6">No lists yet</p>
+            <p className="text-center text-xs text-white/25 py-4">No lists match "{q}"</p>
           ) : (
             filtered.map(l => (
               <button key={l.id} onClick={() => setSelected(l.id)}
-                className={`w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left ${selected === l.id ? "bg-blue-500/10" : ""}`}>
+                className={`w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left ${selected === l.id ? "bg-orange-500/10" : ""}`}>
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selected === l.id ? "bg-blue-400" : "bg-white/15"}`} />
-                  <span className="text-xs text-white/70 truncate max-w-[220px]">{l.name}</span>
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${selected === l.id ? "bg-orange-400" : "bg-white/15"}`} />
+                  <span className={`text-xs truncate max-w-[220px] transition-colors ${selected === l.id ? "text-white font-medium" : "text-white/70"}`}>{l.name}</span>
                 </div>
                 <span className="text-[10px] text-white/30 flex-shrink-0">{l.lead_count.toLocaleString()} leads</span>
               </button>
             ))
           ))}
         </div>
-        <div className="px-5 py-3 border-t border-white/8 flex items-center justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">Cancel</button>
-          <button onClick={handleConfirm} disabled={creating ? !newName.trim() : !selected}
-            className="px-4 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/15 border border-white/15 text-white rounded-lg transition-colors disabled:opacity-40">
-            {creating ? "Create & Add" : "Add to List"}
-          </button>
+
+        <div className="px-5 py-3 border-t border-white/8 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-white/25">
+            {!creating && selected && (() => { const l = lists.find(x => x.id === selected); return l ? `Adding to "${l.name}"` : ""; })()}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} disabled={submitting} className="px-3 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors disabled:opacity-40">Cancel</button>
+            <button
+              onClick={handleConfirm}
+              disabled={!canConfirm || submitting}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                submitting
+                  ? "bg-orange-500/30 border-orange-500/30 text-orange-300 cursor-not-allowed"
+                  : canConfirm
+                  ? "bg-orange-500 hover:bg-orange-400 border-orange-400 text-white shadow-sm shadow-orange-500/20"
+                  : "bg-white/6 border-white/10 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {submitting
+                ? <span className="flex items-center gap-1.5"><span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />Adding…</span>
+                : creating
+                ? (duplicateList ? "Add to Existing List" : "Create & Add")
+                : "Add to List"
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -960,6 +1020,7 @@ function DiscoverContent() {
   const [exportMsg,     setExportMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkProgress,  setBulkProgress]  = useState<{ current: number; total: number; label: string } | null>(null);
   const isInitialRender = useRef(true);
+  const selectNRef      = useRef<HTMLDivElement>(null);
   const [balance,       setBalance]       = useState<number | null>(null);
   const [discoverRate,  setDiscoverRate]  = useState<number>(0.5);
   const [drawer,        setDrawer]        = useState<DrawerTarget | null>(null);
@@ -972,6 +1033,9 @@ function DiscoverContent() {
   const [saveNameVal,   setSaveNameVal]   = useState("");
   const [showSaveInput,    setShowSaveInput]    = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [showSelectNPicker, setShowSelectNPicker] = useState(false);
+  const [selectNCustom,     setSelectNCustom]     = useState("");
+  const [selectNCount,      setSelectNCount]      = useState<number | null>(null);
 
   const limit      = 25;
   const SEARCH_CAP = 50_000;
@@ -1003,6 +1067,16 @@ function DiscoverContent() {
   const activeFilterCount = mode === "people" ? activePeopleFilterCount : activeCoFilterCount;
 
   useEffect(() => {
+    if (!showSelectNPicker) return;
+    function onOutsideClick(e: MouseEvent) {
+      if (selectNRef.current && !selectNRef.current.contains(e.target as Node))
+        setShowSelectNPicker(false);
+    }
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, [showSelectNPicker]);
+
+  useEffect(() => {
     wsGet<{ lead_credits_balance: number }>("/api/settings/workspace")
       .then(d => setBalance(d.lead_credits_balance ?? 0)).catch(() => {});
     wsGet<{ rates?: { discover?: number } }>("/api/lead-campaigns/credits")
@@ -1013,7 +1087,7 @@ function DiscoverContent() {
   }, []);
 
   const searchPeople = useCallback(async (p = 1, skipCount = false) => {
-    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); setExportMsg(null);
     try {
       const f = peopleFilters;
       const params = new URLSearchParams();
@@ -1075,7 +1149,7 @@ function DiscoverContent() {
   }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters]);
 
   const searchCompanies = useCallback(async (p = 1, skipCount = false) => {
-    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setExportMsg(null);
+    setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); setExportMsg(null);
     try {
       const f = companyFilters;
       const params = new URLSearchParams();
@@ -1195,17 +1269,17 @@ function DiscoverContent() {
 
   const visibleResults = mode === "people" ? results : companyResults;
   function toggleSelect(id: string) {
-    setSelectAllMode(false);
+    setSelectAllMode(false); setSelectNCount(null);
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
   function toggleAll() {
-    if (selectAllMode) { setSelectAllMode(false); setSelected(new Set()); return; }
+    if (selectAllMode || selectNCount !== null) { setSelectAllMode(false); setSelectNCount(null); setSelected(new Set()); return; }
     setSelected(selected.size === visibleResults.length ? new Set() : new Set(visibleResults.map(r => r.id)));
   }
 
   const SELECT_ALL_CAP = 50_000;
 
-  async function fetchAllMatchingIds(): Promise<string[]> {
+  async function fetchAllMatchingIds(limitOverride?: number): Promise<string[]> {
     const f = peopleFilters;
     const params = new URLSearchParams();
     if (f.keyword)                       params.set("q",               f.keyword);
@@ -1229,12 +1303,12 @@ function DiscoverContent() {
     params.set("email_status", f.emailStatus);
     if (f.netNew) params.set("net_new", "true");
     params.set("ids_only", "true");
-    params.set("limit", String(SELECT_ALL_CAP));
+    params.set("limit", String(limitOverride ?? SELECT_ALL_CAP));
     const data = await wsGet<{ ids?: string[]; results?: { id: string }[] }>(`/api/discover/search?${params}`);
     return data.ids ?? (data.results ?? []).map(r => r.id);
   }
 
-  async function fetchAllMatchingCompanyIds(): Promise<string[]> {
+  async function fetchAllMatchingCompanyIds(limitOverride?: number): Promise<string[]> {
     const f = companyFilters;
     const params = new URLSearchParams();
     if (f.coKeyword)                 params.set("q",               f.coKeyword);
@@ -1254,13 +1328,21 @@ function DiscoverContent() {
     if (f.coRevenueRange?.max)       params.set("revenue_max",      String(f.coRevenueRange.max));
     params.set("has_people", String(f.coHasPeople));
     params.set("ids_only", "true");
-    params.set("limit", String(SELECT_ALL_CAP));
+    params.set("limit", String(limitOverride ?? SELECT_ALL_CAP));
     const data = await wsGet<{ ids?: string[] }>(`/api/discover/companies/search?${params}`);
     return data.ids ?? [];
   }
 
+  function handleSelectN(n: number) {
+    setShowSelectNPicker(false);
+    setSelectNCustom("");
+    setSelectAllMode(false);
+    setSelected(new Set());
+    setSelectNCount(Math.min(n, total));
+  }
+
   async function handleFindPeopleAtSelected() {
-    const ids = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const ids = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
     const names = companyResults.filter(c => ids.includes(c.id)).map(c => c.name).filter(Boolean);
     setSelectAllMode(false);
     setSelected(new Set());
@@ -1272,7 +1354,7 @@ function DiscoverContent() {
   }
 
   async function handleCompanyExport() {
-    const allIds = selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const allIds = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null);
     const COMPANY_BATCH = 5000;
@@ -1345,12 +1427,12 @@ function DiscoverContent() {
   }
 
   async function revealSelected() {
-    const ids = selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
+    const ids = selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
     await revealIds(ids);
   }
 
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
     const EXPORT_BATCH = 2500;
@@ -1418,12 +1500,13 @@ function DiscoverContent() {
   }
 
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
+    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
     if (!allIds.length) return;
     setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
     const EXPORT_BATCH = 2500;
     if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
     let totalAdded = 0;
+    let totalExisting = 0;
     let resolvedListId = listId;
     try {
       for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
@@ -1442,13 +1525,22 @@ function DiscoverContent() {
           setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
           return;
         }
-        const j = await res.json() as { leads_added: number; credits_used: number; list_id?: string };
-        totalAdded += j.leads_added ?? 0;
+        const j = await res.json() as { leads_added: number; already_existed: number; credits_used: number; list_id?: string };
+        totalAdded    += j.leads_added     ?? 0;
+        totalExisting += j.already_existed ?? 0;
         if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
         if (j.credits_used > 0) { setBalance(b => (b ?? 0) - j.credits_used); emitCreditsChanged(); }
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
-      setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added to list` });
+      let msg: string;
+      if (totalAdded === 0 && totalExisting > 0) {
+        msg = `All ${totalExisting.toLocaleString()} leads already in list`;
+      } else {
+        const parts = [`${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added`];
+        if (totalExisting > 0) parts.push(`${totalExisting.toLocaleString()} already existed`);
+        msg = parts.join(" · ");
+      }
+      setExportMsg({ ok: true, text: msg });
       setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed to add to list" });
@@ -1485,8 +1577,8 @@ function DiscoverContent() {
   }
 
   const unrevealed    = results.filter(r => selected.has(r.id) && !r.revealed);
-  const selectedCount = selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
-  const unrevealedCount = selectAllMode ? selectedCount : unrevealed.length;
+  const selectedCount = selectNCount !== null ? selectNCount : selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
+  const unrevealedCount = (selectNCount !== null || selectAllMode) ? selectedCount : unrevealed.length;
   const revealCost  = Math.ceil(unrevealedCount * discoverRate * 10) / 10;
 
   function SortTh({ label, col, sortBy, sortDir, onSort, className = "" }: {
@@ -1617,7 +1709,7 @@ function DiscoverContent() {
       )}
 
       {/* ── Left sidebar (desktop only) ── */}
-      <div className="hidden lg:flex w-[240px] flex-shrink-0 border-r border-white/8 flex-col overflow-hidden">
+      <div className="hidden lg:flex w-[240px] flex-shrink-0 border-r border-white/8 flex-col">
         {sidebarInner}
       </div>
 
@@ -1655,9 +1747,59 @@ function DiscoverContent() {
             {loading ? <Spinner sm /> : (
               <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
             )}
+            {hasSearched && total > 0 && !loading && (
+              <div className="relative" ref={selectNRef}>
+                <button
+                  onClick={() => setShowSelectNPicker(s => !s)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-white/45 hover:text-white/75 hover:bg-white/6 border border-white/10 rounded-lg transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16"/>
+                  </svg>
+                  Custom select
+                </button>
+                {showSelectNPicker && (
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-[#15182a] border border-white/12 rounded-xl shadow-2xl z-30 py-1.5">
+                    {([100, 500, 1000, 5000] as const).map(n => (
+                      <button key={n} onClick={() => handleSelectN(n)}
+                        disabled={n > total}
+                        className="w-full text-left px-3 py-1.5 text-xs text-white/60 hover:bg-white/6 hover:text-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
+                        {n.toLocaleString()} {mode}
+                      </button>
+                    ))}
+                    <div className="border-t border-white/8 mt-1 pt-1.5 px-2 pb-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          value={selectNCustom}
+                          onChange={e => setSelectNCustom(e.target.value.replace(/\D/g, ""))}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              const n = Math.min(parseInt(selectNCustom) || 0, SELECT_ALL_CAP);
+                              if (n > 0) handleSelectN(n);
+                            }
+                          }}
+                          placeholder="Custom number…"
+                          className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 placeholder-white/25 focus:outline-none focus:border-orange-500/40"
+                        />
+                        <button
+                          onClick={() => {
+                            const n = Math.min(parseInt(selectNCustom) || 0, SELECT_ALL_CAP);
+                            if (n > 0) handleSelectN(n);
+                          }}
+                          disabled={!selectNCustom || parseInt(selectNCustom) <= 0}
+                          className="px-2.5 py-1 text-[10px] font-bold bg-orange-500 hover:bg-orange-400 text-white rounded-lg disabled:opacity-40 transition-colors"
+                        >
+                          Go
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {(selected.size > 0 || selectAllMode) && (
+          {(selected.size > 0 || selectAllMode || selectNCount !== null) && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-orange-300 font-medium whitespace-nowrap">{selectedCount.toLocaleString()} selected</span>
               {mode === "people" ? (
@@ -1733,8 +1875,17 @@ function DiscoverContent() {
           />
         )}
 
+        {/* ── Select-N banner ── */}
+        {selectNCount !== null && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
+            <span className="text-orange-300 font-semibold">First {selectNCount.toLocaleString()} matching {mode} selected.</span>
+            <button onClick={() => { setSelectNCount(null); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
+              Clear selection
+            </button>
+          </div>
+        )}
         {/* ── Select-all banner ── */}
-        {mode === "people" && !selectAllMode && selected.size === results.length && results.length > 0 && total > results.length && (
+        {mode === "people" && !selectAllMode && selectNCount === null && selected.size === results.length && results.length > 0 && total > results.length && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {results.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
@@ -1750,7 +1901,7 @@ function DiscoverContent() {
             </button>
           </div>
         )}
-        {mode === "companies" && !selectAllMode && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
+        {mode === "companies" && !selectAllMode && selectNCount === null && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {companyResults.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
@@ -1774,7 +1925,7 @@ function DiscoverContent() {
               <thead className="sticky top-0 z-10 bg-[#0a0f1e] border-b border-white/8">
                 <tr>
                   <th className="w-10 px-3 py-2.5 sticky left-0 z-20 bg-[#0a0f1e]">
-                    <input type="checkbox" checked={results.length > 0 && (selectAllMode || selected.size === results.length)}
+                    <input type="checkbox" checked={results.length > 0 && (selectAllMode || selectNCount !== null || selected.size === results.length)}
                       onChange={toggleAll} className="accent-orange-500 w-3.5 h-3.5" />
                   </th>
                   <SortTh label="Name" col="name" sortBy={peopleSortBy} sortDir={peopleSortDir} onSort={handlePeopleSort}
@@ -1797,7 +1948,7 @@ function DiscoverContent() {
                 {results.map(r => {
                   const liUrl = normalizeUrl(r.linkedin_url);
                   const isHovered = hoveredRow === r.id;
-                  const isSelected = selected.has(r.id);
+                  const isSelected = selectAllMode || selectNCount !== null || selected.has(r.id);
                   const isActive = drawer?.type === "person" && drawer.id === r.id;
                   return (
                     <tr key={r.id}
@@ -1946,7 +2097,7 @@ function DiscoverContent() {
                 {companyResults.map(c => {
                   const liUrl = normalizeUrl(c.linkedin_url);
                   const isHovered  = hoveredRow === c.id;
-                  const isSelected = selected.has(c.id);
+                  const isSelected = selectAllMode || selectNCount !== null || selected.has(c.id);
                   const isActive   = drawer?.type === "company" && drawer.id === c.id;
                   return (
                     <tr key={c.id}

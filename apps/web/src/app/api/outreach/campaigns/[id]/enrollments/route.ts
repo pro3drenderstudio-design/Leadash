@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Plan gate — free plan cannot run campaigns
   const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
   const planId = wsRow?.plan_id ?? "free";
-  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  const trialExpired = planId === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
   if (trialExpired || planId === "free") {
     return NextResponse.json(
       { error: "Campaigns require a paid plan. Upgrade to enroll leads." },

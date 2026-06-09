@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   // Plan gate
   const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
   const planId = wsRow?.plan_id ?? "free";
-  const trialExpired = wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
+  const trialExpired = planId === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
   if (trialExpired) {
     return NextResponse.json(
       { error: "Your free trial has expired. Upgrade to export leads." },
@@ -174,12 +174,24 @@ export async function POST(req: NextRequest) {
     let resolvedListId: string | null = list_id ?? null;
 
     if (!resolvedListId && list_name) {
-      const { data: newList } = await adminDb
+      // Check for duplicate name first — reuse existing list if name matches
+      const { data: existingList } = await adminDb
         .from("outreach_lists")
-        .insert({ workspace_id: workspaceId, name: list_name })
         .select("id")
-        .single();
-      resolvedListId = newList?.id ?? null;
+        .eq("workspace_id", workspaceId)
+        .ilike("name", list_name)
+        .maybeSingle();
+
+      if (existingList) {
+        resolvedListId = existingList.id;
+      } else {
+        const { data: newList } = await adminDb
+          .from("outreach_lists")
+          .insert({ workspace_id: workspaceId, name: list_name })
+          .select("id")
+          .single();
+        resolvedListId = newList?.id ?? null;
+      }
     }
 
     const leads = mergedPeople.map((p) => ({
@@ -204,11 +216,15 @@ export async function POST(req: NextRequest) {
 
     if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }
 
+    const leadsAdded     = insertedLeads?.length ?? 0;
+    const alreadyExisted = Math.max(0, leads.length - leadsAdded);
+
     return NextResponse.json({
-      ok:           true,
-      leads_added:  insertedLeads?.length ?? 0,
-      credits_used: totalCost,
-      list_id:      resolvedListId,
+      ok:              true,
+      leads_added:     leadsAdded,
+      already_existed: alreadyExisted,
+      credits_used:    totalCost,
+      list_id:         resolvedListId,
     });
   }
 

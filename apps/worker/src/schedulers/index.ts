@@ -37,6 +37,16 @@ export function startSchedulers() {
     console.log(`[scheduler:send] Enqueued ${workspaceIds.length} workspaces`);
   });
 
+  // ── Postal suppression sync: every 15 minutes ───────────────────────────
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      const { syncPostalSuppressions } = await import("./postal-suppression-sync");
+      await syncPostalSuppressions();
+    } catch (e) {
+      console.error("[scheduler:suppression-sync] failed:", e);
+    }
+  });
+
   // ── Reply poll: every 15 minutes ─────────────────────────────────────────
   cron.schedule("*/15 * * * *", async () => {
     const workspaceIds = await getActiveWorkspaceIds();
@@ -104,6 +114,16 @@ export function startSchedulers() {
       await runPostalAiDigest();
     } catch (e) {
       console.error("[scheduler:postal-digest] failed:", e);
+    }
+  });
+
+  // ── Inbox DNS health: every 6 hours ──────────────────────────────────────
+  cron.schedule("0 */6 * * *", async () => {
+    try {
+      const { runInboxDnsHealth } = await import("./inbox-dns-health");
+      await runInboxDnsHealth();
+    } catch (e) {
+      console.error("[scheduler:dns-health] failed:", e);
     }
   });
 
@@ -208,6 +228,26 @@ export function startSchedulers() {
       await runHealthSnapshot();
     } catch (e) {
       console.error("[scheduler:health] snapshot failed:", e);
+    }
+  });
+
+  // ── Scheduled CRM replies: every 5 minutes ──────────────────────────────
+  cron.schedule("*/5 * * * *", async () => {
+    if (!APP_URL || !CRON_SECRET) return;
+    try {
+      const res = await fetch(`${APP_URL}/api/cron/scheduled-replies`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[scheduler:sched-reply] HTTP ${res.status}: ${text.slice(0,200)}`);
+      } else {
+        const data = await res.json() as { sent?: number };
+        if ((data?.sent ?? 0) > 0) console.log(`[scheduler:sched-reply] sent=${data.sent}`);
+      }
+    } catch (e) {
+      console.error("[scheduler:sched-reply] failed:", e);
     }
   });
 

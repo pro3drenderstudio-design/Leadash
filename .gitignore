@@ -29,6 +29,5 @@ npm-debug.log*
 # bubble migration exports (contain user data — never commit)
 scripts/migrate-bubble/exports/*.csv
 
-.vercel
 .env.prod
 .env.staging

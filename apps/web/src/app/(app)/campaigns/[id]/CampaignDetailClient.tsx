@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import RichEmailEditor from "@/components/RichEmailEditor";
@@ -58,6 +58,7 @@ type EditStep = {
   subject_template: string;
   subject_template_b: string;
   body_template: string;
+  abEnabled: boolean;
 };
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -169,14 +170,25 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const [editStopOnAutoReply, setEditStopOnAutoReply]           = useState(false);
   const [editStopOnCompanyReply, setEditStopOnCompanyReply]     = useState(false);
   const [editPauseAfterOpen, setEditPauseAfterOpen]             = useState(false);
+  const [editSmartSendWindow, setEditSmartSendWindow]           = useState(false);
   const [editVerifiedOnly, setEditVerifiedOnly]                 = useState(true);
   const [editTextOnly, setEditTextOnly]                         = useState(false);
   const [editFirstEmailTextOnly, setEditFirstEmailTextOnly]     = useState(false);
   const [editInsertUnsubHeader, setEditInsertUnsubHeader]       = useState(true);
+  const [editIncludeFooter, setEditIncludeFooter]               = useState<boolean | null>(null);
   const [editCustomTags, setEditCustomTags]                     = useState<string[]>([]);
   const [editTagInput, setEditTagInput]                         = useState("");
   const [editSteps, setEditSteps]             = useState<EditStep[]>([]);
   const [loadingTpl, setLoadingTpl]           = useState<number | null>(null);
+
+  // Track inbox count at the time the edit panel was opened so auto-calc
+  // only fires when the user actually changes the selection (not on initial load).
+  const editOpenInboxCount = useRef(0);
+
+  useEffect(() => {
+    if (editInboxes.length === 0 || editInboxes.length === editOpenInboxCount.current) return;
+    setEditDailyCap(editInboxes.length * 15);
+  }, [editInboxes.length]);
 
   // AI generator
   const [showAiGen, setShowAiGen]       = useState(false);
@@ -312,6 +324,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
 
   function openEdit() {
     if (!campaign) return;
+    editOpenInboxCount.current = (campaign.inbox_ids ?? []).length;
     setEditName(campaign.name);
     setEditInboxes(campaign.inbox_ids ?? []);
     setEditTimezone(campaign.timezone ?? "America/New_York");
@@ -325,12 +338,14 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     setEditStopOnAutoReply(campaign.stop_on_auto_reply ?? false);
     setEditStopOnCompanyReply(campaign.stop_on_company_reply ?? false);
     setEditPauseAfterOpen(campaign.pause_after_open ?? false);
+    setEditSmartSendWindow(campaign.smart_send_window ?? false);
     setEditVerifiedOnly(campaign.verified_only ?? true);
     setEditTextOnly(campaign.text_only ?? false);
     setEditFirstEmailTextOnly(campaign.first_email_text_only ?? false);
     setEditInsertUnsubHeader(campaign.insert_unsubscribe_header ?? true);
+    setEditIncludeFooter(campaign.include_unsubscribe_footer ?? null);
     setEditCustomTags(campaign.custom_tags ?? []);
-    setEditSteps(steps.map(s => ({ id: s.id, type: s.type, wait_days: s.wait_days ?? 0, subject_template: s.subject_template ?? "", subject_template_b: s.subject_template_b ?? "", body_template: s.body_template ?? "" })));
+    setEditSteps(steps.map(s => ({ id: s.id, type: s.type, wait_days: s.wait_days ?? 0, subject_template: s.subject_template ?? "", subject_template_b: s.subject_template_b ?? "", body_template: s.body_template ?? "", abEnabled: !!(s.subject_template_b) })));
     setEditing(true);
   }
 
@@ -345,12 +360,14 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         stop_on_reply: editStopOnReply, stop_on_auto_reply: editStopOnAutoReply,
         stop_on_company_reply: editStopOnCompanyReply,
         pause_after_open: editPauseAfterOpen,
+        smart_send_window: editSmartSendWindow,
         verified_only: editVerifiedOnly,
         text_only: editTextOnly, first_email_text_only: editFirstEmailTextOnly,
         insert_unsubscribe_header: editInsertUnsubHeader,
+        include_unsubscribe_footer: editIncludeFooter,
         custom_tags: editCustomTags,
       }),
-      saveSequence(campaign.id, editSteps.map(s => ({ ...s, subject_template_b: s.subject_template_b || null }))),
+      saveSequence(campaign.id, editSteps.map(({ abEnabled: _ab, ...s }) => ({ ...s, subject_template_b: s.subject_template_b || null }))),
     ]);
     setCampaign(updated);
     const newSteps = await getSequence(campaign.id);
@@ -376,7 +393,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
       const result = await generateSequence({ product_name: aiProduct, target_audience: aiAudience, value_prop: aiValueProp, tone: aiTone, num_emails: aiNumEmails, wait_days_between: aiWaitDays, message_length: aiMessageLength });
       if (result.error) { setAiError(result.error); return; }
       if (result.steps) {
-        setEditSteps(result.steps.map((s: { type: string; subject?: string; body?: string; wait_days?: number }) => ({ type: s.type as "email" | "wait", wait_days: s.wait_days ?? aiWaitDays, subject_template: s.subject ?? "", subject_template_b: "", body_template: s.body ?? "" })));
+        setEditSteps(result.steps.map((s: { type: string; subject?: string; body?: string; wait_days?: number }) => ({ type: s.type as "email" | "wait", wait_days: s.wait_days ?? aiWaitDays, subject_template: s.subject ?? "", subject_template_b: "", body_template: s.body ?? "", abEnabled: false })));
         setShowAiGen(false);
       }
     } catch (err) {
@@ -464,6 +481,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
         subject_template: s.subject ?? "",
         subject_template_b: "",
         body_template: s.body ?? "",
+        abEnabled: false,
       }));
       setEditSteps(prev => [...prev, ...newSteps]);
       setShowFollowupGen(false);
@@ -584,7 +602,11 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <div className="flex gap-2">{DAYS.map(d => <button key={d} onClick={() => setEditDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])} className={`w-10 h-10 rounded-lg text-xs font-semibold border transition-all ${editDays.includes(d) ? "bg-orange-500/20 border-orange-500/40 text-orange-300" : "bg-white/4 border-white/8 text-white/30"}`}>{d.slice(0,1).toUpperCase()+d.slice(1,2)}</button>)}</div>
         </div>
 
-        <div><label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label><input type="number" value={editDailyCap} onChange={e => setEditDailyCap(parseInt(e.target.value))} min={1} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" /></div>
+        <div>
+          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Daily Send Cap</label>
+          <input type="number" value={editDailyCap} onChange={e => { const v = parseInt(e.target.value) || 1; const max = Math.max(40, editInboxes.length * 40); setEditDailyCap(Math.min(v, max)); }} min={1} max={Math.max(40, editInboxes.length * 40)} className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50" />
+          {editInboxes.length > 0 && <p className="text-white/30 text-xs mt-1">Auto: {editInboxes.length} × 15 = {editInboxes.length * 15} &nbsp;·&nbsp; Max: {editInboxes.length} × 40 = {editInboxes.length * 40}</p>}
+        </div>
 
         <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
           <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Sending Pattern</p>
@@ -611,6 +633,13 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             </>
           )}
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Pause After Open</p><p className="text-white/35 text-xs">Pause when a lead opens an email</p></div><Toggle value={editPauseAfterOpen} onChange={setEditPauseAfterOpen} color="amber" /></div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white/75 text-sm font-medium">Smart send window</p>
+              <p className="text-white/35 text-xs mt-0.5">Only send when recipient is in business hours (8am–6pm their local time)</p>
+            </div>
+            <Toggle value={editSmartSendWindow} onChange={setEditSmartSendWindow} />
+          </div>
           <div className="flex items-center justify-between"><div><p className="text-white/80 text-sm font-medium">Verified Leads Only</p><p className="text-white/35 text-xs">Skip unverified leads at enrollment — requires email verification first</p></div><Toggle value={editVerifiedOnly} onChange={setEditVerifiedOnly} /></div>
         </div>
 
@@ -629,6 +658,17 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           <div className="flex items-center justify-between">
             <div><p className="text-white/80 text-sm font-medium">Insert Unsubscribe Header</p><p className="text-white/35 text-xs">Adds List-Unsubscribe header for one-click unsubscribe in supporting clients</p></div>
             <Toggle value={editInsertUnsubHeader} onChange={setEditInsertUnsubHeader} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white/80 text-sm font-medium">Unsubscribe Footer</p>
+              <p className="text-white/35 text-xs">
+                {editIncludeFooter === null ? "Using workspace default" : editIncludeFooter ? "Footer shown" : "Footer hidden"}
+                {" · "}
+                <button type="button" onClick={() => setEditIncludeFooter(null)} className={`underline transition-colors ${editIncludeFooter === null ? "text-orange-400/60" : "text-white/30 hover:text-white/50"}`}>Reset to default</button>
+              </p>
+            </div>
+            <Toggle value={editIncludeFooter ?? true} onChange={v => setEditIncludeFooter(v)} />
           </div>
         </div>
 
@@ -676,7 +716,12 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             {editSteps.map((s, i) => (
               <div key={i} className="bg-white/4 border border-white/8 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">Step {i+1} · {s.type === "wait" ? `Wait ${s.wait_days}d` : "Email"}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">Step {i+1} · {s.type === "wait" ? `Wait ${s.wait_days}d` : "Email"}</span>
+                    {s.type === "email" && s.subject_template_b && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-600/20 text-violet-300 border border-violet-500/25">A/B</span>
+                    )}
+                  </div>
                   <button onClick={() => setEditSteps(st => st.filter((_,idx) => idx !== i))} className="text-red-400/60 hover:text-red-400 text-xs">Remove</button>
                 </div>
                 {s.type === "wait" ? (
@@ -705,12 +750,20 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                           <>
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center gap-2">
-                                <label className="text-xs text-white/40">Subject {s.subject_template_b ? "(Variant A)" : ""}</label>
+                                <label className="text-xs text-white/40">Subject {s.abEnabled ? "(Variant A)" : ""}</label>
                                 {isReply && (
                                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-500/12 text-teal-400 border border-teal-500/20">
                                     ↩ Replies to first email
                                   </span>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => setEditSteps(st => st.map((st2, idx) => idx !== i ? st2 : { ...st2, abEnabled: !st2.abEnabled, subject_template_b: st2.abEnabled ? "" : st2.subject_template_b }))}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${s.abEnabled ? "bg-violet-600/25 text-violet-300 border-violet-500/35 hover:bg-violet-600/35" : "bg-white/6 text-white/30 border-white/10 hover:bg-white/10 hover:text-white/50"}`}
+                                  title="Toggle A/B subject testing"
+                                >
+                                  [A/B]
+                                </button>
                               </div>
                               <button
                                 type="button"
@@ -732,7 +785,9 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
                         );
                       })()}
                     </div>
-                    <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><VariableInput value={s.subject_template_b} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:v}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-500/40" /></div>
+                    {s.abEnabled && (
+                      <div><label className="block text-xs text-white/40 mb-1">Subject B <span className="text-white/20">(A/B test)</span></label><VariableInput value={s.subject_template_b} onChange={v => setEditSteps(st => st.map((st2,idx) => idx===i?{...st2,subject_template_b:v}:st2))} placeholder="Alternate subject" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" /></div>
+                    )}
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs text-white/40">Body</label>
@@ -764,8 +819,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
             ))}
           </div>
           <div className="flex gap-3 mt-3 flex-wrap">
-            <button onClick={() => setEditSteps(s => [...s, { type: "email", wait_days: 0, subject_template: "Following up", subject_template_b: "", body_template: "Hi {{first_name}},\n\n" }])} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Email</button>
-            <button onClick={() => setEditSteps(s => [...s, { type: "wait", wait_days: 3, subject_template: "", subject_template_b: "", body_template: "" }])} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Wait Step</button>
+            <button onClick={() => setEditSteps(s => [...s, { type: "email", wait_days: 0, subject_template: "Following up", subject_template_b: "", body_template: "Hi {{first_name}},\n\n", abEnabled: false }])} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Email</button>
+            <button onClick={() => setEditSteps(s => [...s, { type: "wait", wait_days: 3, subject_template: "", subject_template_b: "", body_template: "", abEnabled: false }])} className="px-4 py-2 bg-white/6 hover:bg-white/10 text-white/70 text-sm rounded-xl border border-white/10 transition-colors">+ Add Wait Step</button>
             <button onClick={() => { setShowFollowupGen(s => !s); setFollowupError(null); }} className="px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-sm rounded-xl border border-orange-500/20 transition-colors">✦ Generate follow-ups</button>
           </div>
           {showFollowupGen && (
