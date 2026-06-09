@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { LeadCampaign, LeadCampaignLead } from "@/types/lead-campaigns";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
+import { emitCreditsChanged } from "@/lib/credits/events";
 import LeadDrawer from "./LeadDrawer";
 
 function cleanVal(v: string | null | undefined): string {
@@ -172,6 +173,8 @@ export default function LeadCampaignDetailClient() {
   async function handleCancel() {
     setCancelling(true);
     await wsPost(`/api/lead-campaigns/${id}/cancel`, {}).catch(() => {});
+    // Cancel refunds unused credits server-side
+    emitCreditsChanged();
     setCancelling(false);
     loadCampaign();
   }

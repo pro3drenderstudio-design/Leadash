@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ADMIN_MODULES, type AdminModuleKey } from "@/lib/admin/modules";
 
 const NAV = [
   {
@@ -72,12 +73,38 @@ const NAV = [
   },
 ];
 
-interface Props { adminEmail: string; adminRole: string; }
+interface Props {
+  adminEmail:   string;
+  adminRole:    string;
+  /** Module keys this admin has access to — used to hide sidebar groups they can't see. */
+  adminModules: AdminModuleKey[];
+}
 
-export default function AdminSidebar({ adminEmail, adminRole }: Props) {
+// Map from sidebar group label → required module key. Stays in sync with the
+// `sidebarGroups` arrays declared in lib/admin/modules.ts.
+const GROUP_MODULE_MAP: Record<string, AdminModuleKey> = (() => {
+  const out: Record<string, AdminModuleKey> = {};
+  for (const m of ADMIN_MODULES) {
+    for (const group of m.sidebarGroups) out[group] = m.key;
+  }
+  return out;
+})();
+
+export default function AdminSidebar({ adminEmail, adminRole, adminModules }: Props) {
   const pathname = usePathname();
   const [isOpen, setIsOpen]   = useState(false);
   const [unread, setUnread]   = useState(0);
+
+  // Only show sidebar groups whose backing module is granted to this admin.
+  const allowed = useMemo(() => new Set(adminModules), [adminModules]);
+  const visibleNav = useMemo(
+    () => NAV.filter(group => {
+      const requiredModule = GROUP_MODULE_MAP[group.label];
+      // Groups without an explicit mapping are visible by default (defensive).
+      return !requiredModule || allowed.has(requiredModule);
+    }),
+    [allowed],
+  );
 
   useEffect(() => {
     async function fetchUnread() {
@@ -137,7 +164,7 @@ export default function AdminSidebar({ adminEmail, adminRole }: Props) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-        {NAV.map(group => (
+        {visibleNav.map(group => (
           <div key={group.label}>
             <p className="px-2 mb-1.5 text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-[0.15em]">
               {group.label}

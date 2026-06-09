@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 import type { VerifyBulkJob, VerifyResult } from "@/types/lead-campaigns";
+import { emitCreditsChanged } from "@/lib/credits/events";
+import { validateCsvFile } from "@/lib/file-validators";
 import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -245,6 +247,7 @@ export default function VerifyEmailPage() {
           stopPolling();
           setBulkView("done");
           setBalance(b => b !== null ? b - job.credits_used : null);
+          emitCreditsChanged();
         } else if (job.status === "failed") {
           stopPolling();
           setBulkErr(job.error ?? "Job failed");
@@ -270,6 +273,7 @@ export default function VerifyEmailPage() {
       setSingleResult(res);
       setHistory(prev => [res, ...prev].slice(0, 20));
       setBalance(b => b !== null ? b - 0.5 : null);
+      emitCreditsChanged();
     } catch (err) { setSingleErr(err instanceof Error ? err.message : "Verification failed"); }
     finally { setLoading(false); }
   }
@@ -278,6 +282,15 @@ export default function VerifyEmailPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reject anything that isn't a CSV — the OS file dialog lets users pick
+    // any file type, so we have to gate it here too (the `accept` attr is just a hint).
+    const validation = validateCsvFile(file);
+    if (!validation.ok) {
+      setBulkErr(validation.error);
+      setBulkEmails([]);
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = ev => {
       setBulkEmails(parseCsvEmails(ev.target?.result as string));
@@ -302,6 +315,8 @@ export default function VerifyEmailPage() {
       });
       const body = await res.json() as { job_id?: string; error?: string };
       if (!res.ok) { setBulkErr(body.error ?? res.statusText); setBulkView("upload"); return; }
+      // Credits are debited the moment the job is created server-side — sync the UI right away.
+      emitCreditsChanged();
       // Optimistic placeholder while worker starts
       setActiveJob({ id: body.job_id!, status: "pending", total: bulkEmails.length, processed: 0, safe: 0, invalid: 0, catch_all: 0, risky: 0, dangerous: 0, disposable: 0, unknown: 0, credits_used: bulkEmails.length * verifyRate, error: null, results: null, completed_at: null, expires_at: null, created_at: new Date().toISOString(), workspace_id: "" });
       startPolling(body.job_id!);
@@ -435,7 +450,7 @@ export default function VerifyEmailPage() {
                     <svg className="w-8 h-8 text-white/25 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
                     <p className="text-white/50 text-sm font-medium">{bulkEmails.length > 0 ? `${fmt(bulkEmails.length)} emails loaded — click to replace` : "Upload CSV file"}</p>
                     <p className="text-white/25 text-xs mt-1">Must contain an email column · up to 50,000 emails</p>
-                    <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                    <input ref={fileRef} type="file" accept=".csv,text/csv,application/csv" className="hidden" onChange={handleFileChange} />
                   </div>
                   {bulkErr && <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-sm">{bulkErr}</div>}
                   {bulkEmails.length > 0 && (

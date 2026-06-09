@@ -3,6 +3,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsPost, wsPatch, wsDelete, wsFetch } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
+import { sanitizeName, sanitizeLettersOnly, sanitizeCountryCode, sanitizeZip } from "@/lib/registrant-validators";
 import { CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
 import type { PlanConfig } from "@/lib/billing/getActivePlans";
 
@@ -1104,10 +1105,10 @@ function OutreachTab() {
       >
         <div className="grid grid-cols-2 gap-4">
           <Field label="First name">
-            <Input value={settings.registrant_first_name} onChange={e => set("registrant_first_name", e.target.value)} placeholder="Alex" />
+            <Input value={settings.registrant_first_name} onChange={e => set("registrant_first_name", sanitizeName(e.target.value))} placeholder="Alex" />
           </Field>
           <Field label="Last name">
-            <Input value={settings.registrant_last_name} onChange={e => set("registrant_last_name", e.target.value)} placeholder="Smith" />
+            <Input value={settings.registrant_last_name} onChange={e => set("registrant_last_name", sanitizeName(e.target.value))} placeholder="Smith" />
           </Field>
           <Field label="Email address">
             <Input type="email" value={settings.registrant_email} onChange={e => set("registrant_email", e.target.value)} placeholder="you@company.com" />
@@ -1121,17 +1122,17 @@ function OutreachTab() {
         </Field>
         <div className="grid grid-cols-3 gap-4">
           <Field label="City">
-            <Input value={settings.registrant_city} onChange={e => set("registrant_city", e.target.value)} placeholder="New York" />
+            <Input value={settings.registrant_city} onChange={e => set("registrant_city", sanitizeName(e.target.value))} placeholder="New York" />
           </Field>
           <Field label="State / Province">
-            <Input value={settings.registrant_state} onChange={e => set("registrant_state", e.target.value)} placeholder="NY" />
+            <Input value={settings.registrant_state} onChange={e => set("registrant_state", sanitizeLettersOnly(e.target.value))} placeholder="NY" />
           </Field>
           <Field label="ZIP / Postal code">
-            <Input value={settings.registrant_zip} onChange={e => set("registrant_zip", e.target.value)} placeholder="10001" />
+            <Input value={settings.registrant_zip} onChange={e => set("registrant_zip", sanitizeZip(e.target.value))} placeholder="10001" maxLength={10} />
           </Field>
         </div>
         <Field label="Country (2-letter code)">
-          <Input value={settings.registrant_country} onChange={e => set("registrant_country", e.target.value.toUpperCase().slice(0, 2))} placeholder="US" className="max-w-[80px]" />
+          <Input value={settings.registrant_country} onChange={e => set("registrant_country", sanitizeCountryCode(e.target.value))} placeholder="US" className="max-w-[80px]" />
         </Field>
         <p className="text-white/25 text-xs">
           This information is required by ICANN for domain registration. It appears in public WHOIS records unless domain privacy is enabled.

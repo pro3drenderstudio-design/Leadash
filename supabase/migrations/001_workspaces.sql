@@ -1,3 +1,6 @@
+-- ─── Extensions ──────────────────────────────────────────────────────────────
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ─── Workspaces ──────────────────────────────────────────────────────────────
 CREATE TABLE workspaces (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,7 +41,7 @@ CREATE TABLE workspace_invites (
   workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   email        text NOT NULL,
   role         text NOT NULL DEFAULT 'member',
-  token        text UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  token        text UNIQUE NOT NULL DEFAULT encode(extensions.gen_random_bytes(32), 'hex'),
   invited_by   uuid NOT NULL REFERENCES auth.users(id),
   expires_at   timestamptz NOT NULL DEFAULT now() + interval '7 days',
   accepted_at  timestamptz,
@@ -63,7 +66,7 @@ CREATE TABLE webhook_endpoints (
   workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   url          text NOT NULL,
   events       text[] NOT NULL DEFAULT '{}',
-  secret       text NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  secret       text NOT NULL DEFAULT encode(extensions.gen_random_bytes(32), 'hex'),
   enabled      boolean NOT NULL DEFAULT true,
   created_at   timestamptz NOT NULL DEFAULT now()
 );

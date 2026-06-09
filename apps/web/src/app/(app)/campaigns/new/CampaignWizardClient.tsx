@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { getInboxes, getLists, createList, createCampaign, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows, getSettings, enrollLeads } from "@/lib/outreach/api";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getInboxes, getLists, createList, createCampaign, updateCampaign, getCampaign, getSequence, saveSequence, getTemplates, generateSequence, generateFollowups, generateSpintax, sendTestEmail, checkInboxDns, importLeadRows, getSettings, enrollLeads } from "@/lib/outreach/api";
 import type { CampaignEnrollmentRow } from "@/types/outreach";
 import type { OutreachInboxSafe, OutreachList, OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg, type SpamResult } from "@/lib/outreach/spam-scorer";
@@ -38,6 +38,16 @@ function WizToggle({ label, desc, value, onChange, color = "green", indent = fal
 
 export default function CampaignWizardClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const draftIdParam = searchParams.get("draft");
+
+  // Draft autosave state — the campaign row exists once we've left step 0
+  const [campaignId, setCampaignId] = useState<string | null>(draftIdParam);
+  const [autosaving, setAutosaving] = useState(false);
+  const [autosavedAt, setAutosavedAt] = useState<Date | null>(null);
+  const [draftLoading, setDraftLoading] = useState<boolean>(!!draftIdParam);
+  const draftLoadedRef = useRef(false);
+
   const [step, setStep]       = useState(0);
   const [inboxes, setInboxes] = useState<OutreachInboxSafe[]>([]);
   const [lists, setLists]     = useState<OutreachList[]>([]);
@@ -246,7 +256,8 @@ export default function CampaignWizardClient() {
       getSettings(),
     ]).then(([i, l, t, ws]) => {
       setInboxes(i); setLists(l); setTemplates(t);
-      // Apply workspace defaults to new campaign
+      // Only apply workspace defaults to brand-new campaigns — drafts carry their own values
+      if (draftIdParam) return;
       if (ws.default_timezone)  setTimezone(ws.default_timezone as string);
       if (ws.default_send_start) setStartTime(ws.default_send_start as string);
       if (ws.default_send_end)   setEndTime(ws.default_send_end as string);
@@ -254,7 +265,121 @@ export default function CampaignWizardClient() {
       if (ws.track_opens_default  !== undefined) setTrackOpens(ws.track_opens_default  === true || ws.track_opens_default  === "true");
       if (ws.track_clicks_default !== undefined) setTrackClicks(ws.track_clicks_default === true || ws.track_clicks_default === "true");
     });
-  }, []);
+  }, [draftIdParam]);
+
+  // Resume editing a saved draft — fetch campaign + its sequence steps and rehydrate state
+  useEffect(() => {
+    if (!draftIdParam || draftLoadedRef.current) return;
+    draftLoadedRef.current = true;
+    (async () => {
+      try {
+        const [c, steps] = await Promise.all([
+          getCampaign(draftIdParam),
+          getSequence(draftIdParam).catch(() => [] as Awaited<ReturnType<typeof getSequence>>),
+        ]);
+        // Hydrate step 0 — settings
+        if (c.name) setName(c.name);
+        if (c.inbox_ids) setSelectedInboxes(c.inbox_ids);
+        if (c.timezone) setTimezone(c.timezone);
+        if (c.send_days) setSendDays(c.send_days);
+        if (c.send_start_time) setStartTime(c.send_start_time);
+        if (c.send_end_time)   setEndTime(c.send_end_time);
+        if (typeof c.daily_cap === "number")         setDailyCap(c.daily_cap);
+        if (typeof c.min_delay_seconds === "number") setMinDelay(c.min_delay_seconds);
+        if (typeof c.max_delay_seconds === "number") setMaxDelay(c.max_delay_seconds);
+        if (typeof c.stop_on_reply === "boolean")         setStopOnReply(c.stop_on_reply);
+        if (typeof c.stop_on_auto_reply === "boolean")    setStopOnAutoReply(c.stop_on_auto_reply);
+        if (typeof c.stop_on_company_reply === "boolean") setStopOnCompanyReply(c.stop_on_company_reply);
+        if (typeof c.pause_after_open === "boolean")      setPauseAfterOpen(c.pause_after_open);
+        if (typeof c.text_only === "boolean")             setTextOnly(c.text_only);
+        if (typeof c.first_email_text_only === "boolean") setFirstEmailTextOnly(c.first_email_text_only);
+        if (typeof c.track_opens === "boolean")  setTrackOpens(c.track_opens);
+        if (typeof c.track_clicks === "boolean") setTrackClicks(c.track_clicks);
+        if (typeof c.insert_unsubscribe_header === "boolean") setInsertUnsubHeader(c.insert_unsubscribe_header);
+        if (Array.isArray(c.custom_tags)) setCustomTags(c.custom_tags);
+        // Hydrate step 1 — lists
+        if (Array.isArray(c.list_ids)) setSelectedLists(c.list_ids);
+        // Hydrate step 2 — sequence
+        if (steps.length > 0) {
+          setSeqSteps(steps
+            .slice()
+            .sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
+            .map(s => ({
+              type:               (s.type as "email" | "wait") ?? "email",
+              wait_days:          s.wait_days ?? 0,
+              subject_template:   s.subject_template ?? "",
+              subject_template_b: s.subject_template_b ?? "",
+              body_template:      s.body_template ?? "",
+            })));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? `Failed to load draft: ${e.message}` : "Failed to load draft");
+      } finally {
+        setDraftLoading(false);
+      }
+    })();
+  }, [draftIdParam]);
+
+  // Build the payload sent on every autosave — mirrors the launch payload shape
+  function buildCampaignPayload() {
+    return {
+      name:                      name.trim(),
+      inbox_ids:                 selectedInboxes,
+      list_ids:                  selectedLists,
+      timezone, send_days: sendDays,
+      send_start_time:           startTime,
+      send_end_time:             endTime,
+      daily_cap:                 dailyCap,
+      min_delay_seconds:         minDelay,
+      max_delay_seconds:         maxDelay,
+      stop_on_reply:             stopOnReply,
+      stop_on_auto_reply:        stopOnAutoReply,
+      stop_on_company_reply:     stopOnCompanyReply,
+      pause_after_open:          pauseAfterOpen,
+      text_only:                 textOnly,
+      first_email_text_only:     firstEmailTextOnly,
+      track_opens:               trackOpens,
+      track_clicks:              trackClicks,
+      insert_unsubscribe_header: insertUnsubHeader,
+      custom_tags:               customTags,
+    };
+  }
+
+  /**
+   * Persist the current wizard state as a draft. Called on every step transition.
+   *  - If no name yet, skip silently (the campaign name is required server-side)
+   *  - If no campaignId yet, create one (status defaults to 'draft' in the DB)
+   *  - If campaignId exists, PATCH the latest values
+   *  - If we're advancing out of the Sequence step, also persist the sequence rows
+   * Failures are swallowed so they don't block navigation between steps.
+   */
+  async function autosaveDraft(fromStep: number): Promise<void> {
+    if (!name.trim()) return;
+    setAutosaving(true);
+    try {
+      let id = campaignId;
+      if (!id) {
+        const created = await createCampaign(buildCampaignPayload());
+        id = created.id;
+        setCampaignId(id);
+      } else {
+        await updateCampaign(id, buildCampaignPayload());
+      }
+      // After leaving the Sequence step (index 2), persist the sequence rows
+      if (fromStep >= 2 && id) {
+        await saveSequence(id, seqSteps.map(s => ({
+          ...s,
+          subject_template_b: s.subject_template_b || null,
+        })));
+      }
+      setAutosavedAt(new Date());
+    } catch (e) {
+      // Non-blocking: log so the user can still advance
+      console.warn("[autosave]", e);
+    } finally {
+      setAutosaving(false);
+    }
+  }
 
   // Auto-calc daily cap = 15 × inbox count whenever selection changes
   useEffect(() => {
@@ -494,19 +619,12 @@ export default function CampaignWizardClient() {
     setSaving(true); setError(null);
 
     try {
-      const campaign = await createCampaign({
-        name, inbox_ids: selectedInboxes,
-        timezone, send_days: sendDays, send_start_time: startTime,
-        send_end_time: endTime, daily_cap: dailyCap,
-        min_delay_seconds: minDelay, max_delay_seconds: maxDelay,
-        stop_on_reply: stopOnReply, stop_on_auto_reply: stopOnAutoReply,
-        stop_on_company_reply: stopOnCompanyReply,
-        pause_after_open: pauseAfterOpen,
-        text_only: textOnly, first_email_text_only: firstEmailTextOnly,
-        track_opens: trackOpens, track_clicks: trackClicks,
-        insert_unsubscribe_header: insertUnsubHeader,
-        custom_tags: customTags,
-      });
+      // If autosave already created a draft, reuse it; otherwise create now
+      const payload = buildCampaignPayload();
+      const campaign = campaignId
+        ? await updateCampaign(campaignId, payload)
+        : await createCampaign(payload);
+      if (!campaignId) setCampaignId(campaign.id);
 
       await saveSequence(campaign.id, seqSteps.map((s) => ({
         ...s,
@@ -1231,7 +1349,26 @@ export default function CampaignWizardClient() {
       <div className="flex justify-between mt-8">
         <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} className="px-5 py-2.5 bg-white/6 hover:bg-white/10 disabled:opacity-30 text-white/70 text-sm rounded-xl transition-colors">Back</button>
         {step < 3 ? (
-          <button onClick={() => { setError(null); setStep((s) => s + 1); }} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors">Continue</button>
+          <div className="flex items-center gap-3">
+            {autosaving ? (
+              <span className="text-white/40 text-xs flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                Saving draft…
+              </span>
+            ) : autosavedAt ? (
+              <span className="text-white/35 text-xs">Draft saved</span>
+            ) : null}
+            <button
+              onClick={async () => {
+                setError(null);
+                const current = step;
+                await autosaveDraft(current);
+                setStep((s) => s + 1);
+              }}
+              disabled={autosaving}
+              className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors"
+            >Continue</button>
+          </div>
         ) : (() => {
           const spamBlocking = seqSteps.some((s, i) => s.type === "email" && (stepScores[i]?.score ?? 0) >= 7);
           return (

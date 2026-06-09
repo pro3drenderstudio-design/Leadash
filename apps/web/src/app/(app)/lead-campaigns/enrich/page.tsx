@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { wsGet, wsFetch } from "@/lib/workspace/client";
+import { emitCreditsChanged } from "@/lib/credits/events";
 import type { EnrichBulkJob, EnrichedLead, LeadInput } from "@/types/lead-campaigns";
 import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
@@ -176,6 +177,8 @@ export default function EnrichPage() {
       });
       const body = await res.json() as { job_id?: string; error?: string };
       if (!res.ok) { setError(body.error ?? res.statusText); setView("setup"); return; }
+      // Credits debited server-side at job creation — sync the global balance immediately.
+      emitCreditsChanged();
       setActiveJob({ id: body.job_id!, status: "pending", total: leads.length, processed: 0, prompt: prompt.trim(), credits_used: leads.length * 0.5, error: null, results: null, completed_at: null, expires_at: null, created_at: new Date().toISOString(), workspace_id: "" });
       startPolling(body.job_id!);
     } catch (err) {

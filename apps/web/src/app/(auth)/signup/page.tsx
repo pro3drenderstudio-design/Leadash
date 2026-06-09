@@ -60,8 +60,9 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, full_name: name || undefined }),
       });
-      const d = await res.json() as { error?: string };
+      const d = await res.json() as { error?: string; confirmed?: boolean };
       if (!res.ok) { setError(d.error ?? "Something went wrong. Please try again."); setLoading(false); }
+      else if (d.confirmed) { window.location.href = "/onboarding"; }
       else setDone(true);
     } catch {
       setError("Network error. Please try again.");

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { wsGet } from "@/lib/workspace/client";
+import { useCredits } from "@/components/CreditsProvider";
 import { useSidebar } from "@/components/SidebarContext";
 
 interface SearchResult {
@@ -34,25 +35,16 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
   const [search, setSearch]           = useState("");
   const [results, setResults]         = useState<SearchResult[]>([]);
   const [searchFocused, setFocused]   = useState(false);
-  const [credits, setCredits]           = useState<number | null>(null);
-  const [monthlyCredits, setMonthly]    = useState<number>(0);
-  const [lifetimeCredits, setLifetime]  = useState<number>(0);
   const [notifCount, setNotifCount]   = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const { open: openSidebar } = useSidebar();
+  // Credits come from the shared provider — they live-update via the ld:credits-changed event.
+  const { credits, monthlyCredits, lifetimeCredits } = useCredits();
 
   const displayName = userName || userEmail.split("@")[0];
   const initials    = displayName.split(/[\s.]+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 
   useEffect(() => {
-    wsGet<{ balance: number; monthly_credits: number; lifetime_credits: number }>("/api/lead-campaigns/credits")
-      .then(d => {
-        setCredits(d.balance ?? 0);
-        setMonthly(d.monthly_credits ?? 0);
-        setLifetime(d.lifetime_credits ?? 0);
-      })
-      .catch(() => {});
-
     const fetchInterested = () =>
       wsGet<{ count: number }>("/api/outreach/crm/interested-count")
         .then(d => setNotifCount(Math.min(d.count ?? 0, 9)))
@@ -240,7 +232,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
         })()}
 
         {/* Credits */}
-        {credits !== null && (
+        {(
           <div className="relative group/credits hidden sm:block">
             <Link
               href="/lead-campaigns/credits"

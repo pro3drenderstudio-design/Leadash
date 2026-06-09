@@ -8,6 +8,14 @@ import {
   type SavedSearch,
 } from "@/types/discover";
 import {
+  cacheKey as discoverCacheKey,
+  getCachedResult, setCachedResult,
+  getInflight, registerInflight,
+  getLastSearchKey,
+  type CacheEntry as DiscoverCacheEntry,
+} from "@/lib/discover/search-cache";
+import { emitCreditsChanged } from "@/lib/credits/events";
+import {
   PeopleSidebar, CompanySidebar,
   DEFAULT_PEOPLE_FILTERS, DEFAULT_COMPANY_FILTERS,
   PEOPLE_QUICK_FILTERS, COMPANY_QUICK_FILTERS,
@@ -964,12 +972,24 @@ function CompanyDrawer({ id, onClose, onRevealPerson, onViewPerson }: {
 function DiscoverContent() {
   const router      = useRouter();
   const searchParams = useSearchParams();
-  const [initState] = useState(() => filtersFromParams(searchParams));
+  // If the URL is empty but we cached a previous search this session, restore it.
+  // This is what makes navigating away and back to /discover not "feel like you were never there".
+  const [initState] = useState(() => {
+    const hasUrlParams = searchParams.toString().length > 0;
+    if (hasUrlParams) return { ...filtersFromParams(searchParams), restored: null as DiscoverCacheEntry | null };
+    const lastKey = typeof window !== "undefined" ? getLastSearchKey() : null;
+    const entry = lastKey ? getCachedResult(lastKey) : null;
+    if (entry) {
+      const restoredParams = new URLSearchParams(entry.urlSearch);
+      return { ...filtersFromParams(restoredParams), restored: entry };
+    }
+    return { ...filtersFromParams(searchParams), restored: null as DiscoverCacheEntry | null };
+  });
 
   const [mode, setMode] = useState<"people" | "companies">(initState.mode);
   const [peopleFilters,  setPeopleFilters]  = useState<PeopleFilters>(initState.pf);
   const [companyFilters, setCompanyFilters] = useState<CompanyFilters>(initState.cf);
-  const [hasSearched,   setHasSearched]   = useState(() => searchParams.toString().length > 0);
+  const [hasSearched,   setHasSearched]   = useState(() => searchParams.toString().length > 0 || !!initState.restored);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
 
   const [peopleSortBy,  setPeopleSortBy]  = useState("created_at");
@@ -977,13 +997,20 @@ function DiscoverContent() {
   const [coSortBy,      setCoSortBy]      = useState("people_count");
   const [coSortDir,     setCoSortDir]     = useState<"asc" | "desc">("desc");
 
-  const [results,        setResults]        = useState<DiscoverResult[]>([]);
-  const [companyResults, setCompanyResults] = useState<DiscoverCompanyResult[]>([]);
-  const [total,          setTotal]          = useState(0);
-  const [resultsCapped,  setResultsCapped]  = useState(false);
-  const [page,           setPage]           = useState(1);
+  // Seed results from the cached entry so the page renders populated instantly on remount.
+  const [results,        setResults]        = useState<DiscoverResult[]>(
+    initState.restored?.mode === "people" ? initState.restored.results : [],
+  );
+  const [companyResults, setCompanyResults] = useState<DiscoverCompanyResult[]>(
+    initState.restored?.mode === "companies" ? initState.restored.results : [],
+  );
+  const [total,          setTotal]          = useState(initState.restored?.total ?? 0);
+  const [resultsCapped,  setResultsCapped]  = useState(initState.restored?.capped ?? false);
+  const [page,           setPage]           = useState(initState.restored?.page ?? 1);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
+  // When we restore from cache we already have results — block the debounced effect's first auto-fetch.
+  const skipNextAutoSearch = useRef<boolean>(!!initState.restored);
 
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
   const [selectAllMode, setSelectAllMode] = useState(false);
@@ -1087,13 +1114,39 @@ function DiscoverContent() {
       params.set("sort", peopleSortBy); params.set("order", peopleSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       if (skipCount) params.set("skip_count", "true");
-      const data = await wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`);
+
+      const ckey = discoverCacheKey("people", params.toString());
+      const filterUrl = filtersToParams("people", f, companyFilters).toString();
+      // If a request for this exact key is already mid-flight (e.g. user just remounted),
+      // join it instead of issuing a duplicate.
+      const existing = getInflight(ckey) as Promise<DiscoverSearchResponse> | undefined;
+      const fetchPromise: Promise<DiscoverSearchResponse> = existing ?? (
+        wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`)
+          .then(data => {
+            // Cache writes even if the React component unmounts mid-fetch
+            if (p === 1 && !skipCount) {
+              setCachedResult(ckey, {
+                mode: "people",
+                page: p,
+                total: data.total ?? 0,
+                capped: !!data.message,
+                results: data.results ?? [],
+                ts: Date.now(),
+                urlSearch: filterUrl,
+              });
+            }
+            return data;
+          })
+      );
+      if (!existing && p === 1) registerInflight(ckey, fetchPromise);
+
+      const data = await fetchPromise;
       setResults(data.results ?? []);
       if (!skipCount) { setTotal(data.total ?? 0); setResultsCapped(!!data.message); }
       setPage(p);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [peopleFilters, peopleSortBy, peopleSortDir]);
+  }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters]);
 
   const searchCompanies = useCallback(async (p = 1, skipCount = false) => {
     setLoading(true); setError(null); setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); setExportMsg(null);
@@ -1119,19 +1172,48 @@ function DiscoverContent() {
       params.set("sort", coSortBy); params.set("order", coSortDir);
       params.set("page", String(p)); params.set("limit", String(limit));
       if (skipCount) params.set("skip_count", "true");
-      const data = await wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`);
+
+      const ckey = discoverCacheKey("companies", params.toString());
+      const filterUrl = filtersToParams("companies", peopleFilters, f).toString();
+      const existing = getInflight(ckey) as Promise<DiscoverCompanySearchResponse> | undefined;
+      const fetchPromise: Promise<DiscoverCompanySearchResponse> = existing ?? (
+        wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`)
+          .then(data => {
+            if (p === 1 && !skipCount) {
+              setCachedResult(ckey, {
+                mode: "companies",
+                page: p,
+                total: data.total ?? 0,
+                capped: false,
+                results: data.results ?? [],
+                ts: Date.now(),
+                urlSearch: filterUrl,
+              });
+            }
+            return data;
+          })
+      );
+      if (!existing && p === 1) registerInflight(ckey, fetchPromise);
+
+      const data = await fetchPromise;
       setCompanyResults(data.results ?? []);
       if (!skipCount) setTotal(data.total ?? 0);
       setPage(p); setResultsCapped(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
     finally { setLoading(false); }
-  }, [companyFilters, coSortBy, coSortDir]);
+  }, [companyFilters, coSortBy, coSortDir, peopleFilters]);
 
   const search = mode === "people" ? searchPeople : searchCompanies;
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!hasSearched) return;
+    // Just restored from cache — skip the auto-search, but let subsequent filter changes re-run.
+    if (skipNextAutoSearch.current) {
+      skipNextAutoSearch.current = false;
+      isInitialRender.current = false;
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     // Fire immediately on first render (e.g. arriving via saved-search URL); debounce after
     const delay = isInitialRender.current ? 0 : 600;
@@ -1333,7 +1415,7 @@ function DiscoverContent() {
             if (!rev) return r;
             return { ...r, email_preview: rev.email, phone_preview: rev.phone, email_status: (rev.email_status as DiscoverResult["email_status"]) ?? r.email_status, revealed: true };
           }));
-          if (data.credits_used > 0) setBalance(b => (b ?? 0) - data.credits_used);
+          if (data.credits_used > 0) { setBalance(b => (b ?? 0) - data.credits_used); emitCreditsChanged(); }
         }
         completed += window.reduce((s, b) => s + b.length, 0);
         setBulkProgress(p => p ? { ...p, current: Math.min(completed, ids.length) } : null);
@@ -1407,7 +1489,7 @@ function DiscoverContent() {
         const j = await res.json() as { leads_added: number; credits_used: number; campaign_id?: string };
         totalAdded += j.leads_added ?? 0;
         if (!resolvedCampaignId && j.campaign_id) resolvedCampaignId = j.campaign_id;
-        if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
+        if (j.credits_used > 0) { setBalance(b => (b ?? 0) - j.credits_used); emitCreditsChanged(); }
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
       setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} leads added to campaign` });
@@ -1447,7 +1529,7 @@ function DiscoverContent() {
         totalAdded    += j.leads_added     ?? 0;
         totalExisting += j.already_existed ?? 0;
         if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
-        if (j.credits_used > 0) setBalance(b => (b ?? 0) - j.credits_used);
+        if (j.credits_used > 0) { setBalance(b => (b ?? 0) - j.credits_used); emitCreditsChanged(); }
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
       let msg: string;
