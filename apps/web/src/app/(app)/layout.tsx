@@ -7,6 +7,7 @@ import SectionTabs from "@/components/SectionTabs";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
 import CreditsProvider from "@/components/CreditsProvider";
 import { CurrencyProvider } from "@/lib/currency";
+import { getCurrencyContext } from "@/lib/currency/server";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
@@ -84,9 +85,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     && renewalDate !== null
     && renewalDate <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+  // Resolve the visitor's currency (from x-vercel-ip-country + the currency_rates table)
+  // so prices throughout the app render in their local currency. Nigerian visitors get NGN.
+  const currencyContext = await getCurrencyContext();
+
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
-    <CurrencyProvider>
+    <CurrencyProvider context={currencyContext}>
     <CreditsProvider
       initialCredits={workspace.lead_credits_balance ?? 0}
       initialMonthlyCredits={workspace.subscription_credits_balance ?? 0}

@@ -163,8 +163,10 @@ export default function BuyDomainPage() {
   const combos = generateCombos(firstName, lastName);
 
   // ── Step 3: Review ──────────────────────────────────────────────────────────
-  const { currency: globalCurrency }      = useCurrency();
-  const currency: PaymentProvider         = globalCurrency === "NGN" ? "paystack" : "stripe";
+  // formatPrice converts NGN → visitor's local currency for display only —
+  // checkout always goes through Paystack in NGN.
+  const { formatPrice } = useCurrency();
+  const currency: PaymentProvider = "paystack";
   const [paying, setPaying]               = useState(false);
   const [payError, setPayError]           = useState<string | null>(null);
 
@@ -750,8 +752,8 @@ export default function BuyDomainPage() {
               ))}
             </div>
             <div className="border-t border-white/8 pt-3">
-              <Row label="Monthly subscription" value={`₦${recurringNgn.toLocaleString()}/mo`} highlight />
-              <p className="text-white/30 text-xs mt-1">₦{activeInboxPriceNgn.toLocaleString()}/inbox × {totalInboxes} inboxes</p>
+              <Row label="Monthly subscription" value={`${formatPrice(recurringNgn)}/mo`} highlight />
+              <p className="text-white/30 text-xs mt-1">{formatPrice(activeInboxPriceNgn)}/inbox × {totalInboxes} inboxes</p>
             </div>
             {(redirectUrl || replyForwardTo) && (
               <div className="border-t border-white/8 pt-3 space-y-1">
@@ -761,28 +763,17 @@ export default function BuyDomainPage() {
             )}
           </div>
 
-          {/* Currency — driven by sidebar toggle */}
+          {/* Payment summary — charged in NGN via Paystack, shown in local currency */}
           <div className="mb-6 flex items-center justify-between px-4 py-3 bg-white/4 border border-white/8 rounded-xl">
             <div>
-              <p className="text-white text-sm font-semibold">
-                {currency === "stripe" ? "USD · via Stripe" : "NGN · via Paystack"}
+              <p className="text-white text-sm font-semibold">NGN · via Paystack</p>
+              <p className="text-white/60 text-sm font-mono mt-0.5">
+                {formatPrice(totalNgn)} charged now
               </p>
-              {currency === "stripe" ? (
-                <p className="text-white/60 text-sm font-mono mt-0.5">
-                  ${oneTimeUsd.toFixed(2)} domain + ₦{recurringNgn.toLocaleString()}/mo
-                </p>
-              ) : (
-                <>
-                  <p className="text-white/60 text-sm font-mono mt-0.5">
-                    ₦{totalNgn.toLocaleString()} charged now
-                  </p>
-                  <p className="text-white/35 text-xs mt-0.5">
-                    ₦{domainOnlyNgn.toLocaleString()} domain + ₦{recurringNgn.toLocaleString()} 1st month · then ₦{recurringNgn.toLocaleString()}/mo
-                  </p>
-                </>
-              )}
+              <p className="text-white/35 text-xs mt-0.5">
+                {formatPrice(domainOnlyNgn)} domain + {formatPrice(recurringNgn)} 1st month · then {formatPrice(recurringNgn)}/mo
+              </p>
             </div>
-            <p className="text-white/30 text-xs">Change in sidebar</p>
           </div>
 
           {payError && <p className="text-red-400 text-sm mb-4">{payError}</p>}

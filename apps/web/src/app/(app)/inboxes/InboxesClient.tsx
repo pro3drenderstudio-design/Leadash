@@ -293,7 +293,8 @@ function generateCombos(first: string, last: string): string[] {
 
 export default function InboxesClient({ trialExpired = false, planId = "free", maxInboxes = 5 }: InboxesClientProps) {
   const params = useSearchParams();
-  const { currency: globalCurrency } = useCurrency();
+  // formatPrice converts NGN → visitor's local currency. Paystack still charges in NGN.
+  const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab]       = useState<"inboxes" | "domains" | "warmup">(() => {
     const t = params.get("tab");
     return (t === "warmup" || t === "domains") ? t : "inboxes";
@@ -775,7 +776,8 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
       return;
     }
 
-    const paymentProvider: "stripe" | "paystack" = globalCurrency === "NGN" ? "paystack" : "stripe";
+    // All charges go through Paystack in NGN — local-currency display is informational only.
+    const paymentProvider: "stripe" | "paystack" = "paystack";
     setAddWorking(true);
     setAddMsg(null);
     try {
@@ -2100,10 +2102,7 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
         const overCap = uniqueValid.length > slotsLeft;
         const canProceed = uniqueValid.length > 0 && !conflict && !overCap && !addWorking;
 
-        const pricePerInboxUsd = addNgnPerUsd > 0 ? addInboxPriceNgn / addNgnPerUsd : 0;
-        const totalMonthlyUsd = pricePerInboxUsd * uniqueValid.length;
         const totalMonthlyNgn = addInboxPriceNgn * uniqueValid.length;
-        const isNgn = globalCurrency === "NGN";
 
         const warmupDaily = 30;
         const fullDaily = 50;
@@ -2233,9 +2232,9 @@ export default function InboxesClient({ trialExpired = false, planId = "free", m
                   <div className="bg-white/4 border border-white/8 rounded-xl p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs text-white/50">{uniqueValid.length} inbox{uniqueValid.length !== 1 ? "es" : ""} × {isNgn ? `₦${addInboxPriceNgn.toLocaleString()}` : `$${pricePerInboxUsd.toFixed(2)}`}/mo</p>
+                        <p className="text-xs text-white/50">{uniqueValid.length} inbox{uniqueValid.length !== 1 ? "es" : ""} × {formatPrice(addInboxPriceNgn)}/mo</p>
                         <p className="text-white text-base font-semibold mt-0.5">
-                          {isNgn ? `₦${totalMonthlyNgn.toLocaleString()}` : `$${totalMonthlyUsd.toFixed(2)}`}
+                          {formatPrice(totalMonthlyNgn)}
                           <span className="text-white/35 text-xs font-normal">/month</span>
                         </p>
                       </div>
