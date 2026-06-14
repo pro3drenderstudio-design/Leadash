@@ -104,24 +104,62 @@ export default function LeadDrawer({
                    || lead.email[0].toUpperCase();
   const badge    = VERIFY_BADGE[lead.verification_status ?? ""];
 
-  // Resolve LinkedIn URL: prefer top-level field, then custom_fields
-  const linkedinUrl =
-    lead.linkedin_url ||
-    (lead.custom_fields?.linkedin_url as string | undefined) ||
-    (lead.custom_fields?.linkedin as string | undefined) ||
-    null;
+  // Helper: pull a field from custom_fields under any of the listed aliases.
+  function customField(...aliases: string[]): string | null {
+    if (!lead.custom_fields) return null;
+    for (const k of Object.keys(lead.custom_fields)) {
+      if (aliases.includes(k.toLowerCase())) {
+        const v = lead.custom_fields[k];
+        if (v != null && String(v).trim() !== "") return String(v);
+      }
+    }
+    return null;
+  }
 
-  // Location: city / country
-  const location = [lead.city, lead.country].filter(Boolean).join(", ") || null;
+  // ── Derived fields ────────────────────────────────────────────────────────
+  const linkedinUrl  = lead.linkedin_url || customField("linkedin_url", "linkedin");
+  const twitterUrl   = customField("twitter_url", "twitter", "x_url");
+  const facebookUrl  = customField("facebook_url", "facebook");
+  const githubUrl    = customField("github_url", "github");
+  const instagramUrl = customField("instagram_url", "instagram");
+  const phone        = customField("phone", "phone_number", "mobile");
 
-  // Extra custom fields (phone, twitter, instagram — excluding linkedin since shown separately)
+  // Header chips — these come straight from CSV upload custom_fields when present
+  const seniority   = customField("seniority", "seniority_level");
+  const department  = customField("department", "function", "job_function");
+  const subRole     = customField("sub_role", "subrole");
+
+  // Company info
+  const companyDomain    = customField("company_domain", "domain", "website_domain");
+  const companyIndustry  = customField("industry", "company_industry");
+  const companySize      = customField("company_size", "size_range", "employees", "employee_count", "headcount");
+  const companyKeywords  = customField("company_keywords", "keywords");
+  const companyLocation  = customField("company_location", "company_city");
+
+  // Location: full address — city, state, country (state usually only in custom_fields)
+  const state    = customField("state", "region");
+  const location = [lead.city, state, lead.country].filter(Boolean).join(", ") || null;
+
+  // Bio / summary
+  const summary = customField("summary", "bio", "about", "description");
+
+  // Catch-all: any other custom_fields key we haven't already surfaced above
+  const SURFACED_KEYS = new Set([
+    "linkedin_url","linkedin","twitter_url","twitter","x_url",
+    "facebook_url","facebook","github_url","github","instagram_url","instagram",
+    "phone","phone_number","mobile",
+    "seniority","seniority_level","department","function","job_function","sub_role","subrole",
+    "company_domain","domain","website_domain","industry","company_industry",
+    "company_size","size_range","employees","employee_count","headcount",
+    "company_keywords","keywords","company_location","company_city",
+    "state","region","summary","bio","about","description",
+  ]);
   const extraFields: { key: string; value: string }[] = [];
   if (lead.custom_fields) {
     for (const [k, v] of Object.entries(lead.custom_fields)) {
-      const lk = k.toLowerCase();
-      if (["phone","twitter","instagram"].includes(lk) && v) {
-        extraFields.push({ key: k, value: String(v) });
-      }
+      if (v == null || String(v).trim() === "") continue;
+      if (SURFACED_KEYS.has(k.toLowerCase())) continue;
+      extraFields.push({ key: k, value: String(v) });
     }
   }
 
@@ -166,41 +204,105 @@ export default function LeadDrawer({
       {/* Drawer panel */}
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-[#0d0d0d] border-l border-white/8 flex flex-col shadow-2xl">
 
-        {/* Header */}
-        <div className="flex items-start gap-3 p-5 border-b border-white/8 shrink-0">
-          {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-semibold text-sm shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold truncate">{name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-white/40 text-xs truncate">{lead.email}</span>
-              <button
-                onClick={copyEmail}
-                className="text-white/25 hover:text-white/60 transition-colors text-xs shrink-0"
-                title="Copy email"
-              >
-                {copied ? "✓" : "⎘"}
-              </button>
+        {/* Header — bigger avatar + title underneath the name + chip row, mirroring Discovery's PersonDrawer */}
+        <div className="p-5 border-b border-white/8 shrink-0">
+          <div className="flex items-start gap-3">
+            {/* Avatar */}
+            <div className="w-11 h-11 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-semibold shrink-0">
+              {initials}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold truncate">{name}</p>
+              {(lead.title || subRole) && (
+                <p className="text-white/55 text-xs mt-0.5 truncate">
+                  {[lead.title, subRole].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-white/40 text-xs truncate">{lead.email}</span>
+                <button
+                  onClick={copyEmail}
+                  className="text-white/25 hover:text-white/60 transition-colors text-xs shrink-0"
+                  title="Copy email"
+                >
+                  {copied ? "✓" : "⎘"}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white/25 hover:text-white/65 transition-colors shrink-0 mt-0.5"
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white/25 hover:text-white/65 transition-colors shrink-0 mt-0.5"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+
+          {/* Chips — seniority / department / verification at a glance */}
+          {(seniority || department) && (
+            <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+              {seniority && (
+                <span className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[10px] text-white/55 uppercase tracking-wider">
+                  {seniority}
+                </span>
+              )}
+              {department && (
+                <span className="px-1.5 py-0.5 rounded bg-white/6 border border-white/8 text-[10px] text-white/55">
+                  {department}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Social link row */}
+          {(linkedinUrl || twitterUrl || facebookUrl || githubUrl || instagramUrl) && (
+            <div className="flex items-center gap-3 mt-3">
+              {linkedinUrl && (
+                <a href={linkedinUrl.startsWith("http") ? linkedinUrl : `https://${linkedinUrl}`} target="_blank" rel="noreferrer"
+                  className="text-[#0077B5]/60 hover:text-[#0077B5] transition-colors" title="LinkedIn">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                </a>
+              )}
+              {twitterUrl && (
+                <a href={twitterUrl.startsWith("http") ? twitterUrl : `https://${twitterUrl}`} target="_blank" rel="noreferrer"
+                  className="text-sky-400/60 hover:text-sky-400 transition-colors" title="Twitter/X">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+              )}
+              {facebookUrl && (
+                <a href={facebookUrl.startsWith("http") ? facebookUrl : `https://${facebookUrl}`} target="_blank" rel="noreferrer"
+                  className="text-blue-600/60 hover:text-blue-500 transition-colors" title="Facebook">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+              )}
+              {githubUrl && (
+                <a href={githubUrl.startsWith("http") ? githubUrl : `https://${githubUrl}`} target="_blank" rel="noreferrer"
+                  className="text-white/40 hover:text-white/80 transition-colors" title="GitHub">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                </a>
+              )}
+              {instagramUrl && (
+                <a href={instagramUrl.startsWith("http") ? instagramUrl : `https://${instagramUrl}`} target="_blank" rel="noreferrer"
+                  className="text-pink-500/60 hover:text-pink-500 transition-colors" title="Instagram">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
 
-          {/* Contact info */}
+          {/* Bio / summary */}
+          {summary && (
+            <p className="text-xs text-white/50 italic leading-relaxed line-clamp-6 border-l-2 border-white/10 pl-3">
+              &quot;{summary}&quot;
+            </p>
+          )}
+
+          {/* Person info */}
           <div className="space-y-3">
-            {lead.title && <Field label="Title">{lead.title}</Field>}
-            {lead.company && <Field label="Company">{lead.company}</Field>}
             {location && (
               <Field label="Location">
                 <span className="flex items-center gap-1.5">
@@ -212,45 +314,54 @@ export default function LeadDrawer({
                 </span>
               </Field>
             )}
-            {lead.website && (
-              <Field label="Website">
-                <a
-                  href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-400 hover:text-indigo-300 hover:underline truncate block transition-colors"
-                >
-                  {lead.website}
-                </a>
+            {phone && (
+              <Field label="Phone">
+                <a href={`tel:${phone}`} className="text-white/70 hover:text-white transition-colors">{phone}</a>
               </Field>
             )}
-            {linkedinUrl && (
-              <Field label="LinkedIn">
-                <a
-                  href={linkedinUrl.startsWith("http") ? linkedinUrl : `https://${linkedinUrl}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[#0077B5] hover:text-[#0093e0] hover:underline truncate transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                  </svg>
-                  View profile
-                </a>
-              </Field>
-            )}
-            {extraFields.map(f => (
-              <Field key={f.key} label={f.key.charAt(0).toUpperCase() + f.key.slice(1)}>
-                {f.value.startsWith("http") ? (
-                  <a href={f.value} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline truncate block">
-                    {f.value}
-                  </a>
-                ) : (
-                  <span>{f.value}</span>
-                )}
-              </Field>
-            ))}
           </div>
+
+          {/* Company panel — grouped block, like Discovery's company subsection */}
+          {(lead.company || companyDomain || companyIndustry || companySize || companyKeywords || companyLocation || lead.website) && (
+            <div className="bg-white/[0.03] rounded-xl p-4 space-y-2.5">
+              <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">Company</p>
+              {lead.company && <Field label="Name">{lead.company}</Field>}
+              {(companyDomain || lead.website) && (
+                <Field label="Domain">
+                  <a
+                    href={(companyDomain || lead.website || "").startsWith("http") ? (companyDomain || lead.website || "") : `https://${companyDomain || lead.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 hover:underline truncate block transition-colors"
+                  >
+                    {companyDomain || lead.website}
+                  </a>
+                </Field>
+              )}
+              {companyIndustry && <Field label="Industry">{companyIndustry}</Field>}
+              {companySize     && <Field label="Size">{companySize}</Field>}
+              {companyLocation && <Field label="Office">{companyLocation}</Field>}
+              {companyKeywords && <Field label="Keywords"><span className="text-white/55 text-xs">{companyKeywords}</span></Field>}
+            </div>
+          )}
+
+          {/* Anything else — preserves any custom_fields keys we haven't already mapped */}
+          {extraFields.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">More</p>
+              {extraFields.map(f => (
+                <Field key={f.key} label={f.key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}>
+                  {f.value.startsWith("http") ? (
+                    <a href={f.value} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline truncate block">
+                      {f.value}
+                    </a>
+                  ) : (
+                    <span>{f.value}</span>
+                  )}
+                </Field>
+              ))}
+            </div>
+          )}
 
           {/* Verification */}
           <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">

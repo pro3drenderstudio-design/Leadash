@@ -677,70 +677,46 @@ export default function LeadCampaignDetailClient() {
         </div>
       )}
 
-      {/* Export to Leads Pool Modal */}
+      {/* Export to Leads Pool — DEPRECATED. The direct export path is disabled;
+          users must download a CSV and re-upload it from the Leads Pool page. */}
       {showExport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => { setShowExport(false); setExportResult(null); }} />
-          <div className="relative w-full max-w-md bg-gray-950 border border-white/10 rounded-2xl p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-1">Export to Leads Pool</h3>
-            <p className="text-white/40 text-sm mb-5">
-              {selectAllMode
-                ? `All ${total.toLocaleString()} leads`
-                : selected.size > 0
-                ? `${selected.size} selected leads`
-                : "All unexported leads"
-              } will be added to your chosen list
-            </p>
-
-            {exportResult ? (
-              <div className={`p-3 rounded-xl text-sm mb-4 ${exportResult.startsWith("Error") ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"}`}>
-                {exportResult}
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowExport(false)} />
+          <div className="relative w-full max-w-md bg-gray-950 border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Valid only toggle — pre-checked */}
-                <div className="flex items-center justify-between p-3.5 bg-white/4 border border-white/8 rounded-xl">
-                  <div>
-                    <p className="text-white text-sm font-medium">Valid emails only</p>
-                    <p className="text-white/35 text-xs mt-0.5">Only export verified valid + catch-all emails</p>
-                  </div>
-                  <Toggle value={validOnly} onChange={setValidOnly} />
-                </div>
-
-                <div>
-                  <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Add to existing list</label>
-                  <select
-                    value={exportListId}
-                    onChange={e => { setExportListId(e.target.value); setNewListName(""); }}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
-                  >
-                    <option value="">Select a list...</option>
-                    {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-white/8" />
-                  <span className="text-white/30 text-xs">or</span>
-                  <div className="flex-1 h-px bg-white/8" />
-                </div>
-                <div>
-                  <label className="block text-white/40 text-xs font-semibold uppercase tracking-wider mb-1.5">Create new list</label>
-                  <input
-                    value={newListName}
-                    onChange={e => { setNewListName(e.target.value); setExportListId(""); }}
-                    placeholder="List name..."
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-orange-500/60 transition-colors"
-                  />
-                </div>
-                <button
-                  onClick={handleExport}
-                  disabled={exporting || (!exportListId && !newListName)}
-                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
-                >
-                  {exporting ? "Exporting..." : "Export Leads"}
-                </button>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">Direct export is being retired</h3>
+                <p className="text-white/50 text-sm mt-1 leading-relaxed">
+                  Lead Campaigns is shutting down on <strong className="text-amber-300">June 30, 2026</strong>. Direct export to Leads Pool is no longer supported — please download your leads as a CSV and re-upload them from the Leads Pool page instead.
+                </p>
               </div>
-            )}
+            </div>
+            <div className="bg-white/4 border border-white/8 rounded-xl p-3.5 mb-4 text-xs text-white/55 space-y-1.5">
+              <p><span className="font-semibold text-white/75">1.</span> Click <span className="font-semibold text-white/75">Download CSV</span> below to save this campaign&apos;s leads.</p>
+              <p><span className="font-semibold text-white/75">2.</span> Go to <a href="/leads" className="text-orange-400 hover:text-orange-300 underline">Leads Pool</a> and upload the CSV into a list.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setShowExport(false); setShowDownload(true); }}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Download CSV
+              </button>
+              <button
+                onClick={() => setShowExport(false)}
+                className="px-4 py-2.5 text-sm text-white/60 hover:text-white/90 hover:bg-white/5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

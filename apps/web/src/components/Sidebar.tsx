@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/components/SidebarContext";
 import { useCredits } from "@/components/CreditsProvider";
-import { SECTIONS, WORKSPACE_SECTION, findActiveSection, type NavSection } from "@/lib/nav/sections";
+import { SECTIONS, WORKSPACE_SECTION, findActiveSection, type NavSection, type NavTab } from "@/lib/nav/sections";
 
 interface Props {
   workspaceName: string;
@@ -46,6 +46,35 @@ export default function Sidebar({ workspaceName, plan }: Props) {
             {section.badge}
           </span>
         )}
+        {active && <span className="ml-auto w-1 h-4 rounded-full bg-orange-400/60" />}
+      </Link>
+    );
+  }
+
+  // Inline sidebar link for a workspace sub-tab. Same visual treatment as SectionLink
+  // so Settings/Support/Help sit visually alongside the primary section list, just
+  // pinned to the bottom under the Workspace heading.
+  function WorkspaceTabLink({ tab }: { tab: NavTab }) {
+    const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
+    return (
+      <Link
+        href={tab.href}
+        onClick={close}
+        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
+          active
+            ? "bg-orange-50 dark:bg-white/10 text-slate-900 dark:text-white font-medium"
+            : "text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5"
+        }`}
+      >
+        {tab.icon && (
+          <svg
+            className={`w-4 h-4 flex-shrink-0 ${active ? "text-orange-500 dark:text-orange-400" : ""}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
+          </svg>
+        )}
+        {tab.label}
         {active && <span className="ml-auto w-1 h-4 rounded-full bg-orange-400/60" />}
       </Link>
     );
@@ -97,12 +126,16 @@ export default function Sidebar({ workspaceName, plan }: Props) {
         {SECTIONS.map(section => <SectionLink key={section.id} section={section} />)}
       </nav>
 
-      {/* Workspace — sticky bottom group, separated from the main nav so it stays put */}
+      {/* Workspace — sticky bottom group, Settings/Support/Help shown directly so users
+          don't have to drill in to find help. */}
       <div
-        className="px-2 py-2"
+        className="px-2 py-2 space-y-0.5"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
-        <SectionLink section={WORKSPACE_SECTION} />
+        <p className="px-2.5 pt-1 pb-1 text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-[0.15em]">
+          {WORKSPACE_SECTION.label}
+        </p>
+        {WORKSPACE_SECTION.tabs.map(tab => <WorkspaceTabLink key={tab.href} tab={tab} />)}
       </div>
 
       {/* Bottom utility row — credits + sign out */}
