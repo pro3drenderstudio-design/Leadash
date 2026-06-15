@@ -312,7 +312,20 @@ export async function POST(req: NextRequest) {
         .eq("campaign_id", campaign_id);
 
       const enrolledSet = new Set((existing ?? []).map((e: { lead_id: string }) => e.lead_id));
-      const toEnroll = insertedLeads.filter((l: { id: string }) => !enrolledSet.has(l.id));
+
+      // Block re-enrollment of unsubscribed leads
+      const emailsToCheck = (insertedLeads ?? []).map((l: { id: string; email: string | null }) => l.email).filter(Boolean) as string[];
+      let unsubEmails = new Set<string>();
+      if (emailsToCheck.length > 0) {
+        const { data: unsubs } = await adminDb
+          .from("outreach_unsubscribes")
+          .select("email")
+          .eq("workspace_id", workspaceId)
+          .in("email", emailsToCheck);
+        unsubEmails = new Set((unsubs ?? []).map((u: { email: string }) => u.email.toLowerCase()));
+      }
+
+      const toEnroll = insertedLeads.filter((l: { id: string; email: string | null }) => !enrolledSet.has(l.id) && !unsubEmails.has((l.email ?? "").toLowerCase()));
 
       if (toEnroll.length > 0) {
         await adminDb.from("outreach_enrollments").insert(

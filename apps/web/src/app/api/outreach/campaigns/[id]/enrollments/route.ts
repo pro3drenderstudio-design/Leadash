@@ -64,14 +64,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ALLOWED_VSTATUS = ["safe", "valid", "catch_all", "verified_external"];
 
   // Fetch all leads across pages (PostgREST caps at 1000 rows per request)
-  type LeadRow = { id: string; verification_status: string | null };
+  type LeadRow = { id: string; verification_status: string | null; email: string | null };
   const typedLeads: LeadRow[] = [];
   const PAGE = 1000;
   let from = 0;
   while (true) {
     const { data: page, error: pageErr } = await db
       .from("outreach_leads")
-      .select("id, verification_status")
+      .select("id, verification_status, email")
       .eq("workspace_id", workspaceId)
       .in("list_id", list_ids)
       .eq("status", "active")
@@ -126,8 +126,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const skippedCount = typedLeads.length - eligibleLeads.length;
-  const toEnroll     = eligibleLeads.filter(l => !enrolledIds.has(l.id));
-  const duplicates   = eligibleLeads.length - toEnroll.length;
+
+  // Block re-enrollment of unsubscribed leads
+  const eligibleEmails = eligibleLeads.map(l => l.email).filter(Boolean) as string[];
+  let unsubscribedEmails = new Set<string>();
+  if (eligibleEmails.length > 0) {
+    const { data: unsubs } = await db
+      .from("outreach_unsubscribes")
+      .select("email")
+      .eq("workspace_id", workspaceId)
+      .in("email", eligibleEmails);
+    unsubscribedEmails = new Set((unsubs ?? []).map((u: { email: string }) => u.email.toLowerCase()));
+  }
+
+  const toEnroll   = eligibleLeads.filter(l => !enrolledIds.has(l.id) && !unsubscribedEmails.has((l.email ?? "").toLowerCase()));
+  const duplicates = eligibleLeads.length - toEnroll.length;
 
   // Dry-run: return counts without inserting
   if (dryRun) {
