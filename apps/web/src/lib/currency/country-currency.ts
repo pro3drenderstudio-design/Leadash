@@ -86,16 +86,9 @@ export const COUNTRY_TO_CURRENCY: Readonly<Record<string, string>> = {
   GQ: "XAF",                                  // Equatorial Guinea
   EH: FALLBACK_NON_AFRICAN_CURRENCY,          // Western Sahara — disputed, fall back
 
-  // ── Major non-African economies (diaspora) ────────────────────────────────
-  US: "USD", CA: "CAD", MX: "MXN",
-  GB: "GBP", IE: "EUR", FR: "EUR", DE: "EUR", ES: "EUR", IT: "EUR",
-  NL: "EUR", BE: "EUR", PT: "EUR", AT: "EUR", FI: "EUR", GR: "EUR",
-  CH: "CHF", SE: "SEK", NO: "NOK", DK: "DKK", PL: "PLN",
-  AE: "AED", SA: "SAR",
-  IN: "INR", PK: "PKR", BD: "BDT",
-  CN: "CNY", JP: "JPY", KR: "KRW", HK: "HKD", SG: "SGD",
-  AU: "AUD", NZ: "NZD",
-  BR: "BRL", AR: "ARS",
+  // ── Non-African visitors always see USD (product rule, not a technical limitation).
+  //    No per-country diaspora rows here — the function falls back to USD by default,
+  //    which is the desired behavior for every country outside Africa.
 };
 
 /**
