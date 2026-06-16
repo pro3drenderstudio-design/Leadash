@@ -45,11 +45,13 @@ export function formatLocalPrice(amountNgn: number, ctx: CurrencyContext): strin
   // Convert to local. For NGN visitors this is a no-op (rate = 1).
   const local = amountNgn * ctx.rateToNgn;
 
-  const fractionDigits = pickFractionDigits(ctx.currency, local);
+  // All displayed prices are rounded to the nearest whole unit for clarity.
+  // The charged amount (always NGN, exact) is unaffected — this only changes
+  // what the visitor sees on the screen.
   const formatted = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(local);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(local));
 
   // Prefer a tight symbol prefix when we have one; otherwise use the ISO code.
   if (ctx.symbol) return `${ctx.symbol}${formatted}`;
@@ -67,14 +69,3 @@ export function formatLocalPriceApprox(amountNgn: number, ctx: CurrencyContext):
   return ctx.currency === "NGN" ? base : `≈ ${base}`;
 }
 
-// Currencies that conventionally show no fractional part. The full ISO 4217 list
-// is large; we only need the ones we actually serve.
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "NGN","JPY","KRW","VND","UGX","RWF","BIF","CLP","COP","ISK","HUF","PYG","XOF","XAF","XPF","KMF","DJF","GNF","MGA",
-]);
-
-function pickFractionDigits(currency: string, localAmount: number): number {
-  if (ZERO_DECIMAL_CURRENCIES.has(currency)) return 0;
-  // For large amounts in any currency, fractions just add noise.
-  return localAmount >= 1000 ? 0 : 2;
-}
