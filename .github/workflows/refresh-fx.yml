@@ -33,9 +33,11 @@ jobs:
           fi
           # Use a bearer token in the Authorization header — cleaner than the query string
           # and won't end up in any logs or analytics.
+          # Hit the canonical www host directly — the apex `leadash.com` 307s to
+          # www and curl won't carry the Authorization header across that hop.
           response=$(curl --silent --show-error --write-out "\nHTTP %{http_code}\n" \
             --header "Authorization: Bearer $CRON_SECRET" \
-            "https://leadash.com/api/cron/refresh-fx")
+            "https://www.leadash.com/api/cron/refresh-fx")
           echo "$response"
           # Fail the job if the endpoint didn't return 200.
           echo "$response" | tail -n 1 | grep -q "HTTP 200" || exit 1
