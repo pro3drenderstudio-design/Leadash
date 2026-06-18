@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!industry.trim()) return NextResponse.json({ error: "industry is required" }, { status: 400 });
   if (!role.trim())     return NextResponse.json({ error: "role is required" }, { status: 400 });
   if (!geography.trim()) return NextResponse.json({ error: "geography is required" }, { status: 400 });
-  if (![10, 25, 50, 100].includes(count)) return NextResponse.json({ error: "count must be 10, 25, 50, or 100" }, { status: 400 });
+  if (typeof count !== "number" || count < 1 || count > 1000) return NextResponse.json({ error: "count must be between 1 and 1,000" }, { status: 400 });
   if (!AI_PROSPECT_MODELS[model as AiProspectModel]) return NextResponse.json({ error: "invalid model" }, { status: 400 });
 
   // Create search record
