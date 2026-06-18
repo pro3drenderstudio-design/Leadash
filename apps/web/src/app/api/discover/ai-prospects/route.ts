@@ -4,11 +4,13 @@ import { getPlanById } from "@/lib/billing/getActivePlans";
 import { generateProspects, creditRateForModel, AI_PROSPECT_MODELS } from "@/lib/discover/ai-prospects-prompt";
 import type { AiProspectModel } from "@/lib/discover/ai-prospects-prompt";
 import { Queue } from "bullmq";
+import IORedis from "ioredis";
 
 const enrichQueue = new Queue("leadash:ai-prospect-enrich", {
-  connection: {
-    url: process.env.UPSTASH_REDIS_URL,
-  },
+  connection: new IORedis(process.env.UPSTASH_REDIS_URL!, {
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+  }),
 });
 
 export async function POST(req: NextRequest) {
