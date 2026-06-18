@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.95.1",
+    "postgres": "^3.4.4",
     "@azure/msal-node": "^5.1.2",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/supabase-js": "^2.49.4",
