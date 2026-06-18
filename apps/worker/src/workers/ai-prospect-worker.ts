@@ -1,8 +1,8 @@
 // ─── AI Prospect Enrichment Worker ────────────────────────────────────────────
-// For each result in an ai_prospect_searches record:
-//   1. Look up matching email from the Discover VPS DB (discover_people by domain + title)
-//   2. Verify best email via Reoon
-//   3. Update the row and mark search as done when all rows are processed
+// Phase 1: Discover DB lookup for each result (domain + title fuzzy match)
+// Phase 2: Batch-verify all best emails via admin-configured verifier
+//           (admin_settings.verifier_provider = "reoon" | "leadash")
+// Phase 3: Write results back, mark search done
 
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
@@ -14,6 +14,46 @@ export interface AiProspectJobData {
   search_id:    string;
   workspace_id: string;
 }
+
+interface EnrichedRow {
+  id:               string;
+  discover_email:   string | null;
+  best_email:       string | null;
+  best_email_source: "discover" | "ai";
+}
+
+interface BulkPollResult {
+  status:              "waiting" | "running" | "completed";
+  count_total:         number;
+  count_checked:       number;
+  progress_percentage: number;
+  results?: Record<string, { status?: string }>;
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const POLL_MS         = 12_000;
+const REOON_BASE      = "https://emailverifier.reoon.com/api/v1";
+const LEADASH_BASE    = () => (process.env.VERIFIER_URL  ?? "").replace(/\/$/, "");
+const LEADASH_SECRET  = () =>  process.env.VERIFIER_SECRET ?? "";
+
+// Statuses the DB CHECK constraint allows
+const ALLOWED = new Set(["pending","valid","invalid","catch_all","disposable","unknown","risky","dangerous"]);
+
+const STATUS_MAP: Record<string, string> = {
+  safe:              "valid",
+  verified_external: "valid",
+  dangerous:         "invalid",
+  risky:             "unknown",
+};
+
+function mapStatus(raw: string): string {
+  const st     = raw || "unknown";
+  const mapped = STATUS_MAP[st] ?? st;
+  return ALLOWED.has(mapped) ? mapped : "unknown";
+}
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 // ─── DB clients ───────────────────────────────────────────────────────────────
 
@@ -35,31 +75,92 @@ function getLeadsDb() {
   return _leadsDb;
 }
 
-// ─── Reoon verification ───────────────────────────────────────────────────────
+// ─── Verifier: read admin setting ────────────────────────────────────────────
 
-const REOON_BASE = "https://emailverifier.reoon.com/api/v1";
-
-async function verifyEmail(email: string, apiKey: string): Promise<string> {
+async function getVerifierProvider(db: ReturnType<typeof getDb>): Promise<"reoon" | "leadash"> {
   try {
-    const url = `${REOON_BASE}/verify?email=${encodeURIComponent(email)}&key=${apiKey}&mode=power`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) return "unknown";
-    const data = await res.json() as { status?: string };
-    return data.status ?? "unknown";
-  } catch {
-    return "unknown";
+    const { data } = await db
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "verifier_provider")
+      .maybeSingle();
+    if (data?.value === "leadash") return "leadash";
+  } catch { /* default */ }
+  return "reoon";
+}
+
+// ─── Reoon bulk verify ────────────────────────────────────────────────────────
+
+async function reoonVerifyBatch(apiKey: string, emails: string[]): Promise<Map<string, string>> {
+  const submitRes = await fetch(`${REOON_BASE}/create-bulk-verification-task/`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ key: apiKey, emails }),
+    signal:  AbortSignal.timeout(30_000),
+  });
+  if (!submitRes.ok) throw new Error(`Reoon submit: HTTP ${submitRes.status}`);
+  const sd = await submitRes.json() as Record<string, unknown>;
+  const taskId = sd.task_id as string | undefined;
+  if (!taskId) throw new Error(`Reoon submit: no task_id — ${JSON.stringify(sd)}`);
+
+  while (true) {
+    await sleep(POLL_MS);
+    const pollUrl = `${REOON_BASE}/get-result-bulk-verification-task/?key=${encodeURIComponent(apiKey)}&task_id=${encodeURIComponent(taskId)}`;
+    const pr = await fetch(pollUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!pr.ok) throw new Error(`Reoon poll: HTTP ${pr.status}`);
+    const pd = await pr.json() as BulkPollResult;
+    if (pd.status === "completed" && pd.results) {
+      const map = new Map<string, string>();
+      for (const [email, r] of Object.entries(pd.results)) {
+        map.set(email.toLowerCase(), mapStatus(r.status ?? "unknown"));
+      }
+      return map;
+    }
+  }
+}
+
+// ─── Leadash verifier bulk verify ────────────────────────────────────────────
+
+async function leadashVerifyBatch(emails: string[]): Promise<Map<string, string>> {
+  const base   = LEADASH_BASE();
+  const secret = LEADASH_SECRET();
+  if (!base) throw new Error("VERIFIER_URL not configured");
+
+  const submitRes = await fetch(`${base}/tasks`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "x-agent-secret": secret },
+    body:    JSON.stringify({ emails }),
+    signal:  AbortSignal.timeout(30_000),
+  });
+  if (!submitRes.ok) throw new Error(`Leadash verifier submit: HTTP ${submitRes.status}`);
+  const sd = await submitRes.json() as Record<string, unknown>;
+  const taskId = sd.task_id as string | undefined;
+  if (!taskId) throw new Error(`Leadash submit: no task_id — ${JSON.stringify(sd)}`);
+
+  while (true) {
+    await sleep(POLL_MS);
+    const pr = await fetch(`${base}/tasks/${encodeURIComponent(taskId)}`, {
+      headers: { "x-agent-secret": secret },
+      signal:  AbortSignal.timeout(30_000),
+    });
+    if (!pr.ok) throw new Error(`Leadash verifier poll: HTTP ${pr.status}`);
+    const pd = await pr.json() as BulkPollResult;
+    if (pd.status === "completed" && pd.results) {
+      const map = new Map<string, string>();
+      for (const [email, r] of Object.entries(pd.results)) {
+        map.set(email.toLowerCase(), mapStatus(r.status ?? "unknown"));
+      }
+      return map;
+    }
   }
 }
 
 // ─── Discover DB lookup ───────────────────────────────────────────────────────
 
-interface DiscoverMatch { email: string }
-
 async function lookupDiscoverEmail(domain: string, title: string): Promise<string | null> {
   try {
     const leadsDb = getLeadsDb();
-    // Match by company domain, prefer person whose title is most similar to the query title
-    const rows = await leadsDb.unsafe<DiscoverMatch[]>(`
+    const rows = await leadsDb.unsafe<{ email: string }[]>(`
       SELECT dp.email
       FROM discover_people dp
       JOIN discover_companies dc ON dp.company_id = dc.id
@@ -77,7 +178,7 @@ async function lookupDiscoverEmail(domain: string, title: string): Promise<strin
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processAiProspect(job: Job<AiProspectJobData>): Promise<void> {
-  const { search_id, workspace_id } = job.data;
+  const { search_id } = job.data;
   const db = getDb();
 
   // Fetch all pending results for this search
@@ -92,44 +193,71 @@ export async function processAiProspect(job: Job<AiProspectJobData>): Promise<vo
     return;
   }
 
-  // Fetch Reoon API key from admin settings
-  const { data: settings } = await db
-    .from("admin_settings")
-    .select("key, value")
-    .in("key", ["reoon_api_key"]);
-  const reoonKey = settings?.find((s: { key: string; value: string }) => s.key === "reoon_api_key")?.value ?? "";
-
-  let enriched = 0;
+  // ── Phase 1: Discover DB lookup ──────────────────────────────────────────────
+  const enriched: EnrichedRow[] = [];
 
   for (const result of results) {
+    const discoverEmail = await lookupDiscoverEmail(result.domain ?? "", result.title ?? "");
+    enriched.push({
+      id:                result.id,
+      discover_email:    discoverEmail,
+      best_email:        discoverEmail ?? result.ai_email ?? null,
+      best_email_source: discoverEmail ? "discover" : "ai",
+    });
+  }
+
+  // ── Phase 2: Batch email verification ────────────────────────────────────────
+  const emailsToVerify = [...new Set(
+    enriched.map(r => r.best_email).filter(Boolean) as string[],
+  )];
+
+  let verifyMap = new Map<string, string>();
+
+  if (emailsToVerify.length > 0) {
     try {
-      const discoverEmail = await lookupDiscoverEmail(result.domain ?? "", result.title ?? "");
+      const provider = await getVerifierProvider(db);
 
-      const bestEmail     = discoverEmail ?? result.ai_email;
-      const bestSource    = discoverEmail ? "discover" : "ai";
-
-      let verificationStatus: string | null = null;
-      if (bestEmail && reoonKey) {
-        verificationStatus = await verifyEmail(bestEmail, reoonKey);
+      if (provider === "leadash") {
+        verifyMap = await leadashVerifyBatch(emailsToVerify);
+      } else {
+        const apiKey = process.env.REOON_API_KEY ?? "";
+        if (apiKey) {
+          verifyMap = await reoonVerifyBatch(apiKey, emailsToVerify);
+        }
       }
-
-      await db.from("ai_prospect_results").update({
-        discover_email:      discoverEmail,
-        best_email:          bestEmail,
-        best_email_source:   bestSource,
-        verification_status: verificationStatus,
-        enrichment_status:   "done",
-      }).eq("id", result.id);
-
-      enriched++;
-
-      // Keep search progress counter in sync
-      await db.from("ai_prospect_searches").update({ total_enriched: enriched }).eq("id", search_id);
     } catch (err) {
-      console.error(`[ai-prospect-worker] result ${result.id} failed:`, err);
-      await db.from("ai_prospect_results").update({ enrichment_status: "failed" }).eq("id", result.id);
+      // Verification is best-effort — log but don't fail the whole job
+      console.error(`[ai-prospect-worker] verification failed for search ${search_id}:`, err);
     }
   }
 
-  await db.from("ai_prospect_searches").update({ status: "done", total_enriched: enriched }).eq("id", search_id);
+  // ── Phase 3: Write results back ───────────────────────────────────────────────
+  let totalEnriched = 0;
+
+  for (const row of enriched) {
+    try {
+      const verificationStatus = row.best_email
+        ? (verifyMap.get(row.best_email.toLowerCase()) ?? null)
+        : null;
+
+      await db.from("ai_prospect_results").update({
+        discover_email:      row.discover_email,
+        best_email:          row.best_email,
+        best_email_source:   row.best_email_source,
+        verification_status: verificationStatus,
+        enrichment_status:   "done",
+      }).eq("id", row.id);
+
+      totalEnriched++;
+    } catch (err) {
+      console.error(`[ai-prospect-worker] failed to update result ${row.id}:`, err);
+      await db.from("ai_prospect_results").update({ enrichment_status: "failed" }).eq("id", row.id);
+    }
+  }
+
+  await db.from("ai_prospect_searches")
+    .update({ status: "done", total_enriched: totalEnriched })
+    .eq("id", search_id);
+
+  console.log(`[ai-prospect-worker] search ${search_id}: done — ${totalEnriched}/${results.length} enriched`);
 }
