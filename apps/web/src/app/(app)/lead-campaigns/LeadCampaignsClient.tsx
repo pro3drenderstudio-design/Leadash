@@ -7,7 +7,7 @@ import { wsGet } from "@/lib/workspace/client";
 import NewCampaignModal from "./NewCampaignModal";
 import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
 
-const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1, ai_prospect_haiku: 3, ai_prospect_sonnet: 5, ai_prospect_opus: 9 };
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   "bg-white/8 text-white/50",
