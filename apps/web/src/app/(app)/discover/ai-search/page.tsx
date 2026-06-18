@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useWorkspace } from "@/components/WorkspaceProvider";
+import { wsFetch } from "@/lib/workspace/client";
 import { AI_PROSPECT_MODELS } from "@/lib/discover/ai-prospects-prompt";
 import type { AiProspectModel } from "@/lib/discover/ai-prospects-prompt";
 
@@ -102,7 +102,6 @@ function ExportModal({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AiSearchPage() {
-  const { workspaceId } = useWorkspace();
 
   // Form state
   const [industry,    setIndustry]    = useState("");
@@ -125,9 +124,7 @@ export default function AiSearchPage() {
   // Poll for enrichment progress
   const pollSearch = useCallback(async (searchId: string) => {
     try {
-      const res = await fetch(`/api/discover/ai-prospects/${searchId}`, {
-        headers: { "x-workspace-id": workspaceId },
-      });
+      const res = await wsFetch(`/api/discover/ai-prospects/${searchId}`);
       if (!res.ok) return;
       const data = await res.json();
       setSearch(data.search);
@@ -136,7 +133,7 @@ export default function AiSearchPage() {
         if (pollRef.current) clearInterval(pollRef.current);
       }
     } catch { /* silent */ }
-  }, [workspaceId]);
+  }, []);
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -151,9 +148,8 @@ export default function AiSearchPage() {
     setSelected(new Set());
 
     try {
-      const res = await fetch("/api/discover/ai-prospects", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "x-workspace-id": workspaceId },
+      const res = await wsFetch("/api/discover/ai-prospects", {
+        method: "POST",
         body: JSON.stringify({ industry, role, geography, company_size: companySize, count, model }),
       });
       const data = await res.json();
@@ -174,9 +170,8 @@ export default function AiSearchPage() {
     setShowExport(false);
     if (!search || selected.size === 0) return;
 
-    const res = await fetch(`/api/discover/ai-prospects/${search.id}/export`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", "x-workspace-id": workspaceId },
+    const res = await wsFetch(`/api/discover/ai-prospects/${search.id}/export`, {
+      method: "POST",
       body: JSON.stringify({ result_ids: Array.from(selected), list_name: listName }),
     });
     const data = await res.json();
