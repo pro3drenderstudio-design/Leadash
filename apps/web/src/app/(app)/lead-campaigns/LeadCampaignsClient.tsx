@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { LeadCampaign } from "@/types/lead-campaigns";
 import { wsGet } from "@/lib/workspace/client";
-import NewCampaignModal from "./NewCampaignModal";
 import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
+import { LEAD_CAMPAIGNS_CUTOFF_ISO } from "@/components/LeadCampaignsDeprecationBanner";
 
 const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1, ai_prospect_haiku: 3, ai_prospect_sonnet: 5, ai_prospect_opus: 9 };
 
@@ -33,9 +33,13 @@ export default function LeadCampaignsClient() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<LeadCampaign[]>([]);
   const [balance, setBalance]     = useState<number>(0);
-  const [rates, setRates]         = useState<CreditRates>(DEFAULT_RATES);
+  // rates is still loaded so the credits link stays accurate, even though we
+  // no longer surface the new-campaign modal (the feature is being retired).
+  const [, setRates]              = useState<CreditRates>(DEFAULT_RATES);
   const [loading, setLoading]     = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  // Replaces the old "open new-campaign modal" state — clicking "+ New Campaign"
+  // now opens a popup directing users to Discover instead.
+  const [showDeprecatedPopup, setShowDeprecatedPopup] = useState(false);
 
   async function load() {
     const [campaigns, credits] = await Promise.all([
@@ -82,7 +86,7 @@ export default function LeadCampaignsClient() {
             {balance.toLocaleString()} credits
           </Link>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => setShowDeprecatedPopup(true)}
             className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             + New Campaign
@@ -120,7 +124,7 @@ export default function LeadCampaignsClient() {
           <p className="text-white font-medium">No campaigns yet</p>
           <p className="text-white/40 text-sm mt-1 mb-5">Create your first lead generation campaign to start building your prospect list</p>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => setShowDeprecatedPopup(true)}
             className="px-5 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
           >
             Create Campaign
@@ -178,13 +182,51 @@ export default function LeadCampaignsClient() {
         </div>
       )}
 
-      {showModal && (
-        <NewCampaignModal
-          onClose={() => setShowModal(false)}
-          onCreated={() => { setShowModal(false); load(); }}
-          balance={balance}
-          rates={rates}
-        />
+      {/* New-campaign popup is deprecated. The modal now directs users to Discover
+          (the recommended replacement) until /lead-campaigns is removed entirely. */}
+      {showDeprecatedPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowDeprecatedPopup(false)} />
+          <div className="relative w-full max-w-md bg-gray-950 border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">New campaign creation has been retired</h3>
+                <p className="text-white/55 text-sm mt-1 leading-relaxed">
+                  Lead Campaigns is shutting down on{" "}
+                  <strong className="text-amber-300">
+                    {new Date(LEAD_CAMPAIGNS_CUTOFF_ISO + "T00:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+                  </strong>
+                  . Use <span className="font-semibold text-white">Discover</span> to find and add leads going forward — it's our recommended replacement.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white/4 border border-white/8 rounded-xl p-3.5 mb-4 text-xs text-white/55 space-y-1.5">
+              <p><span className="font-semibold text-white/75">Recommended workflow:</span> open Discover, filter for the prospects you want, then add them straight into a Leads Pool list.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push("/discover")}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                Go to Discover
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowDeprecatedPopup(false)}
+                className="px-4 py-2.5 text-sm text-white/60 hover:text-white/90 hover:bg-white/5 rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

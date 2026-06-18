@@ -194,27 +194,65 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const leads = mergedPeople.map((p) => ({
-      workspace_id:        workspaceId,
-      list_id:             resolvedListId,
-      first_name:          p.first_name   ?? null,
-      last_name:           p.last_name    ?? null,
-      email:               p.email        ?? null,
-      title:               p.title        ?? null,
-      company:             p.company_name ?? null,
-      linkedin_url:        p.linkedin_url ?? null,
-      country:             p.country      ?? null,
-      city:                p.city         ?? null,
-      status:              "active",
-      verification_status: "pending",
-    }));
+    // The outreach_leads table has a tight schema (email NOT NULL, no
+    // linkedin_url / city / country / phone / seniority columns) — anything
+    // extra has to go in custom_fields, and leads without an email get
+    // dropped rather than failing the whole batch.
+    const leads = mergedPeople
+      .filter(p => p.email && p.email.trim().length > 0)
+      .map(p => {
+        const custom: Record<string, unknown> = {};
+        if (p.linkedin_url)     custom.linkedin_url     = p.linkedin_url;
+        if (p.city)             custom.city             = p.city;
+        if (p.state)            custom.state            = p.state;
+        if (p.country)          custom.country          = p.country;
+        if (p.phone)            custom.phone            = p.phone;
+        if (p.seniority)        custom.seniority        = p.seniority;
+        if (p.department)       custom.department       = p.department;
+        if (p.company_domain)   custom.company_domain   = p.company_domain;
+        if (p.company_industry) custom.company_industry = p.company_industry;
+        if (p.company_size)     custom.company_size     = p.company_size;
+
+        return {
+          workspace_id:        workspaceId,
+          list_id:             resolvedListId,
+          first_name:          p.first_name   ?? null,
+          last_name:           p.last_name    ?? null,
+          email:               p.email,
+          title:               p.title        ?? null,
+          company:             p.company_name ?? null,
+          status:              "active",
+          verification_status: "pending",
+          custom_fields:       Object.keys(custom).length > 0 ? custom : null,
+        };
+      });
+
+    const skippedNoEmail = mergedPeople.length - leads.length;
+
+    // Nothing to insert (every selected prospect was missing an email)
+    if (leads.length === 0) {
+      return NextResponse.json({
+        ok:              true,
+        leads_added:     0,
+        already_existed: 0,
+        skipped_no_email: skippedNoEmail,
+        credits_used:    totalCost,
+        list_id:         resolvedListId,
+      });
+    }
 
     const { data: insertedLeads, error: insertError } = await adminDb
       .from("outreach_leads")
       .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: true })
       .select("id, email");
 
-    if (insertError) { console.error("[discover/export]", insertError.message); return NextResponse.json({ error: "Failed to add leads" }, { status: 500 }); }
+    if (insertError) {
+      console.error("[discover/export] insert failed:", insertError.message, insertError.details);
+      return NextResponse.json(
+        { error: `Failed to add leads: ${insertError.message}` },
+        { status: 500 },
+      );
+    }
 
     const leadsAdded     = insertedLeads?.length ?? 0;
     const alreadyExisted = Math.max(0, leads.length - leadsAdded);
@@ -223,6 +261,7 @@ export async function POST(req: NextRequest) {
       ok:              true,
       leads_added:     leadsAdded,
       already_existed: alreadyExisted,
+      skipped_no_email: skippedNoEmail,
       credits_used:    totalCost,
       list_id:         resolvedListId,
     });

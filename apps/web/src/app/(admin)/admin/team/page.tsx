@@ -178,9 +178,33 @@ export default function AdminTeamPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ email: inviteEmail.trim(), role, preset_id }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string };
+      const data = await res.json() as {
+        ok?: boolean;
+        error?: string;
+        email_status?: "sent" | "skipped" | "failed";
+        email_error?: string | null;
+        accept_url?: string | null;
+      };
       if (data.ok) {
-        setSendMsg(`Invite sent to ${inviteEmail.trim()}`);
+        // The invite row was created server-side — but the email itself may
+        // have failed (e.g. Resend domain not verified). Distinguish so the
+        // operator can fall back to copying the accept URL out.
+        const target = inviteEmail.trim();
+        if (data.email_status === "sent") {
+          setSendMsg(`Invite sent to ${target}.`);
+        } else if (data.email_status === "failed") {
+          setSendMsg(
+            `Invite created for ${target}, but the email failed to send (${data.email_error ?? "unknown error"}). ` +
+            `Send them this link manually: ${data.accept_url}`,
+          );
+        } else if (data.email_status === "skipped") {
+          setSendMsg(
+            `Invite created for ${target}, but the email service isn't configured on the server. ` +
+            `Send them this link manually: ${data.accept_url}`,
+          );
+        } else {
+          setSendMsg(`Invite created for ${target}.`);
+        }
         setInviteEmail("");
         load();
       } else {
