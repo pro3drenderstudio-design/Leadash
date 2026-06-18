@@ -81,8 +81,9 @@ export async function POST(
     return NextResponse.json({ error: "Failed to resolve list" }, { status: 500 });
   }
 
+  type ResultRow = { id: string; person_name: string | null; title: string | null; company_name: string | null; domain: string | null; linkedin_url: string | null; best_email: string | null; best_email_source: string | null; verification_status: string | null };
   // Build lead rows — skip results with no email
-  const leadsWithEmail = results.filter(r => r.best_email);
+  const leadsWithEmail = (results as ResultRow[]).filter(r => r.best_email);
   const leads = leadsWithEmail.map(r => {
     const [firstName, ...rest] = (r.person_name ?? "").split(" ");
     return {
