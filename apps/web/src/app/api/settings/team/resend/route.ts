@@ -3,6 +3,9 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
+const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
+
+type InviteEmailResult = { status: "sent" | "skipped" | "failed"; error: string | null };
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -41,20 +44,26 @@ export async function POST(req: NextRequest) {
   const workspaceName = (ws as { name: string } | null)?.name ?? "your team";
   const acceptUrl = `${APP_URL}/invite/${invite.token}`;
 
-  await sendInviteEmail({ to: invite.email, workspaceName, role: invite.role, acceptUrl });
+  const emailResult = await sendInviteEmail({ to: invite.email, workspaceName, role: invite.role, acceptUrl });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok:           true,
+    email_status: emailResult.status,
+    email_error:  emailResult.error,
+    accept_url:   emailResult.status === "sent" ? null : acceptUrl,
+  });
 }
 
+// Same shape as the sender in /api/settings/team — returns a result object
+// instead of swallowing failures so the UI can show the operator what went
+// wrong (and the fallback accept URL).
 async function sendInviteEmail(opts: {
   to: string;
   workspaceName: string;
   role: string;
   acceptUrl: string;
-}): Promise<void> {
+}): Promise<InviteEmailResult> {
   const { to, workspaceName, role, acceptUrl } = opts;
-  const FROM = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
-
   const subject = `You've been invited to join ${workspaceName} on Leadash`;
   const html = `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#374151">
@@ -76,31 +85,59 @@ async function sendInviteEmail(opts: {
   `;
   const text = [
     `You've been invited to join ${workspaceName} on Leadash as ${role}.`,
-    ``,
+    "",
     `Accept your invitation:`,
     acceptUrl,
-    ``,
+    "",
     `This link expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.`,
   ].join("\n");
 
   const postalHost   = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
   const postalApiKey = process.env.POSTAL_API_KEY;
-
   if (postalHost && postalApiKey) {
-    await fetch(`https://${postalHost}/api/v1/send/message`, {
-      method:  "POST",
-      headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html_body: html, plain_body: text }),
-    });
-    return;
+    try {
+      const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
+        method:  "POST",
+        headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html_body: html, plain_body: text }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => res.statusText);
+        const error = `Postal ${res.status}: ${body.slice(0, 300)}`;
+        console.error("[settings/team/resend] Postal failed:", error);
+        return { status: "failed", error };
+      }
+      return { status: "sent", error: null };
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      console.error("[settings/team/resend] Postal threw:", error);
+      return { status: "failed", error };
+    }
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
-    await fetch("https://api.resend.com/emails", {
+  if (!apiKey) {
+    const error = "No email provider configured (RESEND_API_KEY and POSTAL_API_KEY both missing).";
+    console.error("[settings/team/resend] " + error);
+    return { status: "skipped", error };
+  }
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
       method:  "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html, text }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => res.statusText);
+      const error = `Resend ${res.status}: ${body.slice(0, 300)}`;
+      console.error("[settings/team/resend] Resend failed:", error);
+      return { status: "failed", error };
+    }
+    return { status: "sent", error: null };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error("[settings/team/resend] Resend threw:", error);
+    return { status: "failed", error };
   }
 }

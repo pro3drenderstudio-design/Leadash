@@ -227,14 +227,44 @@ function TeamTab() {
 
   useEffect(load, []);
 
+  // The invite POST/resend endpoints now return the email delivery status —
+  // surface failures inline so the operator knows when to fall back to copying
+  // the accept URL manually (rather than getting a misleading "sent" toast).
+  type InviteResponse = {
+    email_status?: "sent" | "skipped" | "failed";
+    email_error?:  string | null;
+    accept_url?:   string | null;
+  };
+
+  function flashEmailOutcome(target: string, resp: InviteResponse) {
+    if (resp.email_status === "sent") {
+      flash(`Invite sent to ${target} — link expires in 7 days.`);
+    } else if (resp.email_status === "failed") {
+      flash(
+        `Invite created for ${target}, but the email failed to send (${resp.email_error ?? "unknown error"}). ` +
+        (resp.accept_url ? `Send them this link: ${resp.accept_url}` : ""),
+        false,
+      );
+    } else if (resp.email_status === "skipped") {
+      flash(
+        `Invite created for ${target}, but no email provider is configured. ` +
+        (resp.accept_url ? `Send them this link: ${resp.accept_url}` : ""),
+        false,
+      );
+    } else {
+      flash(`Invite created for ${target}.`);
+    }
+  }
+
   async function sendInvite() {
     if (!inviteEmail) return;
     setInviting(true);
     try {
-      await wsPost("/api/settings/team", { email: inviteEmail });
+      const resp = await wsPost<InviteResponse>("/api/settings/team", { email: inviteEmail });
+      const target = inviteEmail.trim();
       setInviteEmail("");
       load();
-      flash("Invite sent — link expires in 7 days.");
+      flashEmailOutcome(target, resp);
     } catch (e) {
       flash(e instanceof Error ? e.message : "Failed to invite", false);
     } finally {
@@ -245,9 +275,10 @@ function TeamTab() {
   async function resendInvite(inviteId: string) {
     setResending(inviteId);
     try {
-      await wsPost("/api/settings/team/resend", { invite_id: inviteId });
+      const resp = await wsPost<InviteResponse>("/api/settings/team/resend", { invite_id: inviteId });
+      const target = invites.find(i => i.id === inviteId)?.email ?? "the invitee";
       load();
-      flash("Invite resent — new link expires in 7 days.");
+      flashEmailOutcome(target, resp);
     } catch (e) {
       flash(e instanceof Error ? e.message : "Failed to resend", false);
     } finally {
