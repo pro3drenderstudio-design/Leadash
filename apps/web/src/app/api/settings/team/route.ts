@@ -42,32 +42,13 @@ async function sendInviteEmail(opts: { to: string; workspaceName: string; role: 
     `This link expires in 7 days.`,
   ].join("\n");
 
-  // Postal is the preferred provider when configured, Resend is the fallback.
-  // Each try-block reports a precise reason so the operator can see exactly
-  // which provider rejected the email and why.
-  const postalHost   = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
-  const postalApiKey = process.env.POSTAL_API_KEY;
-  if (postalHost && postalApiKey) {
-    try {
-      const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
-        method:  "POST",
-        headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html_body: html, plain_body: text }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => res.statusText);
-        const error = `Postal ${res.status}: ${body.slice(0, 300)}`;
-        console.error("[settings/team] invite email via Postal failed:", error);
-        return { status: "failed", error };
-      }
-      return { status: "sent", error: null };
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      console.error("[settings/team] invite email via Postal threw:", error);
-      return { status: "failed", error };
-    }
-  }
-
+  // Always send transactional invites through Resend. The rest of the platform
+  // (welcome emails, Postal health alerts, etc.) routes through Resend on the
+  // same domain, and we want a single source of truth for deliverability.
+  // Postal is reserved for outreach sends, not internal/system mail — using it
+  // here was previously causing invites to vanish silently because Postal's
+  // /send/message endpoint can return 200 while the message is dropped at the
+  // server level.
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     const error = "No email provider configured (RESEND_API_KEY and POSTAL_API_KEY both missing).";

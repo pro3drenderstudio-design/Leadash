@@ -92,29 +92,8 @@ async function sendInviteEmail(opts: {
     `This link expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.`,
   ].join("\n");
 
-  const postalHost   = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
-  const postalApiKey = process.env.POSTAL_API_KEY;
-  if (postalHost && postalApiKey) {
-    try {
-      const res = await fetch(`https://${postalHost}/api/v1/send/message`, {
-        method:  "POST",
-        headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html_body: html, plain_body: text }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => res.statusText);
-        const error = `Postal ${res.status}: ${body.slice(0, 300)}`;
-        console.error("[settings/team/resend] Postal failed:", error);
-        return { status: "failed", error };
-      }
-      return { status: "sent", error: null };
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      console.error("[settings/team/resend] Postal threw:", error);
-      return { status: "failed", error };
-    }
-  }
-
+  // Same as /api/settings/team: skip Postal entirely for invites. Postal is
+  // for outreach mail; internal/system mail goes through Resend.
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     const error = "No email provider configured (RESEND_API_KEY and POSTAL_API_KEY both missing).";
