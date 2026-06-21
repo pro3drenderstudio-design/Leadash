@@ -48,32 +48,19 @@ const FIELDS = {
 
 type FieldKey = keyof typeof FIELDS;
 
-// Self-contained variable token — renders the template string by default,
-// resolves to the personalized text when the timeline tells it to.
-//
-// Both spans are plain `display: inline` so they participate in the
-// surrounding paragraph's text flow and wrap naturally. The swap is a hard
-// display toggle: tpl fades out, then `display: none` removes it from flow
-// (the line collapses instantly with no leftover space), then per gets
-// `display: inline` and fades up. Because only one is ever in flow at a
-// time, the email reads as a clean reflowed paragraph at every step — and
-// the long compliment phrase wraps naturally onto the next line rather
-// than fighting inline-block sizing.
+// Self-contained variable token. Renders as a single inline span whose
+// textContent and color we swap imperatively at the right point on the
+// timeline. Because there's exactly one DOM node in flow per field, the
+// surrounding paragraph reflows perfectly — the placeholder is replaced
+// by the personalized phrase in-place, with no leftover gap.
 function Field({ name }: { name: FieldKey }) {
   return (
-    <span className="sigm-field" data-field={name}>
-      <span
-        className="sigm-tpl"
-        style={{ color: "var(--v2-accent)", fontWeight: 500 }}
-      >
-        {FIELDS[name].tpl}
-      </span>
-      <span
-        className="sigm-per"
-        style={{ color: "var(--v2-text)", display: "none", opacity: 0 }}
-      >
-        {FIELDS[name].per}
-      </span>
+    <span
+      className="sigm-field"
+      data-field={name}
+      style={{ color: "var(--v2-accent)", fontWeight: 500 }}
+    >
+      {FIELDS[name].tpl}
     </span>
   );
 }
@@ -106,24 +93,40 @@ export default function SignatureMoment() {
         },
       });
 
-      // Each swap is a hard handoff:
-      //   1. Fade the template span to opacity 0.
-      //   2. At the fade midpoint, remove it from flow (`display: none`)
-      //      and bring the personalized span in (`display: inline`). The
-      //      paragraph reflows instantly — no leftover gap, no jump in
-      //      visible content because both are at opacity 0 at that beat.
-      //   3. Fade the personalized span up to opacity 1.
-      // On scrub-reverse GSAP rewinds the display sets, so the template
-      // comes back into flow exactly as it was.
+      // Each swap fades the span out, replaces its textContent at the
+      // midpoint, then fades it back in. The onStart/onReverseComplete
+      // callbacks on a zero-duration tween give us a single source of truth
+      // for both scroll directions — when the user scrubs backward, the
+      // template string is restored automatically.
       const swap = (name: FieldKey, at: number, dur = 0.12) => {
-        const tplSel = `.sigm-field[data-field="${name}"] .sigm-tpl`;
-        const perSel = `.sigm-field[data-field="${name}"] .sigm-per`;
+        const sel = `.sigm-field[data-field="${name}"]`;
         const half = dur / 2;
+        const TPL = FIELDS[name].tpl;
+        const PER = FIELDS[name].per;
 
-        tl.to(tplSel, { opacity: 0, duration: half, ease: "power1.in" }, at);
-        tl.set(tplSel, { display: "none" }, at + half);
-        tl.set(perSel, { display: "inline" }, at + half);
-        tl.to(perSel, { opacity: 1, duration: half, ease: "power1.out" }, at + half);
+        tl.to(sel, { opacity: 0, duration: half, ease: "power1.in" }, at);
+
+        // Mid-fade content swap. Zero-duration tween with start/reverse
+        // callbacks — fires once in each direction.
+        tl.to({}, {
+          duration: 0.001,
+          onStart: () => {
+            const el = sectionRef.current?.querySelector<HTMLElement>(sel);
+            if (!el) return;
+            el.textContent = PER;
+            el.style.color = "var(--v2-text)";
+            el.style.fontWeight = "400";
+          },
+          onReverseComplete: () => {
+            const el = sectionRef.current?.querySelector<HTMLElement>(sel);
+            if (!el) return;
+            el.textContent = TPL;
+            el.style.color = "var(--v2-accent)";
+            el.style.fontWeight = "500";
+          },
+        }, at + half);
+
+        tl.to(sel, { opacity: 1, duration: half, ease: "power1.out" }, at + half);
       };
 
       swap("subject",    0.10, 0.12);
