@@ -660,6 +660,32 @@
 /* ── Contact rows */
 .v2-contact-row:hover { background: rgba(255,255,255,0.02); }
 
+/* ── Long-form legal pages */
+.v2-legal-toc-link {
+  font-size: var(--v2-small);
+  color: var(--v2-text-muted);
+  transition: color 200ms var(--v2-ease-out);
+  letter-spacing: -0.005em;
+}
+.v2-legal-toc-link:hover { color: var(--v2-accent); }
+
+.v2-legal-section { scroll-margin-top: 88px; }
+.v2-legal-h2 {
+  font-size: var(--v2-headline);
+  letter-spacing: -0.02em;
+  color: var(--v2-text);
+  font-weight: 500;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--v2-border);
+}
+.v2-legal-p {
+  font-size: var(--v2-body);
+  line-height: 1.65;
+  color: var(--v2-text-muted);
+  max-width: 720px;
+}
+
 .v2-foot-base {
   display: flex;
   flex-wrap: wrap;
