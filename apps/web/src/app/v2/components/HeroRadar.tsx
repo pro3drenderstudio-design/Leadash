@@ -1,18 +1,46 @@
 "use client";
 
 /**
- * The radar SVG that lives on the right of the v2 hero. Quiet by default
- * (3 concentric rings + a center marker + 4 ambient dots) and comes alive
- * via GSAP on mount: rings ripple outward in a 3.6s loop, an "inbound"
- * dashed path redraws toward the center every 4.8s, the trailing dot eases
- * in to land on the focal point.
+ * Hero radar. Three concentric rings ripple outward continuously; the
+ * "inbound" trail rotates origin every cycle so it depicts multiple jobs
+ * arriving at the centre from different directions over time.
  *
- * Every animatable element gets a stable className so the GSAP timeline
- * can target it without ref-juggling across server/client boundaries.
+ * Why a queue of origins instead of one fixed point: a single repeating
+ * trail reads as a heartbeat (predictable). Cycling six positions on the
+ * outer ring sells the *multiplicity* of inbound work — exactly the "sent
+ * your way" promise the hero is making.
+ *
+ * The cycle:
+ *   1. Pick next origin from ORIGINS[]
+ *   2. Update the path's d to "M origin.x origin.y L 120 120"
+ *   3. Reset stroke-dashoffset to the path length, then animate it to 0
+ *      while the inbound dot drifts from origin to centre
+ *   4. Fade origin marker + dot out as they arrive
+ *   5. Brief pause, then advance to the next origin
  */
 
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
+
+// Origins picked around the outer ring at varied angles + radii so the
+// rotation feels organic, never metronomic. Each is a point near (or on)
+// the r=100 outer ring relative to the centre (120, 120).
+const ORIGINS: Array<{ x: number; y: number }> = [
+  { x: 178, y: 172 },  // SE
+  { x: 68,  y: 56  },  // NW
+  { x: 200, y: 90  },  // ENE
+  { x: 58,  y: 180 },  // SW
+  { x: 100, y: 24  },  // N-ish (slightly W of true N)
+  { x: 214, y: 144 },  // E-SE
+  { x: 190, y: 58  },  // NE
+  { x: 40,  y: 132 },  // W
+];
+
+const CENTER = { x: 120, y: 120 };
+const DRAW_DURATION = 1.6;   // seconds: trail draw-in + dot travel
+const HOLD_AT_END   = 0.35;  // brief pause after arrival
+const FADE_OUT      = 0.5;   // seconds: trail + origin marker fade
+const GAP_BEFORE_NEXT = 0.6; // beat before the next origin starts
 
 export default function HeroRadar() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -21,9 +49,7 @@ export default function HeroRadar() {
     if (!svgRef.current) return;
 
     const ctx = gsap.context(() => {
-      // Continuous ripple — three rings expanding outward on a loop. Each
-      // ring fades as it grows so the eye reads "broadcast" rather than
-      // "circle gets bigger".
+      // Continuous outer ring ripple — unchanged from v1.
       gsap.to(".v2-radar-ring", {
         scale: 1.18,
         opacity: 0,
@@ -33,8 +59,7 @@ export default function HeroRadar() {
         transformOrigin: "120px 120px",
       });
 
-      // Center marker subtle breathing — keeps the focal point alive without
-      // dragging the eye.
+      // Centre marker subtle breathing.
       gsap.to(".v2-radar-core", {
         scale: 1.08,
         duration: 1.6,
@@ -44,38 +69,7 @@ export default function HeroRadar() {
         transformOrigin: "120px 120px",
       });
 
-      // Inbound dashed trail — redraws toward the centre every 4.8s. The
-      // strokeDashoffset trick gives the "drawn-on" effect; pairing it with
-      // a moving dot makes it read as motion toward you.
-      const trail   = svgRef.current!.querySelector<SVGPathElement>(".v2-radar-trail");
-      const trailLn = trail?.getTotalLength() ?? 0;
-      if (trail && trailLn > 0) {
-        trail.style.strokeDasharray  = `${trailLn}`;
-        trail.style.strokeDashoffset = `${trailLn}`;
-        gsap.to(trail, {
-          strokeDashoffset: 0,
-          duration: 1.8,
-          ease: "power2.out",
-          repeat: -1,
-          repeatDelay: 3,
-        });
-      }
-
-      // Tiny inbound dot riding the trail.
-      gsap.fromTo(
-        ".v2-radar-inbound",
-        { attr: { cx: 178, cy: 172 }, opacity: 0 },
-        {
-          attr: { cx: 120, cy: 120 },
-          opacity: 1,
-          duration: 1.8,
-          ease: "power2.out",
-          repeat: -1,
-          repeatDelay: 3,
-        },
-      );
-
-      // Ambient dots — quiet float so the composition never feels frozen.
+      // Ambient floating dots.
       gsap.to(".v2-radar-ambient", {
         y: "+=4",
         duration: 4,
@@ -83,6 +77,68 @@ export default function HeroRadar() {
         yoyo: true,
         repeat: -1,
         stagger: { each: 0.6, from: "random" },
+      });
+
+      // ── Cycling inbound trail ────────────────────────────────────────────
+      const trail   = svgRef.current!.querySelector<SVGPathElement>(".v2-radar-trail");
+      const dot     = svgRef.current!.querySelector<SVGCircleElement>(".v2-radar-inbound");
+      const origin  = svgRef.current!.querySelector<SVGCircleElement>(".v2-radar-origin");
+      if (!trail || !dot || !origin) return;
+
+      let index = 0;
+      const tl = gsap.timeline({ repeat: -1 });
+
+      ORIGINS.forEach(() => {
+        tl.call(() => {
+          // Each cycle: pick the next origin, redraw the path geometry, reset stroke-dash for the draw-in effect.
+          const o = ORIGINS[index % ORIGINS.length];
+          index += 1;
+
+          trail.setAttribute("d", `M ${o.x} ${o.y} L ${CENTER.x} ${CENTER.y}`);
+          const len = trail.getTotalLength();
+          trail.style.strokeDasharray  = `${len}`;
+          trail.style.strokeDashoffset = `${len}`;
+          trail.setAttribute("opacity", "1");
+
+          origin.setAttribute("cx", `${o.x}`);
+          origin.setAttribute("cy", `${o.y}`);
+          gsap.set(origin, { opacity: 1, scale: 1, transformOrigin: `${o.x}px ${o.y}px` });
+
+          dot.setAttribute("cx", `${o.x}`);
+          dot.setAttribute("cy", `${o.y}`);
+          gsap.set(dot, { opacity: 1 });
+        });
+
+        // Trail draws from origin → centre while the dot travels along it.
+        tl.to(trail, {
+          strokeDashoffset: 0,
+          duration: DRAW_DURATION,
+          ease: "power2.out",
+        }, ">");
+        tl.to(dot, {
+          attr: { cx: CENTER.x, cy: CENTER.y },
+          duration: DRAW_DURATION,
+          ease: "power2.out",
+        }, "<");
+
+        // Origin marker shrinks as if the opportunity has been "consumed".
+        tl.to(origin, {
+          scale: 0,
+          opacity: 0,
+          duration: DRAW_DURATION * 0.8,
+          ease: "power2.in",
+        }, "<");
+
+        // Brief hold at centre — a beat of impact.
+        tl.to({}, { duration: HOLD_AT_END });
+
+        // Fade out the trail + arrival dot, ready for the next origin.
+        tl.to([trail, dot], {
+          opacity: 0,
+          duration: FADE_OUT,
+          ease: "power2.in",
+        });
+        tl.to({}, { duration: GAP_BEFORE_NEXT });
       });
     }, svgRef);
 
@@ -96,18 +152,16 @@ export default function HeroRadar() {
       height="280"
       viewBox="0 0 240 240"
       role="img"
-      aria-label="A radar illustration showing opportunities arriving at a centre point"
+      aria-label="A radar illustration showing opportunities arriving at the centre from multiple directions"
     >
-      {/* Crosshair axis */}
       <line x1="0"   y1="120" x2="240" y2="120" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
       <line x1="120" y1="0"   x2="120" y2="240" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
 
-      {/* Three concentric rings — animated to ripple outward. */}
-      <circle className="v2-radar-ring" cx="120" cy="120" r="44" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="0.75" />
-      <circle className="v2-radar-ring" cx="120" cy="120" r="72" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.75" />
+      <circle className="v2-radar-ring" cx="120" cy="120" r="44"  fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="0.75" />
+      <circle className="v2-radar-ring" cx="120" cy="120" r="72"  fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.75" />
       <circle className="v2-radar-ring" cx="120" cy="120" r="100" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.75" />
 
-      {/* Static outermost compass ring — fixed reference frame so the rippling rings have something to bloom from. */}
+      {/* Static outermost ring keeps the rippling rings visually anchored. */}
       <circle cx="120" cy="120" r="100" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
 
       {/* Cardinal direction ticks */}
@@ -116,13 +170,16 @@ export default function HeroRadar() {
       <circle cx="120" cy="220" r="2" fill="rgba(255,255,255,0.10)" />
       <circle cx="20"  cy="120" r="2" fill="rgba(255,255,255,0.10)" />
 
-      {/* Ambient opportunity dots — pre-revealed cards. */}
-      <circle className="v2-radar-ambient" cx="190" cy="58"  r="3"   fill="rgba(245,245,247,0.55)" />
-      <circle className="v2-radar-ambient" cx="58"  cy="180" r="2.5" fill="rgba(154,154,168,0.6)" />
-      <circle className="v2-radar-ambient" cx="178" cy="172" r="3.5" fill="rgba(245,245,247,0.85)" />
-      <circle className="v2-radar-ambient" cx="68"  cy="56"  r="2"   fill="rgba(154,154,168,0.55)" />
+      {/* Ambient dots — different in-flight opportunities the user hasn't acted on yet. */}
+      <circle className="v2-radar-ambient" cx="156" cy="46"  r="2.5" fill="rgba(245,245,247,0.5)" />
+      <circle className="v2-radar-ambient" cx="48"  cy="86"  r="2"   fill="rgba(154,154,168,0.55)" />
+      <circle className="v2-radar-ambient" cx="208" cy="186" r="2.5" fill="rgba(245,245,247,0.45)" />
+      <circle className="v2-radar-ambient" cx="84"  cy="208" r="2"   fill="rgba(154,154,168,0.5)" />
 
-      {/* Inbound trail and travelling dot — the "sent your way" gesture. */}
+      {/* Active origin marker — rendered at the current cycle's origin point. */}
+      <circle className="v2-radar-origin" cx="178" cy="172" r="3.5" fill="rgba(245,245,247,0.85)" />
+
+      {/* Inbound trail — d attribute is rewritten each cycle by the GSAP timeline. */}
       <path
         className="v2-radar-trail"
         d="M 178 172 L 120 120"
@@ -131,9 +188,11 @@ export default function HeroRadar() {
         strokeDasharray="2 3"
         fill="none"
       />
+
+      {/* Travelling dot — animated along the trail each cycle. */}
       <circle className="v2-radar-inbound" cx="178" cy="172" r="2.5" fill="#F97316" />
 
-      {/* Focal point — outer marker + inner cutout for a "bullseye" feel. */}
+      {/* Focal point */}
       <circle className="v2-radar-core" cx="120" cy="120" r="10" fill="#F97316" />
       <circle cx="120" cy="120" r="4" fill="#07070A" />
     </svg>

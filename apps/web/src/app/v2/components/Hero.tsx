@@ -56,11 +56,18 @@ export default function Hero() {
         ["--spot-y" as string]: "35%",
       }}
     >
+      {/* Cursor-following warm-glow spotlight. Two layers stacked: a tight,
+          warmer orange tint at ~14% so you can actually feel it move, plus
+          a broader cool white halo at ~4% that softens the surrounding void.
+          Pure CSS — no React state, so it stays 60 fps even on slower laptops. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
-          background: "radial-gradient(420px circle at var(--spot-x) var(--spot-y), rgba(249,115,22,0.06), transparent 70%)",
+          background:
+            "radial-gradient(280px circle at var(--spot-x) var(--spot-y), rgba(249,115,22,0.14), transparent 70%), " +
+            "radial-gradient(640px circle at var(--spot-x) var(--spot-y), rgba(255,255,255,0.04), transparent 70%)",
+          transition: "background-position 200ms linear",
         }}
       />
 

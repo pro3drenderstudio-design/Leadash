@@ -38,15 +38,18 @@ export default function V2Nav() {
       }}
     >
       <div className="v2-container flex items-center justify-between" style={{ paddingTop: 18, paddingBottom: 18 }}>
-        <Link href="/v2" className="inline-flex items-center gap-2.5 group" aria-label="Leadash home">
-          <span
+        <Link href="/v2" className="inline-flex items-center gap-2 group" aria-label="Leadash home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Logo_Icon_Colored.svg"
+            alt=""
             aria-hidden
-            style={{ width: 18, height: 18, background: "var(--v2-accent)", borderRadius: 4, display: "inline-block" }}
+            style={{ width: 22, height: 22, display: "inline-block" }}
           />
           <span
-            style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.02em", color: "var(--v2-text)" }}
+            style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--v2-text)" }}
           >
-            leadash
+            Leadash
           </span>
         </Link>
 
