@@ -8,6 +8,7 @@
 import "../v2.css";
 import Link from "next/link";
 import V2Nav from "../components/V2Nav";
+import V2Scroll from "../components/V2Scroll";
 import Footer from "../components/Footer";
 
 export const metadata = {
@@ -25,6 +26,7 @@ const PERKS = [
 export default function BetaPage() {
   return (
     <div className="v2 min-h-screen">
+      <V2Scroll />
       <V2Nav />
 
       <main>

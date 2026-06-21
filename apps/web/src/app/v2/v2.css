@@ -613,6 +613,50 @@
 }
 .v2-foot-links a:hover { color: var(--v2-text); }
 
+/* ── Reduced motion — neutralize any unnecessary animation/transition.
+   Component-level JS handles its own reduced-motion branches; this
+   covers CSS-driven movement (hover lifts, persona reveal slide-ins) so
+   the whole page settles to a still surface for users who request it. */
+@media (prefers-reduced-motion: reduce) {
+  .v2 *,
+  .v2 *::before,
+  .v2 *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .v2 .v2-progress-bar { display: none; }
+}
+
+/* ── Nav link with active-section underline */
+.v2-nav-link {
+  position: relative;
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  letter-spacing: -0.005em;
+  transition: color 200ms var(--v2-ease-out);
+}
+.v2-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 1px;
+  background: var(--v2-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 280ms var(--v2-ease-out);
+}
+.v2-nav-link:hover { color: var(--v2-text); }
+.v2-nav-link[data-active="true"] {
+  color: var(--v2-text);
+}
+.v2-nav-link[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
 /* ── Contact rows */
 .v2-contact-row:hover { background: rgba(255,255,255,0.02); }
 

@@ -70,6 +70,37 @@ export default function SignatureMoment() {
 
   useEffect(() => {
     if (!sectionRef.current) return;
+
+    // Reduced-motion fallback. Skip the entire pinned/scrubbed timeline,
+    // jump straight to the personalized end state, and reveal the right-
+    // side recipient signals so the section still reads as "complete".
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      const root = sectionRef.current;
+      root.querySelectorAll<HTMLElement>(".sigm-field").forEach(el => {
+        const name = el.dataset.field as FieldKey | undefined;
+        if (!name) return;
+        el.textContent = FIELDS[name].per;
+        el.style.color = "var(--v2-text)";
+        el.style.fontWeight = "400";
+      });
+      const matchFill = root.querySelector<HTMLElement>(".sigm-match-fill");
+      if (matchFill) matchFill.style.width = "96%";
+      const matchPct = root.querySelector<HTMLElement>(".sigm-match-pct");
+      if (matchPct) matchPct.textContent = "96";
+      root.querySelectorAll<HTMLElement>(".sigm-signal-0, .sigm-signal-1, .sigm-signal-2").forEach(el => {
+        el.style.opacity = "1";
+        el.style.transform = "translateX(0)";
+      });
+      const drafting = root.querySelector<HTMLElement>(".sigm-status-drafting");
+      const ready = root.querySelector<HTMLElement>(".sigm-status-ready");
+      if (drafting) drafting.style.opacity = "0";
+      if (ready) ready.style.opacity = "1";
+      const card = root.querySelector<HTMLElement>(".sigm-recipient-card");
+      if (card) card.style.borderColor = "var(--v2-accent-line)";
+      return;
+    }
+
     const ctx = gsap.context(() => {
       // Initial card fade-in is its own pinless ScrollTrigger so the user
       // doesn't have to start scrolling before the section reveals itself.

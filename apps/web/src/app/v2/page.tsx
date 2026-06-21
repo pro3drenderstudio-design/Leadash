@@ -21,6 +21,7 @@
 
 import "./v2.css";
 import V2Nav from "./components/V2Nav";
+import V2Scroll from "./components/V2Scroll";
 import Hero from "./components/Hero";
 import SignatureMoment from "./components/SignatureMoment";
 import Personas from "./components/Personas";
@@ -48,6 +49,7 @@ export default async function LandingV2Page() {
 
   return (
     <div className="v2 min-h-screen">
+      <V2Scroll />
       <V2Nav />
       <main>
         <Hero />
