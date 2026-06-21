@@ -227,14 +227,44 @@ function TeamTab() {
 
   useEffect(load, []);
 
+  // The invite POST/resend endpoints now return the email delivery status —
+  // surface failures inline so the operator knows when to fall back to copying
+  // the accept URL manually (rather than getting a misleading "sent" toast).
+  type InviteResponse = {
+    email_status?: "sent" | "skipped" | "failed";
+    email_error?:  string | null;
+    accept_url?:   string | null;
+  };
+
+  function flashEmailOutcome(target: string, resp: InviteResponse) {
+    if (resp.email_status === "sent") {
+      flash(`Invite sent to ${target} — link expires in 7 days.`);
+    } else if (resp.email_status === "failed") {
+      flash(
+        `Invite created for ${target}, but the email failed to send (${resp.email_error ?? "unknown error"}). ` +
+        (resp.accept_url ? `Send them this link: ${resp.accept_url}` : ""),
+        false,
+      );
+    } else if (resp.email_status === "skipped") {
+      flash(
+        `Invite created for ${target}, but no email provider is configured. ` +
+        (resp.accept_url ? `Send them this link: ${resp.accept_url}` : ""),
+        false,
+      );
+    } else {
+      flash(`Invite created for ${target}.`);
+    }
+  }
+
   async function sendInvite() {
     if (!inviteEmail) return;
     setInviting(true);
     try {
-      await wsPost("/api/settings/team", { email: inviteEmail });
+      const resp = await wsPost<InviteResponse>("/api/settings/team", { email: inviteEmail });
+      const target = inviteEmail.trim();
       setInviteEmail("");
       load();
-      flash("Invite sent — link expires in 7 days.");
+      flashEmailOutcome(target, resp);
     } catch (e) {
       flash(e instanceof Error ? e.message : "Failed to invite", false);
     } finally {
@@ -245,9 +275,10 @@ function TeamTab() {
   async function resendInvite(inviteId: string) {
     setResending(inviteId);
     try {
-      await wsPost("/api/settings/team/resend", { invite_id: inviteId });
+      const resp = await wsPost<InviteResponse>("/api/settings/team/resend", { invite_id: inviteId });
+      const target = invites.find(i => i.id === inviteId)?.email ?? "the invitee";
       load();
-      flash("Invite resent — new link expires in 7 days.");
+      flashEmailOutcome(target, resp);
     } catch (e) {
       flash(e instanceof Error ? e.message : "Failed to resend", false);
     } finally {
@@ -429,8 +460,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
   const [creditActivated, setCreditActivated] = useState(false);
   const [grantedCredits, setGrantedCredits]   = useState(0);
   const [invoices, setInvoices]               = useState<Invoice[]>([]);
-  const { currency } = useCurrency();
-  const isNgn = currency === "NGN";
+  // formatPrice converts NGN → local currency (display only — Paystack still charges NGN).
+  const { formatPrice } = useCurrency();
 
   useEffect(() => {
     Promise.all([
@@ -562,7 +593,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
 
   function fmtPrice(plan: PlanConfig) {
     if (plan.price_ngn === 0) return "Free";
-    return isNgn ? `₦${plan.price_ngn.toLocaleString()}` : `$${plan.price_usd}`;
+    return formatPrice(plan.price_ngn);
   }
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 bg-white/4 rounded-2xl animate-pulse" />)}</div>;
@@ -750,7 +781,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {CREDIT_PACKS_CONFIG.map(pack => {
             const isBest = pack.savingsPct >= 20;
-            const price  = isNgn ? `₦${pack.priceNgn.toLocaleString()}` : `$${pack.priceUsd}`;
+            const price  = formatPrice(pack.priceNgn);
             return (
               <div
                 key={pack.id}
@@ -796,9 +827,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
           <div className="divide-y divide-white/6">
             {invSlice.map(inv => {
               const amountNgn = inv.amount_kobo / 100;
-              const fmtAmt    = isNgn
-                ? `₦${amountNgn.toLocaleString("en-NG")}`
-                : `$${(amountNgn / 1600).toFixed(2)}`;
+              const fmtAmt    = formatPrice(amountNgn);
               return (
                 <div key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                   <div className="w-7 h-7 rounded-lg bg-white/6 flex items-center justify-center text-xs flex-shrink-0">
@@ -1176,8 +1205,7 @@ interface BlacklistCheck {
 }
 
 function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean }) {
-  const { currency } = useCurrency();
-  const isNgn = currency === "NGN";
+  const { formatPrice } = useCurrency();
   const [sub,        setSub]       = useState<DedicatedIpSub | null | undefined>(undefined);
   const [check,      setCheck]     = useState<BlacklistCheck | null>(null);
   const [domains,    setDomains]   = useState(0);
@@ -1339,7 +1367,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
             </div>
             <div className="flex-shrink-0 text-right">
               <p className="text-white font-bold text-2xl">
-                {isNgn ? `₦${priceNgn.toLocaleString("en-NG")}` : `$${priceUsd}`}
+                {formatPrice(priceNgn)}
               </p>
               <p className="text-white/30 text-xs">/month</p>
               <button
@@ -1390,7 +1418,7 @@ function InfrastructureTab({ dedicatedIpSuccess }: { dedicatedIpSuccess: boolean
                   <div className="bg-white/4 border border-white/8 rounded-xl p-3">
                     <p className="text-white/30 text-[11px] uppercase tracking-wide mb-1">Price</p>
                     <p className="text-white font-bold text-sm leading-none">
-                      {isNgn ? `₦${sub.price_ngn.toLocaleString("en-NG")}` : `$${priceUsd}`}
+                      {formatPrice(sub.price_ngn)}
                     </p>
                     <p className="text-white/30 text-xs mt-0.5">per month</p>
                   </div>

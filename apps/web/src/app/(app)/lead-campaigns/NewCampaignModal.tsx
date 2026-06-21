@@ -12,7 +12,7 @@ import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
 import { wsGet, wsPost, wsFetch } from "@/lib/workspace/client";
 import { emitCreditsChanged } from "@/lib/credits/events";
 
-const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1, ai_prospect_haiku: 3, ai_prospect_sonnet: 5, ai_prospect_opus: 9 };
 
 interface Props {
   onClose:   () => void;

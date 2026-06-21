@@ -1,0 +1,43 @@
+# Daily ping to /api/cron/refresh-fx so the currency_rates table stays
+# up to date with the latest FX rates from open.er-api.com.
+#
+# Setup (one-time):
+#   1. Go to https://github.com/pro3drenderstudio-design/Leadash/settings/secrets/actions
+#   2. Click "New repository secret"
+#   3. Name: CRON_SECRET — value: the same string that's in Vercel's CRON_SECRET env var
+#   4. Save
+#
+# Then this workflow will run daily on its own. You can also kick it off
+# manually any time from the Actions tab → "Refresh FX rates" → "Run workflow".
+
+name: Refresh FX rates
+
+on:
+  schedule:
+    # 04:00 UTC daily — well after open.er-api.com's daily refresh (00:00 UTC)
+    # so we always get the freshest rates.
+    - cron: '0 4 * * *'
+  workflow_dispatch: {}   # Lets you trigger from the GitHub Actions UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the FX refresh endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET secret is not configured on this repo. See the workflow header for setup steps." >&2
+            exit 1
+          fi
+          # Use a bearer token in the Authorization header — cleaner than the query string
+          # and won't end up in any logs or analytics.
+          # Hit the canonical www host directly — the apex `leadash.com` 307s to
+          # www and curl won't carry the Authorization header across that hop.
+          response=$(curl --silent --show-error --write-out "\nHTTP %{http_code}\n" \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "https://www.leadash.com/api/cron/refresh-fx")
+          echo "$response"
+          # Fail the job if the endpoint didn't return 200.
+          echo "$response" | tail -n 1 | grep -q "HTTP 200" || exit 1

@@ -6,7 +6,16 @@ import { createClient } from "@/lib/supabase/server";
 const APP_URL  = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 const FROM     = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
 
-async function sendInviteEmail(opts: { to: string; workspaceName: string; role: string; acceptUrl: string }) {
+export type InviteEmailResult = {
+  status: "sent" | "skipped" | "failed";
+  error:  string | null;
+};
+
+// Sends the workspace invite email and reports success/failure instead of
+// swallowing it. Previously every Resend / Postal failure was silently dropped
+// via `.catch(() => null)`, leaving operators with no way to tell whether the
+// recipient actually got the email.
+async function sendInviteEmail(opts: { to: string; workspaceName: string; role: string; acceptUrl: string }): Promise<InviteEmailResult> {
   const { to, workspaceName, role, acceptUrl } = opts;
   const subject = `You've been invited to join ${workspaceName} on Leadash`;
   const html = `
@@ -33,23 +42,37 @@ async function sendInviteEmail(opts: { to: string; workspaceName: string; role: 
     `This link expires in 7 days.`,
   ].join("\n");
 
-  const postalHost   = process.env.POSTAL_HOST ?? process.env.SMTP_HOST;
-  const postalApiKey = process.env.POSTAL_API_KEY;
-  if (postalHost && postalApiKey) {
-    await fetch(`https://${postalHost}/api/v1/send/message`, {
-      method:  "POST",
-      headers: { "X-Server-API-Key": postalApiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html_body: html, plain_body: text }),
-    }).catch(() => null);
-    return;
-  }
+  // Always send transactional invites through Resend. The rest of the platform
+  // (welcome emails, Postal health alerts, etc.) routes through Resend on the
+  // same domain, and we want a single source of truth for deliverability.
+  // Postal is reserved for outreach sends, not internal/system mail — using it
+  // here was previously causing invites to vanish silently because Postal's
+  // /send/message endpoint can return 200 while the message is dropped at the
+  // server level.
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
-    await fetch("https://api.resend.com/emails", {
+  if (!apiKey) {
+    const error = "No email provider configured (RESEND_API_KEY and POSTAL_API_KEY both missing).";
+    console.error("[settings/team] " + error);
+    return { status: "skipped", error };
+  }
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
       method:  "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: `Leadash <${FROM}>`, to: [to], subject, html, text }),
-    }).catch(() => null);
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => res.statusText);
+      const error = `Resend ${res.status}: ${body.slice(0, 300)}`;
+      console.error("[settings/team] invite email via Resend failed:", error);
+      return { status: "failed", error };
+    }
+    return { status: "sent", error: null };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error("[settings/team] invite email via Resend threw:", error);
+    return { status: "failed", error };
   }
 }
 
@@ -114,18 +137,29 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Send invite email (non-fatal)
+  // Send the invite email. Whatever happens, we always return the invite row
+  // (it was created successfully); the client decides how to surface the
+  // email outcome.
+  let emailResult: InviteEmailResult = { status: "skipped", error: "Email send was not attempted." };
+  const acceptUrl = `${APP_URL}/invite/${data.token}`;
   try {
     const adminDb = createAdminClient();
     const { data: ws } = await adminDb.from("workspaces").select("name").eq("id", workspaceId).single();
     const workspaceName = (ws as { name: string } | null)?.name ?? "your team";
-    const acceptUrl = `${APP_URL}/invite/${data.token}`;
-    await sendInviteEmail({ to: data.email, workspaceName, role: data.role, acceptUrl });
-  } catch {
-    // Non-fatal — invite row is created; user can resend from settings
+    emailResult = await sendInviteEmail({ to: data.email, workspaceName, role: data.role, acceptUrl });
+  } catch (e) {
+    emailResult = { status: "failed", error: e instanceof Error ? e.message : String(e) };
+    console.error("[settings/team] sendInviteEmail threw:", emailResult.error);
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({
+    ...data,
+    email_status: emailResult.status,
+    email_error:  emailResult.error,
+    // When the email didn't go through, we expose the accept URL so the
+    // operator can copy-paste it to the invitee until delivery is fixed.
+    accept_url:   emailResult.status === "sent" ? null : acceptUrl,
+  }, { status: 201 });
 }
 
 export async function DELETE(req: NextRequest) {

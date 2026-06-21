@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getActivePlans, type PlanConfig } from "@/lib/billing/getActivePlans";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
+import { getCurrencyContext } from "@/lib/currency/server";
+import { formatLocalPrice, type CurrencyContext } from "@/lib/currency/format";
 
 // ─── Shared micro-components ──────────────────────────────────────────────────
 
@@ -567,7 +569,7 @@ const PLAN_DISPLAY: Record<string, { desc: string; cta: string; highlight?: bool
   enterprise: { desc: "For large teams requiring custom limits, SLAs, and dedicated support.",     cta: "Talk to sales",   extraFeatures: ["Everything in Scale", "Custom limits", "Dedicated Slack support", "SLA guarantee", "Custom onboarding"] },
 };
 
-function Pricing({ plans }: { plans: PlanConfig[] }) {
+function Pricing({ plans, currencyContext }: { plans: PlanConfig[]; currencyContext: CurrencyContext }) {
   const displayPlans = plans
     .filter(p => p.plan_id !== "free" && PLAN_DISPLAY[p.plan_id])
     .map(p => {
@@ -575,7 +577,9 @@ function Pricing({ plans }: { plans: PlanConfig[] }) {
       return {
         id:        p.plan_id,
         name:      p.name,
-        price:     `₦${p.price_ngn.toLocaleString()}`,
+        // Prices are stored in NGN — formatted in the visitor's local currency
+        // (Paystack still charges NGN; non-NGN values are conversions for display).
+        price:     formatLocalPrice(p.price_ngn, currencyContext),
         period:    "/month",
         desc:      d.desc,
         features:  [
@@ -861,7 +865,10 @@ function Footer() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function LandingPage() {
-  const plans = await getActivePlans();
+  const [plans, currencyContext] = await Promise.all([
+    getActivePlans(),
+    getCurrencyContext(),
+  ]);
   return (
     <div className="min-h-screen" style={{ background: "#020617" }}>
       <SiteNav />
@@ -871,7 +878,7 @@ export default async function LandingPage() {
       <HowItWorks />
       <Testimonials />
       <Comparison />
-      <Pricing plans={plans} />
+      <Pricing plans={plans} currencyContext={currencyContext} />
       <FAQ />
       <CTA />
       <SiteFooter />

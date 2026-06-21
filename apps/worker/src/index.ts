@@ -10,6 +10,7 @@ import { processLeadCampaign } from "./workers/lead-campaign-worker";
 import { processVerifyBulk } from "./workers/verify-bulk-worker";
 import { processEnrichBulk } from "./workers/enrich-bulk-worker";
 import { processProvision } from "./workers/provision-worker";
+import { processAiProspect } from "./workers/ai-prospect-worker";
 import { startSchedulers } from "./schedulers";
 import { startHttpServer } from "./server";
 
@@ -49,6 +50,7 @@ new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concur
 new Worker("leadash:verify-bulk",    processVerifyBulk,     { connection, concurrency: 3 });
 new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concurrency: 3 });
 new Worker("leadash:provision",      processProvision,      { connection, concurrency: 3 });
+new Worker("leadash:ai-prospect-enrich", processAiProspect, { connection, concurrency: 3 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();

@@ -148,42 +148,75 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "Failed to create invite" }, { status: 500 });
   }
 
-  // Send the invite email if Resend is configured (best-effort)
+  // Send the invite email. We surface any failure back to the UI now instead
+  // of silently swallowing it — the previous version did `.catch(() => null)`
+  // which made bad sender domains / unverified Resend setups impossible to
+  // diagnose from the dashboard.
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
+  let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+  let emailError: string | null = null;
+
+  if (!apiKey) {
+    emailError = "RESEND_API_KEY is not configured — invite email was not sent.";
+    console.error("[admin/team] " + emailError);
+  } else {
     const acceptUrl = `${APP_URL}/admin/accept-invite?token=${invite.token}`;
     const roleLabel = role === "custom" ? "custom" : role;
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from:    `Leadash Admin <${FROM}>`,
-        to:      [invite.email],
-        subject: "You've been invited to the Leadash admin panel",
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-            <div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:24px 32px;border-radius:12px 12px 0 0">
-              <p style="margin:0;font-size:20px;font-weight:700;color:#fff">Leadash Admin</p>
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // Match the sender format used by other working Resend calls in this
+          // codebase ("Leadash <…>") so we share whatever verified domain config
+          // they rely on, instead of inventing a new sender that might not be
+          // allowlisted on Resend.
+          from:    `Leadash <${FROM}>`,
+          to:      [invite.email],
+          subject: "You've been invited to the Leadash admin panel",
+          html: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+              <div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:24px 32px;border-radius:12px 12px 0 0">
+                <p style="margin:0;font-size:20px;font-weight:700;color:#fff">Leadash Admin</p>
+              </div>
+              <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:32px">
+                <p style="font-size:15px;color:#1e293b">You've been invited to join the Leadash admin panel as <strong>${roleLabel}</strong>.</p>
+                <p style="font-size:14px;color:#64748b">Click the button below to accept your invitation. This link expires in 7 days.</p>
+                <a href="${acceptUrl}" style="display:inline-block;margin:16px 0;background:#f97316;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
+                  Accept Invitation →
+                </a>
+                <p style="font-size:12px;color:#94a3b8;margin-top:24px;border-top:1px solid #f1f5f9;padding-top:16px">
+                  If you did not expect this invitation, you can safely ignore this email.
+                </p>
+              </div>
             </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:32px">
-              <p style="font-size:15px;color:#1e293b">You've been invited to join the Leadash admin panel as <strong>${roleLabel}</strong>.</p>
-              <p style="font-size:14px;color:#64748b">Click the button below to accept your invitation. This link expires in 7 days.</p>
-              <a href="${acceptUrl}" style="display:inline-block;margin:16px 0;background:#f97316;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
-                Accept Invitation →
-              </a>
-              <p style="font-size:12px;color:#94a3b8;margin-top:24px;border-top:1px solid #f1f5f9;padding-top:16px">
-                If you did not expect this invitation, you can safely ignore this email.
-              </p>
-            </div>
-          </div>
-        `,
-        text: `You've been invited to the Leadash admin panel as ${roleLabel}.\n\nAccept your invitation:\n${acceptUrl}\n\nThis link expires in 7 days.`,
-      }),
-    }).catch(() => null);
+          `,
+          text: `You've been invited to the Leadash admin panel as ${roleLabel}.\n\nAccept your invitation:\n${acceptUrl}\n\nThis link expires in 7 days.`,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => res.statusText);
+        emailError  = `Resend ${res.status}: ${body.slice(0, 300)}`;
+        emailStatus = "failed";
+        console.error("[admin/team] invite email failed:", emailError);
+      } else {
+        emailStatus = "sent";
+      }
+    } catch (e) {
+      emailError  = e instanceof Error ? e.message : String(e);
+      emailStatus = "failed";
+      console.error("[admin/team] invite email threw:", emailError);
+    }
   }
 
   const { token: _token, ...safeInvite } = invite;
-  return NextResponse.json({ ok: true, invite: safeInvite });
+  return NextResponse.json({
+    ok:           true,
+    invite:       safeInvite,
+    email_status: emailStatus,
+    email_error:  emailError,
+    accept_url:   emailStatus === "sent" ? null : `${APP_URL}/admin/accept-invite?token=${invite.token}`,
+  });
 }
 
 export async function DELETE(req: NextRequest) {

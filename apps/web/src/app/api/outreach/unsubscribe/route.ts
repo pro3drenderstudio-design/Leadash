@@ -38,11 +38,14 @@ export async function GET(req: NextRequest) {
 
   const leadIds = (leads ?? []).map((l: { id: string }) => l.id);
   if (leadIds.length > 0) {
+    // Mark ALL non-terminal enrollments as unsubscribed — not just active ones.
+    // Completed/replied enrollments must also be blocked so re-activated or
+    // paused sequences can't fire additional steps.
     await db
       .from("outreach_enrollments")
       .update({ status: "unsubscribed" })
       .eq("workspace_id", workspaceId)
-      .eq("status", "active")
+      .not("status", "in", '("bounced","unsubscribed")')
       .in("lead_id", leadIds);
   }
 

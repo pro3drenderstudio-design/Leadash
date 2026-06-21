@@ -338,10 +338,10 @@ export async function runSendBatch(
         result.skipped++; continue;
       }
 
-      // Unsubscribe check
-      const { data: unsub } = await db.from("outreach_unsubscribes").select("id")
-        .eq("workspace_id", workspaceId).eq("email", lead.email.toLowerCase()).single();
-      if (unsub) {
+      // Unsubscribe check — use maybeSingle() so a DB error is fail-safe (skip send)
+      const { data: unsub, error: unsubErr } = await db.from("outreach_unsubscribes").select("id")
+        .eq("workspace_id", workspaceId).eq("email", lead.email.toLowerCase()).maybeSingle();
+      if (unsubErr || unsub) {
         await db.from("outreach_enrollments").update({ status: "unsubscribed" }).eq("id", enrollment.id);
         result.skipped++; continue;
       }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { LeadCreditTransaction } from "@/types/lead-campaigns";
 import type { CreditRates } from "@/lib/lead-campaigns/credit-rates";
 
-const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1 };
+const DEFAULT_RATES: CreditRates = { verify: 1, discover: 0.5, first_line: 1, scrape: 1, ai_prospect_haiku: 3, ai_prospect_sonnet: 5, ai_prospect_opus: 9 };
 
 // Static display data — no env vars, safe for client bundle
 const CREDIT_PACKS = [

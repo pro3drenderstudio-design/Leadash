@@ -109,7 +109,7 @@ export default function ConnectDomainPage() {
   const [error, setError]         = useState<string | null>(null);
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
 
-  const { currency: globalCurrency } = useCurrency();
+  const { formatPrice } = useCurrency();
   const searchParams = useSearchParams();
   const [inboxPriceNgn, setInboxPriceNgn] = useState(2500);
 
@@ -214,7 +214,8 @@ export default function ConnectDomainPage() {
   async function handlePay() {
     setLoading(true);
     setError(null);
-    const provider = globalCurrency === "NGN" ? "paystack" : "stripe";
+    // Charges go through Paystack in NGN regardless of the visitor's display currency.
+    const provider = "paystack";
     try {
       const wsId = getWorkspaceId() ?? "";
       const res  = await fetch("/api/outreach/domains/checkout", {
@@ -598,8 +599,8 @@ export default function ConnectDomainPage() {
             <div className="border-t border-white/8 pt-3 flex justify-between items-center">
               <span className="text-white/60 text-sm">Monthly total</span>
               <div className="text-right">
-                <span className="text-white font-bold">₦{monthlyNgn.toLocaleString()}/mo</span>
-                <p className="text-white/30 text-xs">₦{inboxPriceNgn.toLocaleString()}/inbox × {totalInboxes} inbox{totalInboxes !== 1 ? "es" : ""}</p>
+                <span className="text-white font-bold">{formatPrice(monthlyNgn)}/mo</span>
+                <p className="text-white/30 text-xs">{formatPrice(inboxPriceNgn)}/inbox × {totalInboxes} inbox{totalInboxes !== 1 ? "es" : ""}</p>
               </div>
             </div>
             {(() => {
