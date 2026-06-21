@@ -4,13 +4,13 @@
  * we'll swap the root page to render this surface and retire /v2.
  *
  * Current spine being assembled:
- *   1. Hero  ✅
- *   2. Signature moment  (next)
- *   3. Who's it for
- *   4. Features + flow
- *   5. What it replaces
- *   6. Comparison
- *   7. Quotes
+ *   1. Hero               ✅
+ *   2. Signature moment   ✅
+ *   3. Personas           ✅
+ *   4. Capabilities       ✅
+ *   5. Stack replacement  ✅
+ *   6. Comparison         ✅
+ *   7. Quotes             (next)
  *   8. Pricing
  *   9. FAQ
  *  10. Footer
@@ -20,6 +20,10 @@ import "./v2.css";
 import V2Nav from "./components/V2Nav";
 import Hero from "./components/Hero";
 import SignatureMoment from "./components/SignatureMoment";
+import Personas from "./components/Personas";
+import Capabilities from "./components/Capabilities";
+import StackReplacement from "./components/StackReplacement";
+import Comparison from "./components/Comparison";
 
 export const metadata = {
   title: "Leadash — The work you want, sent your way",
@@ -33,7 +37,11 @@ export default function LandingV2Page() {
       <main>
         <Hero />
         <SignatureMoment />
-        {/* Subsequent sections land here as they're built */}
+        <Personas />
+        <Capabilities />
+        <StackReplacement />
+        <Comparison />
+        {/* Sections 07–10 land here in the next push */}
       </main>
     </div>
   );
