@@ -19,6 +19,7 @@
 import "./v2.css";
 import V2Nav from "./components/V2Nav";
 import Hero from "./components/Hero";
+import SignatureMoment from "./components/SignatureMoment";
 
 export const metadata = {
   title: "Leadash — The work you want, sent your way",
@@ -31,6 +32,7 @@ export default function LandingV2Page() {
       <V2Nav />
       <main>
         <Hero />
+        <SignatureMoment />
         {/* Subsequent sections land here as they're built */}
       </main>
     </div>
