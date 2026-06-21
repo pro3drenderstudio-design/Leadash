@@ -613,6 +613,9 @@
 }
 .v2-foot-links a:hover { color: var(--v2-text); }
 
+/* ── Contact rows */
+.v2-contact-row:hover { background: rgba(255,255,255,0.02); }
+
 .v2-foot-base {
   display: flex;
   flex-wrap: wrap;
