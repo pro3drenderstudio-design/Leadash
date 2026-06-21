@@ -51,40 +51,26 @@ type FieldKey = keyof typeof FIELDS;
 // Self-contained variable token — renders the template string by default,
 // resolves to the personalized text when the timeline tells it to.
 //
-// Both spans are inline-block siblings inside the field wrapper. tpl starts
-// at its natural inline width; per starts at max-width 0 with opacity 0.
-// During the swap, GSAP animates tpl's max-width → 0 while per's max-width
-// expands to its measured natural width. The result: surrounding inline
-// text reflows in real time as each placeholder collapses and the
-// personalized phrase grows into place. No leftover gaps, no jumps — the
-// final frame is a clean, fully reflowed email.
+// Both spans are plain `display: inline` so they participate in the
+// surrounding paragraph's text flow and wrap naturally. The swap is a hard
+// display toggle: tpl fades out, then `display: none` removes it from flow
+// (the line collapses instantly with no leftover space), then per gets
+// `display: inline` and fades up. Because only one is ever in flow at a
+// time, the email reads as a clean reflowed paragraph at every step — and
+// the long compliment phrase wraps naturally onto the next line rather
+// than fighting inline-block sizing.
 function Field({ name }: { name: FieldKey }) {
   return (
-    <span className="sigm-field" data-field={name} style={{ display: "inline" }}>
+    <span className="sigm-field" data-field={name}>
       <span
         className="sigm-tpl"
-        style={{
-          color: "var(--v2-accent)",
-          fontWeight: 500,
-          display: "inline-block",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          verticalAlign: "baseline",
-        }}
+        style={{ color: "var(--v2-accent)", fontWeight: 500 }}
       >
         {FIELDS[name].tpl}
       </span>
       <span
         className="sigm-per"
-        style={{
-          color: "var(--v2-text)",
-          display: "inline-block",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          verticalAlign: "baseline",
-          maxWidth: 0,
-          opacity: 0,
-        }}
+        style={{ color: "var(--v2-text)", display: "none", opacity: 0 }}
       >
         {FIELDS[name].per}
       </span>
@@ -97,21 +83,7 @@ export default function SignatureMoment() {
 
   useEffect(() => {
     if (!sectionRef.current) return;
-
-    // Wait for web fonts to load before measuring widths — otherwise the
-    // tpl/per natural widths reflect fallback-font metrics and the layout
-    // animation lands a few pixels off when Geist finally swaps in.
-    const fontsReady: Promise<unknown> =
-      typeof document !== "undefined" && document.fonts
-        ? document.fonts.ready
-        : Promise.resolve();
-
-    let ctx: gsap.Context | null = null;
-    let cancelled = false;
-
-    fontsReady.then(() => {
-      if (cancelled || !sectionRef.current) return;
-      ctx = gsap.context(() => {
+    const ctx = gsap.context(() => {
       // Initial card fade-in is its own pinless ScrollTrigger so the user
       // doesn't have to start scrolling before the section reveals itself.
       gsap.from(".sigm-card", {
@@ -120,32 +92,6 @@ export default function SignatureMoment() {
         duration: 0.8,
         ease: "power3.out",
         scrollTrigger: { trigger: ".sigm-card", start: "top 75%" },
-      });
-
-      // ── One-time width measurement ──────────────────────────────────────
-      // Each field has two inline-block siblings: the template placeholder
-      // (visible at its natural width) and the personalized phrase (hidden
-      // at max-width 0). To animate the swap as a real layout reflow we need
-      // a pixel target for each. Temporarily expand each per span, read its
-      // offsetWidth, and stash both widths on the elements as data-* attrs.
-      const fields = sectionRef.current!.querySelectorAll<HTMLSpanElement>(".sigm-field");
-      fields.forEach(field => {
-        const tpl = field.querySelector<HTMLSpanElement>(".sigm-tpl");
-        const per = field.querySelector<HTMLSpanElement>(".sigm-per");
-        if (!tpl || !per) return;
-
-        // Lock tpl to its measured natural width so it animates from a real
-        // pixel value (GSAP can't smoothly tween from "auto").
-        const tplW = tpl.offsetWidth;
-        tpl.style.maxWidth = `${tplW}px`;
-
-        // Measure per by temporarily letting it expand.
-        per.style.maxWidth = "none";
-        const perW = per.offsetWidth;
-        per.style.maxWidth = "0px";
-
-        tpl.dataset.naturalWidth = String(tplW);
-        per.dataset.naturalWidth = String(perW);
       });
 
       // The big pinned timeline that drives the transformation.
@@ -160,25 +106,24 @@ export default function SignatureMoment() {
         },
       });
 
-      // Each swap collapses the template's width to 0 while the personalized
-      // text expands to its natural width — so the line literally reflows as
-      // the phrase replaces the placeholder. y/opacity carry the fade.
+      // Each swap is a hard handoff:
+      //   1. Fade the template span to opacity 0.
+      //   2. At the fade midpoint, remove it from flow (`display: none`)
+      //      and bring the personalized span in (`display: inline`). The
+      //      paragraph reflows instantly — no leftover gap, no jump in
+      //      visible content because both are at opacity 0 at that beat.
+      //   3. Fade the personalized span up to opacity 1.
+      // On scrub-reverse GSAP rewinds the display sets, so the template
+      // comes back into flow exactly as it was.
       const swap = (name: FieldKey, at: number, dur = 0.12) => {
-        const perEl = sectionRef.current!.querySelector<HTMLSpanElement>(
-          `.sigm-field[data-field="${name}"] .sigm-per`,
-        );
-        const perW = Number(perEl?.dataset.naturalWidth ?? 200);
+        const tplSel = `.sigm-field[data-field="${name}"] .sigm-tpl`;
+        const perSel = `.sigm-field[data-field="${name}"] .sigm-per`;
+        const half = dur / 2;
 
-        tl.to(
-          `.sigm-field[data-field="${name}"] .sigm-tpl`,
-          { maxWidth: 0, opacity: 0, y: -6, duration: dur, ease: "power2.inOut" },
-          at,
-        );
-        tl.to(
-          `.sigm-field[data-field="${name}"] .sigm-per`,
-          { maxWidth: perW, opacity: 1, y: 0, duration: dur, ease: "power2.out" },
-          at,
-        );
+        tl.to(tplSel, { opacity: 0, duration: half, ease: "power1.in" }, at);
+        tl.set(tplSel, { display: "none" }, at + half);
+        tl.set(perSel, { display: "inline" }, at + half);
+        tl.to(perSel, { opacity: 1, duration: half, ease: "power1.out" }, at + half);
       };
 
       swap("subject",    0.10, 0.12);
@@ -188,13 +133,6 @@ export default function SignatureMoment() {
       swap("value_prop", 0.66, 0.14);
       swap("cta",        0.78, 0.10);
       swap("sender",     0.85, 0.08);
-
-      // ── Final settle ────────────────────────────────────────────────────
-      // After the last variable resolves, force-zero any sub-pixel rounding
-      // on the collapsed templates so the email reads as exactly aligned in
-      // its final frame. The reflow itself has already happened — this is
-      // belt-and-suspenders to guarantee no hairline gap survives.
-      tl.to(".sigm-tpl", { maxWidth: 0, marginInline: 0, paddingInline: 0, duration: 0.06, ease: "power1.out" }, 0.90);
 
       // Right-side recipient card — wakes up as the email finishes.
       tl.to(".sigm-recipient-card", { borderColor: "var(--v2-accent-line)", duration: 0.2 }, 0.82);
@@ -209,13 +147,9 @@ export default function SignatureMoment() {
       tl.to(".sigm-signal-0", { opacity: 1, x: 0, duration: 0.12 }, 0.88);
       tl.to(".sigm-signal-1", { opacity: 1, x: 0, duration: 0.12 }, 0.92);
       tl.to(".sigm-signal-2", { opacity: 1, x: 0, duration: 0.12 }, 0.96);
-      }, sectionRef);
-    });
+    }, sectionRef);
 
-    return () => {
-      cancelled = true;
-      ctx?.revert();
-    };
+    return () => ctx.revert();
   }, []);
 
   return (
