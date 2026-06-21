@@ -106,6 +106,27 @@ export default function Capabilities() {
             </motion.article>
           ))}
 
+          {/* Bottom-row anchor — mirrors the hero card's 2-column span at lg,
+              so the grid closes symmetrically (1-2-1-2 instead of trailing
+              empty cells). Larger type, a small inline accent rule, no chip:
+              reads like a closing remark rather than another feature card. */}
+          <motion.article
+            className="v2-cap-card v2-cap-anchor lg:col-span-2"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ delay: 0.4, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="v2-cap-chip">07 — The whole loop, owned</div>
+            <h3 className="v2-cap-title" style={{ fontSize: "var(--v2-headline)" }}>
+              Control your entire pipeline from one place.
+            </h3>
+            <p className="v2-cap-body" style={{ maxWidth: 560 }}>
+              Find, write, send, listen, learn — every step of outbound under one workspace, one login, one mental model. No spreadsheets in the loop, no late-night CSV exports, no &quot;wait, which tool had that lead?&quot;
+            </p>
+            <span aria-hidden className="v2-cap-anchor-rule" />
+          </motion.article>
+
         </div>
 
       </div>
@@ -132,7 +153,7 @@ function CapabilityFlow() {
     <div className="v2-cap-flow">
       {steps.map((s, i) => (
         <div key={s.label} className="v2-cap-flow-step">
-          <div className={`v2-cap-flow-node${i === 1 ? " v2-cap-flow-node-accent" : ""}`}>
+          <div className="v2-cap-flow-node">
             <span>{String(i + 1).padStart(2, "0")}</span>
           </div>
           <p className="v2-cap-flow-label">{s.label}</p>

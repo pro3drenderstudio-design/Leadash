@@ -74,8 +74,21 @@ export default function Comparison() {
 
 function SpecCell({ value, positive = false }: { value: boolean | string; positive?: boolean }) {
   if (value === true) {
+    if (positive) {
+      // Leadash column — orange check inside an accent-tinted disc.
+      return (
+        <span className="v2-spec-cell v2-spec-yes-accent" aria-label="Included">
+          <span className="v2-spec-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+        </span>
+      );
+    }
+    // "The usual stack" column — keep restrained hairline mark.
     return (
-      <span className={`v2-spec-cell ${positive ? "v2-spec-yes-accent" : "v2-spec-yes"}`}>
+      <span className="v2-spec-cell v2-spec-yes" aria-label="Included">
         <span aria-hidden className="v2-spec-line" />
       </span>
     );

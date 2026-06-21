@@ -35,7 +35,7 @@ export default function StackReplacement() {
             Three subscriptions,<br/>one bill<span style={{ color: "var(--v2-accent)" }}>.</span>
           </h2>
           <p style={{ color: "var(--v2-text-muted)", fontSize: "var(--v2-body-l)", marginTop: 20, maxWidth: 560, lineHeight: 1.55 }}>
-            The average outbound stack runs $220–$650 a month across three tools that don&apos;t quite talk to each other. Leadash is one of them.
+            The average outbound stack runs $220–$650 a month across three tools that don&apos;t quite talk to each other. Leadash is all in one.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export default function StackReplacement() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/Logo_Icon_Colored.svg" alt="" aria-hidden style={{ width: 40, height: 40, marginBottom: 18 }} />
             <p className="v2-stack-right-name">Leadash</p>
-            <p className="v2-stack-right-price">From $29/mo</p>
+            <p className="v2-stack-right-price">From $10/mo</p>
             <p className="v2-stack-right-desc">Prospecting, sending, warmup, reply triage — one workspace, one bill, one mental model.</p>
           </motion.div>
 
