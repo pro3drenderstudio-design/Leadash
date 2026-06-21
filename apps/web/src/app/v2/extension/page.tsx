@@ -62,7 +62,7 @@ export default function ExtensionPage() {
                   <path d="M7 17L17 7"/><path d="M9 7h8v8"/>
                 </svg>
               </a>
-              <Link href="/v2/extension/auth" className="v2-btn v2-btn-ghost">Sign in to the extension</Link>
+              <Link href="/extension/auth" className="v2-btn v2-btn-ghost">Sign in to the extension</Link>
             </div>
           </div>
         </section>

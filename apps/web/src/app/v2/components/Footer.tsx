@@ -18,18 +18,18 @@ const LINK_COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "How it works", href: "#how" },
-      { label: "For freelancers", href: "#personas" },
-      { label: "Pricing", href: "#pricing" },
-      { label: "Browser extension", href: "/v2/extension" },
+      { label: "How it works", href: "/#how" },
+      { label: "For freelancers", href: "/#personas" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "Browser extension", href: "/extension" },
     ],
   },
   {
     heading: "Company",
     links: [
-      { label: "About", href: "/v2/about" },
-      { label: "Beta program", href: "/v2/beta" },
-      { label: "Contact", href: "/v2/contact" },
+      { label: "About", href: "/about" },
+      { label: "Beta program", href: "/beta" },
+      { label: "Contact", href: "/contact" },
     ],
   },
   {
@@ -82,7 +82,7 @@ export default function Footer() {
 
           <div className="v2-foot-grid">
             <div>
-              <Link href="/v2" className="inline-flex items-center gap-2" aria-label="Leadash home">
+              <Link href="/" className="inline-flex items-center gap-2" aria-label="Leadash home">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/Logo_Icon_Colored.svg" alt="" aria-hidden style={{ width: 22, height: 22 }} />
                 <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--v2-text)" }}>Leadash</span>

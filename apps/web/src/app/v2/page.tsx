@@ -35,10 +35,64 @@ import Footer from "./components/Footer";
 import { getActivePlans } from "@/lib/billing/getActivePlans";
 import { getCurrencyContext } from "@/lib/currency/server";
 
+const SITE = "https://www.leadash.com";
+
 export const metadata = {
   title: "Leadash — The work you want, sent your way",
   description:
     "Cold email that fills your calendar with the kind of clients you actually want to work with — without sounding like a pitch.",
+  alternates: { canonical: SITE },
+  openGraph: {
+    type: "website",
+    url: SITE,
+    siteName: "Leadash",
+    title: "Leadash — The work you want, sent your way",
+    description:
+      "Cold email that fills your calendar with the kind of clients you actually want to work with — without sounding like a pitch.",
+    images: [
+      {
+        url: `${SITE}/opengraph-image`,
+        width: 1200,
+        height: 630,
+        alt: "Leadash — The work you want, sent your way",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Leadash — The work you want, sent your way",
+    description:
+      "Cold email that fills your calendar with the kind of clients you actually want to work with.",
+    images: [`${SITE}/opengraph-image`],
+  },
+};
+
+// Structured data — Organization + WebSite. Helps search engines render
+// the brand panel correctly and pick the right name/url for snippets.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "Leadash",
+      url: SITE,
+      logo: `${SITE}/Logo_Icon_Colored.svg`,
+      sameAs: [
+        "https://twitter.com/leadash",
+        "https://www.linkedin.com/company/leadash",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      name: "Leadash",
+      url: SITE,
+      potentialAction: {
+        "@type": "SearchAction",
+        target: `${SITE}/?q={search_term_string}`,
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ],
 };
 
 export default async function LandingV2Page() {
@@ -49,6 +103,11 @@ export default async function LandingV2Page() {
 
   return (
     <div className="v2 min-h-screen">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <V2Scroll />
       <V2Nav />
       <main>

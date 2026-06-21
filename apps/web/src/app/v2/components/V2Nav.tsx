@@ -26,7 +26,7 @@ const LINKS = [
   { href: "#how",         label: "How it works",    sectionId: "how" },
   { href: "#personas",    label: "For freelancers", sectionId: "personas" },
   { href: "#pricing",     label: "Pricing",         sectionId: "pricing" },
-  { href: "/v2/about",    label: "About",           sectionId: null },
+  { href: "/about",       label: "About",           sectionId: null },
 ];
 
 export default function V2Nav() {
@@ -110,7 +110,7 @@ export default function V2Nav() {
       }}
     >
       <div className="v2-container flex items-center justify-between" style={{ paddingTop: 18, paddingBottom: 18 }}>
-        <Link href="/v2" className="inline-flex items-center gap-2 group" aria-label="Leadash home">
+        <Link href="/" className="inline-flex items-center gap-2 group" aria-label="Leadash home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/Logo_Icon_Colored.svg"

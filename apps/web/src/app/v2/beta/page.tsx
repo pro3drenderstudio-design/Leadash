@@ -46,7 +46,7 @@ export default function BetaPage() {
                   <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
                 </svg>
               </Link>
-              <Link href="/v2/contact" className="v2-btn v2-btn-ghost">Ask a question first</Link>
+              <Link href="/contact" className="v2-btn v2-btn-ghost">Ask a question first</Link>
             </div>
           </div>
         </section>
