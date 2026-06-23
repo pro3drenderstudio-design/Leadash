@@ -66,8 +66,6 @@ export async function syncPostalSuppressions(): Promise<void> {
   const postalEmails = rows.map(r => r[0]?.toLowerCase()).filter(Boolean);
   if (!postalEmails.length) return;
 
-  const db = adminClient();
-
   // Find which are already in our table (avoid redundant work)
   const { data: existing } = await db
     .from("email_suppressions")

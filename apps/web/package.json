@@ -12,6 +12,8 @@
     "@anthropic-ai/sdk": "^0.95.1",
     "@azure/msal-node": "^5.1.2",
     "@google/generative-ai": "^0.24.1",
+    "@hugeicons/core-free-icons": "^4.2.1",
+    "@hugeicons/react": "^1.1.7",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@mux/mux-node": "^14.0.1",
     "@mux/mux-player-react": "^3.13.0",

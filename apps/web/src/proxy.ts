@@ -14,6 +14,8 @@ const PUBLIC_PATHS = [
   "/signup",
   "/forgot-password",
   "/reset-password",
+  "/join",
+  "/free-training",
   "/api/billing/webhook",
   "/api/billing/paystack",
   "/api/track",
@@ -25,6 +27,8 @@ const PUBLIC_PATHS = [
   "/api/cron",
   "/api/beta",
   "/api/debug-currency",
+  "/api/funnel",
+  "/api/public",
   "/vendor/login",
   "/api/vendor/login",
 ];

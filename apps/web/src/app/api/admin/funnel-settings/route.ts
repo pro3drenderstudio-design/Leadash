@@ -21,6 +21,10 @@ const FUNNEL_KEYS = [
   "funnel_vsl_youtube_id",
   // Analytics
   "meta_pixel_id",
+  // Brand / social links
+  "social_twitter_url",
+  "social_linkedin_url",
+  "social_instagram_url",
   // WhatsApp
   "whatsapp_phone_number_id",
   "whatsapp_access_token",

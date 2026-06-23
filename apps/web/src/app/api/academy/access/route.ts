@@ -16,7 +16,7 @@ export async function GET() {
   // No setting row → coming soon is on by default
   if (!settingRow) return NextResponse.json({ accessible: false });
 
-  const setting  = settingRow.value as { enabled?: boolean; beta_workspaces?: string[] };
+  const setting  = (typeof settingRow.value === "string" ? JSON.parse(settingRow.value) : settingRow.value) as { enabled?: boolean; beta_workspaces?: string[] };
   const enabled  = setting.enabled  ?? true;   // default: coming soon is ON
   const betaList = setting.beta_workspaces ?? [];
 
