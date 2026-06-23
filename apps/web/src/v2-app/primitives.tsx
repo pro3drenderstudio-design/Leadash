@@ -118,9 +118,9 @@ export function Field({
   required,
   children,
 }: {
-  label?: string;
-  helper?: string;
-  error?: string;
+  label?: React.ReactNode;
+  helper?: React.ReactNode;
+  error?: React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
