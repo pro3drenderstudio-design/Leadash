@@ -15,12 +15,15 @@ export async function GET() {
   const { data } = await db
     .from("admin_settings")
     .select("key, value")
-    .in("key", ["funnel_vsl_youtube_id", "meta_pixel_id"]);
+    .in("key", ["funnel_vsl_youtube_id", "meta_pixel_id", "social_twitter_url", "social_linkedin_url", "social_instagram_url"]);
 
   const cfg = Object.fromEntries((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value as string]));
 
   return NextResponse.json({
-    youtube_id: cfg["funnel_vsl_youtube_id"] ?? null,
-    pixel_id:   cfg["meta_pixel_id"]          ?? null,
+    youtube_id:    cfg["funnel_vsl_youtube_id"]   ?? null,
+    pixel_id:      cfg["meta_pixel_id"]            ?? null,
+    twitter_url:   cfg["social_twitter_url"]       ?? null,
+    linkedin_url:  cfg["social_linkedin_url"]      ?? null,
+    instagram_url: cfg["social_instagram_url"]     ?? null,
   });
 }

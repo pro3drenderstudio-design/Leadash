@@ -17,6 +17,10 @@ type FunnelSettings = {
   funnel_vsl_youtube_id:   string;
   // Analytics
   meta_pixel_id:           string;
+  // Brand / social
+  social_twitter_url:      string;
+  social_linkedin_url:     string;
+  social_instagram_url:    string;
   // WhatsApp credentials
   whatsapp_phone_number_id: string;
   whatsapp_access_token:    string;
@@ -52,6 +56,9 @@ const DEFAULTS: FunnelSettings = {
   funnel_mizark_invite_link:         "",
   funnel_vsl_youtube_id:             "",
   meta_pixel_id:                     "",
+  social_twitter_url:                "",
+  social_linkedin_url:               "",
+  social_instagram_url:              "",
   whatsapp_phone_number_id:          "",
   whatsapp_access_token:             "",
   whatsapp_waba_id:                  "",
@@ -264,6 +271,29 @@ export default function FunnelSettingsPage() {
         </FieldRow>
         <FieldRow label="Meta Pixel ID" hint="Your Facebook Pixel ID for tracking opt-ins, video views, and purchases.">
           <TextInput value={s.meta_pixel_id} onChange={v => u("meta_pixel_id", v)} placeholder="123456789012345" mono />
+        </FieldRow>
+      </SectionCard>
+
+      {/* ── Brand / Social ── */}
+      <SectionCard
+        title="Social Links"
+        hint="Displayed in the website footer. Leave blank to hide that icon."
+        onSave={() => save("social", {
+          social_twitter_url:   s.social_twitter_url,
+          social_linkedin_url:  s.social_linkedin_url,
+          social_instagram_url: s.social_instagram_url,
+        })}
+        saving={saving === "social"}
+        saved={saved === "social"}
+      >
+        <FieldRow label="X / Twitter URL" hint="Full URL e.g. https://twitter.com/leadash">
+          <TextInput value={s.social_twitter_url} onChange={v => u("social_twitter_url", v)} placeholder="https://twitter.com/leadash" />
+        </FieldRow>
+        <FieldRow label="LinkedIn URL" hint="Full URL e.g. https://linkedin.com/company/leadash">
+          <TextInput value={s.social_linkedin_url} onChange={v => u("social_linkedin_url", v)} placeholder="https://linkedin.com/company/leadash" />
+        </FieldRow>
+        <FieldRow label="Instagram URL" hint="Full URL e.g. https://instagram.com/leadash">
+          <TextInput value={s.social_instagram_url} onChange={v => u("social_instagram_url", v)} placeholder="https://instagram.com/leadash" />
         </FieldRow>
       </SectionCard>
 

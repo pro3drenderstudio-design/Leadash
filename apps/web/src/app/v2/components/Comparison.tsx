@@ -26,7 +26,7 @@ const ROWS: Row[] = [
   { feature: "Send from your own domain",              leadash: true,                       others: true },
   { feature: "Per-line reply-rate analytics",          leadash: true,                       others: "partial" },
   { feature: "Export your own data, any time",         leadash: true,                       others: "plan-gated" },
-  { feature: "Pricing that fits a freelancer's books", leadash: "from $29",                 others: "$220+" },
+  { feature: "Pricing that fits a freelancer's books", leadash: "from $10",                 others: "$220+" },
 ];
 
 export default function Comparison() {
