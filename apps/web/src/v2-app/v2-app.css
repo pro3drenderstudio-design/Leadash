@@ -1,0 +1,550 @@
+/* ─── v2-app design tokens ──────────────────────────────────────────────────
+ * Sister token system to the landing's v2.css, tuned for the in-app surface.
+ *
+ * Why a separate file: the landing uses generous 160px section rhythm, 64–84px
+ * display type, and a focal-point composition. Apps need denser type, tighter
+ * spacing, persistent chrome, and a different mental model for what counts as
+ * "section". Sharing tokens would force one register to compromise.
+ *
+ * Shared with landing v2: palette family (#07070A bg, #F5F5F7 text, #F97316
+ * accent), Geist font, dark-only.
+ * Different from landing v2: type scale (smaller), spacing rhythm (denser),
+ * sidebar/topbar primitives, no dot-grid background, no display-XL.
+ *
+ * Everything is scoped to .v2-app so the existing chrome keeps working while
+ * we migrate screens over progressively. Once the migration completes, the
+ * scope can be hoisted to :root.
+ */
+
+.v2-app {
+  /* ── Palette ───────────────────────────────────────────────────────────── */
+  --app-bg:             #07070A;   /* canvas */
+  --app-bg-elevated:    #0E0E13;   /* cards, surfaces */
+  --app-bg-sunken:      #050507;   /* sidebar background — slightly darker than canvas */
+  --app-bg-overlay:     rgba(7, 7, 10, 0.78);  /* modal scrim */
+
+  --app-surface:        rgba(255, 255, 255, 0.02);   /* hover surface */
+  --app-surface-strong: rgba(255, 255, 255, 0.05);   /* active surface */
+  --app-surface-faint:  rgba(255, 255, 255, 0.01);   /* striped row */
+
+  --app-border:         rgba(255, 255, 255, 0.06);
+  --app-border-strong:  rgba(255, 255, 255, 0.10);
+  --app-border-focus:   rgba(249, 115, 22, 0.45);
+
+  --app-text:           #F5F5F7;
+  --app-text-muted:     #9A9AA8;
+  --app-text-quiet:     #5B5B68;
+  --app-text-faint:     #2A2A33;
+
+  --app-accent:         #F97316;
+  --app-accent-hover:   #FB7E2A;
+  --app-accent-soft:    rgba(249, 115, 22, 0.12);
+  --app-accent-line:    rgba(249, 115, 22, 0.30);
+  --app-accent-glow:    rgba(249, 115, 22, 0.18);
+
+  --app-success:        #34D399;
+  --app-success-soft:   rgba(52, 211, 153, 0.10);
+  --app-warning:        #FBBF24;
+  --app-warning-soft:   rgba(251, 191, 36, 0.10);
+  --app-danger:         #F87171;
+  --app-danger-soft:    rgba(248, 113, 113, 0.10);
+  --app-info:           #60A5FA;
+  --app-info-soft:      rgba(96, 165, 250, 0.10);
+
+  /* ── Type scale (px) ────────────────────────────────────────────────────
+     App needs smaller, denser type than the landing. No display-XL. */
+  --app-h1:        28px;     /* page titles */
+  --app-h2:        20px;     /* section headers */
+  --app-h3:        16px;     /* card titles */
+  --app-body:      14px;     /* default body */
+  --app-body-sm:   13px;     /* secondary body */
+  --app-small:     12px;     /* labels, captions */
+  --app-micro:     11px;     /* eyebrows, tags */
+  --app-tabular:   13px;     /* tabular nums in tables */
+
+  /* ── Spacing rhythm ──────────────────────────────────────────────────── */
+  --app-gap-xs:    4px;
+  --app-gap-sm:    8px;
+  --app-gap:       12px;
+  --app-gap-lg:    16px;
+  --app-gap-xl:    24px;
+  --app-gap-2xl:   32px;
+  --app-section-y: 48px;    /* between major page sections */
+
+  /* ── Sidebar metrics ─────────────────────────────────────────────────── */
+  --app-sidebar-w:        236px;
+  --app-sidebar-w-collapsed: 56px;
+  --app-topbar-h:         52px;
+
+  /* ── Radii ───────────────────────────────────────────────────────────── */
+  --app-radius-xs:        4px;
+  --app-radius-sm:        6px;
+  --app-radius:           8px;
+  --app-radius-lg:        12px;
+  --app-radius-pill:      999px;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --app-ease:             cubic-bezier(0.16, 1, 0.3, 1);
+  --app-ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+  --app-dur-fast:         120ms;
+  --app-dur:              180ms;
+  --app-dur-slow:         260ms;
+
+  /* ── Density variants ────────────────────────────────────────────────────
+     Comfortable = default, used everywhere except dense tables.
+     Compact = used on Leads / Inboxes / Campaigns tables. */
+  --row-h-comfortable:    44px;
+  --row-h-compact:        32px;
+  --row-pad-x-comfortable: 16px;
+  --row-pad-x-compact:    12px;
+
+  /* ── Inherit globals ─────────────────────────────────────────────────── */
+  background: var(--app-bg);
+  color:      var(--app-text);
+  font-size:  var(--app-body);
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  font-feature-settings: "cv11", "ss01", "ss03"; /* Geist stylistic alternates */
+}
+
+/* ─── Typography utilities ──────────────────────────────────────────────── */
+.v2-app .app-h1 { font-size: var(--app-h1); letter-spacing: -0.025em; font-weight: 500; line-height: 1.2; color: var(--app-text); }
+.v2-app .app-h2 { font-size: var(--app-h2); letter-spacing: -0.015em; font-weight: 500; line-height: 1.3; color: var(--app-text); }
+.v2-app .app-h3 { font-size: var(--app-h3); letter-spacing: -0.01em;  font-weight: 500; line-height: 1.35; color: var(--app-text); }
+.v2-app .app-eyebrow {
+  font-size: var(--app-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--app-text-quiet);
+}
+
+/* ─── Button primitive ─────────────────────────────────────────────────── */
+.v2-app .app-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--app-radius-sm);
+  font-size: var(--app-body-sm);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--app-text);
+  cursor: pointer;
+  transition: background var(--app-dur) var(--app-ease),
+              border-color var(--app-dur) var(--app-ease),
+              color var(--app-dur) var(--app-ease),
+              transform var(--app-dur) var(--app-ease);
+  white-space: nowrap;
+  user-select: none;
+}
+.v2-app .app-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.v2-app .app-btn:focus-visible { outline: 2px solid var(--app-border-focus); outline-offset: 1px; }
+
+.v2-app .app-btn-primary {
+  background: var(--app-accent);
+  color: #FFFFFF;
+}
+.v2-app .app-btn-primary:hover:not(:disabled) { background: var(--app-accent-hover); }
+.v2-app .app-btn-primary:active:not(:disabled) { transform: translateY(0.5px); }
+
+.v2-app .app-btn-secondary {
+  background: var(--app-surface);
+  border-color: var(--app-border-strong);
+  color: var(--app-text);
+}
+.v2-app .app-btn-secondary:hover:not(:disabled) {
+  background: var(--app-surface-strong);
+  border-color: var(--app-text-quiet);
+}
+
+.v2-app .app-btn-ghost {
+  background: transparent;
+  color: var(--app-text-muted);
+}
+.v2-app .app-btn-ghost:hover:not(:disabled) {
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.v2-app .app-btn-danger {
+  background: transparent;
+  border-color: var(--app-danger-soft);
+  color: var(--app-danger);
+}
+.v2-app .app-btn-danger:hover:not(:disabled) {
+  background: var(--app-danger-soft);
+  border-color: var(--app-danger);
+}
+
+.v2-app .app-btn-sm  { height: 26px; padding: 0 10px; font-size: var(--app-small); }
+.v2-app .app-btn-lg  { height: 38px; padding: 0 16px; font-size: var(--app-body); }
+.v2-app .app-btn-icon {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* ─── Input primitive ──────────────────────────────────────────────────── */
+.v2-app .app-input {
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-sm);
+  color: var(--app-text);
+  font-size: var(--app-body-sm);
+  letter-spacing: -0.005em;
+  transition: border-color var(--app-dur) var(--app-ease),
+              background var(--app-dur) var(--app-ease);
+}
+.v2-app .app-input::placeholder { color: var(--app-text-quiet); }
+.v2-app .app-input:hover { border-color: var(--app-text-quiet); }
+.v2-app .app-input:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  background: var(--app-bg-elevated);
+}
+.v2-app .app-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.v2-app textarea.app-input { height: auto; min-height: 72px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+
+/* ─── Card primitive ───────────────────────────────────────────────────── */
+.v2-app .app-card {
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  padding: 20px;
+  transition: border-color var(--app-dur) var(--app-ease);
+}
+.v2-app .app-card-interactive:hover { border-color: var(--app-border-strong); }
+.v2-app .app-card-tight { padding: 14px; }
+.v2-app .app-card-flat {
+  background: transparent;
+  border-color: var(--app-border);
+}
+
+/* ─── Badge ────────────────────────────────────────────────────────────── */
+.v2-app .app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--app-radius-xs);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.v2-app .app-badge-default { background: var(--app-surface); border-color: var(--app-border-strong); color: var(--app-text-muted); }
+.v2-app .app-badge-accent  { background: var(--app-accent-soft); border-color: var(--app-accent-line); color: var(--app-accent); }
+.v2-app .app-badge-success { background: var(--app-success-soft); border-color: rgba(52, 211, 153, 0.30); color: var(--app-success); }
+.v2-app .app-badge-warning { background: var(--app-warning-soft); border-color: rgba(251, 191, 36, 0.30); color: var(--app-warning); }
+.v2-app .app-badge-danger  { background: var(--app-danger-soft); border-color: rgba(248, 113, 113, 0.30); color: var(--app-danger); }
+.v2-app .app-badge-info    { background: var(--app-info-soft); border-color: rgba(96, 165, 250, 0.30); color: var(--app-info); }
+
+/* ─── Skeleton ─────────────────────────────────────────────────────────── */
+.v2-app .app-skeleton {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.03) 0%,
+    rgba(255,255,255,0.06) 50%,
+    rgba(255,255,255,0.03) 100%);
+  background-size: 200% 100%;
+  border-radius: var(--app-radius-sm);
+  animation: app-skeleton-shimmer 1.4s linear infinite;
+}
+@keyframes app-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Tabs ─────────────────────────────────────────────────────────────── */
+.v2-app .app-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+}
+.v2-app .app-tab {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--app-radius-xs);
+  font-size: var(--app-small);
+  color: var(--app-text-muted);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background var(--app-dur) var(--app-ease), color var(--app-dur) var(--app-ease);
+}
+.v2-app .app-tab:hover { color: var(--app-text); }
+.v2-app .app-tab[data-active="true"] {
+  background: var(--app-bg-elevated);
+  color: var(--app-text);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+
+/* ─── DataTable ────────────────────────────────────────────────────────── */
+.v2-app .app-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--app-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+.v2-app .app-table thead th {
+  padding: 10px var(--row-pad-x-comfortable);
+  text-align: left;
+  font-size: var(--app-micro);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--app-text-quiet);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-bg-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.v2-app .app-table tbody tr {
+  transition: background var(--app-dur-fast) var(--app-ease);
+}
+.v2-app .app-table tbody tr:hover { background: var(--app-surface); }
+.v2-app .app-table tbody td {
+  height: var(--row-h-comfortable);
+  padding: 0 var(--row-pad-x-comfortable);
+  color: var(--app-text-muted);
+  border-bottom: 1px solid var(--app-border);
+  vertical-align: middle;
+}
+.v2-app .app-table tbody td:first-child { color: var(--app-text); }
+.v2-app .app-table tbody tr:last-child td { border-bottom: none; }
+.v2-app .app-table-wrap {
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  overflow: hidden;
+}
+
+/* Compact density variant — used on power tables */
+.v2-app .app-table-compact thead th { padding: 8px var(--row-pad-x-compact); }
+.v2-app .app-table-compact tbody td { height: var(--row-h-compact); padding: 0 var(--row-pad-x-compact); font-size: var(--app-small); }
+
+/* ─── Toast ────────────────────────────────────────────────────────────── */
+.v2-app .app-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius);
+  font-size: var(--app-body-sm);
+  color: var(--app-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+}
+.v2-app .app-toast-success { border-color: rgba(52, 211, 153, 0.30); }
+.v2-app .app-toast-warning { border-color: rgba(251, 191, 36, 0.30); }
+.v2-app .app-toast-danger  { border-color: rgba(248, 113, 113, 0.30); }
+
+/* ─── Tooltip ──────────────────────────────────────────────────────────── */
+.v2-app .app-tooltip {
+  display: inline-block;
+  padding: 6px 8px;
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-xs);
+  font-size: var(--app-small);
+  color: var(--app-text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.36);
+}
+
+/* ─── Modal scrim + body ───────────────────────────────────────────────── */
+.v2-app .app-modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--app-bg-overlay);
+  backdrop-filter: blur(6px);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.v2-app .app-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-lg);
+  padding: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Empty / error states ─────────────────────────────────────────────── */
+.v2-app .app-empty,
+.v2-app .app-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--app-text-muted);
+  gap: 12px;
+}
+.v2-app .app-empty-icon { color: var(--app-text-quiet); margin-bottom: 4px; }
+.v2-app .app-empty-title { color: var(--app-text); font-size: var(--app-h3); font-weight: 500; letter-spacing: -0.01em; }
+.v2-app .app-empty-body { font-size: var(--app-body-sm); max-width: 380px; line-height: 1.55; }
+
+/* ─── Layout shell ─────────────────────────────────────────────────────── */
+.v2-app .app-shell {
+  display: grid;
+  grid-template-columns: var(--app-sidebar-w) 1fr;
+  min-height: 100vh;
+  background: var(--app-bg);
+}
+.v2-app .app-shell-sidebar {
+  background: var(--app-bg-sunken);
+  border-right: 1px solid var(--app-border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.v2-app .app-shell-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.v2-app .app-shell-topbar {
+  height: var(--app-topbar-h);
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: var(--app-bg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.v2-app .app-shell-content {
+  flex: 1;
+  padding: 28px 32px;
+  max-width: 100%;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .v2-app .app-shell { grid-template-columns: 1fr; }
+  .v2-app .app-shell-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; transform: translateX(-100%); transition: transform var(--app-dur-slow) var(--app-ease); }
+  .v2-app .app-shell-sidebar[data-open="true"] { transform: translateX(0); }
+  .v2-app .app-shell-content { padding: 20px; }
+}
+
+/* ─── Sidebar ──────────────────────────────────────────────────────────── */
+.v2-app .app-sidebar-brand {
+  height: var(--app-topbar-h);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--app-border);
+}
+.v2-app .app-sidebar-brand-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--app-text);
+}
+.v2-app .app-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.v2-app .app-sidebar-section-label {
+  padding: 12px 10px 6px;
+  font-size: var(--app-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--app-text-faint);
+  font-weight: 500;
+}
+.v2-app .app-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--app-radius-sm);
+  font-size: var(--app-body-sm);
+  color: var(--app-text-muted);
+  transition: background var(--app-dur-fast) var(--app-ease), color var(--app-dur-fast) var(--app-ease);
+  position: relative;
+}
+.v2-app .app-sidebar-link:hover { color: var(--app-text); background: var(--app-surface); }
+.v2-app .app-sidebar-link[data-active="true"] {
+  background: var(--app-surface-strong);
+  color: var(--app-text);
+}
+.v2-app .app-sidebar-link[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 16px;
+  background: var(--app-accent);
+  border-radius: 0 2px 2px 0;
+}
+.v2-app .app-sidebar-link-icon { width: 16px; height: 16px; flex-shrink: 0; color: currentColor; }
+.v2-app .app-sidebar-bottom {
+  padding: 8px;
+  border-top: 1px solid var(--app-border);
+}
+
+/* ─── Topbar ───────────────────────────────────────────────────────────── */
+.v2-app .app-topbar-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--app-body-sm);
+  color: var(--app-text-muted);
+}
+.v2-app .app-topbar-crumb-sep { color: var(--app-text-faint); }
+.v2-app .app-topbar-crumb-current { color: var(--app-text); }
+.v2-app .app-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── Misc utilities ───────────────────────────────────────────────────── */
+.v2-app .app-hr { border: none; border-top: 1px solid var(--app-border); margin: 16px 0; }
+.v2-app .app-kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-xs);
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.04em;
+}
