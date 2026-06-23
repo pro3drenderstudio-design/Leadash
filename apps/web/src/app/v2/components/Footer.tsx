@@ -83,7 +83,7 @@ export default function Footer() {
             </Link>
             <Link href="#pricing" className="v2-btn v2-btn-ghost">See pricing</Link>
           </div>
-          <p className="v2-cta-trust">No credit card · 14-day trial · Cancel anytime</p>
+          <p className="v2-cta-trust">No credit card · Free to start · Pay as you grow</p>
         </motion.div>
       </div>
 

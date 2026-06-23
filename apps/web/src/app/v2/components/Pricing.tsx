@@ -85,7 +85,7 @@ export default function Pricing({
             Built for a freelancer&apos;s<br/>monthly P&amp;L<span style={{ color: "var(--v2-accent)" }}>.</span>
           </h2>
           <p style={{ color: "var(--v2-text-muted)", fontSize: "var(--v2-body-l)", marginTop: 20, maxWidth: 560, lineHeight: 1.55 }}>
-            14-day trial on every plan. No card required to start. Shown in your local currency — billed transparently.
+            Free to sign up. Pay only for what you use — credits for one-off jobs, a plan when you&apos;re ready to scale. Shown in your local currency, billed transparently.
           </p>
         </div>
 
