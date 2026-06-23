@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
   } else {
     return NextResponse.json(
-      { error: "Your free trial has expired. Upgrade to reveal lead details." },
+      { error: "Lead reveal requires credits or a paid plan. Buy credits or upgrade to reveal lead details." },
       { status: 403 },
     );
   }

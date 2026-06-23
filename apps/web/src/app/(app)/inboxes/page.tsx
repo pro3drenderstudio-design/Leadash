@@ -6,20 +6,14 @@ export default async function InboxesPage() {
   const ctx = await getWorkspaceContext();
   const ws = ctx?.workspace as {
     plan_id: string;
-    trial_ends_at: string | null;
     max_inboxes: number;
   } | null;
 
-  // Only treat a workspace as trial-expired if it is still on the free plan.
-  // Paid subscribers retain a stale trial_ends_at after upgrading — don't block them.
-  const trialExpired =
-    ws?.plan_id === "free" &&
-    !!ws?.trial_ends_at &&
-    new Date(ws.trial_ends_at) < new Date();
-
+  // The legacy 14-day trial gate has been removed. Free plan limits come
+  // straight from `max_inboxes` on the workspace row.
   return (
     <Suspense fallback={<div className="p-8 text-gray-400">Loading…</div>}>
-      <InboxesClient trialExpired={trialExpired} planId={ws?.plan_id ?? "free"} maxInboxes={ws?.max_inboxes ?? 5} />
+      <InboxesClient planId={ws?.plan_id ?? "free"} maxInboxes={ws?.max_inboxes ?? 5} />
     </Suspense>
   );
 }

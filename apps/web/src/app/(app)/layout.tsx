@@ -9,7 +9,6 @@ import CreditsProvider from "@/components/CreditsProvider";
 import { CurrencyProvider } from "@/lib/currency";
 import { getCurrencyContext } from "@/lib/currency/server";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
-import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import PastDueBanner from "@/components/PastDueBanner";
 import SubscriptionRenewalBanner from "@/components/SubscriptionRenewalBanner";
@@ -113,9 +112,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {showRenewalBanner && workspace.subscription_renews_at && (
               <SubscriptionRenewalBanner renewsAt={workspace.subscription_renews_at} />
             )}
-            {trialEndsAt && (
-              <TrialBanner trialEndsAt={trialEndsAt} />
-            )}
+            {/* TrialBanner mount removed — the 14-day trial program is
+                discontinued. trialEndsAt is preserved on the workspace row
+                for back-compat but no UI surfaces it. */}
             <AppHeader
               userEmail={user.email ?? ""}
               userName={userName}

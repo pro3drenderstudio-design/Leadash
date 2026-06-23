@@ -112,7 +112,7 @@ export default function SignupPage() {
       <header style={{ marginBottom: 28 }}>
         <h1 className="app-h1" style={{ marginBottom: 6 }}>Create your account</h1>
         <p style={{ color: "var(--app-text-muted)", fontSize: 14 }}>
-          Free 14-day trial. No card to start.
+          Free to start. No card. Pay only when you&apos;re ready.
         </p>
       </header>
 

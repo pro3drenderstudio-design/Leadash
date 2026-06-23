@@ -21,8 +21,10 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (existing) return NextResponse.json({ id: existing.workspace_id }, { status: 200 });
 
-  // Create workspace — free plan, 14-day warmup trial, 3 inboxes to start
-  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  // Create workspace on the free plan with no trial. The trial program was
+  // discontinued — users now sign up directly to the free plan, pay for
+  // credits as they need them, and upgrade to a subscription when they want
+  // subscription-gated features (more inboxes, warmup, etc.).
   const { data: workspace, error } = await db
     .from("workspaces")
     .insert({
@@ -30,9 +32,9 @@ export async function POST(req: NextRequest) {
       slug:          `${slug}-${Date.now().toString(36)}`,
       owner_id:      user.id,
       plan_id:       "free",
-      plan_status:   "trialing",
+      plan_status:   "active",
       max_inboxes:   3,
-      trial_ends_at: trialEndsAt,
+      trial_ends_at: null,
       billing_email: user.email ?? null,
     })
     .select()
