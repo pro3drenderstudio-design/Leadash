@@ -11,6 +11,8 @@ import { processVerifyBulk } from "./workers/verify-bulk-worker";
 import { processEnrichBulk } from "./workers/enrich-bulk-worker";
 import { processProvision } from "./workers/provision-worker";
 import { processAiProspect } from "./workers/ai-prospect-worker";
+import { processWhatsapp } from "./workers/whatsapp-worker";
+import { processAutomation } from "./workers/automation-worker";
 import { startSchedulers } from "./schedulers";
 import { startHttpServer } from "./server";
 
@@ -51,6 +53,8 @@ new Worker("leadash:verify-bulk",    processVerifyBulk,     { connection, concur
 new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concurrency: 3 });
 new Worker("leadash:provision",      processProvision,      { connection, concurrency: 3 });
 new Worker("leadash:ai-prospect-enrich", processAiProspect, { connection, concurrency: 3 });
+new Worker("leadash:whatsapp",           processWhatsapp,   { connection, concurrency: 10 });
+new Worker("leadash:automation",         processAutomation, { connection, concurrency: 5 });
 
 // ── Schedulers (internal crons) ───────────────────────────────────────────────
 startSchedulers();

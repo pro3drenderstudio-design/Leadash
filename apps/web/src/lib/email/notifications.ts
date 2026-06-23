@@ -1636,3 +1636,158 @@ export async function sendCampaignPausedByInboxEmail(opts: {
   ];
   await sendEmail({ to: opts.to, subject, html, text: textLines.join("\n") });
 }
+
+// ── Bundle (Leadash x Learn By Mizark) lifecycle emails ─────────────────────
+
+export async function sendBundleExpiryWarning(opts: {
+  userEmail:    string;
+  firstName?:   string;
+  daysLeft:     number;
+  expiresAt:    string;
+}): Promise<void> {
+  const name    = opts.firstName ?? "there";
+  const expDate = new Date(opts.expiresAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const subject = opts.daysLeft <= 7
+    ? `⚠️ Your Mizark bundle expires in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""}`
+    : `Your Mizark bundle renews in ${opts.daysLeft} days`;
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#ea580c;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash × Learn By Mizark</span>
+    <p style="color:#fed7aa;font-size:12px;margin:4px 0 0">Annual Bundle</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#ea580c">
+      ${opts.daysLeft <= 7 ? "⚠️ " : ""}Your bundle ${opts.daysLeft <= 7 ? "expires soon" : "renews soon"}
+    </p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Hi ${name},</p>
+    <p style="color:#374151;font-size:14px;margin:0 0 16px">
+      Your <strong>Leadash × Learn By Mizark Annual Bundle</strong> is set to ${opts.daysLeft <= 7 ? "expire" : "renew"} on
+      <strong>${expDate}</strong> — that's in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""}.
+    </p>
+    ${opts.daysLeft <= 7 ? `
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin:0 0 16px">
+      <p style="margin:0;font-size:13px;color:#92400e">
+        <strong>Action required:</strong> If your card on file is up to date, no action is needed — Paystack will charge automatically.
+        If you need to update your payment details, please do so before the expiry date.
+      </p>
+    </div>` : ""}
+    <a href="${APP_URL}/academy" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-family:sans-serif;font-size:14px">Continue Learning →</a>
+  </div>
+</div>`;
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `Your Leadash × Learn By Mizark Annual Bundle ${opts.daysLeft <= 7 ? "expires" : "renews"} on ${expDate} (in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""}).`,
+    opts.daysLeft <= 7
+      ? `If your payment details are up to date, Paystack will charge automatically. Otherwise, update them now.`
+      : `No action needed — Paystack will charge automatically on renewal day.`,
+    ``,
+    `Continue learning: ${APP_URL}/academy`,
+  ].join("\n");
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}
+
+export async function sendBundleRenewedEmail(opts: {
+  userEmail:    string;
+  firstName?:   string;
+  amountNgn:    number;
+  newExpiresAt: string;
+}): Promise<void> {
+  const name    = opts.firstName ?? "there";
+  const expDate = new Date(opts.newExpiresAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const amount  = opts.amountNgn.toLocaleString("en-NG");
+  const subject = "✅ Your Mizark bundle has been renewed";
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#ea580c;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash × Learn By Mizark</span>
+    <p style="color:#fed7aa;font-size:12px;margin:4px 0 0">Annual Bundle</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#16a34a">✅ Bundle renewed — access extended</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Hi ${name},</p>
+    <p style="color:#374151;font-size:14px;margin:0 0 16px">
+      Your annual bundle has been renewed for <strong>₦${amount}</strong>. Your access is now extended until <strong>${expDate}</strong>.
+    </p>
+    <a href="${APP_URL}/academy" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-family:sans-serif;font-size:14px">Go to Academy →</a>
+  </div>
+</div>`;
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `Your Leadash × Learn By Mizark Annual Bundle has been renewed for ₦${amount}.`,
+    `Your access is extended until ${expDate}.`,
+    ``,
+    `Go to academy: ${APP_URL}/academy`,
+  ].join("\n");
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}
+
+export async function sendBundleExpiredEmail(opts: {
+  userEmail:  string;
+  firstName?: string;
+}): Promise<void> {
+  const name    = opts.firstName ?? "there";
+  const subject = "Your Mizark bundle access has ended";
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash × Learn By Mizark</span>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#374151">Your bundle access has ended</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Hi ${name},</p>
+    <p style="color:#374151;font-size:14px;margin:0 0 16px">
+      Your annual bundle subscription has expired and your premium access has been removed.
+      If you'd like to continue, you can re-subscribe at any time.
+    </p>
+    <a href="${APP_URL}/pay/bundle" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-family:sans-serif;font-size:14px">Re-subscribe →</a>
+  </div>
+</div>`;
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `Your Leadash × Learn By Mizark Annual Bundle has expired.`,
+    `Re-subscribe at: ${APP_URL}/pay/bundle`,
+  ].join("\n");
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}
+
+export async function sendBundlePaymentFailedEmail(opts: {
+  userEmail:   string;
+  firstName?:  string;
+  graceEndsAt: string;
+}): Promise<void> {
+  const name      = opts.firstName ?? "there";
+  const graceDate = new Date(opts.graceEndsAt).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+  const subject   = "⚠️ Bundle payment failed — update your card";
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#ea580c;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash × Learn By Mizark</span>
+    <p style="color:#fed7aa;font-size:12px;margin:4px 0 0">Payment Alert</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:#dc2626">⚠️ Payment failed</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Hi ${name},</p>
+    <p style="color:#374151;font-size:14px;margin:0 0 16px">
+      We were unable to charge your card for the annual bundle renewal.
+      You have a <strong>7-day grace period</strong> — your access remains active until <strong>${graceDate}</strong>.
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 16px;margin:0 0 20px">
+      <p style="margin:0;font-size:13px;color:#991b1b">
+        If payment is not resolved by <strong>${graceDate}</strong>, your bundle access will be removed.
+      </p>
+    </div>
+    <a href="mailto:support@leadash.com" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-family:sans-serif;font-size:14px">Contact Support →</a>
+  </div>
+</div>`;
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `Your bundle renewal payment failed. Grace period active until ${graceDate}.`,
+    `Please update your payment method or contact support@leadash.com.`,
+  ].join("\n");
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}

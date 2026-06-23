@@ -30,6 +30,8 @@ import {
   sendSubscriptionRenewalReminder,
   sendGracePeriodWarning,
   sendInboxRenewalReminder,
+  sendBundleExpiryWarning,
+  sendBundlePaymentFailedEmail,
 } from "@/lib/email/notifications";
 
 export const maxDuration = 60;
@@ -248,6 +250,81 @@ export async function GET(req: NextRequest) {
       } catch (err) {
         console.error(`[billing-reminders] inbox email failed domain=${d.domain} key=${r.key}:`, err instanceof Error ? err.message : err);
       }
+    }
+  }
+
+  // ── 5. Bundle expiry reminders (30-day and 7-day) ────────────────────────
+  const bundleWindow30 = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+  const bundleWindow7  = new Date(Date.now() +  8 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: bundleWorkspaces } = await db
+    .from("workspaces")
+    .select("id, name, billing_email, bundle_expires_at, billing_reminders_sent, workspace_members(user_id)")
+    .not("bundle_expires_at", "is", null)
+    .gt("bundle_expires_at", now)
+    .lte("bundle_expires_at", bundleWindow30);
+
+  for (const ws of bundleWorkspaces ?? []) {
+    if (!ws.bundle_expires_at) continue;
+    const emailTo = await resolveEmail(db, ws.billing_email, (ws as Record<string, unknown>).workspace_members as Array<{ user_id: string }> | null);
+    if (!emailTo) continue;
+
+    const sent_map = (ws.billing_reminders_sent ?? {}) as Record<string, boolean>;
+    const daysLeft = daysFromNow(ws.bundle_expires_at);
+
+    const bundleReminders = [
+      { key: `bundle_30d_${t}`, target: 30 },
+      { key: `bundle_7d_${t}`,  target: 7 },
+    ];
+
+    // Only check the reminders relevant to the current window
+    for (const r of bundleReminders) {
+      if (sent_map[r.key]) { skipped++; continue; }
+      if (daysLeft !== r.target) continue;
+
+      try {
+        await sendBundleExpiryWarning({
+          userEmail:  emailTo,
+          daysLeft:   r.target,
+          expiresAt:  ws.bundle_expires_at,
+        });
+        await db.from("workspaces")
+          .update({ billing_reminders_sent: { ...sent_map, [r.key]: true } })
+          .eq("id", ws.id);
+        sent++;
+      } catch (err) {
+        console.error(`[billing-reminders] bundle expiry email failed ws=${ws.id} key=${r.key}:`, err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  // ── 6. Bundle grace period warning ────────────────────────────────────────
+  const { data: bundleGraceWorkspaces } = await db
+    .from("workspaces")
+    .select("id, name, billing_email, bundle_grace_ends_at, billing_reminders_sent, workspace_members(user_id)")
+    .not("bundle_grace_ends_at", "is", null)
+    .gt("bundle_grace_ends_at", now);
+
+  for (const ws of bundleGraceWorkspaces ?? []) {
+    if (!ws.bundle_grace_ends_at) continue;
+    const emailTo = await resolveEmail(db, ws.billing_email, (ws as Record<string, unknown>).workspace_members as Array<{ user_id: string }> | null);
+    if (!emailTo) continue;
+
+    const sent_map = (ws.billing_reminders_sent ?? {}) as Record<string, boolean>;
+    const key = `bundle_grace_warn_${t}`;
+    if (sent_map[key]) { skipped++; continue; }
+
+    try {
+      await sendBundlePaymentFailedEmail({
+        userEmail:   emailTo,
+        graceEndsAt: ws.bundle_grace_ends_at,
+      });
+      await db.from("workspaces")
+        .update({ billing_reminders_sent: { ...sent_map, [key]: true } })
+        .eq("id", ws.id);
+      sent++;
+    } catch (err) {
+      console.error(`[billing-reminders] bundle grace email failed ws=${ws.id}:`, err instanceof Error ? err.message : err);
     }
   }
 

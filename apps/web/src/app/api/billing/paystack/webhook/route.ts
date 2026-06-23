@@ -12,7 +12,10 @@ import {
   sendGracePeriodWarning,
   sendDowngradeNotification,
   sendDomainProvisioningStartedEmail,
+  sendBundleRenewedEmail,
+  sendBundlePaymentFailedEmail,
 } from "@/lib/email/notifications";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 async function resolveWorkspaceEmail(
   db: ReturnType<typeof createAdminClient>,
@@ -268,6 +271,172 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // ── Annual bundle subscription (funnel) ──────────────────────────────────
+    if (type === "bundle_subscription" && workspaceId) {
+      const userId          = meta.user_id               as string | undefined;
+      const durationMonths  = parseInt(String(meta.bundle_duration_months ?? "12"), 10);
+      const existingSubCode = meta.existing_sub_code     as string | null | undefined;
+      const amountKobo      = (data as Record<string, unknown>).amount as number | undefined;
+
+      if (userId) {
+        const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
+        if (paid) {
+          // Idempotency
+          const { data: existingInvoice } = await db
+            .from("billing_invoices")
+            .select("id")
+            .eq("paystack_reference", data.reference)
+            .maybeSingle();
+
+          if (!existingInvoice) {
+            const purchasedAt  = new Date().toISOString();
+            const expiresAt    = new Date(Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString();
+
+            // Cancel existing monthly subscription if present
+            if (existingSubCode) {
+              // Paystack needs the email_token to disable — look it up or skip gracefully
+              // We store auth code and sub code on the workspace; Paystack disables on their end
+              // via the subscription.disable event. Here we just mark as upgrading.
+              console.log(`[paystack] bundle upgrade: cancelling existing sub=${existingSubCode} for workspace=${workspaceId}`);
+              // Disable via Paystack API — we need the email token which we don't store.
+              // The subscription.disable webhook will fire when Paystack confirms.
+              // For now, mark the workspace so cron doesn't charge the old sub.
+              await db.from("workspaces")
+                .update({ plan_status: "bundle_upgrading" })
+                .eq("id", workspaceId)
+                .eq("paystack_sub_code", existingSubCode);
+            }
+
+            // Load bundle settings
+            const { data: bundleSettings } = await db
+              .from("admin_settings")
+              .select("key, value")
+              .in("key", ["funnel_bundle_inbox_count", "funnel_mizark_invite_link"]);
+            const bsMap = Object.fromEntries((bundleSettings ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value as string]));
+            const inboxCredits = parseInt(bsMap["funnel_bundle_inbox_count"] ?? "20", 10);
+            const mizarkLink   = bsMap["funnel_mizark_invite_link"] ?? null;
+
+            // Update workspace — mark as bundle subscriber
+            await db.from("workspaces").update({
+              bundle_expires_at:       expiresAt,
+              ...(authorizationCode ? { paystack_auth_code:     authorizationCode } : {}),
+              ...(customerCode      ? { paystack_customer_code: customerCode }      : {}),
+              updated_at:              purchasedAt,
+            }).eq("id", workspaceId);
+
+            // Grant inbox entitlements
+            await db.from("workspace_entitlements").insert({
+              workspace_id:    workspaceId,
+              entitlement_type: "inbox_credit",
+              quantity:         inboxCredits,
+              expires_at:       expiresAt,
+              source:           "bundle_subscription",
+              is_active:        true,
+            });
+
+            // Update funnel_state
+            await db.from("funnel_states").upsert({
+              user_id:             userId,
+              upsell_purchased_at: purchasedAt,
+              current_offer:       "bundle",
+            }, { onConflict: "user_id" });
+
+            // Record invoice
+            await db.from("billing_invoices").insert({
+              workspace_id:       workspaceId,
+              type:               "bundle_subscription",
+              description:        "Leadash × Learn By Mizark Annual Bundle",
+              amount_kobo:        amountKobo ?? 0,
+              paystack_reference: data.reference,
+              status:             "paid",
+            }).catch(() => {});
+
+            // Fire automation
+            await enqueueAutomation({
+              event:        "user.bundle_purchased",
+              workspace_id: workspaceId,
+              user_id:      userId,
+              payload: {
+                purchased_at:   purchasedAt,
+                expires_at:     expiresAt,
+                inbox_credits:  inboxCredits,
+                mizark_link:    mizarkLink,
+                amount_ngn:     Math.round((amountKobo ?? 0) / 100),
+              },
+            }).catch(e => console.error("[paystack] bundle automation enqueue:", e));
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── 30-Day Challenge enrollment (funnel) ─────────────────────────────────
+    if (type === "challenge_30_enrollment" && workspaceId) {
+      const userId     = meta.user_id   as string | undefined;
+      const productId  = meta.product_id as string | undefined;
+      const amountKobo = (data as Record<string, unknown>).amount as number | undefined;
+
+      if (userId && productId) {
+        const { paid } = await verifyPaystackPayment(data.reference);
+        if (paid) {
+          // Idempotency guard
+          const { data: existingEnroll } = await db
+            .from("academy_enrollments")
+            .select("id")
+            .eq("paystack_reference", data.reference)
+            .maybeSingle();
+
+          if (!existingEnroll) {
+            const enrolledAt = new Date().toISOString();
+            const offerExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+            // Create academy enrollment
+            await db.from("academy_enrollments").insert({
+              user_id:            userId,
+              workspace_id:       workspaceId,
+              product_id:         productId,
+              status:             "active",
+              paystack_reference: data.reference,
+              amount_kobo:        amountKobo ?? null,
+              credits_granted:    false,
+            });
+
+            // Update funnel_state — set 30-day timer origin
+            await db.from("funnel_states").upsert({
+              user_id:                userId,
+              challenge_enrolled_at:  enrolledAt,
+              bundle_offer_expires_at: offerExpires,
+              current_offer:          "challenge",
+            }, { onConflict: "user_id" });
+
+            // Record invoice
+            await db.from("billing_invoices").insert({
+              workspace_id:       workspaceId,
+              type:               "academy_enrollment",
+              description:        "30-Day Outreach Challenge",
+              amount_kobo:        amountKobo ?? 0,
+              paystack_reference: data.reference,
+              status:             "paid",
+            }).catch(() => {});
+
+            // Fire automation
+            await enqueueAutomation({
+              event:        "user.challenge_enrolled",
+              workspace_id: workspaceId,
+              user_id:      userId,
+              payload: {
+                product_id:              productId,
+                enrolled_at:             enrolledAt,
+                bundle_offer_expires_at: offerExpires,
+                amount_ngn:              Math.round((amountKobo ?? 0) / 100),
+              },
+            }).catch(e => console.error("[paystack] challenge automation enqueue:", e));
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Academy enrollment
     if (type === "academy_enrollment" && workspaceId) {
       const productId  = meta.product_id as string | undefined;
@@ -396,6 +565,7 @@ export async function POST(req: NextRequest) {
   if (event.event === "subscription.create") {
     const data = event.data as {
       subscription_code?: string;
+      plan?:              { plan_code?: string };
       customer?: { customer_code?: string; metadata?: { workspace_id?: string } };
       authorization?: { authorization_code?: string };
     };
@@ -403,33 +573,53 @@ export async function POST(req: NextRequest) {
     const authCode     = data.authorization?.authorization_code;
     const fromMeta     = data.customer?.metadata?.workspace_id;
     const customerCode = data.customer?.customer_code;
+    const planCode     = data.plan?.plan_code;
 
     if (subCode) {
-      // Try each identifier in order, stopping at the first match.
-      // Lookups 1 & 2 depend on charge.success having already run; lookup 3
-      // (auth_code) works even if the events arrive out of order.
-      if (fromMeta) {
+      // Determine if this is a bundle plan subscription
+      const { data: bundleSetting } = await db
+        .from("admin_settings").select("value").eq("key", "funnel_bundle_paystack_plan_code").maybeSingle();
+      const bundlePlanCode = bundleSetting?.value as string | undefined;
+      const isBundle = bundlePlanCode && planCode === bundlePlanCode;
+
+      if (isBundle && fromMeta) {
+        // Store bundle sub code separately from main plan sub code
         await db.from("workspaces")
-          .update({ paystack_sub_code: subCode })
+          .update({ bundle_paystack_sub_code: subCode })
           .eq("id", fromMeta);
-      } else if (customerCode) {
-        const { data: matched } = await db.from("workspaces")
-          .update({ paystack_sub_code: subCode })
+      } else if (isBundle && customerCode) {
+        await db.from("workspaces")
+          .update({ bundle_paystack_sub_code: subCode })
           .eq("paystack_customer_code", customerCode)
-          .is("paystack_sub_code", null)
-          .select("id")
-          .maybeSingle();
-        if (!matched && authCode) {
+          .not("bundle_expires_at", "is", null)
+          .is("bundle_paystack_sub_code", null);
+      } else {
+        // Main Leadash plan — try each identifier in order, stopping at the first match.
+        // Lookups 1 & 2 depend on charge.success having already run; lookup 3
+        // (auth_code) works even if the events arrive out of order.
+        if (fromMeta) {
+          await db.from("workspaces")
+            .update({ paystack_sub_code: subCode })
+            .eq("id", fromMeta);
+        } else if (customerCode) {
+          const { data: matched } = await db.from("workspaces")
+            .update({ paystack_sub_code: subCode })
+            .eq("paystack_customer_code", customerCode)
+            .is("paystack_sub_code", null)
+            .select("id")
+            .maybeSingle();
+          if (!matched && authCode) {
+            await db.from("workspaces")
+              .update({ paystack_sub_code: subCode })
+              .eq("paystack_auth_code", authCode)
+              .is("paystack_sub_code", null);
+          }
+        } else if (authCode) {
           await db.from("workspaces")
             .update({ paystack_sub_code: subCode })
             .eq("paystack_auth_code", authCode)
             .is("paystack_sub_code", null);
         }
-      } else if (authCode) {
-        await db.from("workspaces")
-          .update({ paystack_sub_code: subCode })
-          .eq("paystack_auth_code", authCode)
-          .is("paystack_sub_code", null);
       }
     }
     return NextResponse.json({ received: true });
@@ -445,9 +635,82 @@ export async function POST(req: NextRequest) {
     };
     // Only act on paid invoices for active subscriptions
     if (inv.status === "success" && inv.subscription?.subscription_code) {
-      const subCode = inv.subscription.subscription_code;
+      const subCode  = inv.subscription.subscription_code;
+      const planCode = inv.subscription.plan?.plan_code;
 
-      // Find the workspace tied to this subscription
+      // ── Check if this is a bundle renewal (annual) ──────────────────────────
+      const { data: bundlePlanSetting } = await db
+        .from("admin_settings")
+        .select("value")
+        .eq("key", "funnel_bundle_paystack_plan_code")
+        .maybeSingle();
+      const bundlePlanCode = bundlePlanSetting?.value as string | undefined;
+
+      const { data: bundleWs } = await db
+        .from("workspaces")
+        .select("id, name, bundle_expires_at")
+        .eq("bundle_paystack_sub_code", subCode)
+        .maybeSingle();
+
+      if (bundleWs || (bundlePlanCode && planCode === bundlePlanCode)) {
+        const targetWs = bundleWs ?? (
+          // Fallback: find by bundle plan code if sub code not yet stored
+          await db.from("workspaces")
+            .select("id, name, bundle_expires_at")
+            .eq("bundle_paystack_sub_code", subCode)
+            .maybeSingle()
+            .then((r: { data: unknown }) => r.data as { id: string; name: string; bundle_expires_at: string | null } | null)
+        );
+
+        if (targetWs?.id) {
+          const currentExpiry    = targetWs.bundle_expires_at ? new Date(targetWs.bundle_expires_at) : new Date();
+          const newExpiresAt     = new Date(Math.max(currentExpiry.getTime(), Date.now()) + 365 * 24 * 60 * 60 * 1000).toISOString();
+          const renewalRef       = inv.reference ?? `bundle_renewal:${subCode}:${Date.now()}`;
+          const amountNgn        = Math.round((inv.amount ?? 0) / 100);
+
+          await db.from("workspaces")
+            .update({
+              bundle_expires_at:     newExpiresAt,
+              bundle_grace_ends_at:  null,  // Clear any grace period
+              updated_at:            new Date().toISOString(),
+            })
+            .eq("id", targetWs.id);
+
+          // Record invoice
+          await db.from("billing_invoices").upsert({
+            workspace_id:       targetWs.id,
+            type:               "bundle_renewal",
+            description:        "Leadash × Learn By Mizark — annual renewal",
+            amount_kobo:        inv.amount ?? 0,
+            paystack_reference: renewalRef,
+            status:             "paid",
+          }, { onConflict: "paystack_reference", ignoreDuplicates: true });
+
+          // Fire automation
+          const { data: member } = await db.from("workspace_members")
+            .select("user_id").eq("workspace_id", targetWs.id).limit(1).maybeSingle();
+          if (member?.user_id) {
+            enqueueAutomation({
+              workspace_id: targetWs.id,
+              user_id:      member.user_id,
+              event:        "user.bundle_renewed",
+              payload:      { amount_ngn: amountNgn, new_expires_at: newExpiresAt },
+            }).catch(() => {});
+          }
+
+          // Email
+          const { email: userEmail } = await resolveWorkspaceEmail(db, targetWs.id);
+          if (userEmail) {
+            sendBundleRenewedEmail({ userEmail, amountNgn, newExpiresAt })
+              .catch(e => console.error("[billing] bundle renewal email failed:", e));
+          }
+
+          console.log(`[billing] Bundle renewed: workspace=${targetWs.id} expires=${newExpiresAt}`);
+          return NextResponse.json({ received: true });
+        }
+      }
+
+      // Find the workspace tied to this subscription (main Leadash plan)
       const { data: ws } = await db
         .from("workspaces")
         .select("id, plan_id, lead_credits_balance, subscription_credits_balance")
@@ -511,6 +774,37 @@ export async function POST(req: NextRequest) {
   if (event.event === "invoice.payment_failed") {
     const data = event.data as { subscription_code?: string };
     const subCode = data.subscription_code;
+
+    // Check if this is a bundle subscription first
+    if (subCode) {
+      const { data: bundleWs } = await db
+        .from("workspaces")
+        .select("id, name, billing_email, billing_reminders_sent, workspace_members(user_id)")
+        .eq("bundle_paystack_sub_code", subCode)
+        .maybeSingle();
+
+      if (bundleWs?.id) {
+        const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        await db.from("workspaces")
+          .update({ bundle_grace_ends_at: graceEndsAt, updated_at: new Date().toISOString() })
+          .eq("id", bundleWs.id);
+
+        const todayKey = `bundle_grace_warn_${new Date().toISOString().slice(0, 10)}`;
+        const sentMap  = ((bundleWs as unknown as Record<string, unknown>).billing_reminders_sent ?? {}) as Record<string, boolean>;
+        if (!sentMap[todayKey]) {
+          const { email: userEmail } = await resolveWorkspaceEmail(db, bundleWs.id);
+          if (userEmail) {
+            sendBundlePaymentFailedEmail({ userEmail, graceEndsAt })
+              .catch(e => console.error("[billing] bundle payment failed email:", e));
+          }
+          await db.from("workspaces")
+            .update({ billing_reminders_sent: { ...sentMap, [todayKey]: true } })
+            .eq("id", bundleWs.id);
+        }
+        console.warn(`[billing] Bundle payment failed: workspace=${bundleWs.id} grace_ends_at=${graceEndsAt}`);
+        return NextResponse.json({ received: true });
+      }
+    }
     if (subCode) {
       const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const todayKey = `grace_warn_${new Date().toISOString().slice(0, 10)}`;

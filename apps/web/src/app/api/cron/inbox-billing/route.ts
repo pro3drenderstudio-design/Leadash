@@ -40,7 +40,46 @@ export async function POST(req: NextRequest) {
 
   const results: Array<{ domain: string; status: string; reference?: string; error?: string }> = [];
 
+  // Load workspace entitlements to skip bundle-covered inboxes
+  const workspaceIds = [...new Set((domains ?? []).map((d: Record<string, unknown>) => d.workspace_id as string).filter(Boolean))];
+  const { data: entitlements } = workspaceIds.length > 0
+    ? await db.from("workspace_entitlements")
+        .select("workspace_id, quantity")
+        .in("workspace_id", workspaceIds)
+        .eq("entitlement_type", "inbox_credit")
+        .eq("is_active", true)
+        .gt("quantity", 0)
+    : { data: [] };
+
+  // Map of workspace_id → remaining inbox credits
+  const creditsByWs = new Map<string, number>();
+  for (const e of entitlements ?? []) {
+    const wsId = e.workspace_id as string;
+    creditsByWs.set(wsId, (creditsByWs.get(wsId) ?? 0) + (e.quantity as number));
+  }
+
   for (const domain of domains ?? []) {
+    // Bundle subscribers have inbox credits — consume one instead of charging
+    const wsCredits = creditsByWs.get(domain.workspace_id as string) ?? 0;
+    if (wsCredits > 0) {
+      // Deduct one credit from workspace_entitlements and advance billing date
+      await db.from("workspace_entitlements")
+        .update({ quantity: wsCredits - 1 })
+        .eq("workspace_id", domain.workspace_id)
+        .eq("entitlement_type", "inbox_credit")
+        .eq("is_active", true);
+
+      const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await db.from("outreach_domains")
+        .update({ inbox_next_billing_date: nextBillingDate, charge_failure_count: 0 })
+        .eq("id", domain.id);
+
+      creditsByWs.set(domain.workspace_id as string, wsCredits - 1);
+      results.push({ domain: domain.domain, status: "covered_by_bundle" });
+      console.log(`[inbox-billing] Bundle credit used for ${domain.domain} (ws=${domain.workspace_id})`);
+      continue;
+    }
+
     try {
       const { reference, status } = await chargePaystackAuthorization({
         authorizationCode: domain.paystack_auth_code as string,

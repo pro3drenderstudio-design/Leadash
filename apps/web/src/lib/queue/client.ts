@@ -14,10 +14,12 @@ function getConnection() {
   return _connection;
 }
 
-export const sendQueue    = () => new Queue("leadash:send",       { connection: getConnection() });
-export const replyQueue   = () => new Queue("leadash:reply-poll", { connection: getConnection() });
-export const warmupQueue  = () => new Queue("leadash:warmup",     { connection: getConnection() });
-export const webhookQueue = () => new Queue("leadash:webhook",    { connection: getConnection() });
+export const sendQueue       = () => new Queue("leadash:send",       { connection: getConnection() });
+export const replyQueue      = () => new Queue("leadash:reply-poll", { connection: getConnection() });
+export const warmupQueue     = () => new Queue("leadash:warmup",     { connection: getConnection() });
+export const webhookQueue    = () => new Queue("leadash:webhook",    { connection: getConnection() });
+export const whatsappQueue   = () => new Queue("leadash:whatsapp",   { connection: getConnection() });
+export const automationQueue = () => new Queue("leadash:automation", { connection: getConnection() });
 
 /** Enqueue a one-off send batch for a workspace (e.g. after campaign activation) */
 export async function enqueueSend(workspaceId: string, batchLimit = 100) {
@@ -25,6 +27,38 @@ export async function enqueueSend(workspaceId: string, batchLimit = 100) {
   await q.add("send", { workspace_id: workspaceId, batch_limit: batchLimit }, {
     attempts: 2,
     backoff:  { type: "fixed", delay: 30_000 },
+  });
+}
+
+/** Enqueue a WhatsApp message send */
+export async function enqueueWhatsapp(data: {
+  message_id:    string;   // whatsapp_messages.id — already inserted by caller
+  phone_number:  string;
+  template_name?: string;
+  template_params?: Record<string, string>;
+  body?:         string;
+  source:        "automation" | "crm" | "system";
+}) {
+  const q = whatsappQueue();
+  await q.add("whatsapp", data, {
+    attempts:  6,
+    backoff:   { type: "exponential", delay: 60_000 },  // 1m → 2m → 4m → 8m → 16m → 32m
+    removeOnComplete: 100,
+  });
+}
+
+/** Enqueue an automation trigger event */
+export async function enqueueAutomation(data: {
+  event:        string;
+  workspace_id: string;
+  user_id:      string;
+  payload:      Record<string, unknown>;
+}) {
+  const q = automationQueue();
+  await q.add("automation", data, {
+    attempts: 3,
+    backoff:  { type: "fixed", delay: 5_000 },
+    removeOnComplete: 500,
   });
 }
 

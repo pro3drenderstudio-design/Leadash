@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import OpenAI from "openai";
 
-const client = new OpenAI();
-
 const PEOPLE_SYSTEM = `You are a lead search filter parser. Convert natural language queries into structured JSON filter parameters.
 
 Available filter fields (include only fields that are clearly implied):
@@ -55,6 +53,7 @@ export async function POST(req: NextRequest) {
   if (!query?.trim()) return NextResponse.json({ error: "query required" }, { status: 400 });
 
   const system = mode === "companies" ? COMPANY_SYSTEM : PEOPLE_SYSTEM;
+  const client = new OpenAI();
 
   try {
     const completion = await client.chat.completions.create({

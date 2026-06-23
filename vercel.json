@@ -6,5 +6,19 @@
   "github": {
     "enabled": false
   },
-  "crons": []
+  "crons": [
+    { "path": "/api/cron/send",              "schedule": "*/5 * * * *"  },
+    { "path": "/api/cron/warmup",            "schedule": "0 * * * *"    },
+    { "path": "/api/cron/replies",           "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/scheduled-replies", "schedule": "*/5 * * * *"  },
+    { "path": "/api/cron/lead-campaigns",    "schedule": "*/2 * * * *"  },
+    { "path": "/api/cron/deliverability",    "schedule": "0 6 * * *"    },
+    { "path": "/api/cron/blacklist-check",   "schedule": "0 4 * * *"    },
+    { "path": "/api/cron/refresh-fx",        "schedule": "0 1 * * *"    },
+    { "path": "/api/cron/billing-reminders", "schedule": "0 8 * * *"    },
+    { "path": "/api/cron/billing-grace",     "schedule": "0 3 * * *"    },
+    { "path": "/api/cron/inbox-billing",     "schedule": "0 2 * * *"    },
+    { "path": "/api/cron/domains",           "schedule": "0 5 * * *"    },
+    { "path": "/api/cron/cleanup",           "schedule": "0 0 * * 0"    }
+  ]
 }
