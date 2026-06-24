@@ -300,9 +300,16 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
         </div>
       </aside>
 
-      {/* Desktop spacer removed — same reason as in AdminSidebarV2: on
-          desktop the aside is sticky-positioned (in-flow), so a separate
-          spacer doubled the gap to the left of page content. */}
+      {/* Desktop spacer — the aside has inline `position: fixed` which beats
+          the CSS sticky override, so it's out of flow even on desktop. This
+          spacer reserves the 236px of flex width that the fixed aside
+          visually occupies. Without it, the main column expands to full
+          width and the sidebar overlaps the content. */}
+      <div
+        aria-hidden
+        style={{ width: "var(--app-sidebar-w)", flexShrink: 0 }}
+        className="hidden lg:block v2-app"
+      />
 
       <style>{`
         @media (max-width: 1023px) {

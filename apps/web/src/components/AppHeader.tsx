@@ -99,8 +99,8 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
       style={{
         backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
-        background: "var(--header-bg)",
-        borderBottom: "1px solid var(--header-border)",
+        background: "var(--app-bg-sunken)",
+        borderBottom: "1px solid var(--app-border)",
       }}
     >
       {/* ── Hamburger — mobile only ── */}
@@ -118,7 +118,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
       <div className="relative flex-1 max-w-sm">
         <div
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all"
-          style={{ background: "var(--search-bg)", border: "1px solid var(--search-border)" }}
+          style={{ background: "var(--app-surface)", border: "1px solid var(--app-border-strong)" }}
         >
           <svg className="w-3.5 h-3.5 text-slate-400 dark:text-white/30 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -145,7 +145,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
         {searchFocused && results.length > 0 && (
           <div
             className="absolute top-full mt-1.5 w-full rounded-xl overflow-hidden shadow-2xl"
-            style={{ background: "var(--dropdown-bg)", border: "1px solid var(--dropdown-border)" }}
+            style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border-strong)" }}
           >
             {results.map(r => (
               <Link
@@ -312,7 +312,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
           {profileOpen && (
             <div
               className="absolute right-0 top-full mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-50"
-              style={{ background: "var(--dropdown-bg)", border: "1px solid var(--dropdown-border)" }}
+              style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border-strong)" }}
             >
               {/* Identity */}
               <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--divider-color)" }}>

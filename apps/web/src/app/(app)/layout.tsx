@@ -99,7 +99,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
     <SidebarProvider>
       <CommandPaletteMount />
-      <div className="flex h-screen overflow-hidden">
+      <div className="v2-app flex h-screen overflow-hidden" style={{ background: "var(--app-bg)" }}>
         <Sidebar
           workspaceName={workspace.name}
           plan={workspace.plan_id}

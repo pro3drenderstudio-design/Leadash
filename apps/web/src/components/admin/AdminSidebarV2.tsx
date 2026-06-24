@@ -391,10 +391,16 @@ export default function AdminSidebarV2({ adminEmail, adminRole, adminModules }: 
         </div>
       </aside>
 
-      {/* Desktop spacer removed — on desktop the aside is `position: sticky`
-          (see the @media rule below) which keeps it in normal flow, so a
-          separate spacer doubled the sidebar-column width and pushed content
-          240px to the right. The aside itself reserves its space now. */}
+      {/* Desktop spacer — the aside has inline `position: fixed` which beats
+          the CSS sticky override, so the aside is out of flow on desktop.
+          This spacer reserves the 236px of flex width that the fixed aside
+          visually occupies; without it the main column slides under the
+          sidebar. */}
+      <div
+        aria-hidden
+        className="hidden lg:block v2-app"
+        style={{ width: "var(--app-sidebar-w)", flexShrink: 0 }}
+      />
 
       <style>{`
         @media (max-width: 1023px) {
