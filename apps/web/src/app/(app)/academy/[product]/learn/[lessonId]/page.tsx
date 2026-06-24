@@ -1,4 +1,5 @@
 "use client";
+import "@/v2-app/v2-app.css";
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -209,11 +210,11 @@ export default function LessonViewer() {
     setLesson(l => l ? { ...l, completed: true } : l);
   }
 
-  if (loading) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40">Loading…</div></div>;
-  if (!lesson)  return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40">Lesson not found.</div></div>;
+  if (loading) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="text-white/40">Loading…</div></div>;
+  if (!lesson)  return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="text-white/40">Lesson not found.</div></div>;
 
   return (
-    <div className="min-h-screen bg-[#0c0c0f] flex flex-col" style={{ height: "100vh" }}>
+    <div className="v2-app flex flex-col" style={{ height: "100vh", background: "var(--app-bg)" }}>
       {/* Top bar */}
       <div className="flex items-center gap-4 px-4 py-3 border-b border-white/8 flex-shrink-0">
         <button onClick={() => setNavOpen(v => !v)} className="lg:hidden text-white/50 hover:text-white">

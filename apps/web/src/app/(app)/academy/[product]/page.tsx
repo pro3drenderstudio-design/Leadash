@@ -1,21 +1,36 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { wsGet } from "@/lib/workspace/client";
 import type { ProductWithEnrollment } from "@/types/academy";
 import { formatNgn, lessonDuration } from "@/types/academy";
 import MuxPlayer from "@mux/mux-player-react";
+import "@/v2-app/v2-app.css";
 
-/** Sales landing page for a course — visible to enrolled and non-enrolled alike. */
+/**
+ * Sales landing page for a course — visible to enrolled and non-enrolled alike.
+ *
+ * The 30-day challenge has its own funnel-aware page at /academy/challenge-30
+ * (countdown timer, Day-1 detection, bundle upsell). When a visitor lands
+ * here via the slug-based route, we forward them so they get the full
+ * experience instead of this generic landing.
+ */
 export default function CourseLandingPage() {
   const { product: slug } = useParams<{ product: string }>();
+  const router = useRouter();
 
   const [product,  setProduct]  = useState<ProductWithEnrollment | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
+    // Forward the 30-day challenge to its funnel-aware page so users who
+    // discover it via the catalog get the same experience as funnel users.
+    if (slug === "30-day-challenge" || slug === "challenge-30") {
+      router.replace("/academy/challenge-30");
+      return;
+    }
     wsGet<{ products: ProductWithEnrollment[] }>("/api/academy/products")
       .then(d => {
         const p = d.products.find(x => x.slug === slug || x.id === slug) ?? null;
@@ -23,10 +38,10 @@ export default function CourseLandingPage() {
         if (p?.sections.length) setExpanded(p.sections[0].id);
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, router]);
 
-  if (loading) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40 text-sm">Loading…</div></div>;
-  if (!product) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40">Course not found.</div></div>;
+  if (loading) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--app-text-muted)", fontSize: 13 }}>Loading…</div></div>;
+  if (!product) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--app-text-muted)" }}>Course not found.</div></div>;
 
   const enrolled     = !!product.enrollment;
   const allLessons   = product.sections.flatMap(s => s.lessons);
@@ -34,7 +49,7 @@ export default function CourseLandingPage() {
   const totalMins    = Math.round(allLessons.reduce((a, l) => a + (l.duration_secs ?? 0), 0) / 60);
 
   return (
-    <div className="min-h-screen bg-[#0c0c0f]">
+    <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="grid lg:grid-cols-5 gap-10">
           {/* Left: course info */}

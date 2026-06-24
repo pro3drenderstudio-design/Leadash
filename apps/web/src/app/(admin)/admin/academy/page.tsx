@@ -388,12 +388,12 @@ export default function AdminAcademyPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h1 className="text-xl font-semibold">Academy</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h1 className="app-h1">Academy</h1>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 4 }}>
             {enrollments.length} enrollments · {cohorts.length} cohorts · {products.length} products
           </p>
         </div>

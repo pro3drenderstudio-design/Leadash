@@ -1,4 +1,5 @@
 "use client";
+import "@/v2-app/v2-app.css";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -34,11 +35,11 @@ export default function CourseDashboard() {
   // Find the first unlocked+incomplete lesson to resume
   const resumeLesson = allLessons.find(l => l.unlocked && !l.completed) ?? allLessons.find(l => l.unlocked);
 
-  if (loading) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40 text-sm">Loading…</div></div>;
+  if (loading) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="text-white/40 text-sm">Loading…</div></div>;
   if (!enrollment) return null;
 
   return (
-    <div className="min-h-screen bg-[#0c0c0f] max-w-3xl mx-auto px-6 py-10">
+    <div className="v2-app max-w-3xl mx-auto px-6 py-10" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
       {/* Header */}
       <div className="mb-8">
         <Link href="/academy" className="text-sm text-white/40 hover:text-white/70 mb-4 inline-flex items-center gap-1">
