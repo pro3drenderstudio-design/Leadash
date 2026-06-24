@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { wsGet } from "@/lib/workspace/client";
 import type { LeadPayAccount, LeadPayDashboardStats, LeadPayInvoice, LeadPayTransaction } from "@/types/leadpay";
+import "@/v2-app/v2-app.css";
 
 function fmt(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(cents / 100);
@@ -104,6 +105,7 @@ export default function LeadPayDashboardClient() {
 
   if (noAccount || !account) {
     return (
+      <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
       <div className="max-w-2xl mx-auto px-6 py-24">
         {/* Hero onboarding */}
         <div className="text-center mb-12">
@@ -137,11 +139,12 @@ export default function LeadPayDashboardClient() {
         <div className="flex justify-center">
           <button
             onClick={() => router.push("/leadpay/onboarding")}
-            className="px-8 py-3.5 bg-orange-500 hover:bg-orange-400 text-white font-semibold rounded-2xl transition-all text-sm shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30"
+            className="app-btn app-btn-primary app-btn-lg"
           >
             Set up Leadash Pay →
           </button>
         </div>
+      </div>
       </div>
     );
   }
@@ -149,6 +152,7 @@ export default function LeadPayDashboardClient() {
   const s = stats!;
 
   return (
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
     <div className="max-w-6xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-7">
@@ -356,6 +360,7 @@ export default function LeadPayDashboardClient() {
           </Link>
         ))}
       </div>
+    </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import "@/v2-app/v2-app.css";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -34,11 +35,11 @@ export default function CourseDashboard() {
   // Find the first unlocked+incomplete lesson to resume
   const resumeLesson = allLessons.find(l => l.unlocked && !l.completed) ?? allLessons.find(l => l.unlocked);
 
-  if (loading) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40 text-sm">Loading…</div></div>;
+  if (loading) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="text-white/40 text-sm">Loading…</div></div>;
   if (!enrollment) return null;
 
   return (
-    <div className="min-h-screen bg-[#0c0c0f] max-w-3xl mx-auto px-6 py-10">
+    <div className="v2-app max-w-3xl mx-auto px-6 py-10" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
       {/* Header */}
       <div className="mb-8">
         <Link href="/academy" className="text-sm text-white/40 hover:text-white/70 mb-4 inline-flex items-center gap-1">
@@ -77,9 +78,29 @@ export default function CourseDashboard() {
 
       {/* Sections + Lessons */}
       <div className="space-y-6">
-        {sections.map(section => (
+        {sections.map(section => {
+          // Section-level CTA: optional fields from academy_sections (migration 054).
+          // Cast loosely because the type lives in @/types/academy and hasn't been
+          // updated to include these yet; the API already returns them.
+          const secCta = section as unknown as { cta_text?: string | null; cta_url?: string | null };
+          return (
           <div key={section.id}>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3 px-1">{section.title}</h3>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-white/40">{section.title}</h3>
+              {secCta.cta_text && secCta.cta_url && (
+                <a
+                  href={secCta.cta_url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-xs text-orange-400 hover:text-orange-300 inline-flex items-center gap-1.5 transition-colors"
+                >
+                  {secCta.cta_text}
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M7 17L17 7"/><path d="M9 7h8v8"/>
+                  </svg>
+                </a>
+              )}
+            </div>
             <div className="space-y-1">
               {section.lessons.map((lesson, i) => {
                 const icon = lesson.completed ? "✓" :
@@ -133,7 +154,8 @@ export default function CourseDashboard() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Certificate CTA */}

@@ -12,20 +12,14 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  // Plan gate
-  const { data: wsRow } = await db.from("workspaces").select("plan_id, trial_ends_at").eq("id", workspaceId).single();
+  // Plan gate — discover export requires a paid plan. The legacy trial gate
+  // was removed; the trial program is discontinued.
+  const { data: wsRow } = await db.from("workspaces").select("plan_id").eq("id", workspaceId).single();
   const planId = wsRow?.plan_id ?? "free";
-  const trialExpired = planId === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
-  if (trialExpired) {
-    return NextResponse.json(
-      { error: "Your free trial has expired. Upgrade to export leads." },
-      { status: 403 },
-    );
-  }
   const plan = await getPlanById(planId);
   if (!plan.can_scrape_leads) {
     return NextResponse.json(
-      { error: "Discover export requires a paid plan. Upgrade to export leads." },
+      { error: "Lead export requires a paid plan. Upgrade to export leads." },
       { status: 403 },
     );
   }

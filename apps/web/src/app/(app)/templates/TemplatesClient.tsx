@@ -1,8 +1,42 @@
 "use client";
+
+/**
+ * /templates — restyled to v2-app.
+ *
+ * Behaviour preserved:
+ *   - getTemplates / createTemplate / deleteTemplate API calls unchanged
+ *   - spam scorer wired into the create form
+ *   - AI generation: POST /api/outreach/templates/generate with prompt + tone
+ *
+ * Visual change: Card grid for templates, Modal primitive for the create
+ * flow, Hugeicons for the sparkle/delete/info icons.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import { getTemplates, createTemplate, deleteTemplate } from "@/lib/outreach/api";
 import type { OutreachTemplate } from "@/types/outreach";
 import { scoreMessage, gradeColor, gradeBg } from "@/lib/outreach/spam-scorer";
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Textarea,
+  Select,
+  Field,
+  Modal,
+  Icon,
+  Badge,
+} from "@/v2-app";
+import {
+  PlusSignIcon,
+  SparklesIcon,
+  Delete02Icon,
+  Note01Icon,
+  ArrowDown01Icon,
+  AlertCircleIcon,
+} from "@/v2-app/icons";
+import "@/v2-app/v2-app.css";
 
 const TONES = ["professional", "friendly", "direct", "casual"] as const;
 
@@ -13,20 +47,18 @@ export default function TemplatesClient() {
   const [saving, setSaving]       = useState(false);
   const [form, setForm]           = useState({ name: "", subject: "", body: "" });
 
-  // Live spam score for the form
   const spamScore = useMemo(
     () => (form.subject || form.body) ? scoreMessage(form.subject, form.body) : null,
     [form.subject, form.body],
   );
 
-  // AI generation state
   const [aiPrompt, setAiPrompt]   = useState("");
   const [aiTone, setAiTone]       = useState<typeof TONES[number]>("professional");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]     = useState("");
   const [showAi, setShowAi]       = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function load() {
     setLoading(true);
@@ -41,13 +73,13 @@ export default function TemplatesClient() {
     setForm({ name: "", subject: "", body: "" });
     setShowNew(false);
     setSaving(false);
-    load();
+    void load();
   }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete template "${name}"?`)) return;
     await deleteTemplate(id);
-    load();
+    void load();
   }
 
   async function handleAiGenerate() {
@@ -81,211 +113,234 @@ export default function TemplatesClient() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Email Templates</h1>
-          <p className="text-white/40 text-sm mt-0.5">Reusable email templates for campaign sequences</p>
-        </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors"
-        >
-          + New Template
-        </button>
-      </div>
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-white/4 rounded-xl animate-pulse" />)}
-        </div>
-      ) : templates.length === 0 ? (
-        <div className="text-center py-20 text-white/30">
-          <div className="text-4xl mb-4">📝</div>
-          <p className="font-medium">No templates yet</p>
-          <p className="text-sm mt-1">Create reusable email templates to load into sequence steps</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {templates.map((t) => (
-            <div key={t.id} className="bg-white/4 border border-white/8 rounded-xl p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-white font-medium text-sm">{t.name}</p>
-                  <p className="text-white/50 text-xs mt-0.5 truncate">Subject: {t.subject}</p>
-                  <p className="text-white/30 text-xs mt-1 line-clamp-2 whitespace-pre-line">{t.body}</p>
+        <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h1 className="app-h1">Email templates</h1>
+            <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+              Reusable email templates for campaign sequences.
+            </p>
+          </div>
+          <Button variant="primary" iconLeft={PlusSignIcon} onClick={() => setShowNew(true)}>
+            New template
+          </Button>
+        </header>
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="app-skeleton" style={{ height: 78, borderRadius: "var(--app-radius-lg)" }} />
+            ))}
+          </div>
+        ) : templates.length === 0 ? (
+          <Card style={{ padding: 0 }}>
+            <EmptyState
+              icon={Note01Icon}
+              title="No templates yet"
+              body="Create reusable email templates to load into sequence steps."
+              action={<Button variant="primary" iconLeft={PlusSignIcon} onClick={() => setShowNew(true)}>New template</Button>}
+            />
+          </Card>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {templates.map(t => (
+              <Card key={t.id} tight>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p style={{ color: "var(--app-text)", fontSize: 13, fontWeight: 500 }}>{t.name}</p>
+                    <p style={{ color: "var(--app-text-muted)", fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Subject: {t.subject}
+                    </p>
+                    <p style={{ color: "var(--app-text-quiet)", fontSize: 12, marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-line" }}>
+                      {t.body}
+                    </p>
+                  </div>
+                  <Button variant="danger" size="sm" iconLeft={Delete02Icon} onClick={() => handleDelete(t.id, t.name)}>
+                    Delete
+                  </Button>
                 </div>
-                <button
-                  onClick={() => handleDelete(t.id, t.name)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors flex-shrink-0"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              </Card>
+            ))}
+          </div>
+        )}
 
-      {/* New template modal */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 flex-shrink-0">
-              <h2 className="text-white font-semibold">New Template</h2>
-              <button onClick={resetModal} className="text-white/40 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        {/* Create modal */}
+        <Modal open={showNew} onClose={resetModal} title="New template" maxWidth={640}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* AI panel */}
+            <div
+              style={{
+                border: "1px solid var(--app-accent-line)",
+                background: "var(--app-accent-soft)",
+                borderRadius: "var(--app-radius)",
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAi(v => !v)}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "10px 14px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  color: "var(--app-accent)",
+                }}
+              >
+                <span
+                  style={{
+                    width: 26, height: 26, borderRadius: 6,
+                    background: "rgba(249,115,22,0.18)",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon icon={SparklesIcon} size={14} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, display: "block" }}>Generate with AI</span>
+                  <span style={{ fontSize: 11, color: "rgba(249, 115, 22, 0.75)", display: "block", marginTop: 2 }}>
+                    Describe your email and let AI write the subject &amp; body.
+                  </span>
+                </span>
+                <span style={{ transform: showAi ? "rotate(180deg)" : undefined, transition: "transform 180ms var(--app-ease)" }}>
+                  <Icon icon={ArrowDown01Icon} size={14} />
+                </span>
               </button>
-            </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              {/* AI Generate panel */}
-              <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 overflow-hidden">
-                <button
-                  onClick={() => setShowAi(v => !v)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-orange-500/10 transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-orange-500/15 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-orange-300 text-sm font-semibold">Generate with AI</p>
-                    <p className="text-orange-400/60 text-xs">Describe your email and let AI write the subject &amp; body</p>
-                  </div>
-                  <svg className={`w-4 h-4 text-orange-400/60 transition-transform ${showAi ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {showAi && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-orange-500/15">
-                    <div className="pt-3">
-                      <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Describe your email</label>
-                      <textarea
+              {showAi && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid var(--app-accent-line)", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ paddingTop: 12 }}>
+                    <Field label="Describe your email">
+                      <Textarea
                         value={aiPrompt}
                         onChange={e => setAiPrompt(e.target.value)}
                         rows={3}
                         placeholder="e.g. Cold outreach to SaaS founders offering a lead generation tool that finds verified B2B emails"
-                        className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50 resize-none"
                       />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Tone</label>
-                        <select
-                          value={aiTone}
-                          onChange={e => setAiTone(e.target.value as typeof TONES[number])}
-                          className="w-full bg-white/6 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500/50 capitalize"
-                        >
-                          {TONES.map(t => <option key={t} value={t} className="bg-[#1a1a1a] capitalize">{t}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex-shrink-0 pt-5">
-                        <button
-                          onClick={handleAiGenerate}
-                          disabled={!aiPrompt.trim() || aiLoading}
-                          className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-                        >
-                          {aiLoading ? (
-                            <>
-                              <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                              Generating…
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              Generate
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {aiError && (
-                      <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{aiError}</p>
-                    )}
+                    </Field>
                   </div>
-                )}
-              </div>
 
-              {/* Manual fields */}
-              {spamScore && (
-                <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${gradeBg(spamScore.grade)} border-white/8`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold ${gradeColor(spamScore.grade)}`}>Grade {spamScore.grade}</span>
-                    <span className="text-white/30 text-xs">·</span>
-                    <span className="text-white/50 text-xs">Spam score: {spamScore.score}/10</span>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Tone">
+                        <Select value={aiTone} onChange={e => setAiTone(e.target.value as typeof TONES[number])}>
+                          {TONES.map(t => <option key={t} value={t} style={{ textTransform: "capitalize" }}>{t}</option>)}
+                        </Select>
+                      </Field>
+                    </div>
+                    <Button
+                      variant="primary"
+                      onClick={handleAiGenerate}
+                      disabled={!aiPrompt.trim() || aiLoading}
+                      iconLeft={SparklesIcon}
+                    >
+                      {aiLoading ? "Generating…" : "Generate"}
+                    </Button>
                   </div>
-                  {spamScore.issues.length > 0 && (
-                    <span className="text-white/30 text-xs">{spamScore.issues.length} issue{spamScore.issues.length !== 1 ? "s" : ""}</span>
+
+                  {aiError && (
+                    <div
+                      role="alert"
+                      style={{
+                        display: "flex", alignItems: "flex-start", gap: 8,
+                        padding: "8px 12px", borderRadius: "var(--app-radius-sm)",
+                        background: "var(--app-danger-soft)",
+                        border: "1px solid rgba(248, 113, 113, 0.30)",
+                        color: "var(--app-danger)", fontSize: 12,
+                      }}
+                    >
+                      <Icon icon={AlertCircleIcon} size={13} />
+                      <span>{aiError}</span>
+                    </div>
                   )}
                 </div>
               )}
-              {spamScore && spamScore.issues.length > 0 && (
-                <div className="space-y-1">
-                  {spamScore.issues.map((issue, i) => (
-                    <p key={i} className="text-amber-400/70 text-xs flex items-start gap-1.5">
-                      <span className="mt-0.5 flex-shrink-0">⚠</span>
-                      <span>{issue.label}</span>
-                    </p>
-                  ))}
-                </div>
-              )}
-              <div>
-                <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Template Name</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Cold intro — contractor"
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50"
-                />
+            </div>
+
+            {/* Spam score */}
+            {spamScore && (
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "8px 12px", borderRadius: "var(--app-radius-sm)",
+                  border: "1px solid var(--app-border)",
+                }}
+                className={gradeBg(spamScore.grade)}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span className={gradeColor(spamScore.grade)} style={{ fontSize: 11, fontWeight: 600 }}>Grade {spamScore.grade}</span>
+                  <span style={{ color: "var(--app-text-quiet)", fontSize: 11 }}>·</span>
+                  <span style={{ color: "var(--app-text-muted)", fontSize: 11 }}>Spam score {spamScore.score}/10</span>
+                </span>
+                {spamScore.issues.length > 0 && (
+                  <Badge tone="warning">{spamScore.issues.length} issue{spamScore.issues.length !== 1 ? "s" : ""}</Badge>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Subject</label>
-                <input
-                  value={form.subject}
-                  onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))}
-                  placeholder="e.g. Quick question for {{first_name}}"
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50"
-                />
+            )}
+            {spamScore && spamScore.issues.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {spamScore.issues.map((issue, i) => (
+                  <p key={i} style={{ color: "var(--app-warning)", fontSize: 11, display: "flex", gap: 6 }}>
+                    <span>⚠</span>
+                    <span>{issue.label}</span>
+                  </p>
+                ))}
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Body</label>
-                <textarea
-                  value={form.body}
-                  onChange={(e) => setForm(f => ({ ...f, body: e.target.value }))}
-                  rows={8}
-                  placeholder={"Hi {{first_name}},\n\nI wanted to reach out…"}
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 focus:outline-none focus:border-orange-500/50 resize-y font-mono"
-                />
-                <p className="text-white/25 text-xs mt-1">Variables: {"{{first_name}}"} {"{{last_name}}"} {"{{company}}"} {"{{title}}"}</p>
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={resetModal}
-                  className="flex-1 py-2.5 bg-white/6 hover:bg-white/10 text-white/60 text-sm font-medium rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={!form.name || !form.subject || !form.body || saving}
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-                >
-                  {saving ? "Saving…" : "Save Template"}
-                </button>
-              </div>
+            )}
+
+            {/* Manual fields */}
+            <Field label="Template name" required>
+              <Input
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Cold intro — contractor"
+              />
+            </Field>
+            <Field label="Subject" required>
+              <Input
+                value={form.subject}
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                placeholder="e.g. Quick question for {{first_name}}"
+              />
+            </Field>
+            <Field
+              label="Body"
+              required
+              helper={`Variables: {{first_name}}  {{last_name}}  {{company}}  {{title}}`}
+            >
+              <Textarea
+                value={form.body}
+                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                rows={8}
+                placeholder={"Hi {{first_name}},\n\nI wanted to reach out…"}
+                style={{ fontFamily: "Geist Mono, ui-monospace, SFMono-Regular, monospace" }}
+              />
+            </Field>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <Button variant="ghost" onClick={resetModal} style={{ flex: 1, justifyContent: "center" }}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCreate}
+                disabled={!form.name || !form.subject || !form.body || saving}
+                style={{ flex: 1, justifyContent: "center" }}
+              >
+                {saving ? "Saving…" : "Save template"}
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
+      </div>
     </div>
   );
 }

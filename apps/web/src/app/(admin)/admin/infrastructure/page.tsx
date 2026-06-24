@@ -232,7 +232,7 @@ export default function InfrastructurePage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white/90">Infrastructure</h1>
+          <h1 className="app-h1">Infrastructure</h1>
           <p className="text-sm text-slate-400 dark:text-white/30 mt-0.5">
             Live snapshot · refreshes every 30s · last captured {timeAgo(data?.lastCapture ?? null)}
           </p>

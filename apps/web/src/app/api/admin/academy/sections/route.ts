@@ -47,15 +47,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ section: data }, { status: 201 });
 }
 
+// Allow-listed fields the section PATCH can touch. cta_text + cta_url
+// added in migration 054.
+const SECTION_PATCHABLE = new Set(["title", "description", "position", "is_published", "cta_text", "cta_url"]);
+
 export async function PATCH(req: NextRequest) {
   const db = await requireAdmin();
   if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { id?: string; title?: string; description?: string; position?: number; is_published?: boolean };
+  let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const { id, ...updates } = body;
+  const id = body.id as string | undefined;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const updates: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (k === "id") continue;
+    if (SECTION_PATCHABLE.has(k)) updates[k] = v;
+  }
 
   const { data, error } = await db.from("academy_sections").update(updates).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

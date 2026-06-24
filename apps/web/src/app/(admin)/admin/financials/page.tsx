@@ -860,7 +860,7 @@ export default function FinancialsPage() {
         {/* ── Header ── */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white/90">Financials</h1>
+            <h1 className="app-h1">Financials</h1>
             <p className="text-xs text-white/30 mt-0.5">Last updated {timeAgo(data.generated_at)}</p>
           </div>
           <button

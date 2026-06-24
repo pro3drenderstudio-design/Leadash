@@ -1,21 +1,36 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { wsGet } from "@/lib/workspace/client";
 import type { ProductWithEnrollment } from "@/types/academy";
 import { formatNgn, lessonDuration } from "@/types/academy";
 import MuxPlayer from "@mux/mux-player-react";
+import "@/v2-app/v2-app.css";
 
-/** Sales landing page for a course — visible to enrolled and non-enrolled alike. */
+/**
+ * Sales landing page for a course — visible to enrolled and non-enrolled alike.
+ *
+ * The 30-day challenge has its own funnel-aware page at /academy/challenge-30
+ * (countdown timer, Day-1 detection, bundle upsell). When a visitor lands
+ * here via the slug-based route, we forward them so they get the full
+ * experience instead of this generic landing.
+ */
 export default function CourseLandingPage() {
   const { product: slug } = useParams<{ product: string }>();
+  const router = useRouter();
 
   const [product,  setProduct]  = useState<ProductWithEnrollment | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
+    // Forward the 30-day challenge to its funnel-aware page so users who
+    // discover it via the catalog get the same experience as funnel users.
+    if (slug === "30-day-challenge" || slug === "challenge-30") {
+      router.replace("/academy/challenge-30");
+      return;
+    }
     wsGet<{ products: ProductWithEnrollment[] }>("/api/academy/products")
       .then(d => {
         const p = d.products.find(x => x.slug === slug || x.id === slug) ?? null;
@@ -23,18 +38,39 @@ export default function CourseLandingPage() {
         if (p?.sections.length) setExpanded(p.sections[0].id);
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, router]);
 
-  if (loading) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40 text-sm">Loading…</div></div>;
-  if (!product) return <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center"><div className="text-white/40">Course not found.</div></div>;
+  if (loading) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--app-text-muted)", fontSize: 13 }}>Loading…</div></div>;
+  if (!product) return <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--app-text-muted)" }}>Course not found.</div></div>;
 
   const enrolled     = !!product.enrollment;
   const allLessons   = product.sections.flatMap(s => s.lessons);
   const freePreviews = allLessons.filter(l => l.is_free_preview);
   const totalMins    = Math.round(allLessons.reduce((a, l) => a + (l.duration_secs ?? 0), 0) / 60);
 
+  // Banner fields come from migration 054 — surfaced via select("*") on
+  // /api/academy/products. Render the banner above the main split if any of
+  // the banner_* fields are set.
+  const p = product as unknown as {
+    banner_image_url?:  string | null;
+    banner_headline?:   string | null;
+    banner_sub?:        string | null;
+    banner_cta_text?:   string | null;
+    banner_cta_url?:    string | null;
+  };
+  const hasBanner = Boolean(p.banner_image_url || p.banner_headline || p.banner_sub || p.banner_cta_text);
+
   return (
-    <div className="min-h-screen bg-[#0c0c0f]">
+    <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
+      {hasBanner && (
+        <CourseBanner
+          imageUrl={p.banner_image_url ?? null}
+          headline={p.banner_headline ?? null}
+          sub={p.banner_sub ?? null}
+          ctaText={p.banner_cta_text ?? null}
+          ctaUrl={p.banner_cta_url ?? null}
+        />
+      )}
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="grid lg:grid-cols-5 gap-10">
           {/* Left: course info */}
@@ -161,6 +197,97 @@ export default function CourseLandingPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Course banner — sits above the main split. If banner_image_url is set, the
+ * image fills the background with a dark gradient overlay; otherwise the
+ * banner is a clean accent-tinted strip with the headline + optional CTA.
+ *
+ * Authored via the banner editor in the admin academy panel; all fields are
+ * optional so authors can use just the headline + CTA without an image.
+ */
+function CourseBanner({
+  imageUrl, headline, sub, ctaText, ctaUrl,
+}: {
+  imageUrl: string | null;
+  headline: string | null;
+  sub:      string | null;
+  ctaText:  string | null;
+  ctaUrl:   string | null;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        borderBottom: "1px solid var(--app-border)",
+        background: imageUrl ? `#000` : "var(--app-bg-elevated)",
+        minHeight: 220,
+        overflow: "hidden",
+      }}
+    >
+      {imageUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt=""
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }}
+          />
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(180deg, rgba(7,7,10,0.45) 0%, rgba(7,7,10,0.92) 100%)",
+            }}
+          />
+        </>
+      )}
+      <div
+        style={{
+          position: "relative",
+          maxWidth: 1024,
+          margin: "0 auto",
+          padding: "44px 24px",
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1, maxWidth: 640 }}>
+          {headline && (
+            <h2
+              style={{
+                fontSize: 32,
+                letterSpacing: "-0.025em",
+                fontWeight: 500,
+                color: "var(--app-text)",
+                lineHeight: 1.15,
+                marginBottom: sub ? 12 : 0,
+              }}
+            >
+              {headline}
+            </h2>
+          )}
+          {sub && (
+            <p style={{ color: "var(--app-text-muted)", fontSize: 15, lineHeight: 1.55, maxWidth: 560 }}>
+              {sub}
+            </p>
+          )}
+        </div>
+        {ctaText && ctaUrl && (
+          <a href={ctaUrl} target="_blank" rel="noreferrer noopener" className="app-btn app-btn-primary app-btn-lg">
+            {ctaText}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M7 17L17 7"/><path d="M9 7h8v8"/>
+            </svg>
+          </a>
+        )}
       </div>
     </div>
   );

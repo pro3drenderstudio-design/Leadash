@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { getWorkspaceContext } from "@/lib/workspace/context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import Sidebar from "@/components/Sidebar";
+import Sidebar from "@/components/SidebarV2";
+import CommandPaletteMount from "@/v2-app/CommandPaletteMount";
+import "@/v2-app/v2-app.css";
 import AppHeader from "@/components/AppHeader";
 import SectionTabs from "@/components/SectionTabs";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
@@ -9,7 +11,6 @@ import CreditsProvider from "@/components/CreditsProvider";
 import { CurrencyProvider } from "@/lib/currency";
 import { getCurrencyContext } from "@/lib/currency/server";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
-import TrialBanner from "@/components/TrialBanner";
 import BetaBanner from "@/components/BetaBanner";
 import PastDueBanner from "@/components/PastDueBanner";
 import SubscriptionRenewalBanner from "@/components/SubscriptionRenewalBanner";
@@ -97,7 +98,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       initialMonthlyCredits={workspace.subscription_credits_balance ?? 0}
     >
     <SidebarProvider>
-      <div className="flex h-screen overflow-hidden">
+      <CommandPaletteMount />
+      <div className="v2-app v2-legacy-bridge flex h-screen overflow-hidden" style={{ background: "var(--app-bg)" }}>
         <Sidebar
           workspaceName={workspace.name}
           plan={workspace.plan_id}
@@ -113,9 +115,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {showRenewalBanner && workspace.subscription_renews_at && (
               <SubscriptionRenewalBanner renewsAt={workspace.subscription_renews_at} />
             )}
-            {trialEndsAt && (
-              <TrialBanner trialEndsAt={trialEndsAt} />
-            )}
+            {/* TrialBanner mount removed — the 14-day trial program is
+                discontinued. trialEndsAt is preserved on the workspace row
+                for back-compat but no UI surfaces it. */}
             <AppHeader
               userEmail={user.email ?? ""}
               userName={userName}

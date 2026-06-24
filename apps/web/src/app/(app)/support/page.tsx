@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { getWorkspaceId } from "@/lib/workspace/client";
+import "@/v2-app/v2-app.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -436,18 +437,21 @@ export default function SupportPage() {
 
   // ── Ticket list ──────────────────────────────────────────────────────────────
   return (
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
     <div className="max-w-3xl mx-auto px-6 py-10">
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Support</h1>
-          <p className="text-white/40 text-sm">Get help from the Leadash team. We respond within 24 hours.</p>
+          <h1 className="app-h1" style={{ marginBottom: 4 }}>Support</h1>
+          <p style={{ color: "var(--app-text-muted)", fontSize: 13 }}>
+            Get help from the Leadash team. We respond within 24 hours.
+          </p>
         </div>
         <button
           onClick={() => setView("new")}
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 flex-shrink-0"
+          className="app-btn app-btn-primary"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           New ticket
@@ -595,6 +599,7 @@ export default function SupportPage() {
         </svg>
         <p className="text-white/25 text-xs">We respond to all tickets within <span className="text-white/40">24 hours</span>. Urgent issues typically within <span className="text-white/40">4 hours</span>.</p>
       </div>
+    </div>
     </div>
   );
 }

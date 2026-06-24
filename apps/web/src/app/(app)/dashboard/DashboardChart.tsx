@@ -27,15 +27,30 @@ function CustomTooltip({ active, payload, label }: {
   if (!active || !payload?.length) return null;
   return (
     <div
-      className="rounded-xl px-4 py-3 shadow-xl text-sm"
-      style={{ background: "var(--dropdown-bg)", border: "1px solid var(--card-border)" }}
+      style={{
+        background: "var(--app-bg-elevated)",
+        border: "1px solid var(--app-border-strong)",
+        borderRadius: "var(--app-radius)",
+        padding: "10px 14px",
+        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+        fontSize: "var(--app-body-sm)",
+        minWidth: 160,
+      }}
     >
-      <p className="text-xs mb-2" style={{ color: "var(--chart-tick)" }}>{label}</p>
+      <p style={{
+        fontSize: "var(--app-micro)",
+        color: "var(--app-text-quiet)",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        marginBottom: 8,
+      }}>
+        {label}
+      </p>
       {payload.map(p => (
-        <div key={p.name} className="flex items-center gap-2">
+        <div key={p.name} className="flex items-center gap-2" style={{ marginTop: 4 }}>
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
-          <span className="capitalize" style={{ color: "var(--chart-legend)" }}>{p.name}</span>
-          <span className="ml-auto font-semibold pl-4" style={{ color: "var(--foreground)" }}>{p.value}</span>
+          <span className="capitalize" style={{ color: "var(--app-text-muted)", fontSize: "var(--app-small)" }}>{p.name}</span>
+          <span className="ml-auto pl-4" style={{ color: "var(--app-text)", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{p.value}</span>
         </div>
       ))}
     </div>

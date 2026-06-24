@@ -174,9 +174,9 @@ export default function Hero() {
             >
               <span>NO CREDIT CARD</span>
               <span className="dot">·</span>
-              <span>14-DAY TRIAL</span>
+              <span>FREE TO START</span>
               <span className="dot">·</span>
-              <span>CANCEL ANYTIME</span>
+              <span>PAY AS YOU GROW</span>
             </motion.div>
           </div>
 

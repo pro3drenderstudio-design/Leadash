@@ -1,8 +1,25 @@
+/**
+ * /help — restyled to v2-app.
+ *
+ * Three quick-link cards across the top, FAQ accordions grouped by topic,
+ * and a closing "still need help?" card that points at /support. Same
+ * content as before, modernised chrome.
+ */
+
 import Link from "next/link";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  UserSearch01Icon,
+  Mail01Icon,
+  Inbox01Icon,
+  ArrowDown01Icon,
+  HeadsetIcon,
+} from "@/v2-app/icons";
+import "@/v2-app/v2-app.css";
 
 const FAQS = [
   {
-    section: "Lead Campaigns",
+    section: "Lead campaigns",
     items: [
       {
         q: "What's the difference between Scrape, Full Suite, and Verify & Personalize?",
@@ -27,7 +44,7 @@ const FAQS = [
     ],
   },
   {
-    section: "Sequences & Outreach",
+    section: "Sequences & outreach",
     items: [
       {
         q: "How do I connect my email inbox?",
@@ -48,7 +65,7 @@ const FAQS = [
     ],
   },
   {
-    section: "Account & Billing",
+    section: "Account & billing",
     items: [
       {
         q: "How do I upgrade my plan?",
@@ -66,77 +83,137 @@ const FAQS = [
   },
 ];
 
+const QUICK_LINKS = [
+  { label: "Lead campaigns", desc: "Scraping, verification & AI",   href: "/lead-campaigns", icon: UserSearch01Icon },
+  { label: "Sequences",      desc: "Email outreach & templates",    href: "/campaigns",      icon: Mail01Icon },
+  { label: "Inboxes",        desc: "Connect & manage senders",      href: "/inboxes",        icon: Inbox01Icon },
+];
+
 export default function HelpPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-2xl font-bold text-white mb-2">Help Center</h1>
-        <p className="text-white/40">Answers to common questions about Leadash.</p>
-      </div>
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "32px 32px 48px" }}>
 
-      {/* Quick links */}
-      <div className="grid grid-cols-3 gap-3 mb-10">
-        {[
-          { label: "Lead Campaigns", desc: "Scraping, verification & AI", href: "/lead-campaigns", icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" },
-          { label: "Sequences", desc: "Email outreach & templates", href: "/campaigns", icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
-          { label: "Inboxes", desc: "Connect & manage senders", href: "/inboxes", icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" },
-        ].map(card => (
-          <Link
-            key={card.href}
-            href={card.href}
-            className="p-4 bg-white/3 border border-white/8 rounded-xl hover:border-white/15 hover:bg-white/5 transition-all group"
-          >
-            <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center mb-3">
-              <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={card.icon} />
-              </svg>
-            </div>
-            <p className="text-white text-sm font-medium group-hover:text-white/90">{card.label}</p>
-            <p className="text-white/35 text-xs mt-0.5">{card.desc}</p>
-          </Link>
-        ))}
-      </div>
+        {/* Header */}
+        <header style={{ marginBottom: 40 }}>
+          <h1 className="app-h1">Help center</h1>
+          <p style={{ color: "var(--app-text-muted)", fontSize: 14, marginTop: 6 }}>
+            Answers to common questions about Leadash.
+          </p>
+        </header>
 
-      {/* FAQ sections */}
-      {FAQS.map(section => (
-        <div key={section.section} className="mb-8">
-          <h2 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">{section.section}</h2>
-          <div className="space-y-3">
-            {section.items.map(item => (
-              <details
-                key={item.q}
-                className="group border border-white/8 rounded-xl overflow-hidden"
+        {/* Quick links */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 40 }} className="help-quick">
+          {QUICK_LINKS.map(card => (
+            <Link
+              key={card.href}
+              href={card.href}
+              className="app-card app-card-tight app-card-interactive"
+              style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <div
+                style={{
+                  width: 32, height: 32, borderRadius: 6,
+                  background: "var(--app-accent-soft)",
+                  border: "1px solid var(--app-accent-line)",
+                  color: "var(--app-accent)",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}
               >
-                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer bg-white/3 hover:bg-white/5 transition-colors list-none">
-                  <span className="text-white text-sm font-medium pr-4">{item.q}</span>
-                  <svg className="w-4 h-4 text-white/30 flex-shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </summary>
-                <div className="px-5 py-4 text-white/50 text-sm leading-relaxed border-t border-white/5">
-                  {item.a}
-                </div>
-              </details>
-            ))}
-          </div>
+                <HugeiconsIcon icon={card.icon} size={16} strokeWidth={1.5} />
+              </div>
+              <div>
+                <p style={{ color: "var(--app-text)", fontSize: 13, fontWeight: 500 }}>{card.label}</p>
+                <p style={{ color: "var(--app-text-quiet)", fontSize: 11, marginTop: 2 }}>{card.desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
-      ))}
 
-      {/* Contact support */}
-      <div className="mt-10 p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-orange-500/20 rounded-2xl">
-        <h3 className="text-white font-semibold mb-1">Still need help?</h3>
-        <p className="text-white/40 text-sm mb-4">Can&apos;t find what you&apos;re looking for? Reach out and we&apos;ll get back to you within 24 hours.</p>
-        <Link
-          href="/support"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold rounded-xl transition-colors"
+        {/* FAQ sections */}
+        {FAQS.map(section => (
+          <section key={section.section} style={{ marginBottom: 32 }}>
+            <h2 className="app-eyebrow" style={{ marginBottom: 14 }}>{section.section}</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {section.items.map(item => (
+                <details
+                  key={item.q}
+                  className="help-faq"
+                  style={{
+                    border: "1px solid var(--app-border)",
+                    borderRadius: "var(--app-radius)",
+                    overflow: "hidden",
+                    background: "var(--app-bg-elevated)",
+                  }}
+                >
+                  <summary
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                      cursor: "pointer",
+                      listStyle: "none",
+                      gap: 12,
+                    }}
+                  >
+                    <span style={{ color: "var(--app-text)", fontSize: 13, fontWeight: 500 }}>{item.q}</span>
+                    <span className="help-chev" style={{ color: "var(--app-text-quiet)", transition: "transform 200ms var(--app-ease)", flexShrink: 0 }}>
+                      <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={2} />
+                    </span>
+                  </summary>
+                  <div style={{ padding: "12px 16px 16px", color: "var(--app-text-muted)", fontSize: 13, lineHeight: 1.55, borderTop: "1px solid var(--app-border)" }}>
+                    {item.a}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {/* Contact support */}
+        <div
+          className="app-card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            border: "1px solid var(--app-accent-line)",
+            background: "var(--app-accent-soft)",
+            padding: 20,
+            marginTop: 32,
+          }}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-          </svg>
-          Open Support
-        </Link>
+          <div
+            style={{
+              width: 36, height: 36, borderRadius: 8,
+              background: "rgba(249, 115, 22, 0.18)",
+              color: "var(--app-accent)",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <HugeiconsIcon icon={HeadsetIcon} size={18} strokeWidth={1.6} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ color: "var(--app-text)", fontSize: 14, fontWeight: 500 }}>Still need help?</p>
+            <p style={{ color: "var(--app-text-muted)", fontSize: 12, marginTop: 2 }}>
+              Can&apos;t find what you&apos;re looking for? Reach out and we&apos;ll get back to you within 24 hours.
+            </p>
+          </div>
+          <Link href="/support" className="app-btn app-btn-primary">
+            <HugeiconsIcon icon={HeadsetIcon} size={14} strokeWidth={1.7} />
+            Open support
+          </Link>
+        </div>
       </div>
+
+      <style>{`
+        .help-faq[open] .help-chev { transform: rotate(180deg); }
+        @media (max-width: 700px) {
+          .help-quick { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

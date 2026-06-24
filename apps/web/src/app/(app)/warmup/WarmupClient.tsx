@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getInboxes, updateInbox } from "@/lib/outreach/api";
 import { wsFetch } from "@/lib/workspace/client";
+import "@/v2-app/v2-app.css";
 import type { OutreachInboxSafe, WarmupPoolStats } from "@/types/outreach";
 
 interface WarmupActivity {
@@ -71,16 +72,21 @@ export default function WarmupClient() {
   }
 
   if (loading) return (
-    <div className="p-6 space-y-4">
-      {[1,2,3].map(i => <div key={i} className="h-32 bg-white/4 rounded-xl animate-pulse" />)}
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)", padding: 24 }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+        {[1,2,3].map(i => <div key={i} className="app-skeleton" style={{ height: 128, borderRadius: "var(--app-radius-lg)" }} />)}
+      </div>
     </div>
   );
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-white">Inbox Warmup</h1>
-        <p className="text-white/40 text-sm mt-0.5">Gradually ramp up sending volume to build sender reputation</p>
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 32px" }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="app-h1">Inbox warmup</h1>
+        <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+          Gradually ramp up sending volume to build sender reputation.
+        </p>
       </div>
 
       {/* Pool stats panel */}
@@ -352,6 +358,7 @@ export default function WarmupClient() {
           <p className="text-white/30 text-sm">No warmup activity yet. Enable warmup on at least 2 inboxes and the pool will start sending.</p>
         </div>
       )}
+    </div>
     </div>
   );
 }

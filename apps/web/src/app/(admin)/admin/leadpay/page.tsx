@@ -33,7 +33,7 @@ export default function AdminLeadPayPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">LeadPay Overview</h1>
+        <h1 className="app-h1">LeadPay Overview</h1>
         <p className="text-white/50 text-sm mt-1">Payment service administration</p>
       </div>
 

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsFetch } from "@/lib/workspace/client";
+import "@/v2-app/v2-app.css";
 import {
   type DiscoverResult, type DiscoverSearchResponse,
   type DiscoverCompanyResult, type DiscoverCompanySearchResponse,
@@ -1688,6 +1689,7 @@ function DiscoverContent() {
   );
 
   return (
+    <div className="v2-app" style={{ position: "absolute", inset: 0, background: "var(--app-bg)" }}>
     <div className="absolute inset-0 flex overflow-hidden">
 
       {/* ── Mobile filter overlay ── */}
@@ -2259,6 +2261,7 @@ function DiscoverContent() {
           onConfirm={(lid, lname) => handleAddToList(lid, lname, listIds ?? undefined)}
         />
       )}
+    </div>
     </div>
   );
 }

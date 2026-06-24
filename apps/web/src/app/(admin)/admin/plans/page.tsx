@@ -519,7 +519,7 @@ export default function PlansPage() {
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Plans</h1>
+        <h1 className="app-h1">Plans</h1>
         <p className="text-sm text-slate-400 dark:text-white/40 mt-0.5">
           Changes take effect sitewide immediately. Price changes sync to Paystack automatically.
         </p>

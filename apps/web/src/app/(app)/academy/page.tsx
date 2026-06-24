@@ -4,6 +4,7 @@ import Link from "next/link";
 import { wsGet } from "@/lib/workspace/client";
 import type { ProductWithEnrollment } from "@/types/academy";
 import { formatNgn } from "@/types/academy";
+import "@/v2-app/v2-app.css";
 
 // Gradient placeholder thumbnails so every card always has a visual
 const THUMBNAILS = [
@@ -164,13 +165,14 @@ export default function AcademyPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="text-white/30 text-sm">Loading…</div>
+      <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center", padding: "120px 16px" }}>
+        <div style={{ color: "var(--app-text-muted)", fontSize: 13 }}>Loading…</div>
       </div>
     );
   }
 
   return (
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
     <div className="px-6 py-8 max-w-5xl mx-auto">
       {/* Hero */}
       <AcademyHero featuredProduct={featured} />
@@ -178,7 +180,7 @@ export default function AcademyPage() {
       {/* Enrolled courses */}
       {enrolled.length > 0 && (
         <section className="mb-10">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-white/35 mb-4">Your Courses</h2>
+          <h2 className="app-eyebrow" style={{ marginBottom: 14 }}>Your courses</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {enrolled.map((p, i) => <EnrolledCard key={p.id} p={p} index={i} />)}
           </div>
@@ -188,8 +190,8 @@ export default function AcademyPage() {
       {/* Available courses */}
       {available.length > 0 && (
         <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-white/35 mb-4">
-            {enrolled.length > 0 ? "Also Available" : "Available Courses"}
+          <h2 className="app-eyebrow" style={{ marginBottom: 14 }}>
+            {enrolled.length > 0 ? "Also available" : "Available courses"}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {available.map((p, i) => <AvailableCard key={p.id} p={p} index={enrolled.length + i} />)}
@@ -205,6 +207,7 @@ export default function AcademyPage() {
         .badge-emerald { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(52,211,153,0.1); color:#34d399; border:1px solid rgba(52,211,153,0.2); }
         .badge-orange  { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(249,115,22,0.1); color:#fb923c; border:1px solid rgba(249,115,22,0.2); }
       ` }} />
+    </div>
     </div>
   );
 }

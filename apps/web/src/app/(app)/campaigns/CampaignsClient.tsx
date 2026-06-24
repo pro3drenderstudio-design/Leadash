@@ -1,68 +1,86 @@
 "use client";
+
+/**
+ * /campaigns — restyled to v2-app.
+ *
+ * Behaviour preserved exactly:
+ *   - getCampaigns / updateCampaign / deleteCampaign / cloneCampaign
+ *   - tab switch between sequences and templates (?tab=templates)
+ *   - search + status filter
+ *   - clone error surfacing
+ *   - draft → /campaigns/new?draft=<id>, non-draft → /campaigns/<id>
+ *
+ * Restyle highlights:
+ *   - DataTable from v2-app, compact density (this is a power table)
+ *   - Tabs use v2-app primitive
+ *   - Status colour codes mapped to Badge tones
+ *   - Paywall uses EmptyState pattern instead of a separate blurred-rows card
+ */
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { getCampaigns, updateCampaign, deleteCampaign, cloneCampaign } from "@/lib/outreach/api";
 import type { OutreachCampaign, CampaignStatus } from "@/types/outreach";
-import dynamic from "next/dynamic";
+import {
+  Button,
+  Badge,
+  Card,
+  DataTable,
+  EmptyState,
+  Input,
+  Tabs,
+  Tooltip,
+  Icon,
+  type Column,
+} from "@/v2-app";
+import {
+  PlusSignIcon,
+  Search01Icon,
+  Edit02Icon,
+  Delete02Icon,
+  Copy01Icon,
+  Mail01Icon,
+  Briefcase01Icon,
+  Loading03Icon,
+} from "@/v2-app/icons";
+import "@/v2-app/v2-app.css";
+
 const TemplatesClient = dynamic(() => import("@/app/(app)/templates/TemplatesClient"), { ssr: false });
 
-const STATUS_COLORS: Record<CampaignStatus, string> = {
-  draft:     "text-white/40 bg-white/8",
-  active:    "text-green-400 bg-green-500/15",
-  paused:    "text-amber-400 bg-amber-500/15",
-  completed: "text-orange-400 bg-orange-500/15",
+type Tab = "sequences" | "templates";
+
+const STATUS_TONE: Record<CampaignStatus, "default" | "success" | "warning" | "accent"> = {
+  draft:     "default",
+  active:    "success",
+  paused:    "warning",
+  completed: "accent",
 };
 
 const ALL_STATUSES: Array<CampaignStatus | "all"> = ["all", "active", "paused", "draft", "completed"];
 
 function SequencesPaywall() {
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-white/8 min-h-[420px] flex items-center justify-center">
-      {/* Blurred background rows */}
-      <div className="absolute inset-0 pointer-events-none select-none blur-sm opacity-30">
-        {[1,2,3,4,5].map(i => (
-          <div key={i} className="h-16 border-b border-white/4 bg-white/2" />
-        ))}
-      </div>
-      {/* Paywall card */}
-      <div className="relative z-10 flex flex-col items-center gap-4 px-8 py-10 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-white/6 border border-white/10 flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <div>
-          <h3 className="text-white font-semibold text-lg">Sequences are a paid feature</h3>
-          <p className="text-white/45 text-sm mt-1.5 max-w-xs">
-            Upgrade your plan to create and run cold email sequences with advanced tracking and automation.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 mt-1">
-          <Link
-            href="/settings?tab=billing"
-            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors"
-          >
-            Upgrade Plan
-          </Link>
-          <Link
-            href="/settings?tab=billing"
-            className="px-5 py-2.5 bg-white/6 hover:bg-white/10 text-white/70 hover:text-white rounded-xl text-sm font-medium transition-colors"
-          >
-            View Plans
-          </Link>
-        </div>
-      </div>
-    </div>
+    <Card style={{ padding: 0 }}>
+      <EmptyState
+        icon={Briefcase01Icon}
+        title="Sequences are a paid feature"
+        body="Upgrade your plan to create and run cold email sequences with advanced tracking and automation."
+        action={
+          <div style={{ display: "inline-flex", gap: 8 }}>
+            <Link href="/settings?tab=billing" className="app-btn app-btn-primary">Upgrade plan</Link>
+            <Link href="/settings?tab=billing" className="app-btn app-btn-secondary">View plans</Link>
+          </div>
+        }
+      />
+    </Card>
   );
 }
 
 export default function CampaignsClient({ canRunCampaigns = true }: { canRunCampaigns?: boolean }) {
   const params = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"sequences" | "templates">(() =>
-    params.get("tab") === "templates" ? "templates" : "sequences"
-  );
+  const [activeTab, setActiveTab] = useState<Tab>(() => (params.get("tab") === "templates" ? "templates" : "sequences"));
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
@@ -70,7 +88,7 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
   const [cloning, setCloning]     = useState<string | null>(null);
   const [cloneError, setCloneError] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function load() {
     setLoading(true);
@@ -81,12 +99,13 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
   async function toggleStatus(c: OutreachCampaign) {
     const next = c.status === "active" ? "paused" : c.status === "paused" ? "active" : "active";
     await updateCampaign(c.id, { status: next as CampaignStatus });
-    load();
+    void load();
   }
 
   async function handleDelete(c: OutreachCampaign) {
     if (!confirm(`Delete campaign "${c.name}"? This cannot be undone.`)) return;
-    await deleteCampaign(c.id); load();
+    await deleteCampaign(c.id);
+    void load();
   }
 
   async function handleClone(c: OutreachCampaign) {
@@ -111,174 +130,266 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
   const countByStatus = (s: CampaignStatus | "all") =>
     s === "all" ? campaigns.length : campaigns.filter(c => c.status === s).length;
 
+  // Column definitions for the DataTable
+  const columns: Column<OutreachCampaign>[] = [
+    {
+      key: "name",
+      header: "Campaign",
+      cell: c => {
+        const enrolled = c.total_enrolled ?? 0;
+        const replied  = c.total_replied  ?? 0;
+        const progress = enrolled > 0 ? Math.round((replied / enrolled) * 100) : 0;
+        const editHref = c.status === "draft" ? `/campaigns/new?draft=${c.id}` : `/campaigns/${c.id}`;
+        return (
+          <div style={{ minWidth: 0 }}>
+            <Link href={editHref} style={{ color: "var(--app-text)", fontWeight: 500, textDecoration: "none" }}>
+              {c.name}
+            </Link>
+            <div style={{ fontSize: 11, color: "var(--app-text-quiet)", marginTop: 2 }}>
+              {c.send_days?.join(", ")} · {c.send_start_time}–{c.send_end_time}
+            </div>
+            {c.status === "active" && enrolled > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                <div style={{ flex: 1, height: 2, background: "var(--app-border)", borderRadius: 1, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${progress}%`, background: "var(--app-success)" }} />
+                </div>
+                <span style={{ fontSize: 10, color: "var(--app-text-quiet)", whiteSpace: "nowrap" }}>{progress}%</span>
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: c => <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>,
+      width: 110,
+    },
+    {
+      key: "enrolled",
+      header: "Enrolled",
+      align: "right",
+      width: 90,
+      cell: c => (c.total_enrolled ?? 0).toLocaleString(),
+    },
+    {
+      key: "sent",
+      header: "Sent",
+      align: "right",
+      width: 80,
+      cell: c => (c.total_sent ?? 0).toLocaleString(),
+    },
+    {
+      key: "openRate",
+      header: "Open rate",
+      align: "right",
+      width: 100,
+      cell: c => {
+        const sent   = c.total_sent ?? 0;
+        const opened = c.total_opened ?? 0;
+        const rate   = sent > 0 ? Math.round((opened / sent) * 100) : 0;
+        const colour = rate >= 40
+          ? "var(--app-success)"
+          : rate >= 20
+          ? "var(--app-warning)"
+          : sent > 0
+          ? "var(--app-text-muted)"
+          : "var(--app-text-faint)";
+        return <span style={{ color: colour }}>{sent > 0 ? `${rate}%` : "—"}</span>;
+      },
+    },
+    {
+      key: "replies",
+      header: "Replies",
+      align: "right",
+      width: 90,
+      cell: c => (c.total_replied ?? 0).toLocaleString(),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      width: 132,
+      cell: c => {
+        const editHref = c.status === "draft" ? `/campaigns/new?draft=${c.id}` : `/campaigns/${c.id}`;
+        return (
+          <div style={{ display: "inline-flex", gap: 2, justifyContent: "flex-end" }}>
+            {c.status !== "completed" && (
+              <Tooltip label={c.status === "active" ? "Pause" : "Activate"}>
+                <button
+                  onClick={() => toggleStatus(c)}
+                  className="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                  aria-label={c.status === "active" ? "Pause" : "Activate"}
+                >
+                  {c.status === "active" ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  )}
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip label={c.status === "draft" ? "Continue draft" : "Edit"}>
+              <Link href={editHref} className="app-btn app-btn-ghost app-btn-icon app-btn-sm" aria-label="Edit">
+                <Icon icon={Edit02Icon} size={13} />
+              </Link>
+            </Tooltip>
+            <Tooltip label="Duplicate">
+              <button
+                onClick={() => handleClone(c)}
+                disabled={cloning === c.id}
+                className="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                aria-label="Duplicate"
+              >
+                <Icon
+                  icon={cloning === c.id ? Loading03Icon : Copy01Icon}
+                  size={13}
+                  className={cloning === c.id ? "app-spin" : undefined}
+                />
+              </button>
+            </Tooltip>
+            <Tooltip label="Delete">
+              <button
+                onClick={() => handleDelete(c)}
+                className="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                aria-label="Delete"
+              >
+                <Icon icon={Delete02Icon} size={13} />
+              </button>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Sequences</h1>
-          <p className="text-white/40 text-sm mt-0.5">Create and manage cold email sequences</p>
-        </div>
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* Header */}
+        <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <h1 className="app-h1">Sequences</h1>
+            <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+              Create and manage cold email sequences.
+            </p>
+          </div>
+          {activeTab === "sequences" && canRunCampaigns && (
+            <Link href="/campaigns/new" className="app-btn app-btn-primary">
+              <Icon icon={PlusSignIcon} size={14} />
+              New sequence
+            </Link>
+          )}
+        </header>
+
+        {/* Tabs */}
+        <Tabs
+          value={activeTab}
+          onChange={(v: Tab) => setActiveTab(v)}
+          options={[
+            { value: "sequences", label: "Sequences" },
+            { value: "templates", label: "Templates" },
+          ]}
+        />
+
+        {/* ── Templates tab ─────────────────────────────────────────────── */}
+        {activeTab === "templates" && <TemplatesClient />}
+
+        {/* ── Sequences paywall ─────────────────────────────────────────── */}
+        {activeTab === "sequences" && !canRunCampaigns && <SequencesPaywall />}
+
+        {/* ── Sequences body ────────────────────────────────────────────── */}
         {activeTab === "sequences" && canRunCampaigns && (
-          <Link href="/campaigns/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
-            + New Sequence
-          </Link>
+          <>
+            {cloneError && (
+              <div
+                role="alert"
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+                  padding: "10px 14px", borderRadius: "var(--app-radius-sm)",
+                  background: "var(--app-danger-soft)",
+                  border: "1px solid rgba(248, 113, 113, 0.30)",
+                  color: "var(--app-danger)", fontSize: 12,
+                }}
+              >
+                <span>{cloneError}</span>
+                <button
+                  onClick={() => setCloneError(null)}
+                  aria-label="Dismiss"
+                  style={{ background: "transparent", border: "none", color: "currentColor", cursor: "pointer" }}
+                >✕</button>
+              </div>
+            )}
+
+            {/* Search + filters */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 360 }}>
+                <span style={{
+                  position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                  color: "var(--app-text-quiet)",
+                  pointerEvents: "none",
+                }}>
+                  <Icon icon={Search01Icon} size={13} />
+                </span>
+                <Input
+                  type="text"
+                  placeholder="Search campaigns…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{ paddingLeft: 30 }}
+                />
+              </div>
+              <div className="app-tabs">
+                {ALL_STATUSES.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className="app-tab"
+                    data-active={statusFilter === s ? "true" : "false"}
+                    style={{ textTransform: "capitalize" }}
+                  >
+                    {s === "all" ? "All" : s}
+                    {s !== "all" && countByStatus(s) > 0 && (
+                      <span style={{ color: "var(--app-text-quiet)", marginLeft: 4 }}>{countByStatus(s)}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Table */}
+            <DataTable
+              density="compact"
+              columns={columns}
+              rows={filtered}
+              loading={loading}
+              emptyTitle={search || statusFilter !== "all" ? "No campaigns match those filters" : "No campaigns yet"}
+              emptyBody={search || statusFilter !== "all"
+                ? "Try clearing the filter or changing the search term."
+                : "Create your first sequence to start landing replies."}
+            />
+
+            {!loading && filtered.length === 0 && !search && statusFilter === "all" && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: -16 }}>
+                <Link href="/campaigns/new" className="app-btn app-btn-primary">
+                  <Icon icon={Mail01Icon} size={14} />
+                  Create your first sequence
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 border-b border-white/8 pb-0">
-        {(["sequences", "templates"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setActiveTab(t)}
-            className={`px-4 py-2 text-sm font-semibold capitalize rounded-t-lg transition-colors border-b-2 -mb-px ${activeTab === t ? "text-white border-orange-500" : "text-white/40 border-transparent hover:text-white/60"}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* ── TEMPLATES TAB ── */}
-      {activeTab === "templates" && <TemplatesClient />}
-
-      {activeTab === "sequences" && !canRunCampaigns && <SequencesPaywall />}
-
-      {activeTab === "sequences" && canRunCampaigns && <>
-
-      {/* Clone error */}
-      {cloneError && (
-        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-          <span>{cloneError}</span>
-          <button onClick={() => setCloneError(null)} className="text-red-400/60 hover:text-red-400 transition-colors">✕</button>
-        </div>
-      )}
-
-      {/* Search + Status Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <input
-          type="text"
-          placeholder="Search campaigns…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-orange-500/50"
-        />
-        <div className="flex gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
-          {ALL_STATUSES.map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
-                statusFilter === s
-                  ? "bg-white/12 text-white"
-                  : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              {s === "all" ? "All" : s}
-              {s !== "all" && countByStatus(s) > 0 && (
-                <span className="ml-1 text-white/30">{countByStatus(s)}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="space-y-3">{[1,2,3].map((i) => <div key={i} className="h-20 bg-white/4 rounded-xl animate-pulse" />)}</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-white/30">
-          <div className="text-4xl mb-3">✉️</div>
-          <p className="font-medium">{search || statusFilter !== "all" ? "No campaigns match your filters" : "No campaigns yet"}</p>
-          {!search && statusFilter === "all" && <p className="text-sm mt-1">Create your first campaign to start sending</p>}
-        </div>
-      ) : (
-        <div className="border border-white/8 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px] gap-4 px-5 py-3 bg-white/3 border-b border-white/6">
-            {["Campaign", "Status", "Enrolled", "Sent", "Open Rate", "Replies"].map((h) => (
-              <div key={h} className="text-white/35 text-xs font-semibold uppercase tracking-wider">{h}</div>
-            ))}
-            <div />
-          </div>
-          {filtered.map((c, i) => {
-            const enrolled  = c.total_enrolled ?? 0;
-            const sent      = c.total_sent     ?? 0;
-            const opened    = c.total_opened   ?? 0;
-            const replied   = c.total_replied  ?? 0;
-            const openRate  = sent > 0 ? Math.round((opened / sent) * 100) : 0;
-            const progress  = enrolled > 0 ? Math.round(((replied) / enrolled) * 100) : 0;
-            // Drafts resume in the wizard; everything else opens the detail view
-            const editHref = c.status === "draft" ? `/campaigns/new?draft=${c.id}` : `/campaigns/${c.id}`;
-
-            return (
-              <div key={c.id} className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px] gap-4 items-center px-5 py-4 border-b border-white/4 last:border-0 ${i % 2 === 0 ? "" : "bg-white/1"}`}>
-                <div>
-                  <Link href={editHref} className="text-white font-medium text-sm hover:text-orange-300 transition-colors">{c.name}</Link>
-                  <div className="text-white/30 text-xs mt-0.5">{c.send_days?.join(", ")} · {c.send_start_time}–{c.send_end_time}</div>
-                  {c.status === "active" && enrolled > 0 && (
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="flex-1 h-1 bg-white/8 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500/60 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                      </div>
-                      <span className="text-white/25 text-xs">{progress}% replied</span>
-                    </div>
-                  )}
-                </div>
-                <div><span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[c.status]}`}>{c.status}</span></div>
-                <div className="text-white/60 text-sm">{enrolled.toLocaleString()}</div>
-                <div className="text-white/60 text-sm">{sent.toLocaleString()}</div>
-                <div className="text-sm font-medium" style={{ color: openRate >= 40 ? "#4ade80" : openRate >= 20 ? "#fbbf24" : openRate > 0 ? "#94a3b8" : "#ffffff20" }}>
-                  {sent > 0 ? `${openRate}%` : "—"}
-                </div>
-                <div className="text-white/60 text-sm">{replied.toLocaleString()}</div>
-                <div className="flex items-center gap-1 justify-end">
-                  {/* Pause / Activate */}
-                  {c.status !== "completed" && (
-                    <button
-                      onClick={() => toggleStatus(c)}
-                      title={c.status === "active" ? "Pause" : "Activate"}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                    >
-                      {c.status === "active" ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                      )}
-                    </button>
-                  )}
-                  {/* Edit */}
-                  <Link
-                    href={editHref}
-                    title={c.status === "draft" ? "Continue editing draft" : "Edit"}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </Link>
-                  {/* Duplicate */}
-                  <button
-                    onClick={() => handleClone(c)}
-                    disabled={cloning === c.id}
-                    title="Duplicate"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-white/10 text-white/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {cloning === c.id
-                      ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    }
-                  </button>
-                  {/* Delete */}
-                  <button
-                    onClick={() => handleDelete(c)}
-                    title="Delete"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/4 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-colors"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </>}
+      <style>{`
+        .app-spin { animation: app-spin 0.8s linear infinite; }
+        @keyframes app-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

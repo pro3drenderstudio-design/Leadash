@@ -3,6 +3,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsPost, wsPatch, wsDelete, wsFetch } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
+import "@/v2-app/v2-app.css";
 import { sanitizeName, sanitizeLettersOnly, sanitizeCountryCode, sanitizeZip } from "@/lib/registrant-validators";
 import { CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
 import type { PlanConfig } from "@/lib/billing/getActivePlans";
@@ -1774,10 +1775,11 @@ function SettingsInner() {
   }
 
   return (
+    <div className="v2-app" style={{ height: "100%", background: "var(--app-bg)" }}>
     <div className="flex flex-col md:flex-row h-full">
       {/* Nav: horizontal scroll on mobile, vertical sidebar on md+ */}
       <nav className="flex-shrink-0 flex flex-row overflow-x-auto gap-0.5 border-b border-white/8 px-3 py-2 md:flex-col md:w-48 md:border-r md:border-b-0 md:p-4 md:space-y-0.5 md:overflow-x-visible">
-        <p className="hidden md:block px-2 mb-3 text-xs font-semibold text-white/30 uppercase tracking-wider">Settings</p>
+        <p className="app-eyebrow hidden md:block" style={{ paddingLeft: 8, marginBottom: 12 }}>Settings</p>
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -1801,6 +1803,7 @@ function SettingsInner() {
         {active === "infrastructure" && <InfrastructureTab dedicatedIpSuccess={dedicatedIpSuccess} />}
         {active === "api-keys"       && <ApiKeysTab />}
       </div>
+    </div>
     </div>
   );
 }

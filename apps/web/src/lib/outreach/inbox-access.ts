@@ -8,10 +8,14 @@ export type InboxAccessResult =
  * Check whether a workspace is allowed to add a new inbox.
  *
  * Rules:
- * 1. Free plan: max 5 inboxes. Trial lasts 14 days from workspace creation.
- *    After trial expires, no new inboxes can be added and warmup is blocked.
+ * 1. Free plan: bounded by `max_inboxes` on the workspace row (default 3).
  * 2. Paid plans: limited only by max_inboxes on the workspace row.
  * 3. An email address can only belong to one workspace at a time.
+ *
+ * The legacy 14-day trial system has been discontinued — `trial_ends_at`
+ * is kept on the table for back-compat but is no longer used as a gate.
+ * The `trial_expired` error code is preserved in the union for callers
+ * that still reference it; nothing in this function emits it anymore.
  *
  * @param db           Admin Supabase client (bypasses RLS)
  * @param workspaceId  The workspace trying to add the inbox
@@ -22,27 +26,13 @@ export async function checkInboxAccess(
   workspaceId: string,
   emailAddress?: string,
 ): Promise<InboxAccessResult> {
-  // Load workspace limits + trial info
   const { data: ws } = await db
     .from("workspaces")
-    .select("plan_id, plan_status, max_inboxes, trial_ends_at")
+    .select("plan_id, plan_status, max_inboxes")
     .eq("id", workspaceId)
     .single();
 
   if (!ws) return { ok: false, code: "inbox_limit", message: "Workspace not found." };
-
-  // ── 1. Trial check — only blocks free-plan workspaces ──────────────────────
-  if (ws.trial_ends_at && ws.plan_id === "free") {
-    const trialExpired = new Date(ws.trial_ends_at) < new Date();
-    if (trialExpired) {
-      return {
-        ok: false,
-        code: "trial_expired",
-        message:
-          "Your free trial has expired. Upgrade your plan to add inboxes and re-enable warmup.",
-      };
-    }
-  }
 
   // ── 1b. Past-due grace period — block new inbox adds ───────────────────────
   if ((ws as Record<string, unknown>).plan_status === "past_due") {
@@ -95,17 +85,16 @@ export async function checkInboxAccess(
 }
 
 /**
- * Returns trial info for a free-plan workspace.
- * Used by the UI to display banners.
+ * Returns trial info for a workspace.
+ *
+ * The trial program has been discontinued — this helper now always returns
+ * "no trial" regardless of the legacy `trial_ends_at` value. Kept as a stub
+ * so any remaining callers compile cleanly while we migrate them off; once
+ * no consumers remain, this can be deleted.
  */
-export function getTrialStatus(workspace: {
+export function getTrialStatus(_workspace: {
   plan_id: string;
   trial_ends_at: string | null;
 }): { onTrial: boolean; expired: boolean; daysLeft: number } {
-  if (!workspace.trial_ends_at) {
-    return { onTrial: false, expired: false, daysLeft: 0 };
-  }
-  const msLeft = new Date(workspace.trial_ends_at).getTime() - Date.now();
-  const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
-  return { onTrial: true, expired: daysLeft === 0, daysLeft };
+  return { onTrial: false, expired: false, daysLeft: 0 };
 }
