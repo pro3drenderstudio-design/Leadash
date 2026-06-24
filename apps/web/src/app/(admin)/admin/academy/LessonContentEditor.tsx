@@ -18,7 +18,8 @@
  * changing the storage shape.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import TiptapEditor from "./TiptapEditor";
 
 type Block = {
   id?: string;
@@ -149,6 +150,38 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
     setResources(rs => rs.filter(r => r.id !== id));
   }
 
+  /**
+   * Upload a file to Supabase Storage via the admin upload route, then
+   * patch the in-progress resource with the returned url/mime/bytes.
+   */
+  async function uploadFileForResource(idx: number, file: File) {
+    const r = resources[idx];
+    if (!r) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("lesson_id", lessonId);
+    setMsg("Uploading…");
+    const res = await fetch("/api/admin/academy/upload", { method: "POST", body: fd }).then(x => x.json());
+    if (res.url) {
+      const next = { ...r, url: res.url, file_mime: res.file_mime, file_bytes: res.file_bytes };
+      setResources(rs => rs.map((x, j) => j === idx ? next : x));
+      // Auto-save the resource so the new URL persists without an extra click.
+      if (next.id) {
+        await fetch("/api/admin/academy/lesson-resources", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: next.id, url: next.url, file_mime: next.file_mime, file_bytes: next.file_bytes,
+          }),
+        });
+      }
+      flash("File uploaded.");
+    } else {
+      setMsg(res.error ?? "Upload failed");
+      setTimeout(() => setMsg(null), 4000);
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────
   if (loading) return <div className="text-xs text-gray-500">Loading lesson content…</div>;
 
@@ -194,17 +227,25 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
                     <button onClick={() => b.id && deleteBlock(b.id)} className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300">Delete</button>
                   </div>
                 </div>
-                <textarea
-                  rows={b.block_type === "code" ? 5 : 4}
-                  value={b.content}
-                  onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: e.target.value } : x))}
-                  placeholder={
-                    b.block_type === "code"     ? "// code"
-                    : b.block_type === "callout" ? "Highlighted note for students"
-                    : "Paragraph text or HTML (admin-trusted)"
-                  }
-                  className={input + (b.block_type === "code" ? " font-mono" : "") + " resize-none"}
-                />
+                {b.block_type === "rich_text" ? (
+                  <TiptapEditor
+                    value={b.content}
+                    onChange={html => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: html } : x))}
+                    placeholder="Paragraph text — use the toolbar above for formatting."
+                  />
+                ) : (
+                  <textarea
+                    rows={b.block_type === "code" ? 5 : 4}
+                    value={b.content}
+                    onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: e.target.value } : x))}
+                    placeholder={
+                      b.block_type === "code"
+                        ? "// code"
+                        : "Highlighted note for students"
+                    }
+                    className={input + (b.block_type === "code" ? " font-mono" : "") + " resize-none"}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -245,10 +286,22 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
                 </div>
                 <div className="mb-2">
                   <label className={label}>URL</label>
-                  <input value={r.url}
-                    onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
-                    placeholder={r.resource_type === "file" ? "https://…/lesson-resource.pdf" : "https://"}
-                    className={input} />
+                  <div className="flex gap-2">
+                    <input value={r.url}
+                      onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
+                      placeholder={r.resource_type === "file" ? "Upload below or paste a URL" : "https://"}
+                      className={input + " flex-1"} />
+                    {r.resource_type === "file" && (
+                      <FileUploadButton onPick={file => uploadFileForResource(i, file)} />
+                    )}
+                  </div>
+                  {r.resource_type === "file" && r.file_bytes && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      {r.file_mime ?? "file"} · {r.file_bytes > 1024 * 1024
+                        ? `${(r.file_bytes / 1024 / 1024).toFixed(1)} MB`
+                        : `${(r.file_bytes / 1024).toFixed(0)} KB`}
+                    </p>
+                  )}
                 </div>
                 <div className="mb-2">
                   <label className={label}>Description (optional)</label>
@@ -266,5 +319,36 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Small file-picker button that hides the native <input type="file"> and
+ * forwards the picked file to the parent. Used inline next to the URL input
+ * on file-type resources.
+ */
+function FileUploadButton({ onPick }: { onPick: (file: File) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        className="px-2 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded whitespace-nowrap"
+      >
+        Upload
+      </button>
+      <input
+        ref={ref}
+        type="file"
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f);
+          // Reset so picking the same file twice still fires onChange.
+          if (ref.current) ref.current.value = "";
+        }}
+      />
+    </>
   );
 }

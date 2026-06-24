@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import LessonContentEditor from "./LessonContentEditor";
 import CourseBannerEditor from "./CourseBannerEditor";
+import SectionSettingsEditor from "./SectionSettingsEditor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -455,6 +456,18 @@ export default function AdminAcademyPage() {
                         ✕
                       </button>
                     </div>
+                    {selectedSection === sec.id && (
+                      <SectionSettingsEditor
+                        sectionId={sec.id}
+                        initialCta={{
+                          text: (sec as unknown as { cta_text?: string | null }).cta_text ?? null,
+                          url:  (sec as unknown as { cta_url?:  string | null }).cta_url  ?? null,
+                        }}
+                        onSaved={next => {
+                          setSections(prev => prev.map(s => s.id === sec.id ? { ...s, ...next } as typeof s : s));
+                        }}
+                      />
+                    )}
                     {selectedSection === sec.id && lessons.filter(l => l.section_id === sec.id).map(lesson => (
                       <div key={lesson.id}
                         onClick={() => openLesson(lesson)}
