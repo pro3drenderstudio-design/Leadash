@@ -82,7 +82,7 @@ function WorkspacesInner() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Workspaces</h1>
+          <h1 className="app-h1">Workspaces</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total workspaces</p>
         </div>
       </div>

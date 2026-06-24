@@ -353,7 +353,7 @@ function UsersPageInner() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Users</h1>
+          <h1 className="app-h1">Users</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total accounts</p>
         </div>
       </div>

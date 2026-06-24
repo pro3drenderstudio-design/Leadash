@@ -60,7 +60,7 @@ export default function AdminBetaPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">Beta Programme</h1>
+          <h1 className="app-h1">Beta Programme</h1>
           <p className="text-sm text-slate-400 dark:text-white/40 mt-0.5">Review and approve beta testing applications</p>
         </div>
         {pendingCount > 0 && (
