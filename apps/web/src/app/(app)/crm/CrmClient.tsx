@@ -9,6 +9,7 @@ import {
   setReminder, setScheduledReply, updateCrmLabels,
 } from "@/lib/outreach/api";
 import type { ConversationMessage } from "@/lib/outreach/api";
+import "@/v2-app/v2-app.css";
 import type { CrmUnmatchedRow } from "@/lib/outreach/api";
 import type { CrmThread, CrmStatus, OutreachCrmFilter, CrmNote } from "@/types/outreach";
 
@@ -763,6 +764,7 @@ export default function CrmClient() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
+    <div className="v2-app" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--app-bg)" }}>
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* Top nav: tabs + actions */}
@@ -1804,6 +1806,7 @@ export default function CrmClient() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

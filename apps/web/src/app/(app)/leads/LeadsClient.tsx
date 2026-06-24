@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getLists, createList, deleteList, importLeads, getVerifyPreview, updateListTags } from "@/lib/outreach/api";
 import { wsFetch } from "@/lib/workspace/client";
+import "@/v2-app/v2-app.css";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import type { OutreachList, CsvFieldMapping } from "@/types/outreach";
 
@@ -588,6 +589,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
   const poolBarColor = isOverPool ? "bg-red-500" : poolPct >= 90 ? "bg-amber-500" : "bg-orange-500";
 
   return (
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
 
       {/* Pool overage banner — shown when plan was downgraded below current usage */}
@@ -618,7 +620,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Leads Pool</h1>
+          <h1 className="app-h1">Leads pool</h1>
           <p className="text-white/40 text-sm mt-1">
             Your contact lists for outreach sequences.
             {!loading && totalLeads > 0 && (
@@ -1301,6 +1303,7 @@ export default function LeadsClient({ poolUsed = 0, poolMax = 0 }: { poolUsed?: 
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
