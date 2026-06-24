@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import TiptapEditor from "./TiptapEditor";
+import SortableList, { DragHandle } from "./SortableList";
 
 type Block = {
   id?: string;
@@ -92,25 +93,19 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
     setBlocks(bs => bs.filter(b => b.id !== id));
   }
 
-  async function moveBlock(idx: number, dir: -1 | 1) {
-    const target = idx + dir;
-    if (target < 0 || target >= blocks.length) return;
-    const next = [...blocks];
-    [next[idx], next[target]] = [next[target], next[idx]];
+  /** Persist a reordered list of blocks — optimistic local update first,
+   *  then PATCH every row carrying its new position. */
+  async function reorderBlocks(next: Block[]) {
     setBlocks(next);
-    // Persist new positions (best-effort, fire-and-forget for both)
-    await Promise.all([
-      fetch("/api/admin/academy/lesson-blocks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: next[idx].id, position: idx }),
-      }),
-      fetch("/api/admin/academy/lesson-blocks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: next[target].id, position: target }),
-      }),
-    ]);
+    await Promise.all(next.map((b, i) =>
+      b.id
+        ? fetch("/api/admin/academy/lesson-blocks", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: b.id, position: i }),
+          })
+        : Promise.resolve(),
+    ));
   }
 
   // ── Resources ───────────────────────────────────────────────────────────
@@ -206,49 +201,56 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
         {blocks.length === 0 ? (
           <p className="text-xs text-gray-500 italic">No blocks yet. Add a text/callout/code block to surface content below the video.</p>
         ) : (
-          <div className="space-y-2">
-            {blocks.map((b, i) => (
-              <div key={b.id ?? i} className={card}>
-                <div className="flex items-center justify-between mb-2">
-                  <select
-                    value={b.block_type}
-                    onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, block_type: e.target.value as Block["block_type"] } : x))}
-                    className={input}
-                    style={{ width: 110 }}
-                  >
-                    <option value="rich_text">Rich text</option>
-                    <option value="callout">Callout</option>
-                    <option value="code">Code</option>
-                  </select>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => moveBlock(i, -1)} disabled={i === 0} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-300 disabled:opacity-30">↑</button>
-                    <button onClick={() => moveBlock(i,  1)} disabled={i === blocks.length - 1} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-300 disabled:opacity-30">↓</button>
-                    <button onClick={() => saveBlock(b)}    className="px-2 py-0.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded">Save</button>
-                    <button onClick={() => b.id && deleteBlock(b.id)} className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300">Delete</button>
+          <SortableList<{ id: string; position: number; block_type: Block["block_type"]; content: string }>
+            items={blocks.filter((b): b is Block & { id: string } => !!b.id)}
+            onReorder={next => reorderBlocks(next)}
+            className="space-y-2"
+            renderItem={(b, handle) => {
+              const i = blocks.findIndex(x => x.id === b.id);
+              return (
+                <div className={card}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <DragHandle listeners={handle.listeners} label="Reorder block" />
+                      <select
+                        value={b.block_type}
+                        onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, block_type: e.target.value as Block["block_type"] } : x))}
+                        className={input}
+                        style={{ width: 110 }}
+                      >
+                        <option value="rich_text">Rich text</option>
+                        <option value="callout">Callout</option>
+                        <option value="code">Code</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => saveBlock(b)}    className="px-2 py-0.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded">Save</button>
+                      <button onClick={() => b.id && deleteBlock(b.id)} className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300">Delete</button>
+                    </div>
                   </div>
+                  {b.block_type === "rich_text" ? (
+                    <TiptapEditor
+                      value={b.content}
+                      onChange={html => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: html } : x))}
+                      placeholder="Paragraph text — use the toolbar above for formatting."
+                    />
+                  ) : (
+                    <textarea
+                      rows={b.block_type === "code" ? 5 : 4}
+                      value={b.content}
+                      onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: e.target.value } : x))}
+                      placeholder={
+                        b.block_type === "code"
+                          ? "// code"
+                          : "Highlighted note for students"
+                      }
+                      className={input + (b.block_type === "code" ? " font-mono" : "") + " resize-none"}
+                    />
+                  )}
                 </div>
-                {b.block_type === "rich_text" ? (
-                  <TiptapEditor
-                    value={b.content}
-                    onChange={html => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: html } : x))}
-                    placeholder="Paragraph text — use the toolbar above for formatting."
-                  />
-                ) : (
-                  <textarea
-                    rows={b.block_type === "code" ? 5 : 4}
-                    value={b.content}
-                    onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: e.target.value } : x))}
-                    placeholder={
-                      b.block_type === "code"
-                        ? "// code"
-                        : "Highlighted note for students"
-                    }
-                    className={input + (b.block_type === "code" ? " font-mono" : "") + " resize-none"}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+              );
+            }}
+          />
         )}
       </div>
 

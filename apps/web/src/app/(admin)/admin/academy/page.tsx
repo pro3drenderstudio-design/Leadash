@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import LessonContentEditor from "./LessonContentEditor";
 import CourseBannerEditor from "./CourseBannerEditor";
 import SectionSettingsEditor from "./SectionSettingsEditor";
+import SortableList, { DragHandle } from "./SortableList";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,36 @@ export default function AdminAcademyPage() {
     } else notify(res.error ?? "Error", false);
   }
 
+  /** Persist a reordered list of sections — optimistic local update first,
+   *  then fire one PATCH per row carrying the new position. */
+  async function reorderSections(next: Section[]) {
+    setSections(next);
+    await Promise.all(next.map((s, i) =>
+      fetch("/api/admin/academy/sections", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: s.id, position: i }),
+      }),
+    ));
+  }
+
+  /** Persist a reordered list of lessons inside one section. */
+  async function reorderLessons(sectionId: string, next: Lesson[]) {
+    // Rebuild the global lessons array — replace this section's lessons with
+    // the new order, keep everything else as-is.
+    setLessons(prev => {
+      const others = prev.filter(l => l.section_id !== sectionId);
+      return [...others, ...next.map((l, i) => ({ ...l, position: i }))];
+    });
+    await Promise.all(next.map((l, i) =>
+      fetch(`/api/admin/academy/lessons/${l.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position: i }),
+      }),
+    ));
+  }
+
   // ── Lesson actions ────────────────────────────────────────────────────────
 
   async function addLesson(type = "video") {
@@ -391,7 +422,40 @@ export default function AdminAcademyPage() {
   ];
 
   return (
-    <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
+    <div className="v2-app academy-admin" style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
+      {/* Scoped CSS overrides — maps the page's legacy gray/indigo Tailwind
+          classes to v2-app tokens without touching 80+ individual classNames.
+          Scoped to .academy-admin so we don't accidentally restyle other
+          admin pages that share these utilities. */}
+      <style>{`
+        .academy-admin .bg-gray-950   { background: var(--app-bg) !important; }
+        .academy-admin .bg-gray-900   { background: var(--app-bg-elevated) !important; }
+        .academy-admin .bg-gray-900\\/40,
+        .academy-admin .bg-gray-900\\/30,
+        .academy-admin .bg-gray-900\\/50 { background: var(--app-surface) !important; }
+        .academy-admin .bg-gray-800   { background: var(--app-surface-strong) !important; }
+        .academy-admin .hover\\:bg-gray-800:hover { background: var(--app-surface-strong) !important; }
+        .academy-admin .hover\\:bg-gray-700:hover { background: var(--app-surface-strong) !important; }
+        .academy-admin .hover\\:bg-gray-900:hover { background: var(--app-surface) !important; }
+        .academy-admin .border-gray-800 { border-color: var(--app-border) !important; }
+        .academy-admin .border-gray-700 { border-color: var(--app-border-strong) !important; }
+        .academy-admin .border-l-2.border-gray-700 { border-left-color: var(--app-border-strong) !important; }
+        .academy-admin .text-gray-200 { color: var(--app-text) !important; }
+        .academy-admin .text-gray-300 { color: var(--app-text) !important; }
+        .academy-admin .text-gray-400 { color: var(--app-text-muted) !important; }
+        .academy-admin .text-gray-500 { color: var(--app-text-quiet) !important; }
+        .academy-admin .text-gray-600 { color: var(--app-text-faint) !important; }
+        .academy-admin .hover\\:text-gray-200:hover { color: var(--app-text) !important; }
+        .academy-admin .hover\\:text-gray-300:hover { color: var(--app-text) !important; }
+        .academy-admin .bg-indigo-600, .academy-admin .hover\\:bg-indigo-500:hover { background: var(--app-accent) !important; }
+        .academy-admin .border-indigo-500 { border-color: var(--app-accent) !important; }
+        .academy-admin .text-indigo-300, .academy-admin .text-indigo-400 { color: var(--app-accent) !important; }
+        .academy-admin .bg-indigo-900\\/40 { background: var(--app-accent-soft) !important; }
+        .academy-admin .focus\\:border-indigo-500:focus { border-color: var(--app-accent) !important; }
+        /* Rounded surfaces — slightly tighter than legacy xl */
+        .academy-admin .rounded-xl { border-radius: var(--app-radius-lg) !important; }
+      `}</style>
+
       {/* Header */}
       <div style={{ borderBottom: "1px solid var(--app-border)", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
@@ -438,52 +502,69 @@ export default function AdminAcademyPage() {
                 </select>
               </div>
 
-              {/* Sections */}
+              {/* Sections — drag to reorder */}
               <div className="flex-1 overflow-y-auto">
-                {productSections.map(sec => (
-                  <div key={sec.id}>
-                    <div
-                      onClick={() => setSelectedSection(sec.id)}
-                      className={`flex items-center justify-between px-4 py-2.5 cursor-pointer group ${
-                        selectedSection === sec.id ? "bg-gray-800" : "hover:bg-gray-900"
-                      }`}>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 truncate">
-                        {sec.title}
-                      </span>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteSection(sec.id); }}
-                        className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 text-xs px-1">
-                        ✕
-                      </button>
-                    </div>
-                    {selectedSection === sec.id && (
-                      <SectionSettingsEditor
-                        sectionId={sec.id}
-                        initialCta={{
-                          text: (sec as unknown as { cta_text?: string | null }).cta_text ?? null,
-                          url:  (sec as unknown as { cta_url?:  string | null }).cta_url  ?? null,
-                        }}
-                        onSaved={next => {
-                          setSections(prev => prev.map(s => s.id === sec.id ? { ...s, ...next } as typeof s : s));
-                        }}
-                      />
-                    )}
-                    {selectedSection === sec.id && lessons.filter(l => l.section_id === sec.id).map(lesson => (
-                      <div key={lesson.id}
-                        onClick={() => openLesson(lesson)}
-                        className={`flex items-center gap-2 pl-8 pr-4 py-2 cursor-pointer text-sm group ${
-                          selectedLesson?.id === lesson.id ? "bg-indigo-900/40 text-indigo-300" : "hover:bg-gray-900 text-gray-300"
-                        }`}>
-                        <span className="text-xs opacity-50">
-                          {lesson.lesson_type === "video" ? "▶" : lesson.lesson_type === "text" ? "📝" : lesson.lesson_type === "live" ? "📡" : "📋"}
-                        </span>
-                        <span className="truncate flex-1">{lesson.title}</span>
-                        {!lesson.is_published && <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1 rounded">draft</span>}
-                        {lesson.mux_playback_id && <span className="text-[10px] text-emerald-500">●</span>}
+                <SortableList
+                  items={productSections}
+                  onReorder={reorderSections}
+                  renderItem={(sec, handle) => (
+                    <div>
+                      <div
+                        onClick={() => setSelectedSection(sec.id)}
+                        className={`flex items-center justify-between px-4 py-2.5 cursor-pointer group ${
+                          selectedSection === sec.id ? "bg-gray-800" : "hover:bg-gray-900"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <DragHandle listeners={handle.listeners} label="Reorder section" />
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 truncate">
+                            {sec.title}
+                          </span>
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteSection(sec.id); }}
+                          className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 text-xs px-1"
+                        >
+                          ✕
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                      {selectedSection === sec.id && (
+                        <SectionSettingsEditor
+                          sectionId={sec.id}
+                          initialCta={{
+                            text: (sec as unknown as { cta_text?: string | null }).cta_text ?? null,
+                            url:  (sec as unknown as { cta_url?:  string | null }).cta_url  ?? null,
+                          }}
+                          onSaved={next => {
+                            setSections(prev => prev.map(s => s.id === sec.id ? { ...s, ...next } as typeof s : s));
+                          }}
+                        />
+                      )}
+                      {selectedSection === sec.id && (
+                        <SortableList
+                          items={lessons.filter(l => l.section_id === sec.id)}
+                          onReorder={next => reorderLessons(sec.id, next)}
+                          renderItem={(lesson, lessonHandle) => (
+                            <div
+                              onClick={() => openLesson(lesson)}
+                              className={`flex items-center gap-2 pl-3 pr-4 py-2 cursor-pointer text-sm group ${
+                                selectedLesson?.id === lesson.id ? "bg-indigo-900/40 text-indigo-300" : "hover:bg-gray-900 text-gray-300"
+                              }`}
+                            >
+                              <DragHandle listeners={lessonHandle.listeners} label="Reorder lesson" />
+                              <span className="text-xs opacity-50">
+                                {lesson.lesson_type === "video" ? "▶" : lesson.lesson_type === "text" ? "📝" : lesson.lesson_type === "live" ? "📡" : "📋"}
+                              </span>
+                              <span className="truncate flex-1">{lesson.title}</span>
+                              {!lesson.is_published && <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1 rounded">draft</span>}
+                              {lesson.mux_playback_id && <span className="text-[10px] text-emerald-500">●</span>}
+                            </div>
+                          )}
+                        />
+                      )}
+                    </div>
+                  )}
+                />
               </div>
 
               {/* Add buttons */}
