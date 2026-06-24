@@ -142,7 +142,142 @@ function Notes({ lessonId, productId }: { lessonId: string; productId: string })
   );
 }
 
+// ─── Lesson block + resource views ───────────────────────────────────────────
+// Renders one authored content block under the video. `rich_text` is treated
+// as trusted HTML authored by an admin (RLS keeps writes admin-only). We do
+// not sanitize because the only path to creating these is the admin authoring
+// UI — if that ever changes, sanitize before insert at the API boundary.
+function LessonBlockView({ block }: { block: { block_type: "rich_text" | "callout" | "code"; content: string } }) {
+  if (block.block_type === "callout") {
+    return (
+      <div
+        style={{
+          padding: "14px 16px",
+          borderRadius: "var(--app-radius)",
+          border: "1px solid var(--app-accent-line)",
+          background: "var(--app-accent-soft)",
+          color: "var(--app-text)",
+          fontSize: 14,
+          lineHeight: 1.6,
+        }}
+      >
+        {block.content}
+      </div>
+    );
+  }
+  if (block.block_type === "code") {
+    return (
+      <pre
+        style={{
+          padding: "14px 16px",
+          borderRadius: "var(--app-radius)",
+          background: "var(--app-bg-elevated)",
+          border: "1px solid var(--app-border)",
+          color: "var(--app-text)",
+          fontSize: 13,
+          lineHeight: 1.55,
+          overflow: "auto",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        }}
+      >
+        <code>{block.content}</code>
+      </pre>
+    );
+  }
+  return (
+    <div
+      className="lesson-rich"
+      style={{ color: "var(--app-text)", fontSize: 14, lineHeight: 1.65 }}
+      dangerouslySetInnerHTML={{ __html: block.content }}
+    />
+  );
+}
+
+function LessonResourceRow({ resource }: {
+  resource: {
+    resource_type: "file" | "link";
+    label: string;
+    description: string | null;
+    url: string;
+    file_mime: string | null;
+    file_bytes: number | null;
+  };
+}) {
+  const isFile = resource.resource_type === "file";
+  const sizeLabel = resource.file_bytes
+    ? resource.file_bytes > 1024 * 1024
+      ? `${(resource.file_bytes / (1024 * 1024)).toFixed(1)} MB`
+      : `${(resource.file_bytes / 1024).toFixed(0)} KB`
+    : null;
+  return (
+    <a
+      href={resource.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      download={isFile ? undefined : undefined}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 14px",
+        borderRadius: "var(--app-radius)",
+        border: "1px solid var(--app-border)",
+        background: "var(--app-bg-elevated)",
+        textDecoration: "none",
+        transition: "border-color var(--app-dur) var(--app-ease)",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--app-border)"; }}
+    >
+      <span
+        style={{
+          width: 30, height: 30, borderRadius: 6,
+          background: "var(--app-surface)",
+          border: "1px solid var(--app-border)",
+          color: "var(--app-text-muted)",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {isFile ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.71"/>
+          </svg>
+        )}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>{resource.label}</p>
+        {resource.description && (
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>{resource.description}</p>
+        )}
+      </div>
+      {sizeLabel && (
+        <span style={{ fontSize: 11, color: "var(--app-text-quiet)", flexShrink: 0 }}>{sizeLabel}</span>
+      )}
+      <span aria-hidden style={{ color: "var(--app-text-quiet)", fontSize: 14, flexShrink: 0 }}>↗</span>
+    </a>
+  );
+}
+
 // ─── Main lesson viewer ───────────────────────────────────────────────────────
+
+type LessonBlock = { id: string; position: number; block_type: "rich_text" | "callout" | "code"; content: string };
+type LessonResource = {
+  id: string;
+  position: number;
+  resource_type: "file" | "link";
+  label: string;
+  description: string | null;
+  url: string;
+  file_mime: string | null;
+  file_bytes: number | null;
+};
 
 export default function LessonViewer() {
   const { product: slug, lessonId } = useParams<{ product: string; lessonId: string }>();
@@ -157,6 +292,8 @@ export default function LessonViewer() {
   const [completing,  setCompleting]  = useState(false);
   const [navOpen,     setNavOpen]     = useState(false);
   const [rightTab,    setRightTab]    = useState<"notes" | "discussion">("notes");
+  const [blocks,      setBlocks]      = useState<LessonBlock[]>([]);
+  const [resources,   setResources]   = useState<LessonResource[]>([]);
 
   useEffect(() => {
     wsGet<{ sections: SectionWithLessons[]; enrollment: AcademyEnrollment | null }>(
@@ -171,11 +308,20 @@ export default function LessonViewer() {
       }
     });
 
-    // Get Mux signed token
+    // Mux signed token (video playback)
     wsGet<{ token: string; playback_id: string }>(`/api/academy/lessons/${lessonId}/token`)
       .then(d => { setToken(d.token); setPlaybackId(d.playback_id); })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Lesson text blocks + resources (rendered under the video)
+    fetch(`/api/academy/lessons/${lessonId}/content`)
+      .then(r => r.ok ? r.json() : { blocks: [], resources: [] })
+      .then((d: { blocks?: LessonBlock[]; resources?: LessonResource[] }) => {
+        setBlocks(d.blocks ?? []);
+        setResources(d.resources ?? []);
+      })
+      .catch(() => { setBlocks([]); setResources([]); });
   }, [slug, lessonId, router]);
 
   const allLessons   = sections.flatMap(s => s.lessons);
@@ -283,6 +429,41 @@ export default function LessonViewer() {
               <h1 className="text-xl font-bold text-white mb-1">{lesson.title}</h1>
               {lesson.description && (
                 <p className="text-white/50 text-sm leading-relaxed mt-3 mb-5 whitespace-pre-wrap">{lesson.description}</p>
+              )}
+
+              {/* Lesson-level CTA — surfaced from academy_lessons.cta_text / cta_url */}
+              {(lesson as unknown as { cta_text?: string | null; cta_url?: string | null }).cta_text &&
+               (lesson as unknown as { cta_text?: string | null; cta_url?: string | null }).cta_url && (
+                <div style={{ marginBottom: 22 }}>
+                  <a
+                    href={(lesson as unknown as { cta_url: string }).cta_url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="app-btn app-btn-primary"
+                  >
+                    {(lesson as unknown as { cta_text: string }).cta_text}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M7 17L17 7"/><path d="M9 7h8v8"/>
+                    </svg>
+                  </a>
+                </div>
+              )}
+
+              {/* Rich-text blocks authored in the admin (migration 054) */}
+              {blocks.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 28 }}>
+                  {blocks.map(b => <LessonBlockView key={b.id} block={b} />)}
+                </div>
+              )}
+
+              {/* Resources — files + links attached to the lesson */}
+              {resources.length > 0 && (
+                <div style={{ marginBottom: 28 }}>
+                  <p className="app-eyebrow" style={{ marginBottom: 12 }}>Resources</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {resources.map(r => <LessonResourceRow key={r.id} resource={r} />)}
+                  </div>
+                </div>
               )}
 
               {/* Mark complete + navigation */}

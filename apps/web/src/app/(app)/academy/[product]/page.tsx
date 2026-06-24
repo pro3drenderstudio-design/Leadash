@@ -48,8 +48,29 @@ export default function CourseLandingPage() {
   const freePreviews = allLessons.filter(l => l.is_free_preview);
   const totalMins    = Math.round(allLessons.reduce((a, l) => a + (l.duration_secs ?? 0), 0) / 60);
 
+  // Banner fields come from migration 054 — surfaced via select("*") on
+  // /api/academy/products. Render the banner above the main split if any of
+  // the banner_* fields are set.
+  const p = product as unknown as {
+    banner_image_url?:  string | null;
+    banner_headline?:   string | null;
+    banner_sub?:        string | null;
+    banner_cta_text?:   string | null;
+    banner_cta_url?:    string | null;
+  };
+  const hasBanner = Boolean(p.banner_image_url || p.banner_headline || p.banner_sub || p.banner_cta_text);
+
   return (
     <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
+      {hasBanner && (
+        <CourseBanner
+          imageUrl={p.banner_image_url ?? null}
+          headline={p.banner_headline ?? null}
+          sub={p.banner_sub ?? null}
+          ctaText={p.banner_cta_text ?? null}
+          ctaUrl={p.banner_cta_url ?? null}
+        />
+      )}
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="grid lg:grid-cols-5 gap-10">
           {/* Left: course info */}
@@ -176,6 +197,97 @@ export default function CourseLandingPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Course banner — sits above the main split. If banner_image_url is set, the
+ * image fills the background with a dark gradient overlay; otherwise the
+ * banner is a clean accent-tinted strip with the headline + optional CTA.
+ *
+ * Authored via the banner editor in the admin academy panel; all fields are
+ * optional so authors can use just the headline + CTA without an image.
+ */
+function CourseBanner({
+  imageUrl, headline, sub, ctaText, ctaUrl,
+}: {
+  imageUrl: string | null;
+  headline: string | null;
+  sub:      string | null;
+  ctaText:  string | null;
+  ctaUrl:   string | null;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        borderBottom: "1px solid var(--app-border)",
+        background: imageUrl ? `#000` : "var(--app-bg-elevated)",
+        minHeight: 220,
+        overflow: "hidden",
+      }}
+    >
+      {imageUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt=""
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }}
+          />
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(180deg, rgba(7,7,10,0.45) 0%, rgba(7,7,10,0.92) 100%)",
+            }}
+          />
+        </>
+      )}
+      <div
+        style={{
+          position: "relative",
+          maxWidth: 1024,
+          margin: "0 auto",
+          padding: "44px 24px",
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1, maxWidth: 640 }}>
+          {headline && (
+            <h2
+              style={{
+                fontSize: 32,
+                letterSpacing: "-0.025em",
+                fontWeight: 500,
+                color: "var(--app-text)",
+                lineHeight: 1.15,
+                marginBottom: sub ? 12 : 0,
+              }}
+            >
+              {headline}
+            </h2>
+          )}
+          {sub && (
+            <p style={{ color: "var(--app-text-muted)", fontSize: 15, lineHeight: 1.55, maxWidth: 560 }}>
+              {sub}
+            </p>
+          )}
+        </div>
+        {ctaText && ctaUrl && (
+          <a href={ctaUrl} target="_blank" rel="noreferrer noopener" className="app-btn app-btn-primary app-btn-lg">
+            {ctaText}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M7 17L17 7"/><path d="M9 7h8v8"/>
+            </svg>
+          </a>
+        )}
       </div>
     </div>
   );
