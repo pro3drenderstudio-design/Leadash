@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getWorkspaceContext } from "@/lib/workspace/context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import Sidebar from "@/components/Sidebar";
+import Sidebar from "@/components/SidebarV2";
 import AppHeader from "@/components/AppHeader";
 import SectionTabs from "@/components/SectionTabs";
 import WorkspaceProvider from "@/components/WorkspaceProvider";

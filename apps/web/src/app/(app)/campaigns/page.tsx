@@ -5,15 +5,16 @@ import CampaignsClient from "./CampaignsClient";
 
 export default async function CampaignsPage() {
   const ctx = await getWorkspaceContext();
-  const ws = ctx?.workspace as { plan_id: string; trial_ends_at: string | null } | null;
+  const ws = ctx?.workspace as { plan_id: string } | null;
 
+  // Trial gate removed — campaign access is bounded only by the plan's
+  // `can_run_campaigns` flag now.
   const planId = ws?.plan_id ?? "free";
-  const trialExpired = planId === "free" && !!ws?.trial_ends_at && new Date(ws.trial_ends_at) < new Date();
   const plan = await getPlanById(planId);
-  const canRunCampaigns = !trialExpired && plan.can_run_campaigns;
+  const canRunCampaigns = plan.can_run_campaigns;
 
   return (
-    <Suspense fallback={<div className="p-6 text-white/40">Loading…</div>}>
+    <Suspense fallback={<div style={{ padding: 24, color: "var(--app-text-muted)" }}>Loading…</div>}>
       <CampaignsClient canRunCampaigns={canRunCampaigns} />
     </Suspense>
   );

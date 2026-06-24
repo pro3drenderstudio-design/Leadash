@@ -1,8 +1,38 @@
+/**
+ * Dashboard — restyled to v2-app.
+ *
+ * Server-fetched stats and recent-replies stream preserved exactly. The
+ * data layer (getStats) reads the same rows in the same order; only the
+ * presentation switched to v2-app primitives (Card, Badge, Icon).
+ *
+ * Layout intent:
+ *   - Header row with workspace greeting + quick-action chips.
+ *   - 5-card stat strip (active sequences, inboxes, sent, open rate, replies).
+ *   - 3/2 split: 30-day chart on the left, recent replies queue on the right.
+ *
+ * Existing chart component (DashboardChart) is kept as-is — it has its own
+ * deliberate colour ramp tuned for the data, which we don't want to lose
+ * by reskinning at this layer.
+ */
+
 import { getWorkspaceContext } from "@/lib/workspace/context";
 import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import DashboardChart, { type DailyPoint } from "./DashboardChart";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Mail01Icon,
+  Inbox01Icon,
+  ChartBarLineIcon,
+  EyeIcon,
+  Note01Icon,
+  PlusSignIcon,
+  UserSearch01Icon,
+  CustomerService01Icon,
+  ArrowRight01Icon,
+} from "@/v2-app/icons";
+import "@/v2-app/v2-app.css";
 
 interface RecentThread {
   enrollment_id: string;
@@ -13,14 +43,14 @@ interface RecentThread {
   replied_at:    string | null;
 }
 
-const CRM_STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  neutral:        { label: "Neutral",        cls: "text-white/40 bg-white/5" },
-  interested:     { label: "Interested",     cls: "text-emerald-400 bg-emerald-500/10" },
-  meeting_booked: { label: "Meeting Booked", cls: "text-orange-400 bg-orange-500/10" },
-  won:            { label: "Won",            cls: "text-yellow-400 bg-yellow-500/10" },
-  not_interested: { label: "Not Interested", cls: "text-red-400 bg-red-500/10" },
-  ooo:            { label: "OOO",            cls: "text-orange-400 bg-orange-500/10" },
-  follow_up:      { label: "Follow Up",      cls: "text-violet-400 bg-violet-500/10" },
+const CRM_STATUS_TONE: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" | "accent" | "info" }> = {
+  neutral:        { label: "Neutral",        tone: "default" },
+  interested:     { label: "Interested",     tone: "success" },
+  meeting_booked: { label: "Meeting booked", tone: "accent"  },
+  won:            { label: "Won",            tone: "warning" },
+  not_interested: { label: "Not interested", tone: "danger"  },
+  ooo:            { label: "OOO",            tone: "warning" },
+  follow_up:      { label: "Follow up",      tone: "info"    },
 };
 
 function timeAgo(iso: string): string {
@@ -58,7 +88,6 @@ async function getStats(workspaceId: string) {
     db.from("outreach_replies").select("received_at")
       .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo)
       .not("enrollment_id", "is", null),
-    // Recent replies joined to enrollment → lead + campaign in one query
     db.from("outreach_replies")
       .select(`
         from_name, body_text, received_at, ai_category,
@@ -94,7 +123,6 @@ async function getStats(workspaceId: string) {
     chartFrom += CHART_PAGE;
   }
 
-  // Build chart
   const dayMap = new Map<string, DailyPoint>();
   for (let i = 29; i >= 0; i--) {
     const d   = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
@@ -113,11 +141,10 @@ async function getStats(workspaceId: string) {
     const point = dayMap.get(key);
     if (point) point.replies++;
   }
-  const chartData   = [...dayMap.values()];
+  const chartData    = [...dayMap.values()];
   const firstNonZero = chartData.findIndex(d => d.sent > 0 || d.opened > 0 || d.replies > 0);
-  const trimmed     = firstNonZero > 0 ? chartData.slice(firstNonZero) : chartData;
+  const trimmed      = firstNonZero > 0 ? chartData.slice(firstNonZero) : chartData;
 
-  // Map flat reply rows into RecentThread shape — already sorted by received_at desc
   type RawReply = {
     from_name: string | null;
     body_text: string | null;
@@ -160,158 +187,198 @@ export default async function DashboardPage() {
   const stats     = await getStats(ctx.workspaceId);
   const workspace = ctx.workspace as { name: string; sends_this_month: number; max_monthly_sends: number; plan_id: string };
 
-  const sendUsagePct = workspace.max_monthly_sends > 0
-    ? Math.min(100, Math.round((workspace.sends_this_month / workspace.max_monthly_sends) * 100))
-    : 0;
-
-  const cards = [
-    { label: "Active Sequences", value: stats.activeCampaigns,             color: "text-orange-400",   glow: "rgba(59,130,246,0.15)",  icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",  href: "/campaigns" },
-    { label: "Active Inboxes",   value: stats.activeInboxes,               color: "text-emerald-400", glow: "rgba(16,185,129,0.15)",  icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4", href: "/inboxes" },
-    { label: "Sent This Month",  value: stats.sentThisMonth.toLocaleString(), color: "text-violet-400", glow: "rgba(139,92,246,0.15)", icon: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8",  href: "/campaigns" },
-    { label: "Open Rate",        value: `${stats.openRate}%`,               color: "text-amber-400",   glow: "rgba(245,158,11,0.15)",  icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z", href: "/campaigns" },
-    { label: "Replies",          value: stats.replies,                       color: "text-pink-400",    glow: "rgba(236,72,153,0.15)",  icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", href: "/crm" },
+  const STAT_CARDS = [
+    { label: "Active sequences", value: stats.activeCampaigns.toString(),         icon: Mail01Icon,        href: "/campaigns" },
+    { label: "Active inboxes",   value: stats.activeInboxes.toString(),           icon: Inbox01Icon,       href: "/inboxes" },
+    { label: "Sent this month",  value: stats.sentThisMonth.toLocaleString(),     icon: ChartBarLineIcon,  href: "/campaigns" },
+    { label: "Open rate",        value: `${stats.openRate}%`,                     icon: EyeIcon,           href: "/campaigns" },
+    { label: "Replies",          value: stats.replies.toLocaleString(),           icon: Note01Icon,        href: "/crm" },
   ];
 
-  const quickActions = [
-    { label: "New Sequence",    href: "/campaigns/new",      icon: "M12 4v16m8-8H4",                  color: "text-orange-400",   bg: "bg-orange-500/10 hover:bg-orange-400/15 border-orange-500/20" },
-    { label: "Add Inbox",       href: "/inboxes/new",        icon: "M12 4v16m8-8H4",                  color: "text-emerald-400", bg: "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/20" },
-    { label: "Lead Campaign",   href: "/lead-campaigns",     icon: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z", color: "text-amber-400", bg: "bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/20" },
-    { label: "CRM Inbox",       href: "/crm",                icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", color: "text-pink-400", bg: "bg-pink-500/10 hover:bg-pink-500/15 border-pink-500/20" },
+  const QUICK_ACTIONS = [
+    { label: "New sequence",   href: "/campaigns/new",  icon: PlusSignIcon },
+    { label: "Add inbox",      href: "/inboxes/new",    icon: Inbox01Icon },
+    { label: "Lead campaign",  href: "/lead-campaigns", icon: UserSearch01Icon },
+    { label: "CRM inbox",      href: "/crm",            icon: CustomerService01Icon },
   ];
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1400px] mx-auto space-y-5">
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
 
-      {/* Greeting + Quick actions */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Dashboard</h1>
-          <p className="text-white/35 text-sm mt-0.5">
-            Welcome back to <span className="text-white/55">{workspace.name}</span>
-          </p>
-        </div>
-        {/* Quick actions — scrollable on mobile */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 flex-shrink-0">
-          {quickActions.map(a => (
+        {/* Greeting + quick actions */}
+        <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <h1 className="app-h1">Dashboard</h1>
+            <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+              Welcome back to <span style={{ color: "var(--app-text)" }}>{workspace.name}</span>
+            </p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {QUICK_ACTIONS.map(a => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className="app-btn app-btn-secondary app-btn-sm"
+              >
+                <HugeiconsIcon icon={a.icon} size={13} strokeWidth={1.5} />
+                <span>{a.label}</span>
+              </Link>
+            ))}
+          </div>
+        </header>
+
+        {/* Stat strip */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+            gap: 12,
+          }}
+          className="dash-stats"
+        >
+          {STAT_CARDS.map(c => (
             <Link
-              key={a.href}
-              href={a.href}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${a.color} ${a.bg}`}
+              key={c.label}
+              href={c.href}
+              className="app-card app-card-tight app-card-interactive"
+              style={{
+                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                minHeight: 96,
+              }}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={a.icon} />
-              </svg>
-              {a.label}
+              <div
+                style={{
+                  width: 28, height: 28, borderRadius: 6,
+                  background: "var(--app-surface)",
+                  border: "1px solid var(--app-border)",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--app-text-muted)",
+                }}
+              >
+                <HugeiconsIcon icon={c.icon} size={15} strokeWidth={1.5} />
+              </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+                <p style={{ fontSize: 11, color: "var(--app-text-quiet)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
+                  {c.label}
+                </p>
+                <p style={{ fontSize: 24, color: "var(--app-text)", fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                  {c.value}
+                </p>
+              </div>
             </Link>
           ))}
         </div>
-      </div>
 
-      {/* Stat cards — 2 cols mobile, 3 cols sm, 5 cols lg; last card spans 2 on xs to avoid orphan */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
-        {cards.map(c => (
-          <Link
-            key={c.label}
-            href={c.href}
-            className="group relative rounded-xl p-4 flex flex-col gap-3 overflow-hidden transition-all hover:scale-[1.02] hover:bg-white/5"
-            style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}
-          >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center relative flex-shrink-0" style={{ background: "var(--card-icon-bg)" }}>
-              <svg className={`w-4 h-4 ${c.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={c.icon} />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-white/35 leading-tight">{c.label}</p>
-              <p className={`text-2xl font-bold mt-0.5 tabular-nums ${c.color}`}>{c.value}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+        {/* Chart + recent replies */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)", gap: 16 }} className="dash-split">
 
-      {/* Main body: chart + activity side-by-side */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-
-        {/* Left: chart */}
-        <div className="lg:col-span-3">
-          <div className="rounded-xl p-4 sm:p-5 h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className="flex items-center justify-between mb-5">
+          {/* Chart */}
+          <div className="app-card" style={{ padding: 20 }}>
+            <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
               <div>
-                <h2 className="text-sm font-semibold text-white">Email Activity</h2>
-                <p className="text-white/35 text-xs mt-0.5">Sends, opens &amp; replies — last 30 days</p>
+                <h2 className="app-h3">Email activity</h2>
+                <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>
+                  Sends, opens &amp; replies — last 30 days
+                </p>
               </div>
-              <Link href="/campaigns" className="text-xs text-white/30 hover:text-white/60 transition-colors whitespace-nowrap ml-4">
-                View sequences →
+              <Link
+                href="/campaigns"
+                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
+                View sequences <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.6} />
               </Link>
-            </div>
+            </header>
             <DashboardChart data={stats.chartData} />
           </div>
-        </div>
 
-        {/* Right: Recent Activity */}
-        <div className="lg:col-span-2">
-          <div className="rounded-xl overflow-hidden h-full" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className="px-4 sm:px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--card-border)" }}>
+          {/* Recent replies */}
+          <div className="app-card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
+            <header style={{ padding: "16px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <h2 className="text-sm font-semibold text-white">Recent Replies</h2>
-                <p className="text-white/35 text-xs mt-0.5">Latest CRM conversations</p>
+                <h2 className="app-h3">Recent replies</h2>
+                <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>Latest CRM threads</p>
               </div>
-              <Link href="/crm" className="text-xs text-white/30 hover:text-white/60 transition-colors whitespace-nowrap ml-4">
-                Open CRM →
+              <Link
+                href="/crm"
+                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
+                Open CRM <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.6} />
               </Link>
-            </div>
+            </header>
 
             {stats.recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 px-5 text-center">
-                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-3">
-                  <svg className="w-5 h-5 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+              <div className="app-empty">
+                <div className="app-empty-icon">
+                  <HugeiconsIcon icon={Note01Icon} size={26} strokeWidth={1.4} />
                 </div>
-                <p className="text-white/25 text-sm">No replies yet</p>
-                <p className="text-white/15 text-xs mt-1">Replies will appear here once prospects respond</p>
+                <p className="app-empty-title">No replies yet</p>
+                <p className="app-empty-body">Replies will show up here the moment prospects respond.</p>
               </div>
             ) : (
-              <div className="divide-y divide-white/5">
-                {stats.recentActivity.map(t => {
-                  const lead    = t.lead;
-                  const name    = lead ? [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.email.split("@")[0] : "Unknown";
-                  const initials = name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
-                  const status  = CRM_STATUS_STYLE[t.crm_status] ?? CRM_STATUS_STYLE.neutral;
-                  const preview = t.latest_reply?.body_text?.replace(/\s+/g, " ").trim().slice(0, 80) ?? "";
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {stats.recentActivity.map((t, i) => {
+                  const lead     = t.lead;
+                  const fullName = lead
+                    ? [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.email.split("@")[0]
+                    : "Unknown";
+                  const initials = fullName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+                  const status   = CRM_STATUS_TONE[t.crm_status] ?? CRM_STATUS_TONE.neutral;
+                  const preview  = t.latest_reply?.body_text?.replace(/\s+/g, " ").trim().slice(0, 80) ?? "";
 
                   return (
                     <Link
                       key={t.enrollment_id}
                       href={`/crm?thread=${t.enrollment_id}`}
-                      className="flex items-start gap-3 px-4 py-3.5 hover:bg-white/4 transition-colors group"
-                      style={{ borderColor: "var(--card-border)" }}
+                      style={{
+                        padding: "14px 20px",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        borderTop: i === 0 ? "none" : "1px solid var(--app-border)",
+                        textDecoration: "none",
+                        transition: "background var(--app-dur-fast) var(--app-ease)",
+                      }}
+                      className="dash-reply-row"
                     >
-                      {/* Avatar */}
                       <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white/80 flex-shrink-0 mt-0.5"
-                        style={{ background: "var(--avatar-bg)" }}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8,
+                          background: "var(--app-surface-strong)",
+                          border: "1px solid var(--app-border)",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          color: "var(--app-text)", fontWeight: 500, fontSize: 12, letterSpacing: "-0.01em",
+                          flexShrink: 0,
+                        }}
                       >
                         {initials}
                       </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-white/80 truncate group-hover:text-white transition-colors">{name}</p>
-                          <span className="text-[10px] text-white/25 flex-shrink-0">{t.replied_at ? timeAgo(t.replied_at) : ""}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 13, color: "var(--app-text)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {fullName}
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--app-text-quiet)", flexShrink: 0 }}>
+                            {t.replied_at ? timeAgo(t.replied_at) : ""}
+                          </span>
                         </div>
                         {lead?.company && (
-                          <p className="text-xs text-white/30 truncate">{lead.company}</p>
+                          <p style={{ fontSize: 11, color: "var(--app-text-quiet)", marginTop: 1 }}>{lead.company}</p>
                         )}
                         {preview && (
-                          <p className="text-xs text-white/40 mt-1 leading-relaxed line-clamp-2">{preview}{preview.length >= 80 ? "…" : ""}</p>
+                          <p style={{ fontSize: 12, color: "var(--app-text-muted)", lineHeight: 1.45, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {preview}{preview.length >= 80 ? "…" : ""}
+                          </p>
                         )}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${status.cls}`}>
-                            {status.label}
-                          </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                          <span className={`app-badge app-badge-${status.tone}`}>{status.label}</span>
                           {t.campaign && (
-                            <span className="text-[10px] text-white/20 truncate">{t.campaign.name}</span>
+                            <span style={{ fontSize: 10, color: "var(--app-text-quiet)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.campaign.name}
+                            </span>
                           )}
                         </div>
                       </div>
@@ -323,6 +390,15 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 960px) {
+          .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .dash-stats > *:last-child { grid-column: span 2; }
+          .dash-split { grid-template-columns: minmax(0, 1fr); }
+        }
+        .dash-reply-row:hover { background: var(--app-surface); }
+      `}</style>
     </div>
   );
 }
