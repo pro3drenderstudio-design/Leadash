@@ -522,7 +522,7 @@ export default function PostalNodesPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white/90">SMTP Nodes</h1>
+          <h1 className="app-h1">SMTP Nodes</h1>
           <p className="text-sm text-slate-400 dark:text-white/30 mt-0.5">
             Postal VPS nodes in the sending pool · 150 inboxes/node (shared) · 100 inboxes/node (dedicated)
           </p>

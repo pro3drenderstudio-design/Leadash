@@ -208,7 +208,7 @@ export default function SystemPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">System Health</h1>
+          <h1 className="app-h1">System Health</h1>
           {lastRefresh && (
             <p className="text-sm text-slate-400 dark:text-white/30 mt-0.5">
               Last refreshed {lastRefresh.toLocaleTimeString()} · auto-updates every 30s

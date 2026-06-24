@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminSidebar from "@/components/admin/AdminSidebarV2";
+import "@/v2-app/v2-app.css";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import { resolveModules, type AdminModuleKey } from "@/lib/admin/modules";
 
@@ -33,7 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const modules: AdminModuleKey[] = Array.from(resolveModules(admin.role as string, customModules));
 
   return (
-    <>
+    <div className="v2-app" style={{ background: "var(--app-bg)" }}>
     <ImpersonationBanner />
     <div className="flex h-screen overflow-hidden">
       <AdminSidebar
@@ -42,11 +43,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         adminModules={modules}
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f1117] pt-12 lg:pt-0">
+        <main className="flex-1 overflow-y-auto pt-12 lg:pt-0" style={{ background: "var(--app-bg)" }}>
           {children}
         </main>
       </div>
     </div>
-    </>
+    </div>
   );
 }

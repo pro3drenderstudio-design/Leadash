@@ -259,7 +259,7 @@ function DedicatedIpInner() {
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dedicated IPs</h1>
+        <h1 className="app-h1">Dedicated IPs</h1>
         <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total subscriptions · ₦78,400/mo (~$49)</p>
       </div>
 

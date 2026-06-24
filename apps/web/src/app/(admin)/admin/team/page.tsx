@@ -315,7 +315,7 @@ export default function AdminTeamPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Team</h1>
+        <h1 className="app-h1">Admin Team</h1>
         <p className="text-sm text-slate-500 dark:text-white/40 mt-1">
           Manage who has access to the Leadash admin panel and what each member can see.
         </p>

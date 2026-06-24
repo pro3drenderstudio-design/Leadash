@@ -121,7 +121,7 @@ function CampaignsInner() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Lead Campaigns</h1>
+          <h1 className="app-h1">Lead Campaigns</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total campaigns</p>
         </div>
       </div>

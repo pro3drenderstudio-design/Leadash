@@ -99,7 +99,7 @@ export default function AdminDashboard() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Dashboard</h1>
+        <h1 className="app-h1">Admin Dashboard</h1>
         <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">
           {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>

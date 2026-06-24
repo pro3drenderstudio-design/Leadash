@@ -171,7 +171,7 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white/90">Notifications</h1>
+          <h1 className="app-h1">Notifications</h1>
           {(data?.unread ?? 0) > 0 && (
             <p className="text-sm text-red-500 font-medium mt-0.5">{data!.unread} unread</p>
           )}

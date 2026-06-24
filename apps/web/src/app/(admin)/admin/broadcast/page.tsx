@@ -197,7 +197,7 @@ export default function BroadcastPage() {
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Broadcast Email</h1>
+        <h1 className="app-h1">Broadcast Email</h1>
         <p className="text-sm text-slate-400 dark:text-white/40 mt-1">Send an email to all users or a filtered subset via Resend.</p>
       </div>
 

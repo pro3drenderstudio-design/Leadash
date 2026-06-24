@@ -70,7 +70,7 @@ function SupportInner() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Support Tickets</h1>
+          <h1 className="app-h1">Support Tickets</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">
             {total.toLocaleString()} total · {openCount > 0 && <span className="text-orange-500 font-semibold">{openCount} open on this page</span>}
           </p>

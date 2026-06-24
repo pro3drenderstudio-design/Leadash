@@ -71,7 +71,7 @@ export default function AutomationsPage() {
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Automations</h1>
+          <h1 className="app-h1">Automations</h1>
           <p className="text-sm text-slate-400 dark:text-white/40 mt-0.5">
             Visual automation flows triggered by funnel events.
           </p>

@@ -198,7 +198,7 @@ export default function FunnelSettingsPage() {
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Funnel Settings</h1>
+        <h1 className="app-h1">Funnel Settings</h1>
         <p className="text-sm text-slate-400 dark:text-white/40 mt-0.5">
           Configure the Leadash × Learn By Mizark course funnel.
         </p>

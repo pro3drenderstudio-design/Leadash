@@ -203,7 +203,7 @@ export default function SettingsPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Platform Settings</h1>
+        <h1 className="app-h1">Platform Settings</h1>
         <p className="text-sm text-slate-400 dark:text-white/40 mt-0.5">Global configuration for all workspaces.</p>
       </div>
 

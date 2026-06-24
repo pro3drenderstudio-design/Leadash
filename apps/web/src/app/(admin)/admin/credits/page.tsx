@@ -102,7 +102,7 @@ function CreditsInner() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Credit Ledger</h1>
+        <h1 className="app-h1">Credit Ledger</h1>
         <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} transactions</p>
       </div>
 
