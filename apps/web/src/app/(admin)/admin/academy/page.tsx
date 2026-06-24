@@ -4,8 +4,28 @@ import LessonContentEditor from "./LessonContentEditor";
 import CourseBannerEditor from "./CourseBannerEditor";
 import SectionSettingsEditor from "./SectionSettingsEditor";
 import SortableList, { DragHandle } from "./SortableList";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  PlusSignIcon,
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+  PlayCircleIcon,
+  DocumentValidationIcon,
+  Calendar03Icon,
+  PencilEdit02Icon,
+  Delete02Icon,
+  Tag01Icon,
+  UserMultipleIcon,
+  Settings02Icon,
+  ImageAdd02Icon,
+  BookOpen02Icon,
+  CreditCardIcon,
+  LockedIcon,
+  GlobeIcon,
+  Video01Icon,
+} from "@hugeicons/core-free-icons";
 
 interface Product {
   id: string; slug: string; name: string; price_ngn: number;
@@ -39,14 +59,11 @@ interface DiscountCode {
   discount_value: number; max_uses: number | null; uses_count: number;
   expires_at: string | null; is_active: boolean;
 }
-interface WorkspaceOption {
-  id: string; name: string;
-}
+interface WorkspaceOption { id: string; name: string; }
 
-type Tab = "builder" | "cohorts" | "enrollments" | "codes" | "products" | "access";
+type TopNav = "courses" | "cohorts" | "enrollments" | "codes" | "access";
+type CourseView = "curriculum" | "details" | "pricing" | "settings";
 type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) { return `₦${n.toLocaleString("en-NG")}`; }
 function dur(s: number | null) {
@@ -54,20 +71,26 @@ function dur(s: number | null) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+const LESSON_ICON: Record<string, typeof PlayCircleIcon> = {
+  video:      PlayCircleIcon,
+  text:       DocumentValidationIcon,
+  live:       Video01Icon,
+  assignment: BookOpen02Icon,
+};
 
 export default function AdminAcademyPage() {
-  const [tab, setTab]               = useState<Tab>("builder");
-  const [products, setProducts]     = useState<Product[]>([]);
-  const [sections, setSections]     = useState<Section[]>([]);
-  const [lessons, setLessons]       = useState<Lesson[]>([]);
-  const [cohorts, setCohorts]       = useState<Cohort[]>([]);
+  const [top, setTop]                 = useState<TopNav>("courses");
+  const [products, setProducts]       = useState<Product[]>([]);
+  const [sections, setSections]       = useState<Section[]>([]);
+  const [lessons, setLessons]         = useState<Lesson[]>([]);
+  const [cohorts, setCohorts]         = useState<Cohort[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [codes, setCodes]           = useState<DiscountCode[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [msg, setMsg]               = useState<{ text: string; ok: boolean } | null>(null);
+  const [codes, setCodes]             = useState<DiscountCode[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [msg, setMsg]                 = useState<{ text: string; ok: boolean } | null>(null);
 
-  const [selectedProduct, setSelectedProduct] = useState<string>("");
+  const [openProduct,    setOpenProduct]    = useState<string | null>(null);
+  const [courseView,     setCourseView]     = useState<CourseView>("curriculum");
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [selectedLesson,  setSelectedLesson]  = useState<Lesson | null>(null);
   const [editingLesson,   setEditingLesson]   = useState<Partial<Lesson>>({});
@@ -76,7 +99,6 @@ export default function AdminAcademyPage() {
   const [uploadPct,   setUploadPct]   = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── Access / coming-soon state ─────────────────────────────────────────────
   const [comingSoon, setComingSoon]         = useState<{ enabled: boolean; beta_workspaces: string[] } | null>(null);
   const [allWorkspaces, setAllWorkspaces]   = useState<WorkspaceOption[]>([]);
   const [wsSearch,     setWsSearch]         = useState("");
@@ -86,8 +108,6 @@ export default function AdminAcademyPage() {
     setMsg({ text, ok });
     setTimeout(() => setMsg(null), 3500);
   };
-
-  // ── Load ──────────────────────────────────────────────────────────────────
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -103,17 +123,11 @@ export default function AdminAcademyPage() {
       setEnrollments(adminRes.enrollments ?? []);
       setCodes(codesRes.codes ?? []);
       if (wsRes.workspaces) setAllWorkspaces(wsRes.workspaces.map((w: WorkspaceOption) => ({ id: w.id, name: w.name })));
-
-      if (!selectedProduct && adminRes.products?.length) {
-        setSelectedProduct(adminRes.products[0].id);
-      }
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [selectedProduct]);
+  }, []);
 
-  // Coming-soon loaded separately with AbortController so StrictMode double-mount
-  // doesn't race against a just-saved value.
   useEffect(() => {
     const ac = new AbortController();
     fetch("/api/admin/academy/coming-soon", { signal: ac.signal })
@@ -127,9 +141,7 @@ export default function AdminAcademyPage() {
     const ac = new AbortController();
     load(ac.signal);
     return () => ac.abort();
-  }, []);
-
-  // ── Access actions ─────────────────────────────────────────────────────────
+  }, [load]);
 
   async function saveComingSoon(next: { enabled: boolean; beta_workspaces: string[] }) {
     setAccessSaving(true);
@@ -163,29 +175,30 @@ export default function AdminAcademyPage() {
     saveComingSoon({ ...comingSoon, beta_workspaces: comingSoon.beta_workspaces.filter(w => w !== id) });
   }
 
-  // Load sections+lessons when product changes
   useEffect(() => {
-    if (!selectedProduct) return;
+    if (!openProduct) {
+      setSections([]); setLessons([]); setSelectedSection(""); setSelectedLesson(null);
+      return;
+    }
     Promise.all([
-      fetch(`/api/admin/academy/sections?product_id=${selectedProduct}`).then(r => r.json()),
-      fetch(`/api/admin/academy/lessons?product_id=${selectedProduct}`).then(r => r.json()),
+      fetch(`/api/admin/academy/sections?product_id=${openProduct}`).then(r => r.json()),
+      fetch(`/api/admin/academy/lessons?product_id=${openProduct}`).then(r => r.json()),
     ]).then(([sRes, lRes]) => {
       setSections(sRes.sections ?? []);
       setLessons(lRes.lessons ?? []);
       setSelectedSection(sRes.sections?.[0]?.id ?? "");
       setSelectedLesson(null);
     });
-  }, [selectedProduct]);
-
-  // ── Section actions ───────────────────────────────────────────────────────
+  }, [openProduct]);
 
   async function addSection() {
+    if (!openProduct) return;
     const title = prompt("Section title:");
     if (!title) return;
     const res = await fetch("/api/admin/academy/sections", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: selectedProduct, title }),
+      body: JSON.stringify({ product_id: openProduct, title }),
     }).then(r => r.json());
     if (res.section) {
       setSections(s => [...s, res.section]);
@@ -205,8 +218,6 @@ export default function AdminAcademyPage() {
     } else notify(res.error ?? "Error", false);
   }
 
-  /** Persist a reordered list of sections — optimistic local update first,
-   *  then fire one PATCH per row carrying the new position. */
   async function reorderSections(next: Section[]) {
     setSections(next);
     await Promise.all(next.map((s, i) =>
@@ -218,10 +229,7 @@ export default function AdminAcademyPage() {
     ));
   }
 
-  /** Persist a reordered list of lessons inside one section. */
   async function reorderLessons(sectionId: string, next: Lesson[]) {
-    // Rebuild the global lessons array — replace this section's lessons with
-    // the new order, keep everything else as-is.
     setLessons(prev => {
       const others = prev.filter(l => l.section_id !== sectionId);
       return [...others, ...next.map((l, i) => ({ ...l, position: i }))];
@@ -235,8 +243,6 @@ export default function AdminAcademyPage() {
     ));
   }
 
-  // ── Lesson actions ────────────────────────────────────────────────────────
-
   async function addLesson(type = "video") {
     if (!selectedSection) return notify("Select a section first", false);
     const title = prompt(`Lesson title (${type}):`);
@@ -244,7 +250,7 @@ export default function AdminAcademyPage() {
     const res = await fetch("/api/admin/academy/lessons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section_id: selectedSection, product_id: selectedProduct, title, lesson_type: type }),
+      body: JSON.stringify({ section_id: selectedSection, product_id: openProduct, title, lesson_type: type }),
     }).then(r => r.json());
     if (res.lesson) {
       setLessons(l => [...l, res.lesson]);
@@ -285,8 +291,6 @@ export default function AdminAcademyPage() {
     } else notify(res.error ?? "Error", false);
   }
 
-  // ── Mux video upload ─────────────────────────────────────────────────────
-
   async function handleVideoUpload(file: File) {
     if (!selectedLesson) return;
     setUploadState("uploading");
@@ -303,7 +307,6 @@ export default function AdminAcademyPage() {
     xhr.onload = async () => {
       setUploadPct(100);
       setUploadState("processing");
-      // Poll until Mux processes the asset
       let attempts = 0;
       const poll = async () => {
         attempts++;
@@ -329,8 +332,6 @@ export default function AdminAcademyPage() {
     xhr.setRequestHeader("Content-Type", file.type);
     xhr.send(file);
   }
-
-  // ── Cohort actions ────────────────────────────────────────────────────────
 
   const [cohortForm, setCohortForm] = useState({ product_id: "", name: "", starts_at: "", ends_at: "", max_seats: "", is_default: false });
 
@@ -358,8 +359,6 @@ export default function AdminAcademyPage() {
     if (res.cohort) { setCohorts(c => c.map(x => x.id === id ? res.cohort : x)); notify("Cohort updated"); }
     else notify(res.error ?? "Error", false);
   }
-
-  // ── Discount code actions ─────────────────────────────────────────────────
 
   const [codeForm, setCodeForm] = useState({ code: "", product_id: "", discount_type: "percent", discount_value: "", max_uses: "", expires_at: "" });
 
@@ -389,8 +388,6 @@ export default function AdminAcademyPage() {
     if (res.code) setCodes(c => c.map(x => x.id === id ? res.code : x));
   }
 
-  // ── Product settings ──────────────────────────────────────────────────────
-
   const [editProduct, setEditProduct] = useState<Partial<Product>>({});
 
   async function saveProduct() {
@@ -401,797 +398,1181 @@ export default function AdminAcademyPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...updates }),
     }).then(r => r.json());
-    if (res.product) { setProducts(p => p.map(x => x.id === id ? res.product : x)); notify("Product saved"); }
+    if (res.product) {
+      setProducts(p => p.map(x => x.id === id ? res.product : x));
+      notify("Product saved");
+    }
     else notify(res.error ?? "Error", false);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const sectionLessons = lessons.filter(l => l.section_id === selectedSection);
-  const productSections = sections.filter(s => s.product_id === selectedProduct);
-
-  if (loading) return <div className="p-8 text-sm text-gray-400">Loading…</div>;
-
-  const TABS: { key: Tab; label: string }[] = [
-    { key: "builder",     label: "Course Builder" },
-    { key: "cohorts",     label: "Cohorts" },
-    { key: "enrollments", label: "Enrollments" },
-    { key: "codes",       label: "Discount Codes" },
-    { key: "products",    label: "Product Settings" },
-    { key: "access",      label: comingSoon == null ? "Access" : comingSoon.enabled ? "🔒 Coming Soon ON" : "✅ Live" },
-  ];
+  const product = openProduct ? products.find(p => p.id === openProduct) ?? null : null;
+  const productSections = sections.filter(s => s.product_id === openProduct);
+  const productEnrollments = enrollments.filter(e => e.product_id === openProduct);
+  const productCohorts = cohorts.filter(c => c.product_id === openProduct);
 
   return (
     <div className="v2-app academy-admin" style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
-      {/* Scoped CSS overrides — maps the page's legacy gray/indigo Tailwind
-          classes to v2-app tokens without touching 80+ individual classNames.
-          Scoped to .academy-admin so we don't accidentally restyle other
-          admin pages that share these utilities. */}
       <style>{`
-        .academy-admin .bg-gray-950   { background: var(--app-bg) !important; }
-        .academy-admin .bg-gray-900   { background: var(--app-bg-elevated) !important; }
-        .academy-admin .bg-gray-900\\/40,
-        .academy-admin .bg-gray-900\\/30,
-        .academy-admin .bg-gray-900\\/50 { background: var(--app-surface) !important; }
-        .academy-admin .bg-gray-800   { background: var(--app-surface-strong) !important; }
-        .academy-admin .hover\\:bg-gray-800:hover { background: var(--app-surface-strong) !important; }
-        .academy-admin .hover\\:bg-gray-700:hover { background: var(--app-surface-strong) !important; }
-        .academy-admin .hover\\:bg-gray-900:hover { background: var(--app-surface) !important; }
-        .academy-admin .border-gray-800 { border-color: var(--app-border) !important; }
-        .academy-admin .border-gray-700 { border-color: var(--app-border-strong) !important; }
-        .academy-admin .border-l-2.border-gray-700 { border-left-color: var(--app-border-strong) !important; }
-        .academy-admin .text-gray-200 { color: var(--app-text) !important; }
-        .academy-admin .text-gray-300 { color: var(--app-text) !important; }
-        .academy-admin .text-gray-400 { color: var(--app-text-muted) !important; }
-        .academy-admin .text-gray-500 { color: var(--app-text-quiet) !important; }
-        .academy-admin .text-gray-600 { color: var(--app-text-faint) !important; }
-        .academy-admin .hover\\:text-gray-200:hover { color: var(--app-text) !important; }
-        .academy-admin .hover\\:text-gray-300:hover { color: var(--app-text) !important; }
-        .academy-admin .bg-indigo-600, .academy-admin .hover\\:bg-indigo-500:hover { background: var(--app-accent) !important; }
-        .academy-admin .border-indigo-500 { border-color: var(--app-accent) !important; }
-        .academy-admin .text-indigo-300, .academy-admin .text-indigo-400 { color: var(--app-accent) !important; }
-        .academy-admin .bg-indigo-900\\/40 { background: var(--app-accent-soft) !important; }
-        .academy-admin .focus\\:border-indigo-500:focus { border-color: var(--app-accent) !important; }
-        /* Rounded surfaces — slightly tighter than legacy xl */
-        .academy-admin .rounded-xl { border-radius: var(--app-radius-lg) !important; }
+        .academy-admin .ac-input,
+        .academy-admin .ac-select,
+        .academy-admin .ac-textarea {
+          width: 100%;
+          background: var(--app-surface);
+          border: 1px solid var(--app-border);
+          border-radius: 6px;
+          padding: 8px 10px;
+          font-size: 13px;
+          color: var(--app-text);
+          outline: none;
+          transition: border-color var(--app-dur) var(--app-ease);
+        }
+        .academy-admin .ac-input:focus,
+        .academy-admin .ac-select:focus,
+        .academy-admin .ac-textarea:focus { border-color: var(--app-accent); }
+        .academy-admin .ac-textarea { resize: vertical; }
+        .academy-admin .ac-label {
+          display: block;
+          font-size: 10px;
+          color: var(--app-text-quiet);
+          margin-bottom: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 600;
+        }
+        .academy-admin .ac-card {
+          background: var(--app-bg-elevated);
+          border: 1px solid var(--app-border);
+          border-radius: var(--app-radius-lg);
+        }
+        .academy-admin .ac-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .academy-admin .ac-table th {
+          padding: 10px 16px;
+          text-align: left;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--app-text-quiet);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          border-bottom: 1px solid var(--app-border);
+        }
+        .academy-admin .ac-table td {
+          padding: 11px 16px;
+          color: var(--app-text);
+          border-bottom: 1px solid var(--app-border);
+        }
+        .academy-admin .ac-table tbody tr:last-child td { border-bottom: 0; }
+        .academy-admin .ac-table tbody tr:hover { background: var(--app-surface); }
+        .academy-admin .ac-chip {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 2px 8px; border-radius: 999px;
+          font-size: 10px; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.06em;
+          border: 1px solid var(--app-border);
+          background: var(--app-surface);
+          color: var(--app-text-muted);
+        }
+        .academy-admin .ac-chip.success { color: #34d399; border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.08); }
+        .academy-admin .ac-chip.warn    { color: #fbbf24; border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.08); }
+        .academy-admin .ac-chip.info    { color: var(--app-accent); border-color: var(--app-accent-line); background: var(--app-accent-soft); }
       `}</style>
 
-      {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 className="app-h1">Academy</h1>
-          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 4 }}>
-            {enrollments.length} enrollments · {cohorts.length} cohorts · {products.length} products
-          </p>
-        </div>
-        {msg && (
-          <div className={`text-sm px-4 py-2 rounded-lg ${msg.ok ? "bg-emerald-900/60 text-emerald-300" : "bg-red-900/60 text-red-300"}`}>
-            {msg.text}
+      {/* Top bar */}
+      <header style={{
+        borderBottom: "1px solid var(--app-border)",
+        padding: "18px 28px",
+        background: "var(--app-bg-sunken)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {openProduct && (
+              <button
+                onClick={() => { setOpenProduct(null); setCourseView("curriculum"); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontSize: 13, color: "var(--app-text-muted)",
+                  background: "transparent", border: "none",
+                  cursor: "pointer", padding: "4px 0",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--app-text)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--app-text-muted)")}
+              >
+                <HugeiconsIcon icon={ArrowLeft01Icon} size={14} strokeWidth={1.8} />
+                All courses
+              </button>
+            )}
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--app-text)" }}>
+                {product ? product.name : "Academy"}
+              </h1>
+              <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>
+                {product
+                  ? `${productSections.length} sections · ${lessons.filter(l => l.product_id === openProduct).length} lessons · ${productEnrollments.length} learners`
+                  : `${products.length} courses · ${enrollments.length} enrollments · ${cohorts.length} cohorts`}
+              </p>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-800 px-6">
-        <div className="flex gap-1">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.key ? "border-indigo-500 text-indigo-400" : "border-transparent text-gray-400 hover:text-gray-200"
-              }`}>
-              {t.label}
-            </button>
-          ))}
+          {msg && (
+            <div
+              role="status"
+              style={{
+                fontSize: 13,
+                padding: "8px 14px",
+                borderRadius: 6,
+                background: msg.ok ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                color:      msg.ok ? "#34d399" : "#f87171",
+                border:     `1px solid ${msg.ok ? "rgba(52,211,153,0.2)" : "rgba(239,68,68,0.2)"}`,
+              }}
+            >
+              {msg.text}
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="p-6">
-
-        {/* ── COURSE BUILDER ─────────────────────────────────────────────── */}
-        {tab === "builder" && (
-          <div className="flex gap-0 h-[calc(100vh-180px)]">
-
-            {/* Left: Section + Lesson tree */}
-            <div className="w-72 border-r border-gray-800 flex flex-col">
-              {/* Product selector */}
-              <div className="p-4 border-b border-gray-800">
-                <label className="text-xs text-gray-400 mb-1 block">Course</label>
-                <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm">
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              {/* Sections — drag to reorder */}
-              <div className="flex-1 overflow-y-auto">
-                <SortableList
-                  items={productSections}
-                  onReorder={reorderSections}
-                  renderItem={(sec, handle) => (
-                    <div>
-                      <div
-                        onClick={() => setSelectedSection(sec.id)}
-                        className={`flex items-center justify-between px-4 py-2.5 cursor-pointer group ${
-                          selectedSection === sec.id ? "bg-gray-800" : "hover:bg-gray-900"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <DragHandle listeners={handle.listeners} label="Reorder section" />
-                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 truncate">
-                            {sec.title}
-                          </span>
-                        </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); deleteSection(sec.id); }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 text-xs px-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      {selectedSection === sec.id && (
-                        <SectionSettingsEditor
-                          sectionId={sec.id}
-                          initialCta={{
-                            text: (sec as unknown as { cta_text?: string | null }).cta_text ?? null,
-                            url:  (sec as unknown as { cta_url?:  string | null }).cta_url  ?? null,
-                          }}
-                          onSaved={next => {
-                            setSections(prev => prev.map(s => s.id === sec.id ? { ...s, ...next } as typeof s : s));
-                          }}
-                        />
-                      )}
-                      {selectedSection === sec.id && (
-                        <SortableList
-                          items={lessons.filter(l => l.section_id === sec.id)}
-                          onReorder={next => reorderLessons(sec.id, next)}
-                          renderItem={(lesson, lessonHandle) => (
-                            <div
-                              onClick={() => openLesson(lesson)}
-                              className={`flex items-center gap-2 pl-3 pr-4 py-2 cursor-pointer text-sm group ${
-                                selectedLesson?.id === lesson.id ? "bg-indigo-900/40 text-indigo-300" : "hover:bg-gray-900 text-gray-300"
-                              }`}
-                            >
-                              <DragHandle listeners={lessonHandle.listeners} label="Reorder lesson" />
-                              <span className="text-xs opacity-50">
-                                {lesson.lesson_type === "video" ? "▶" : lesson.lesson_type === "text" ? "📝" : lesson.lesson_type === "live" ? "📡" : "📋"}
-                              </span>
-                              <span className="truncate flex-1">{lesson.title}</span>
-                              {!lesson.is_published && <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1 rounded">draft</span>}
-                              {lesson.mux_playback_id && <span className="text-[10px] text-emerald-500">●</span>}
-                            </div>
-                          )}
-                        />
-                      )}
-                    </div>
-                  )}
-                />
-              </div>
-
-              {/* Add buttons */}
-              <div className="p-4 border-t border-gray-800 space-y-2">
-                <button onClick={addSection}
-                  className="w-full text-xs bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded text-gray-300">
-                  + Add Section
+        {/* Top nav — only when not in a course detail */}
+        {!openProduct && (
+          <nav style={{ display: "flex", gap: 4, marginTop: 18 }}>
+            {([
+              { key: "courses",     label: "Courses",        icon: BookOpen02Icon },
+              { key: "cohorts",     label: "Cohorts",        icon: Calendar03Icon },
+              { key: "enrollments", label: "Enrollments",    icon: UserMultipleIcon },
+              { key: "codes",       label: "Discount codes", icon: Tag01Icon },
+              { key: "access",      label: "Access",         icon: comingSoon?.enabled ? LockedIcon : GlobeIcon },
+            ] as { key: TopNav; label: string; icon: typeof BookOpen02Icon }[]).map(t => {
+              const active = top === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTop(t.key)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: active ? 500 : 400,
+                    color: active ? "var(--app-text)" : "var(--app-text-muted)",
+                    background: active ? "var(--app-surface)" : "transparent",
+                    border: "1px solid",
+                    borderColor: active ? "var(--app-border)" : "transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    transition: "all var(--app-dur) var(--app-ease)",
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.color = "var(--app-text)"; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.color = "var(--app-text-muted)"; }}
+                >
+                  <HugeiconsIcon icon={t.icon} size={14} strokeWidth={1.8} />
+                  {t.label}
                 </button>
-                <div className="flex gap-1">
-                  {(["video","text","live","assignment"] as const).map(t => (
-                    <button key={t} onClick={() => addLesson(t)}
-                      className="flex-1 text-[10px] bg-gray-800 hover:bg-gray-700 px-2 py-1.5 rounded text-gray-400">
-                      +{t[0].toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Lesson editor */}
-            <div className="flex-1 overflow-y-auto">
-              {!selectedLesson ? (
-                <div className="flex items-center justify-center h-full text-gray-600 text-sm">
-                  Select a lesson to edit, or create one
-                </div>
-              ) : (
-                <div className="p-6 max-w-2xl">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold">{selectedLesson.title}</h2>
-                    <div className="flex gap-2">
-                      <button onClick={() => deleteLesson(selectedLesson.id)}
-                        className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded border border-red-800">
-                        Delete
-                      </button>
-                      <button onClick={saveLesson}
-                        className="text-xs bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 rounded font-medium">
-                        Save
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-5">
-                    {/* Title */}
-                    <div>
-                      <label className="label-xs">Title</label>
-                      <input value={editingLesson.title ?? ""}
-                        onChange={e => setEditingLesson(l => ({ ...l, title: e.target.value }))}
-                        className="input-base w-full" />
-                    </div>
-
-                    {/* Type + drip */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="label-xs">Type</label>
-                        <select value={editingLesson.lesson_type ?? "video"}
-                          onChange={e => setEditingLesson(l => ({ ...l, lesson_type: e.target.value }))}
-                          className="input-base w-full">
-                          <option value="video">Video</option>
-                          <option value="text">Text / Article</option>
-                          <option value="live">Live Session</option>
-                          <option value="assignment">Assignment</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label-xs">Drip</label>
-                        <select value={editingLesson.drip_type ?? "immediate"}
-                          onChange={e => setEditingLesson(l => ({ ...l, drip_type: e.target.value }))}
-                          className="input-base w-full">
-                          <option value="immediate">Immediate</option>
-                          <option value="days_after_enrollment">Days after enrollment</option>
-                          <option value="days_after_cohort_start">Days after cohort start</option>
-                          <option value="on_date">Specific date</option>
-                          <option value="manual">Manual unlock</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Drip value */}
-                    {(editingLesson.drip_type === "days_after_enrollment" || editingLesson.drip_type === "days_after_cohort_start") && (
-                      <div>
-                        <label className="label-xs">Unlock after (days)</label>
-                        <input type="number" min={0} value={editingLesson.drip_value ?? 0}
-                          onChange={e => setEditingLesson(l => ({ ...l, drip_value: parseInt(e.target.value) || 0 }))}
-                          className="input-base w-32" />
-                      </div>
-                    )}
-                    {editingLesson.drip_type === "on_date" && (
-                      <div>
-                        <label className="label-xs">Unlock date</label>
-                        <input type="datetime-local" value={editingLesson.drip_date?.slice(0, 16) ?? ""}
-                          onChange={e => setEditingLesson(l => ({ ...l, drip_date: e.target.value }))}
-                          className="input-base w-full" />
-                      </div>
-                    )}
-
-                    {/* Description */}
-                    <div>
-                      <label className="label-xs">Description / lesson brief</label>
-                      <textarea rows={4} value={editingLesson.description ?? ""}
-                        onChange={e => setEditingLesson(l => ({ ...l, description: e.target.value }))}
-                        className="input-base w-full resize-none" />
-                    </div>
-
-                    {/* Toggles */}
-                    <div className="flex gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editingLesson.is_free_preview ?? false}
-                          onChange={e => setEditingLesson(l => ({ ...l, is_free_preview: e.target.checked }))}
-                          className="rounded" />
-                        <span className="text-sm text-gray-300">Free preview</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editingLesson.is_published ?? false}
-                          onChange={e => setEditingLesson(l => ({ ...l, is_published: e.target.checked }))}
-                          className="rounded" />
-                        <span className="text-sm text-gray-300">Published</span>
-                      </label>
-                    </div>
-
-                    {/* Lesson-level CTA — surfaces as a primary button under
-                        the description in the student player. Optional. */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="label-xs">CTA text (optional)</label>
-                        <input
-                          value={(editingLesson as Record<string, unknown>).cta_text as string ?? ""}
-                          onChange={e => setEditingLesson(l => ({ ...l, cta_text: e.target.value }) as typeof editingLesson)}
-                          placeholder="Download workbook"
-                          className="input-base w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="label-xs">CTA URL (optional)</label>
-                        <input
-                          value={(editingLesson as Record<string, unknown>).cta_url as string ?? ""}
-                          onChange={e => setEditingLesson(l => ({ ...l, cta_url: e.target.value }) as typeof editingLesson)}
-                          placeholder="https://… or /academy/…"
-                          className="input-base w-full"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Video upload (video lessons only) */}
-                    {(editingLesson.lesson_type ?? selectedLesson.lesson_type) === "video" && (
-                      <div className="border border-dashed border-gray-700 rounded-xl p-5">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-300">Video</span>
-                          {selectedLesson.mux_playback_id && (
-                            <span className="text-xs text-emerald-400 flex items-center gap-1">
-                              ● Ready · {dur(selectedLesson.duration_secs)}
-                            </span>
-                          )}
-                        </div>
-
-                        {uploadState === "idle" && (
-                          <>
-                            <input ref={fileRef} type="file" accept="video/*" className="hidden"
-                              onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoUpload(f); }} />
-                            <button onClick={() => fileRef.current?.click()}
-                              className="w-full text-sm bg-gray-800 hover:bg-gray-700 rounded-lg px-4 py-3 text-gray-300">
-                              {selectedLesson.mux_playback_id ? "Replace video" : "Upload video"}
-                            </button>
-                          </>
-                        )}
-                        {uploadState === "uploading" && (
-                          <div>
-                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                              <span>Uploading…</span><span>{uploadPct}%</span>
-                            </div>
-                            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${uploadPct}%` }} />
-                            </div>
-                          </div>
-                        )}
-                        {uploadState === "processing" && (
-                          <p className="text-sm text-yellow-400">Processing video… this may take a few minutes.</p>
-                        )}
-                        {uploadState === "done" && (
-                          <p className="text-sm text-emerald-400">✓ Video ready! Playback ID saved.</p>
-                        )}
-                        {uploadState === "error" && (
-                          <p className="text-sm text-red-400">Upload failed. Try again.</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Lesson content extensions — text blocks + resources.
-                        Renders only after the lesson exists on the server so
-                        block/resource creation has a foreign key to point at. */}
-                    {selectedLesson.id && (
-                      <LessonContentEditor lessonId={selectedLesson.id} />
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+              );
+            })}
+          </nav>
         )}
+      </header>
 
-        {/* ── COHORTS ──────────────────────────────────────────────────────── */}
-        {tab === "cohorts" && (
-          <div className="max-w-4xl space-y-6">
-            <form onSubmit={createCohort} className="bg-gray-900 rounded-xl p-5 space-y-4">
-              <h3 className="font-semibold">Create Cohort</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-xs">Course</label>
-                  <select value={cohortForm.product_id} onChange={e => setCohortForm(f => ({ ...f, product_id: e.target.value }))} className="input-base w-full" required>
-                    <option value="">Select…</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label-xs">Cohort name</label>
-                  <input value={cohortForm.name} onChange={e => setCohortForm(f => ({ ...f, name: e.target.value }))} className="input-base w-full" placeholder="e.g. June 2026 Challenge" required />
-                </div>
-                <div>
-                  <label className="label-xs">Starts at</label>
-                  <input type="datetime-local" value={cohortForm.starts_at} onChange={e => setCohortForm(f => ({ ...f, starts_at: e.target.value }))} className="input-base w-full" required />
-                </div>
-                <div>
-                  <label className="label-xs">Ends at (optional)</label>
-                  <input type="datetime-local" value={cohortForm.ends_at} onChange={e => setCohortForm(f => ({ ...f, ends_at: e.target.value }))} className="input-base w-full" />
-                </div>
-                <div>
-                  <label className="label-xs">Max seats (blank = unlimited)</label>
-                  <input type="number" value={cohortForm.max_seats} onChange={e => setCohortForm(f => ({ ...f, max_seats: e.target.value }))} className="input-base w-full" />
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 cursor-pointer mb-2">
-                    <input type="checkbox" checked={cohortForm.is_default} onChange={e => setCohortForm(f => ({ ...f, is_default: e.target.checked }))} className="rounded" />
-                    <span className="text-sm text-gray-300">Auto-assign new enrollments</span>
-                  </label>
-                </div>
-              </div>
-              <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 px-5 py-2 rounded-lg text-sm font-medium">Create Cohort</button>
-            </form>
+      {loading ? (
+        <div style={{ padding: "60px 28px", textAlign: "center", fontSize: 13, color: "var(--app-text-quiet)" }}>Loading…</div>
+      ) : (
+        <main style={{ padding: openProduct ? 0 : "24px 28px" }}>
+          {/* ── Top-level COURSES gallery ─────────────────────────────────── */}
+          {!openProduct && top === "courses" && (
+            <CoursesGallery products={products} onOpen={id => { setOpenProduct(id); setCourseView("curriculum"); }} />
+          )}
 
-            <div className="bg-gray-900 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="th-left">Cohort</th>
-                    <th className="th-left">Course</th>
-                    <th className="th-left">Starts</th>
-                    <th className="th-left">Seats</th>
-                    <th className="th-left">Status</th>
-                    <th className="th-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cohorts.map(c => (
-                    <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="td">{c.name}{c.is_default && <span className="ml-2 text-[10px] bg-indigo-900/40 text-indigo-400 px-1 rounded">default</span>}</td>
-                      <td className="td text-gray-400">{products.find(p => p.id === c.product_id)?.name}</td>
-                      <td className="td text-gray-400">{new Date(c.starts_at).toLocaleDateString()}</td>
-                      <td className="td text-gray-400">{c.enrolled_count}{c.max_seats ? ` / ${c.max_seats}` : ""}</td>
-                      <td className="td">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          c.status === "active" ? "bg-emerald-900/40 text-emerald-400" :
-                          c.status === "upcoming" ? "bg-blue-900/40 text-blue-400" :
-                          "bg-gray-800 text-gray-500"
-                        }`}>{c.status}</span>
-                      </td>
-                      <td className="td">
-                        <div className="flex gap-2">
-                          {c.status === "upcoming" && <button onClick={() => updateCohortStatus(c.id, "active")} className="text-xs text-emerald-400 hover:text-emerald-300">Activate</button>}
-                          {c.status === "active"   && <button onClick={() => updateCohortStatus(c.id, "ended")}  className="text-xs text-gray-400 hover:text-gray-300">End</button>}
-                        </div>
-                      </td>
+          {/* ── COHORTS ───────────────────────────────────────────────────── */}
+          {!openProduct && top === "cohorts" && (
+            <div style={{ display: "grid", gap: 24, maxWidth: 960 }}>
+              <form onSubmit={createCohort} className="ac-card" style={{ padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Create cohort</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div>
+                    <label className="ac-label">Course</label>
+                    <select value={cohortForm.product_id} onChange={e => setCohortForm(f => ({ ...f, product_id: e.target.value }))} className="ac-select" required>
+                      <option value="">Select…</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="ac-label">Cohort name</label>
+                    <input value={cohortForm.name} onChange={e => setCohortForm(f => ({ ...f, name: e.target.value }))} className="ac-input" placeholder="e.g. June 2026 Challenge" required />
+                  </div>
+                  <div>
+                    <label className="ac-label">Starts at</label>
+                    <input type="datetime-local" value={cohortForm.starts_at} onChange={e => setCohortForm(f => ({ ...f, starts_at: e.target.value }))} className="ac-input" required />
+                  </div>
+                  <div>
+                    <label className="ac-label">Ends at (optional)</label>
+                    <input type="datetime-local" value={cohortForm.ends_at} onChange={e => setCohortForm(f => ({ ...f, ends_at: e.target.value }))} className="ac-input" />
+                  </div>
+                  <div>
+                    <label className="ac-label">Max seats (blank = unlimited)</label>
+                    <input type="number" value={cohortForm.max_seats} onChange={e => setCohortForm(f => ({ ...f, max_seats: e.target.value }))} className="ac-input" />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-end" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingBottom: 6 }}>
+                      <input type="checkbox" checked={cohortForm.is_default} onChange={e => setCohortForm(f => ({ ...f, is_default: e.target.checked }))} />
+                      <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Auto-assign new enrollments</span>
+                    </label>
+                  </div>
+                </div>
+                <button type="submit" className="app-btn app-btn-primary" style={{ marginTop: 16 }}>Create cohort</button>
+              </form>
+
+              <div className="ac-card" style={{ overflow: "hidden" }}>
+                <table className="ac-table">
+                  <thead>
+                    <tr>
+                      <th>Cohort</th>
+                      <th>Course</th>
+                      <th>Starts</th>
+                      <th>Seats</th>
+                      <th>Status</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── ENROLLMENTS ──────────────────────────────────────────────────── */}
-        {tab === "enrollments" && (
-          <div className="max-w-5xl">
-            <div className="bg-gray-900 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-4">
-                <h3 className="font-semibold flex-1">All Enrollments</h3>
-                <span className="text-xs text-gray-400">{enrollments.length} total</span>
+                  </thead>
+                  <tbody>
+                    {cohorts.map(c => (
+                      <tr key={c.id}>
+                        <td style={{ fontWeight: 500 }}>
+                          {c.name}
+                          {c.is_default && <span className="ac-chip info" style={{ marginLeft: 8 }}>default</span>}
+                        </td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{products.find(p => p.id === c.product_id)?.name}</td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{new Date(c.starts_at).toLocaleDateString()}</td>
+                        <td style={{ color: "var(--app-text-muted)", fontVariantNumeric: "tabular-nums" }}>
+                          {c.enrolled_count}{c.max_seats ? ` / ${c.max_seats}` : ""}
+                        </td>
+                        <td>
+                          <span className={`ac-chip ${c.status === "active" ? "success" : c.status === "upcoming" ? "info" : ""}`}>{c.status}</span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          {c.status === "upcoming" && (
+                            <button onClick={() => updateCohortStatus(c.id, "active")} className="app-btn app-btn-ghost" style={{ fontSize: 12 }}>
+                              Activate
+                            </button>
+                          )}
+                          {c.status === "active" && (
+                            <button onClick={() => updateCohortStatus(c.id, "ended")} className="app-btn app-btn-ghost" style={{ fontSize: 12 }}>
+                              End
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {cohorts.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No cohorts yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <table className="w-full text-sm">
+            </div>
+          )}
+
+          {/* ── ENROLLMENTS ───────────────────────────────────────────────── */}
+          {!openProduct && top === "enrollments" && (
+            <div className="ac-card" style={{ overflow: "hidden", maxWidth: 1100 }}>
+              <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", borderBottom: "1px solid var(--app-border)" }}>
+                <h3 style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>All enrollments</h3>
+                <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>{enrollments.length} total</span>
+              </div>
+              <table className="ac-table">
                 <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="th-left">Workspace</th>
-                    <th className="th-left">Course</th>
-                    <th className="th-left">Cohort</th>
-                    <th className="th-left">Type</th>
-                    <th className="th-left">Status</th>
-                    <th className="th-left">Enrolled</th>
+                  <tr>
+                    <th>Workspace</th>
+                    <th>Course</th>
+                    <th>Cohort</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Enrolled</th>
                   </tr>
                 </thead>
                 <tbody>
                   {enrollments.map(e => (
-                    <tr key={e.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="td font-medium">{e.workspaces?.name ?? e.workspace_id.slice(0, 8)}</td>
-                      <td className="td text-gray-400">{products.find(p => p.id === e.product_id)?.name ?? e.product_id}</td>
-                      <td className="td text-gray-400">{e.academy_cohorts?.name ?? "—"}</td>
-                      <td className="td">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          e.access_type === "paid" ? "bg-emerald-900/30 text-emerald-400" :
-                          "bg-yellow-900/30 text-yellow-400"
-                        }`}>{e.access_type}</span>
-                      </td>
-                      <td className="td">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          e.status === "active" ? "bg-blue-900/30 text-blue-400" :
-                          e.status === "completed" ? "bg-emerald-900/30 text-emerald-400" :
-                          "bg-gray-800 text-gray-500"
-                        }`}>{e.status}</span>
-                      </td>
-                      <td className="td text-gray-500 text-xs">{new Date(e.enrolled_at).toLocaleDateString()}</td>
+                    <tr key={e.id}>
+                      <td style={{ fontWeight: 500 }}>{e.workspaces?.name ?? e.workspace_id.slice(0, 8)}</td>
+                      <td style={{ color: "var(--app-text-muted)" }}>{products.find(p => p.id === e.product_id)?.name ?? e.product_id}</td>
+                      <td style={{ color: "var(--app-text-muted)" }}>{e.academy_cohorts?.name ?? "—"}</td>
+                      <td><span className={`ac-chip ${e.access_type === "paid" ? "success" : "warn"}`}>{e.access_type}</span></td>
+                      <td><span className={`ac-chip ${e.status === "active" ? "info" : e.status === "completed" ? "success" : ""}`}>{e.status}</span></td>
+                      <td style={{ color: "var(--app-text-quiet)", fontSize: 12 }}>{new Date(e.enrolled_at).toLocaleDateString()}</td>
                     </tr>
                   ))}
+                  {enrollments.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No enrollments yet.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── DISCOUNT CODES ────────────────────────────────────────────────── */}
-        {tab === "codes" && (
-          <div className="max-w-3xl space-y-6">
-            <form onSubmit={createCode} className="bg-gray-900 rounded-xl p-5 space-y-4">
-              <h3 className="font-semibold">Create Discount Code</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-xs">Code (blank = auto-generate)</label>
-                  <input value={codeForm.code} onChange={e => setCodeForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="input-base w-full uppercase" placeholder="e.g. LAUNCH50" />
+          {/* ── DISCOUNT CODES ────────────────────────────────────────────── */}
+          {!openProduct && top === "codes" && (
+            <div style={{ display: "grid", gap: 24, maxWidth: 860 }}>
+              <form onSubmit={createCode} className="ac-card" style={{ padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Create discount code</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div>
+                    <label className="ac-label">Code (blank = auto-generate)</label>
+                    <input value={codeForm.code} onChange={e => setCodeForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="ac-input" placeholder="e.g. LAUNCH50" style={{ textTransform: "uppercase" }} />
+                  </div>
+                  <div>
+                    <label className="ac-label">Course (blank = all)</label>
+                    <select value={codeForm.product_id} onChange={e => setCodeForm(f => ({ ...f, product_id: e.target.value }))} className="ac-select">
+                      <option value="">All courses</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="ac-label">Discount type</label>
+                    <select value={codeForm.discount_type} onChange={e => setCodeForm(f => ({ ...f, discount_type: e.target.value }))} className="ac-select">
+                      <option value="percent">Percent (%)</option>
+                      <option value="fixed_ngn">Fixed (₦)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="ac-label">Value ({codeForm.discount_type === "percent" ? "%" : "₦"})</label>
+                    <input type="number" value={codeForm.discount_value} onChange={e => setCodeForm(f => ({ ...f, discount_value: e.target.value }))} className="ac-input" required />
+                  </div>
+                  <div>
+                    <label className="ac-label">Max uses (blank = unlimited)</label>
+                    <input type="number" value={codeForm.max_uses} onChange={e => setCodeForm(f => ({ ...f, max_uses: e.target.value }))} className="ac-input" />
+                  </div>
+                  <div>
+                    <label className="ac-label">Expires at</label>
+                    <input type="datetime-local" value={codeForm.expires_at} onChange={e => setCodeForm(f => ({ ...f, expires_at: e.target.value }))} className="ac-input" />
+                  </div>
                 </div>
-                <div>
-                  <label className="label-xs">Course (blank = all)</label>
-                  <select value={codeForm.product_id} onChange={e => setCodeForm(f => ({ ...f, product_id: e.target.value }))} className="input-base w-full">
-                    <option value="">All courses</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label-xs">Discount type</label>
-                  <select value={codeForm.discount_type} onChange={e => setCodeForm(f => ({ ...f, discount_type: e.target.value }))} className="input-base w-full">
-                    <option value="percent">Percent (%)</option>
-                    <option value="fixed_ngn">Fixed (₦)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-xs">Value ({codeForm.discount_type === "percent" ? "%" : "₦"})</label>
-                  <input type="number" value={codeForm.discount_value} onChange={e => setCodeForm(f => ({ ...f, discount_value: e.target.value }))} className="input-base w-full" required />
-                </div>
-                <div>
-                  <label className="label-xs">Max uses (blank = unlimited)</label>
-                  <input type="number" value={codeForm.max_uses} onChange={e => setCodeForm(f => ({ ...f, max_uses: e.target.value }))} className="input-base w-full" />
-                </div>
-                <div>
-                  <label className="label-xs">Expires at</label>
-                  <input type="datetime-local" value={codeForm.expires_at} onChange={e => setCodeForm(f => ({ ...f, expires_at: e.target.value }))} className="input-base w-full" />
-                </div>
-              </div>
-              <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 px-5 py-2 rounded-lg text-sm font-medium">Create Code</button>
-            </form>
+                <button type="submit" className="app-btn app-btn-primary" style={{ marginTop: 16 }}>Create code</button>
+              </form>
 
-            <div className="bg-gray-900 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="th-left">Code</th>
-                    <th className="th-left">Discount</th>
-                    <th className="th-left">Course</th>
-                    <th className="th-left">Uses</th>
-                    <th className="th-left">Expires</th>
-                    <th className="th-left">Active</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {codes.map(c => (
-                    <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="td font-mono font-semibold text-indigo-300">{c.code}</td>
-                      <td className="td">{c.discount_value}{c.discount_type === "percent" ? "%" : "₦"}</td>
-                      <td className="td text-gray-400">{c.product_id ? products.find(p => p.id === c.product_id)?.name : "All"}</td>
-                      <td className="td text-gray-400">{c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ""}</td>
-                      <td className="td text-gray-400">{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Never"}</td>
-                      <td className="td">
-                        <button onClick={() => toggleCode(c.id, !c.is_active)}
-                          className={`text-xs px-2 py-0.5 rounded-full ${c.is_active ? "bg-emerald-900/40 text-emerald-400" : "bg-gray-800 text-gray-500"}`}>
-                          {c.is_active ? "Active" : "Off"}
-                        </button>
-                      </td>
+              <div className="ac-card" style={{ overflow: "hidden" }}>
+                <table className="ac-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Discount</th>
+                      <th>Course</th>
+                      <th>Uses</th>
+                      <th>Expires</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── PRODUCT SETTINGS ─────────────────────────────────────────────── */}
-        {tab === "products" && (
-          <div className="max-w-2xl space-y-4">
-            {products.map(p => (
-              <div key={p.id} className="bg-gray-900 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold">{p.name}</h3>
-                  <button onClick={() => { setEditProduct(editProduct.id === p.id ? {} : { ...p }); }}
-                    className="text-xs text-gray-400 hover:text-gray-200">
-                    {editProduct.id === p.id ? "Cancel" : "Edit"}
-                  </button>
-                </div>
-
-                {editProduct.id === p.id ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="label-xs">Price (₦)</label>
-                        <input type="number" value={editProduct.price_ngn ?? 0}
-                          onChange={e => setEditProduct(ep => ({ ...ep, price_ngn: parseInt(e.target.value) || 0 }))}
-                          className="input-base w-full" />
-                      </div>
-                      <div>
-                        <label className="label-xs">Compare price (₦)</label>
-                        <input type="number" value={editProduct.compare_price_ngn ?? ""}
-                          onChange={e => setEditProduct(ep => ({ ...ep, compare_price_ngn: e.target.value ? parseInt(e.target.value) : null }))}
-                          className="input-base w-full" />
-                      </div>
-                      <div>
-                        <label className="label-xs">Credits granted on enroll</label>
-                        <input type="number" value={editProduct.credits_grant ?? 0}
-                          onChange={e => setEditProduct(ep => ({ ...ep, credits_grant: parseInt(e.target.value) || 0 }))}
-                          className="input-base w-full" />
-                      </div>
-                      <div>
-                        <label className="label-xs">Leadash access (months)</label>
-                        <input type="number" value={editProduct.leadash_months ?? 0}
-                          onChange={e => setEditProduct(ep => ({ ...ep, leadash_months: parseInt(e.target.value) || 0 }))}
-                          className="input-base w-full" />
-                      </div>
-                      <div>
-                        <label className="label-xs">Completion threshold (%)</label>
-                        <input type="number" min={1} max={100} value={editProduct.completion_threshold_pct ?? 80}
-                          onChange={e => setEditProduct(ep => ({ ...ep, completion_threshold_pct: parseInt(e.target.value) || 80 }))}
-                          className="input-base w-full" />
-                      </div>
-                    </div>
-                    <div className="flex gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editProduct.is_active ?? true}
-                          onChange={e => setEditProduct(ep => ({ ...ep, is_active: e.target.checked }))} />
-                        <span className="text-sm text-gray-300">Active</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editProduct.is_published ?? true}
-                          onChange={e => setEditProduct(ep => ({ ...ep, is_published: e.target.checked }))} />
-                        <span className="text-sm text-gray-300">Published</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editProduct.certificate_enabled ?? true}
-                          onChange={e => setEditProduct(ep => ({ ...ep, certificate_enabled: e.target.checked }))} />
-                        <span className="text-sm text-gray-300">Certificates</span>
-                      </label>
-                    </div>
-                    <button onClick={saveProduct}
-                      className="bg-indigo-600 hover:bg-indigo-500 px-5 py-2 rounded-lg text-sm font-medium">
-                      Save Changes
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-4 text-sm text-gray-400">
-                    <div><span className="text-gray-600 text-xs">Price</span><br />{fmt(p.price_ngn)}</div>
-                    <div><span className="text-gray-600 text-xs">Credits</span><br />{p.credits_grant.toLocaleString()}</div>
-                    <div><span className="text-gray-600 text-xs">Access</span><br />{p.leadash_months}mo</div>
-                    <div><span className="text-gray-600 text-xs">Threshold</span><br />{p.completion_threshold_pct}%</div>
-                    <div><span className="text-gray-600 text-xs">Status</span><br />{p.is_published ? "Published" : "Draft"}</div>
-                    <div><span className="text-gray-600 text-xs">Certificate</span><br />{p.certificate_enabled ? "Yes" : "No"}</div>
-                  </div>
-                )}
-
-                {/* Course banner editor — always visible, lives below the
-                    basic product fields. Authors don't need to click "Edit"
-                    to manage banner content. */}
-                <div className="mt-4 pt-4 border-t border-gray-800">
-                  <CourseBannerEditor
-                    productId={p.id}
-                    initial={p as unknown as {
-                      banner_image_url: string | null;
-                      banner_headline:  string | null;
-                      banner_sub:       string | null;
-                      banner_cta_text:  string | null;
-                      banner_cta_url:   string | null;
-                    }}
-                    onSaved={next => {
-                      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, ...next } : x));
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── ACCESS / COMING SOON ─────────────────────────────────────────── */}
-        {tab === "access" && (
-          <div className="max-w-xl space-y-6">
-
-            {comingSoon == null ? (
-              <div className="text-sm text-gray-500 py-8 text-center">Loading access settings…</div>
-            ) : <>
-
-            {/* Global toggle */}
-            <div className="bg-gray-900 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-1">
-                <div>
-                  <h3 className="font-semibold text-white">Coming Soon Mode</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    When ON, all users see the "Coming Soon" overlay instead of the Academy.
-                    Beta workspaces below bypass it.
-                  </p>
-                </div>
-                <button
-                  onClick={() => saveComingSoon({ ...comingSoon, enabled: !comingSoon.enabled })}
-                  disabled={accessSaving}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                    accessSaving ? "opacity-50" : ""
-                  } ${comingSoon.enabled ? "bg-orange-500" : "bg-emerald-500"}`}>
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    comingSoon.enabled ? "translate-x-1" : "translate-x-6"
-                  }`} />
-                </button>
-              </div>
-
-              <div className={`mt-4 flex items-center gap-2 text-sm font-medium ${comingSoon.enabled ? "text-orange-400" : "text-emerald-400"}`}>
-                {comingSoon.enabled
-                  ? "🔒 Academy is hidden — Coming Soon overlay is active"
-                  : "✅ Academy is live — all users can access it"}
-              </div>
-            </div>
-
-            {/* Beta workspaces */}
-            <div className="bg-gray-900 rounded-xl p-5">
-              <h3 className="font-semibold text-white mb-1">Beta Access</h3>
-              <p className="text-xs text-gray-400 mb-4">
-                These workspaces bypass the Coming Soon overlay regardless of the global toggle.
-                You can exempt multiple workspaces.
-              </p>
-
-              {/* Workspace selector */}
-              {(() => {
-                const betaList = comingSoon.beta_workspaces;
-                const filtered = allWorkspaces.filter(
-                  w => !betaList.includes(w.id) &&
-                    (!wsSearch ||
-                      w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
-                      w.id.toLowerCase().includes(wsSearch.toLowerCase()))
-                );
-                return (
-                  <div className="mb-4 border border-gray-700 rounded-lg overflow-hidden">
-                    <div className="bg-gray-800 px-3 py-2 border-b border-gray-700">
-                      <input
-                        value={wsSearch}
-                        onChange={e => setWsSearch(e.target.value)}
-                        placeholder="Filter workspaces…"
-                        className="w-full bg-transparent text-sm text-gray-200 placeholder-gray-500 outline-none"
-                      />
-                    </div>
-                    <div className="max-h-52 overflow-y-auto">
-                      {filtered.length === 0 ? (
-                        <p className="px-4 py-3 text-sm text-gray-500">
-                          {allWorkspaces.length === 0 ? "Loading…" : "No matching workspaces"}
-                        </p>
-                      ) : (
-                        filtered.slice(0, 50).map(w => (
-                          <button
-                            key={w.id}
-                            onClick={() => addBetaWorkspace(w.id)}
-                            disabled={accessSaving}
-                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-700/60 flex items-center justify-between gap-3 border-b border-gray-800 last:border-0">
-                            <span className="text-gray-200 truncate">{w.name}</span>
-                            <span className="text-gray-500 text-xs font-mono shrink-0">{w.id.slice(0, 8)}…</span>
+                  </thead>
+                  <tbody>
+                    {codes.map(c => (
+                      <tr key={c.id}>
+                        <td style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontWeight: 600, color: "var(--app-accent)" }}>{c.code}</td>
+                        <td>{c.discount_value}{c.discount_type === "percent" ? "%" : "₦"}</td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{c.product_id ? products.find(p => p.id === c.product_id)?.name : "All"}</td>
+                        <td style={{ color: "var(--app-text-muted)", fontVariantNumeric: "tabular-nums" }}>{c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ""}</td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Never"}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <button onClick={() => toggleCode(c.id, !c.is_active)} className={`ac-chip ${c.is_active ? "success" : ""}`} style={{ cursor: "pointer" }}>
+                            {c.is_active ? "Active" : "Off"}
                           </button>
-                        ))
+                        </td>
+                      </tr>
+                    ))}
+                    {codes.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No codes yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── ACCESS / COMING SOON ──────────────────────────────────────── */}
+          {!openProduct && top === "access" && (
+            <div style={{ display: "grid", gap: 20, maxWidth: 640 }}>
+              {comingSoon == null ? (
+                <div style={{ padding: 32, textAlign: "center", color: "var(--app-text-quiet)" }}>Loading access settings…</div>
+              ) : (
+                <>
+                  <div className="ac-card" style={{ padding: 20 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>Coming-soon mode</h3>
+                        <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 4, lineHeight: 1.5 }}>
+                          When ON, users see the &ldquo;Coming Soon&rdquo; overlay instead of the academy. Beta workspaces below bypass it.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => saveComingSoon({ ...comingSoon, enabled: !comingSoon.enabled })}
+                        disabled={accessSaving}
+                        style={{
+                          position: "relative",
+                          display: "inline-flex", alignItems: "center",
+                          width: 38, height: 22,
+                          borderRadius: 999,
+                          border: "none",
+                          cursor: accessSaving ? "not-allowed" : "pointer",
+                          background: comingSoon.enabled ? "var(--app-accent)" : "#34d399",
+                          opacity: accessSaving ? 0.5 : 1,
+                          flexShrink: 0,
+                          transition: "background var(--app-dur) var(--app-ease)",
+                        }}
+                        aria-label="Toggle coming soon"
+                      >
+                        <span style={{
+                          display: "inline-block",
+                          width: 16, height: 16,
+                          borderRadius: "50%",
+                          background: "#fff",
+                          transform: comingSoon.enabled ? "translateX(3px)" : "translateX(19px)",
+                          transition: "transform var(--app-dur) var(--app-ease)",
+                        }} />
+                      </button>
+                    </div>
+                    <div style={{
+                      marginTop: 16,
+                      fontSize: 13, fontWeight: 500,
+                      color: comingSoon.enabled ? "var(--app-accent)" : "#34d399",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                      <HugeiconsIcon icon={comingSoon.enabled ? LockedIcon : CheckmarkCircle02Icon} size={14} strokeWidth={1.8} />
+                      {comingSoon.enabled
+                        ? "Academy is hidden — coming-soon overlay is active"
+                        : "Academy is live — all users can access it"}
+                    </div>
+                  </div>
+
+                  <div className="ac-card" style={{ padding: 20 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>Beta access</h3>
+                    <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 4, marginBottom: 16, lineHeight: 1.5 }}>
+                      These workspaces bypass the coming-soon overlay regardless of the global toggle.
+                    </p>
+
+                    {(() => {
+                      const betaList = comingSoon.beta_workspaces;
+                      const filtered = allWorkspaces.filter(
+                        w => !betaList.includes(w.id) &&
+                          (!wsSearch ||
+                            w.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
+                            w.id.toLowerCase().includes(wsSearch.toLowerCase()))
+                      );
+                      return (
+                        <div style={{
+                          marginBottom: 14,
+                          border: "1px solid var(--app-border)",
+                          borderRadius: "var(--app-radius)",
+                          overflow: "hidden",
+                        }}>
+                          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--app-border)", background: "var(--app-surface)" }}>
+                            <input
+                              value={wsSearch}
+                              onChange={e => setWsSearch(e.target.value)}
+                              placeholder="Filter workspaces…"
+                              style={{
+                                width: "100%", background: "transparent",
+                                fontSize: 13, color: "var(--app-text)",
+                                border: "none", outline: "none",
+                              }}
+                            />
+                          </div>
+                          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                            {filtered.length === 0 ? (
+                              <p style={{ padding: "14px 16px", fontSize: 13, color: "var(--app-text-quiet)" }}>
+                                {allWorkspaces.length === 0 ? "Loading…" : "No matching workspaces"}
+                              </p>
+                            ) : (
+                              filtered.slice(0, 50).map(w => (
+                                <button
+                                  key={w.id}
+                                  onClick={() => addBetaWorkspace(w.id)}
+                                  disabled={accessSaving}
+                                  style={{
+                                    width: "100%", textAlign: "left",
+                                    padding: "10px 14px", fontSize: 13,
+                                    background: "transparent", border: "none",
+                                    borderBottom: "1px solid var(--app-border)",
+                                    cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                                    color: "var(--app-text)",
+                                    transition: "background var(--app-dur) var(--app-ease)",
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = "var(--app-surface)")}
+                                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                                >
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
+                                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, color: "var(--app-text-quiet)", flexShrink: 0 }}>
+                                    {w.id.slice(0, 8)}…
+                                  </span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {comingSoon.beta_workspaces.length === 0 ? (
+                      <p style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>No workspaces exempted yet.</p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {comingSoon.beta_workspaces.map(id => {
+                          const ws = allWorkspaces.find(w => w.id === id);
+                          return (
+                            <div key={id} style={{
+                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                              background: "var(--app-surface)",
+                              borderRadius: "var(--app-radius)",
+                              padding: "10px 14px",
+                            }}>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: 13, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ws?.name ?? "Unknown workspace"}</p>
+                                <p style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 10, color: "var(--app-text-quiet)" }}>{id}</p>
+                              </div>
+                              <button onClick={() => removeBetaWorkspace(id)} style={{
+                                fontSize: 12, color: "var(--app-text-quiet)",
+                                background: "transparent", border: "none",
+                                cursor: "pointer", flexShrink: 0, marginLeft: 12,
+                              }}
+                                onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+                                onMouseLeave={e => (e.currentTarget.style.color = "var(--app-text-quiet)")}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── COURSE DETAIL (Kajabi-style) ──────────────────────────────── */}
+          {openProduct && product && (
+            <div style={{ display: "flex", minHeight: "calc(100vh - 84px)" }}>
+              {/* Left rail */}
+              <aside style={{
+                width: 220, flexShrink: 0,
+                borderRight: "1px solid var(--app-border)",
+                background: "var(--app-bg-sunken)",
+                padding: "20px 12px",
+              }}>
+                {([
+                  { key: "curriculum", label: "Curriculum",      icon: BookOpen02Icon },
+                  { key: "details",    label: "Banner & details", icon: ImageAdd02Icon },
+                  { key: "pricing",    label: "Pricing & access", icon: CreditCardIcon },
+                  { key: "settings",   label: "Settings",         icon: Settings02Icon },
+                ] as { key: CourseView; label: string; icon: typeof BookOpen02Icon }[]).map(v => {
+                  const active = courseView === v.key;
+                  return (
+                    <button
+                      key={v.key}
+                      onClick={() => setCourseView(v.key)}
+                      style={{
+                        width: "100%",
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "9px 12px",
+                        fontSize: 13,
+                        fontWeight: active ? 500 : 400,
+                        color: active ? "var(--app-text)" : "var(--app-text-muted)",
+                        background: active ? "var(--app-surface)" : "transparent",
+                        border: "none",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all var(--app-dur) var(--app-ease)",
+                      }}
+                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--app-surface)"; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <HugeiconsIcon icon={v.icon} size={15} strokeWidth={1.8} />
+                      {v.label}
+                    </button>
+                  );
+                })}
+
+                <div style={{ marginTop: 22, paddingTop: 16, borderTop: "1px solid var(--app-border)" }}>
+                  <p style={{ fontSize: 10, color: "var(--app-text-quiet)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: 12, paddingLeft: 12 }}>
+                    Status
+                  </p>
+                  <div style={{ paddingLeft: 12, display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--app-text-muted)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: product.is_published ? "#34d399" : "var(--app-text-quiet)" }} />
+                      {product.is_published ? "Published" : "Draft"}
+                    </div>
+                    <div>{productEnrollments.length} learners</div>
+                    <div>{productCohorts.length} cohorts</div>
+                  </div>
+                </div>
+              </aside>
+
+              {/* Right pane */}
+              <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+                {courseView === "curriculum" && (
+                  <div style={{ display: "flex", height: "calc(100vh - 84px)" }}>
+                    {/* Section + lesson tree */}
+                    <div style={{
+                      width: 300, flexShrink: 0,
+                      borderRight: "1px solid var(--app-border)",
+                      display: "flex", flexDirection: "column",
+                    }}>
+                      <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--app-text-quiet)" }}>
+                          Curriculum
+                        </span>
+                        <button onClick={addSection} className="app-btn app-btn-ghost" style={{ fontSize: 12 }}>
+                          <HugeiconsIcon icon={PlusSignIcon} size={12} strokeWidth={2} />
+                          Section
+                        </button>
+                      </div>
+                      <div style={{ flex: 1, overflowY: "auto" }}>
+                        <SortableList
+                          items={productSections}
+                          onReorder={reorderSections}
+                          renderItem={(sec, handle) => {
+                            const open = selectedSection === sec.id;
+                            return (
+                              <div>
+                                <div
+                                  onClick={() => setSelectedSection(sec.id)}
+                                  className="group"
+                                  style={{
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    padding: "10px 14px",
+                                    cursor: "pointer",
+                                    background: open ? "var(--app-surface)" : "transparent",
+                                    borderBottom: "1px solid var(--app-border)",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                                    <DragHandle listeners={handle.listeners} label="Reorder section" />
+                                    <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: open ? "var(--app-text)" : "var(--app-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {sec.title}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); deleteSection(sec.id); }}
+                                    style={{
+                                      background: "transparent", border: "none",
+                                      color: "var(--app-text-quiet)",
+                                      cursor: "pointer", padding: 2,
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+                                    onMouseLeave={e => (e.currentTarget.style.color = "var(--app-text-quiet)")}
+                                    aria-label="Delete section"
+                                  >
+                                    <HugeiconsIcon icon={Delete02Icon} size={12} strokeWidth={1.8} />
+                                  </button>
+                                </div>
+                                {open && (
+                                  <>
+                                    <div style={{ padding: "10px 14px", background: "var(--app-bg)", borderBottom: "1px solid var(--app-border)" }}>
+                                      <SectionSettingsEditor
+                                        sectionId={sec.id}
+                                        initialCta={{
+                                          text: (sec as unknown as { cta_text?: string | null }).cta_text ?? null,
+                                          url:  (sec as unknown as { cta_url?:  string | null }).cta_url  ?? null,
+                                        }}
+                                        onSaved={next => {
+                                          setSections(prev => prev.map(s => s.id === sec.id ? { ...s, ...next } as typeof s : s));
+                                        }}
+                                      />
+                                    </div>
+                                    <SortableList
+                                      items={lessons.filter(l => l.section_id === sec.id)}
+                                      onReorder={next => reorderLessons(sec.id, next)}
+                                      renderItem={(lesson, lessonHandle) => {
+                                        const Icon = LESSON_ICON[lesson.lesson_type] ?? DocumentValidationIcon;
+                                        const active = selectedLesson?.id === lesson.id;
+                                        return (
+                                          <div
+                                            onClick={() => openLesson(lesson)}
+                                            style={{
+                                              display: "flex", alignItems: "center", gap: 8,
+                                              padding: "8px 14px 8px 24px",
+                                              cursor: "pointer",
+                                              fontSize: 13,
+                                              background: active ? "var(--app-accent-soft)" : "transparent",
+                                              color: active ? "var(--app-accent)" : "var(--app-text-muted)",
+                                              borderLeft: active ? "2px solid var(--app-accent)" : "2px solid transparent",
+                                              transition: "all var(--app-dur) var(--app-ease)",
+                                            }}
+                                            onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--app-surface)"; }}
+                                            onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                                          >
+                                            <DragHandle listeners={lessonHandle.listeners} label="Reorder lesson" />
+                                            <HugeiconsIcon icon={Icon} size={13} strokeWidth={1.8} style={{ flexShrink: 0, opacity: 0.7 }} />
+                                            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lesson.title}</span>
+                                            {!lesson.is_published && <span className="ac-chip warn" style={{ fontSize: 9, padding: "1px 6px" }}>draft</span>}
+                                            {lesson.mux_playback_id && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#34d399", flexShrink: 0 }} aria-label="Video ready" />}
+                                          </div>
+                                        );
+                                      }}
+                                    />
+                                    <div style={{ padding: "8px 14px 12px 24px", display: "flex", gap: 4 }}>
+                                      {(["video","text","live","assignment"] as const).map(t => (
+                                        <button key={t} onClick={() => addLesson(t)} className="app-btn app-btn-ghost" style={{ fontSize: 11, flex: 1 }}>
+                                          + {t}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          }}
+                        />
+                        {productSections.length === 0 && (
+                          <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--app-text-quiet)", fontSize: 13 }}>
+                            No sections yet. Click <em>+ Section</em> to start.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Lesson editor */}
+                    <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+                      {!selectedLesson ? (
+                        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--app-text-quiet)", fontSize: 13, textAlign: "center" }}>
+                          <div>
+                            <p>Select a lesson from the curriculum to edit,</p>
+                            <p>or create one inside a section.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ maxWidth: 700 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                            <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)" }}>{selectedLesson.title}</h2>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => deleteLesson(selectedLesson.id)} className="app-btn app-btn-ghost" style={{ color: "#f87171" }}>
+                                <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                                Delete
+                              </button>
+                              <button onClick={saveLesson} className="app-btn app-btn-primary">Save</button>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                            <div>
+                              <label className="ac-label">Title</label>
+                              <input value={editingLesson.title ?? ""}
+                                onChange={e => setEditingLesson(l => ({ ...l, title: e.target.value }))}
+                                className="ac-input" />
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                              <div>
+                                <label className="ac-label">Type</label>
+                                <select value={editingLesson.lesson_type ?? "video"}
+                                  onChange={e => setEditingLesson(l => ({ ...l, lesson_type: e.target.value }))}
+                                  className="ac-select">
+                                  <option value="video">Video</option>
+                                  <option value="text">Text / article</option>
+                                  <option value="live">Live session</option>
+                                  <option value="assignment">Assignment</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="ac-label">Drip</label>
+                                <select value={editingLesson.drip_type ?? "immediate"}
+                                  onChange={e => setEditingLesson(l => ({ ...l, drip_type: e.target.value }))}
+                                  className="ac-select">
+                                  <option value="immediate">Immediate</option>
+                                  <option value="days_after_enrollment">Days after enrollment</option>
+                                  <option value="days_after_cohort_start">Days after cohort start</option>
+                                  <option value="on_date">Specific date</option>
+                                  <option value="manual">Manual unlock</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {(editingLesson.drip_type === "days_after_enrollment" || editingLesson.drip_type === "days_after_cohort_start") && (
+                              <div>
+                                <label className="ac-label">Unlock after (days)</label>
+                                <input type="number" min={0} value={editingLesson.drip_value ?? 0}
+                                  onChange={e => setEditingLesson(l => ({ ...l, drip_value: parseInt(e.target.value) || 0 }))}
+                                  className="ac-input" style={{ maxWidth: 160 }} />
+                              </div>
+                            )}
+                            {editingLesson.drip_type === "on_date" && (
+                              <div>
+                                <label className="ac-label">Unlock date</label>
+                                <input type="datetime-local" value={editingLesson.drip_date?.slice(0, 16) ?? ""}
+                                  onChange={e => setEditingLesson(l => ({ ...l, drip_date: e.target.value }))}
+                                  className="ac-input" />
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="ac-label">Description / lesson brief</label>
+                              <textarea rows={4} value={editingLesson.description ?? ""}
+                                onChange={e => setEditingLesson(l => ({ ...l, description: e.target.value }))}
+                                className="ac-textarea" />
+                            </div>
+
+                            <div style={{ display: "flex", gap: 20 }}>
+                              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                                <input type="checkbox" checked={editingLesson.is_free_preview ?? false}
+                                  onChange={e => setEditingLesson(l => ({ ...l, is_free_preview: e.target.checked }))} />
+                                <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Free preview</span>
+                              </label>
+                              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                                <input type="checkbox" checked={editingLesson.is_published ?? false}
+                                  onChange={e => setEditingLesson(l => ({ ...l, is_published: e.target.checked }))} />
+                                <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Published</span>
+                              </label>
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                              <div>
+                                <label className="ac-label">CTA text (optional)</label>
+                                <input
+                                  value={(editingLesson as Record<string, unknown>).cta_text as string ?? ""}
+                                  onChange={e => setEditingLesson(l => ({ ...l, cta_text: e.target.value }) as typeof editingLesson)}
+                                  placeholder="Download workbook"
+                                  className="ac-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="ac-label">CTA URL (optional)</label>
+                                <input
+                                  value={(editingLesson as Record<string, unknown>).cta_url as string ?? ""}
+                                  onChange={e => setEditingLesson(l => ({ ...l, cta_url: e.target.value }) as typeof editingLesson)}
+                                  placeholder="https://… or /academy/…"
+                                  className="ac-input"
+                                />
+                              </div>
+                            </div>
+
+                            {(editingLesson.lesson_type ?? selectedLesson.lesson_type) === "video" && (
+                              <div style={{
+                                border: "1px dashed var(--app-border-strong)",
+                                borderRadius: "var(--app-radius-lg)",
+                                padding: 18,
+                              }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>Video</span>
+                                  {selectedLesson.mux_playback_id && (
+                                    <span className="ac-chip success">
+                                      <HugeiconsIcon icon={CheckmarkCircle02Icon} size={11} strokeWidth={2} />
+                                      Ready · {dur(selectedLesson.duration_secs)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {uploadState === "idle" && (
+                                  <>
+                                    <input ref={fileRef} type="file" accept="video/*" style={{ display: "none" }}
+                                      onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoUpload(f); }} />
+                                    <button onClick={() => fileRef.current?.click()} className="app-btn app-btn-secondary" style={{ width: "100%" }}>
+                                      {selectedLesson.mux_playback_id ? "Replace video" : "Upload video"}
+                                    </button>
+                                  </>
+                                )}
+                                {uploadState === "uploading" && (
+                                  <div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)", marginBottom: 6 }}>
+                                      <span>Uploading…</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{uploadPct}%</span>
+                                    </div>
+                                    <div style={{ height: 6, background: "var(--app-surface)", borderRadius: 999, overflow: "hidden" }}>
+                                      <div style={{ height: "100%", background: "var(--app-accent)", width: `${uploadPct}%`, transition: "width var(--app-dur) var(--app-ease)" }} />
+                                    </div>
+                                  </div>
+                                )}
+                                {uploadState === "processing" && (
+                                  <p style={{ fontSize: 13, color: "#fbbf24" }}>Processing video… this may take a few minutes.</p>
+                                )}
+                                {uploadState === "done" && (
+                                  <p style={{ fontSize: 13, color: "#34d399" }}>Video ready — playback ID saved.</p>
+                                )}
+                                {uploadState === "error" && (
+                                  <p style={{ fontSize: 13, color: "#f87171" }}>Upload failed. Try again.</p>
+                                )}
+                              </div>
+                            )}
+
+                            {selectedLesson.id && (
+                              <LessonContentEditor lessonId={selectedLesson.id} />
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
-                );
-              })()}
+                )}
 
-              {/* Exempted list */}
-              {comingSoon.beta_workspaces.length === 0 ? (
-                <p className="text-xs text-gray-600">No workspaces exempted yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {comingSoon.beta_workspaces.map(id => {
-                    const ws = allWorkspaces.find(w => w.id === id);
-                    return (
-                      <div key={id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2.5">
-                        <div>
-                          <p className="text-sm text-gray-200">{ws?.name ?? "Unknown workspace"}</p>
-                          <p className="font-mono text-[10px] text-gray-500">{id}</p>
+                {/* Banner & details */}
+                {courseView === "details" && (
+                  <div style={{ padding: 28, maxWidth: 700 }}>
+                    <CourseBannerEditor
+                      productId={product.id}
+                      initial={product as unknown as {
+                        banner_image_url: string | null;
+                        banner_headline:  string | null;
+                        banner_sub:       string | null;
+                        banner_cta_text:  string | null;
+                        banner_cta_url:   string | null;
+                      }}
+                      onSaved={next => {
+                        setProducts(prev => prev.map(x => x.id === product.id ? { ...x, ...next } : x));
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Pricing & access */}
+                {courseView === "pricing" && (
+                  <div style={{ padding: 28, maxWidth: 700 }}>
+                    <ProductPricingForm
+                      product={product}
+                      edit={editProduct.id === product.id ? editProduct : null}
+                      onEdit={() => setEditProduct({ ...product })}
+                      onCancel={() => setEditProduct({})}
+                      onChange={patch => setEditProduct(ep => ({ ...ep, ...patch }))}
+                      onSave={saveProduct}
+                    />
+                  </div>
+                )}
+
+                {/* Settings */}
+                {courseView === "settings" && (
+                  <div style={{ padding: 28, maxWidth: 700, display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div className="ac-card" style={{ padding: 20 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Cohorts on this course</h3>
+                      {productCohorts.length === 0 ? (
+                        <p style={{ fontSize: 13, color: "var(--app-text-quiet)" }}>No cohorts on this course yet — create one from the global Cohorts tab.</p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {productCohorts.map(c => (
+                            <div key={c.id} style={{
+                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                              padding: "10px 14px",
+                              background: "var(--app-surface)",
+                              borderRadius: "var(--app-radius)",
+                              fontSize: 13,
+                            }}>
+                              <div>
+                                <p style={{ color: "var(--app-text)", fontWeight: 500 }}>{c.name}</p>
+                                <p style={{ color: "var(--app-text-quiet)", fontSize: 11, marginTop: 2 }}>
+                                  {new Date(c.starts_at).toLocaleDateString()} · {c.enrolled_count}{c.max_seats ? ` / ${c.max_seats}` : ""} seats
+                                </p>
+                              </div>
+                              <span className={`ac-chip ${c.status === "active" ? "success" : c.status === "upcoming" ? "info" : ""}`}>{c.status}</span>
+                            </div>
+                          ))}
                         </div>
-                        <button
-                          onClick={() => removeBetaWorkspace(id)}
-                          className="text-gray-500 hover:text-red-400 text-xs ml-4 shrink-0">
-                          Remove
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      )}
+                    </div>
 
-            </>}
+                    <div className="ac-card" style={{ padding: 20 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Learners ({productEnrollments.length})</h3>
+                      {productEnrollments.length === 0 ? (
+                        <p style={{ fontSize: 13, color: "var(--app-text-quiet)" }}>No enrollments yet.</p>
+                      ) : (
+                        <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                          <table className="ac-table">
+                            <thead>
+                              <tr>
+                                <th>Workspace</th>
+                                <th>Cohort</th>
+                                <th>Status</th>
+                                <th>Enrolled</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {productEnrollments.map(e => (
+                                <tr key={e.id}>
+                                  <td style={{ fontWeight: 500 }}>{e.workspaces?.name ?? e.workspace_id.slice(0, 8)}</td>
+                                  <td style={{ color: "var(--app-text-muted)" }}>{e.academy_cohorts?.name ?? "—"}</td>
+                                  <td><span className={`ac-chip ${e.status === "active" ? "info" : e.status === "completed" ? "success" : ""}`}>{e.status}</span></td>
+                                  <td style={{ color: "var(--app-text-quiet)", fontSize: 11 }}>{new Date(e.enrolled_at).toLocaleDateString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      )}
+    </div>
+  );
+}
+
+// ─── Courses gallery ──────────────────────────────────────────────────────────
+
+function CoursesGallery({ products, onOpen }: { products: Product[]; onOpen: (id: string) => void }) {
+  if (products.length === 0) {
+    return (
+      <div className="ac-card" style={{ padding: 60, textAlign: "center" }}>
+        <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>No courses yet.</p>
+        <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 6 }}>
+          Add a product row in the academy_products table to get started — courses are bootstrapped via migration.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+      gap: 16,
+    }}>
+      {products.map(p => (
+        <button
+          key={p.id}
+          onClick={() => onOpen(p.id)}
+          className="ac-card"
+          style={{
+            textAlign: "left",
+            padding: 0,
+            overflow: "hidden",
+            cursor: "pointer",
+            transition: "all var(--app-dur) var(--app-ease)",
+            border: "1px solid var(--app-border)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--app-border)"; e.currentTarget.style.transform = "translateY(0)"; }}
+        >
+          <div style={{
+            aspectRatio: "16 / 9",
+            background: "linear-gradient(135deg, var(--app-accent-soft), var(--app-surface-strong))",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--app-accent)",
+            borderBottom: "1px solid var(--app-border)",
+          }}>
+            <HugeiconsIcon icon={BookOpen02Icon} size={36} strokeWidth={1.4} />
+          </div>
+          <div style={{ padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {p.name}
+              </h3>
+              <span className={`ac-chip ${p.is_published ? "success" : ""}`}>{p.is_published ? "Live" : "Draft"}</span>
+            </div>
+            <p style={{ fontSize: 11, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginBottom: 12 }}>{p.slug}</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)" }}>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.price_ngn)}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--app-accent)" }}>
+                Open
+                <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.8} />
+              </span>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Pricing form ─────────────────────────────────────────────────────────────
+
+function ProductPricingForm({
+  product, edit, onEdit, onCancel, onChange, onSave,
+}: {
+  product: Product;
+  edit: Partial<Product> | null;
+  onEdit: () => void;
+  onCancel: () => void;
+  onChange: (patch: Partial<Product>) => void;
+  onSave: () => void;
+}) {
+  const editing = !!edit;
+  const ep = edit ?? {};
+  return (
+    <div className="ac-card" style={{ padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)" }}>Pricing & access</h3>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 4 }}>
+            Controls the checkout price, what enrolled learners receive, and completion threshold.
+          </p>
+        </div>
+        {!editing ? (
+          <button onClick={onEdit} className="app-btn app-btn-secondary">
+            <HugeiconsIcon icon={PencilEdit02Icon} size={13} strokeWidth={1.8} />
+            Edit
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onCancel} className="app-btn app-btn-ghost">
+              <HugeiconsIcon icon={Cancel01Icon} size={13} strokeWidth={1.8} />
+              Cancel
+            </button>
+            <button onClick={onSave} className="app-btn app-btn-primary">Save</button>
           </div>
         )}
-
       </div>
 
-      {/* Global CSS helpers (inline so no separate file needed) */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .label-xs { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
-        .input-base { background: #111827; border: 1px solid #374151; border-radius: 6px; padding: 7px 10px; font-size: 13px; color: #e5e7eb; outline: none; }
-        .input-base:focus { border-color: #6366f1; }
-        .th-left { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-        .td { padding: 10px 16px; }
-      ` }} />
+      {!editing ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18, fontSize: 13 }}>
+          <Stat label="Price"        value={fmt(product.price_ngn)} />
+          <Stat label="Compare price" value={product.compare_price_ngn ? fmt(product.compare_price_ngn) : "—"} />
+          <Stat label="Credits granted" value={product.credits_grant.toLocaleString()} />
+          <Stat label="Leadash months"  value={`${product.leadash_months}mo`} />
+          <Stat label="Completion threshold" value={`${product.completion_threshold_pct}%`} />
+          <Stat label="Certificate"    value={product.certificate_enabled ? "Enabled" : "Off"} />
+          <Stat label="Status"         value={product.is_published ? "Published" : "Draft"} />
+          <Stat label="Active"         value={product.is_active ? "Yes" : "No"} />
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label className="ac-label">Price (₦)</label>
+              <input type="number" value={ep.price_ngn ?? 0}
+                onChange={e => onChange({ price_ngn: parseInt(e.target.value) || 0 })}
+                className="ac-input" />
+            </div>
+            <div>
+              <label className="ac-label">Compare price (₦)</label>
+              <input type="number" value={ep.compare_price_ngn ?? ""}
+                onChange={e => onChange({ compare_price_ngn: e.target.value ? parseInt(e.target.value) : null })}
+                className="ac-input" />
+            </div>
+            <div>
+              <label className="ac-label">Credits granted on enroll</label>
+              <input type="number" value={ep.credits_grant ?? 0}
+                onChange={e => onChange({ credits_grant: parseInt(e.target.value) || 0 })}
+                className="ac-input" />
+            </div>
+            <div>
+              <label className="ac-label">Leadash access (months)</label>
+              <input type="number" value={ep.leadash_months ?? 0}
+                onChange={e => onChange({ leadash_months: parseInt(e.target.value) || 0 })}
+                className="ac-input" />
+            </div>
+            <div>
+              <label className="ac-label">Completion threshold (%)</label>
+              <input type="number" min={1} max={100} value={ep.completion_threshold_pct ?? 80}
+                onChange={e => onChange({ completion_threshold_pct: parseInt(e.target.value) || 80 })}
+                className="ac-input" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 20 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={ep.is_active ?? true} onChange={e => onChange({ is_active: e.target.checked })} />
+              <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Active</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={ep.is_published ?? true} onChange={e => onChange({ is_published: e.target.checked })} />
+              <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Published</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={ep.certificate_enabled ?? true} onChange={e => onChange({ certificate_enabled: e.target.checked })} />
+              <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Certificates</span>
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--app-text-quiet)", fontWeight: 600, marginBottom: 4 }}>{label}</p>
+      <p style={{ color: "var(--app-text)", fontSize: 14, fontWeight: 500 }}>{value}</p>
     </div>
   );
 }

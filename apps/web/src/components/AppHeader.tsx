@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { wsGet } from "@/lib/workspace/client";
 import { useCredits } from "@/components/CreditsProvider";
 import { useSidebar } from "@/components/SidebarContext";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Coins01Icon, Settings02Icon, Mail01Icon, Logout03Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 interface SearchResult {
   type: "lead_campaign" | "campaign";
@@ -22,13 +24,6 @@ interface Props {
   trialEndsAt?: string | null;
   subscriptionRenewsAt?: string | null;
 }
-
-const PLAN_STYLE: Record<string, string> = {
-  free:       "text-slate-500 dark:text-white/40 bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/[0.08]",
-  pro:        "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20",
-  scale:      "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20",
-  enterprise: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
-};
 
 export default function AppHeader({ userEmail, userName, workspaceName, plan, trialEndsAt, subscriptionRenewsAt }: Props) {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -241,9 +236,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
               onMouseEnter={e => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
               onMouseLeave={e => (e.currentTarget.style.background = "rgba(245,158,11,0.1)")}
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <HugeiconsIcon icon={Coins01Icon} size={14} strokeWidth={1.8} />
               {credits.toLocaleString()}
               <span className="text-amber-400/50 font-normal">cr</span>
             </Link>
@@ -294,76 +287,102 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
             className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
           >
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
+              className="w-7 h-7 rounded-md flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
+              style={{ background: "var(--app-accent)", color: "#0a0a0a" }}
             >
               {initials}
             </div>
-            <div className="text-left hidden sm:block leading-none">
-              <p className="text-xs font-semibold text-slate-700 dark:text-white/80 group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate max-w-[96px]">{displayName}</p>
-              <p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5 truncate max-w-[96px]">{workspaceName}</p>
+            <div className="text-left hidden sm:block leading-tight">
+              <p style={{ fontSize: "var(--app-small)", fontWeight: 500, color: "var(--app-text)" }} className="truncate max-w-[96px]">{displayName}</p>
+              <p style={{ fontSize: "var(--app-micro)", color: "var(--app-text-quiet)", marginTop: 1 }} className="truncate max-w-[96px]">{workspaceName}</p>
             </div>
-            <svg className="w-3 h-3 text-slate-400 dark:text-white/20 group-hover:text-slate-600 dark:group-hover:text-white/40 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={1.8} style={{ color: "var(--app-text-quiet)" }} />
           </button>
 
           {/* Dropdown */}
           {profileOpen && (
             <div
-              className="absolute right-0 top-full mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-50"
-              style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border-strong)" }}
+              className="absolute right-0 top-full mt-2 w-60 overflow-hidden z-50"
+              style={{
+                background: "var(--app-bg-elevated)",
+                border: "1px solid var(--app-border-strong)",
+                borderRadius: "var(--app-radius)",
+                boxShadow: "0 12px 32px rgba(0, 0, 0, 0.5)",
+              }}
             >
               {/* Identity */}
-              <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--divider-color)" }}>
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--app-border)" }}>
                 <div className="flex items-center gap-2.5">
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
+                    className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+                    style={{ background: "var(--app-accent)", color: "#0a0a0a", fontSize: 13, fontWeight: 600 }}
                   >
                     {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{displayName}</p>
-                    <p className="text-xs text-slate-400 dark:text-white/30 truncate">{userEmail}</p>
+                    <p style={{ fontSize: "var(--app-body-sm)", fontWeight: 500, color: "var(--app-text)" }} className="truncate">{displayName}</p>
+                    <p style={{ fontSize: "var(--app-micro)", color: "var(--app-text-quiet)", marginTop: 1 }} className="truncate">{userEmail}</p>
                   </div>
                 </div>
-                <div className="mt-2.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${PLAN_STYLE[plan] ?? PLAN_STYLE.free}`}>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ fontSize: "var(--app-micro)", color: "var(--app-text-quiet)" }} className="truncate">{workspaceName}</span>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    padding: "2px 7px",
+                    borderRadius: 4,
+                    background: "var(--app-surface)",
+                    color: plan === "free" ? "var(--app-text-quiet)" : "var(--app-accent)",
+                    border: "1px solid var(--app-border)",
+                  }}>
                     {plan}
                   </span>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="p-1.5 space-y-0.5">
+              <div style={{ padding: 6 }}>
                 {[
-                  { href: "/settings",              icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", label: "Settings" },
-                  { href: "/lead-campaigns/credits", icon: "M13 10V3L4 14h7v7l9-11h-7z",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     label: "Buy Credits" },
-                  { href: "/inboxes",                icon: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      label: "Manage Inboxes" },
+                  { href: "/settings",              icon: Settings02Icon, label: "Settings" },
+                  { href: "/lead-campaigns/credits", icon: Coins01Icon,    label: "Buy Credits" },
+                  { href: "/inboxes",                icon: Mail01Icon,     label: "Manage Inboxes" },
                 ].map(item => (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setProfileOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-white/55 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                    className="flex items-center gap-2.5 transition-colors"
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 6,
+                      fontSize: "var(--app-body-sm)",
+                      color: "var(--app-text-muted)",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "var(--app-surface)"; e.currentTarget.style.color = "var(--app-text)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--app-text-muted)"; }}
                   >
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                    </svg>
+                    <HugeiconsIcon icon={item.icon} size={16} strokeWidth={1.8} />
                     {item.label}
                   </Link>
                 ))}
               </div>
 
-              <div className="p-1.5" style={{ borderTop: "1px solid var(--divider-color)" }}>
+              <div style={{ padding: 6, borderTop: "1px solid var(--app-border)" }}>
                 <button
                   onClick={signOut}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-500/70 dark:text-red-400/60 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all"
+                  className="w-full flex items-center gap-2.5 transition-colors"
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    fontSize: "var(--app-body-sm)",
+                    color: "var(--app-text-muted)",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)"; e.currentTarget.style.color = "#f87171"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--app-text-muted)"; }}
                 >
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
+                  <HugeiconsIcon icon={Logout03Icon} size={16} strokeWidth={1.8} />
                   Sign out
                 </button>
               </div>

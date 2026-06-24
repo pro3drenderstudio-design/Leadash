@@ -548,3 +548,130 @@
   font-feature-settings: "tnum";
   letter-spacing: 0.04em;
 }
+
+/* ─── Legacy utility bridge (opt-in) ──────────────────────────────────────
+ * Scoped to .v2-legacy-bridge so existing v2-app screens are not affected.
+ * Apply this class to root <div> of pages that still ship raw gray-X /
+ * slate-X / white-alpha Tailwind utilities so panels pick up v2-app tokens
+ * without touching every individual className. Cheaper than per-file
+ * rewrites; remove the class once a page is fully migrated.
+ */
+.v2-app .v2-legacy-bridge {
+  /* Backgrounds */
+  --tw-from-gray-950: var(--app-bg);
+  --tw-from-gray-900: var(--app-bg-elevated);
+  --tw-from-gray-800: var(--app-surface-strong);
+}
+.v2-app .v2-legacy-bridge .bg-gray-950,
+.v2-app .v2-legacy-bridge .dark\:bg-gray-950 { background-color: var(--app-bg) !important; }
+.v2-app .v2-legacy-bridge .bg-gray-900,
+.v2-app .v2-legacy-bridge .dark\:bg-gray-900 { background-color: var(--app-bg-elevated) !important; }
+.v2-app .v2-legacy-bridge .bg-gray-800,
+.v2-app .v2-legacy-bridge .dark\:bg-gray-800,
+.v2-app .v2-legacy-bridge .bg-gray-800\/50,
+.v2-app .v2-legacy-bridge .bg-gray-800\/40,
+.v2-app .v2-legacy-bridge .bg-gray-800\/30 { background-color: var(--app-surface-strong) !important; }
+.v2-app .v2-legacy-bridge .bg-gray-900\/40,
+.v2-app .v2-legacy-bridge .bg-gray-900\/30,
+.v2-app .v2-legacy-bridge .bg-gray-900\/50,
+.v2-app .v2-legacy-bridge .bg-gray-900\/60 { background-color: var(--app-surface) !important; }
+.v2-app .v2-legacy-bridge .bg-slate-950,
+.v2-app .v2-legacy-bridge .dark\:bg-slate-950 { background-color: var(--app-bg) !important; }
+.v2-app .v2-legacy-bridge .bg-slate-900,
+.v2-app .v2-legacy-bridge .dark\:bg-slate-900 { background-color: var(--app-bg-elevated) !important; }
+.v2-app .v2-legacy-bridge .bg-slate-800,
+.v2-app .v2-legacy-bridge .dark\:bg-slate-800 { background-color: var(--app-surface-strong) !important; }
+.v2-app .v2-legacy-bridge .bg-white\/5,
+.v2-app .v2-legacy-bridge .dark\:bg-white\/5,
+.v2-app .v2-legacy-bridge .bg-white\/4,
+.v2-app .v2-legacy-bridge .bg-white\/\[0\.04\] { background-color: var(--app-surface) !important; }
+.v2-app .v2-legacy-bridge .bg-white\/8,
+.v2-app .v2-legacy-bridge .bg-white\/10,
+.v2-app .v2-legacy-bridge .bg-white\/12,
+.v2-app .v2-legacy-bridge .dark\:bg-white\/10 { background-color: var(--app-surface-strong) !important; }
+
+.v2-app .v2-legacy-bridge .hover\:bg-gray-800:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-gray-700:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-white\/5:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-white\/8:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-white\/10:hover { background-color: var(--app-surface-strong) !important; }
+.v2-app .v2-legacy-bridge .hover\:bg-gray-900:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-white\/4:hover { background-color: var(--app-surface) !important; }
+
+/* Borders */
+.v2-app .v2-legacy-bridge .border-gray-800,
+.v2-app .v2-legacy-bridge .border-slate-800,
+.v2-app .v2-legacy-bridge .dark\:border-gray-800,
+.v2-app .v2-legacy-bridge .dark\:border-slate-800,
+.v2-app .v2-legacy-bridge .border-white\/8,
+.v2-app .v2-legacy-bridge .border-white\/10,
+.v2-app .v2-legacy-bridge .dark\:border-white\/\[0\.08\],
+.v2-app .v2-legacy-bridge .dark\:border-white\/10 { border-color: var(--app-border) !important; }
+.v2-app .v2-legacy-bridge .border-gray-700,
+.v2-app .v2-legacy-bridge .border-slate-700,
+.v2-app .v2-legacy-bridge .dark\:border-gray-700,
+.v2-app .v2-legacy-bridge .border-white\/15,
+.v2-app .v2-legacy-bridge .border-white\/20 { border-color: var(--app-border-strong) !important; }
+
+/* Text */
+.v2-app .v2-legacy-bridge .text-white,
+.v2-app .v2-legacy-bridge .dark\:text-white { color: var(--app-text) !important; }
+.v2-app .v2-legacy-bridge .text-gray-100,
+.v2-app .v2-legacy-bridge .text-gray-200,
+.v2-app .v2-legacy-bridge .text-gray-300,
+.v2-app .v2-legacy-bridge .dark\:text-gray-200,
+.v2-app .v2-legacy-bridge .dark\:text-gray-300,
+.v2-app .v2-legacy-bridge .text-white\/80,
+.v2-app .v2-legacy-bridge .text-white\/90 { color: var(--app-text) !important; }
+.v2-app .v2-legacy-bridge .text-gray-400,
+.v2-app .v2-legacy-bridge .dark\:text-gray-400,
+.v2-app .v2-legacy-bridge .text-white\/55,
+.v2-app .v2-legacy-bridge .text-white\/60,
+.v2-app .v2-legacy-bridge .text-white\/65,
+.v2-app .v2-legacy-bridge .text-white\/70 { color: var(--app-text-muted) !important; }
+.v2-app .v2-legacy-bridge .text-gray-500,
+.v2-app .v2-legacy-bridge .text-gray-600,
+.v2-app .v2-legacy-bridge .dark\:text-gray-500,
+.v2-app .v2-legacy-bridge .text-white\/30,
+.v2-app .v2-legacy-bridge .text-white\/35,
+.v2-app .v2-legacy-bridge .text-white\/40,
+.v2-app .v2-legacy-bridge .text-white\/45,
+.v2-app .v2-legacy-bridge .text-white\/50 { color: var(--app-text-quiet) !important; }
+.v2-app .v2-legacy-bridge .text-white\/20,
+.v2-app .v2-legacy-bridge .text-white\/25 { color: var(--app-text-faint) !important; }
+.v2-app .v2-legacy-bridge .hover\:text-white:hover,
+.v2-app .v2-legacy-bridge .dark\:hover\:text-white:hover,
+.v2-app .v2-legacy-bridge .hover\:text-gray-200:hover,
+.v2-app .v2-legacy-bridge .hover\:text-gray-300:hover { color: var(--app-text) !important; }
+
+/* Slate (light-mode siblings) — same idea */
+.v2-app .v2-legacy-bridge .text-slate-700,
+.v2-app .v2-legacy-bridge .text-slate-800 { color: var(--app-text) !important; }
+.v2-app .v2-legacy-bridge .text-slate-500,
+.v2-app .v2-legacy-bridge .text-slate-600 { color: var(--app-text-muted) !important; }
+.v2-app .v2-legacy-bridge .text-slate-400 { color: var(--app-text-quiet) !important; }
+.v2-app .v2-legacy-bridge .border-slate-200,
+.v2-app .v2-legacy-bridge .border-slate-300 { border-color: var(--app-border) !important; }
+
+/* Indigo → accent */
+.v2-app .v2-legacy-bridge .bg-indigo-600,
+.v2-app .v2-legacy-bridge .bg-indigo-500,
+.v2-app .v2-legacy-bridge .hover\:bg-indigo-500:hover,
+.v2-app .v2-legacy-bridge .hover\:bg-indigo-600:hover { background-color: var(--app-accent) !important; color: #0a0a0a !important; }
+.v2-app .v2-legacy-bridge .text-indigo-300,
+.v2-app .v2-legacy-bridge .text-indigo-400 { color: var(--app-accent) !important; }
+.v2-app .v2-legacy-bridge .border-indigo-500 { border-color: var(--app-accent) !important; }
+.v2-app .v2-legacy-bridge .focus\:border-indigo-500:focus,
+.v2-app .v2-legacy-bridge .focus\:ring-indigo-500:focus { border-color: var(--app-accent) !important; box-shadow: none !important; }
+
+/* Inputs */
+.v2-app .v2-legacy-bridge input:not([type="checkbox"]):not([type="radio"]),
+.v2-app .v2-legacy-bridge textarea,
+.v2-app .v2-legacy-bridge select {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+.v2-app .v2-legacy-bridge input:focus,
+.v2-app .v2-legacy-bridge textarea:focus,
+.v2-app .v2-legacy-bridge select:focus { border-color: var(--app-accent); outline: none; }
