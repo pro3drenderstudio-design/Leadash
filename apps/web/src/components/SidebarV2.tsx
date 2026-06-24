@@ -8,6 +8,7 @@
  * Sidebar:
  *   - v2-app palette (deeper sunken background, accent left-rail on active)
  *   - Tighter type, denser rows, fewer hover gradients
+ *   - Hugeicons everywhere (not the raw SVG paths from the legacy data)
  *   - Same Workspace pinned-bottom group and credits + sign out cluster
  *
  * Imports v2-app.css for tokens — safe to load multiple times.
@@ -15,6 +16,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/components/SidebarContext";
 import { useCredits } from "@/components/CreditsProvider";
@@ -25,7 +27,37 @@ import {
   type NavSection,
   type NavTab,
 } from "@/lib/nav/sections";
+import {
+  Dashboard01Icon,
+  Mail01Icon,
+  UserSearch01Icon,
+  Wallet01Icon,
+  GraduationScrollIcon,
+  Settings02Icon,
+  HelpCircleIcon,
+  HeadsetIcon,
+  Coins01Icon,
+  Logout03Icon,
+} from "@/v2-app/icons";
 import "@/v2-app/v2-app.css";
+
+// Map the legacy SECTIONS data (which carries SVG path strings) to the
+// Hugeicons set used everywhere else in v2-app. Keyed by section id so
+// nav.ts can evolve without touching this file.
+const SECTION_ICONS: Record<string, IconSvgElement> = {
+  dashboard: Dashboard01Icon,
+  outreach:  Mail01Icon,
+  leadgen:   UserSearch01Icon,
+  leadpay:   Wallet01Icon,
+  academy:   GraduationScrollIcon,
+};
+
+// Workspace tabs are keyed by href.
+const WORKSPACE_TAB_ICONS: Record<string, IconSvgElement> = {
+  "/settings": Settings02Icon,
+  "/support":  HeadsetIcon,
+  "/help":     HelpCircleIcon,
+};
 
 interface Props {
   workspaceName: string;
@@ -40,6 +72,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
 
   function SectionLink({ section }: { section: NavSection }) {
     const active = activeSection?.id === section.id;
+    const icon = SECTION_ICONS[section.id] ?? Dashboard01Icon;
     return (
       <Link
         href={section.href}
@@ -47,13 +80,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
         className="app-sidebar-link"
         data-active={active ? "true" : "false"}
       >
-        <svg
-          width="15" height="15" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth={1.5}
-          className="app-sidebar-link-icon"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d={section.icon} />
-        </svg>
+        <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} className="app-sidebar-link-icon" />
         <span>{section.label}</span>
         {section.badge && (
           <span
@@ -79,6 +106,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
 
   function WorkspaceTabLink({ tab }: { tab: NavTab }) {
     const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
+    const icon = WORKSPACE_TAB_ICONS[tab.href];
     return (
       <Link
         href={tab.href}
@@ -86,14 +114,8 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
         className="app-sidebar-link"
         data-active={active ? "true" : "false"}
       >
-        {tab.icon && (
-          <svg
-            width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth={1.5}
-            className="app-sidebar-link-icon"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
-          </svg>
+        {icon && (
+          <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} className="app-sidebar-link-icon" />
         )}
         <span>{tab.label}</span>
       </Link>
@@ -262,9 +284,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
           >
             <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <HugeiconsIcon icon={Coins01Icon} size={15} strokeWidth={1.5} />
                 Credits
               </span>
               <span style={{ fontSize: 12, color: "var(--app-text)", fontVariantNumeric: "tabular-nums" }}>
@@ -292,9 +312,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
               fontSize: 13,
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+            <HugeiconsIcon icon={Logout03Icon} size={15} strokeWidth={1.5} />
             <span>Sign out</span>
           </button>
         </div>
