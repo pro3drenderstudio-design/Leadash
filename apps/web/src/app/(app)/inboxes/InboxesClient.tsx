@@ -6,6 +6,7 @@ import { getInboxes, deleteInbox, updateInbox, importInboxes } from "@/lib/outre
 import dynamic from "next/dynamic";
 const WarmupClient = dynamic(() => import("@/app/(app)/warmup/WarmupClient"), { ssr: false });
 import { wsFetch, getWorkspaceId } from "@/lib/workspace/client";
+import "@/v2-app/v2-app.css";
 import { useCurrency } from "@/lib/currency";
 import type { OutreachInboxSafe, ImportResult as InboxImportResult } from "@/types/outreach";
 
@@ -944,6 +945,7 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
   }
 
   return (
+    <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
     <div className="p-6 max-w-4xl mx-auto">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-xl ${toast.startsWith("Error") ? "bg-red-500/20 border border-red-500/40 text-red-300" : "bg-green-500/20 border border-green-500/40 text-green-300"}`}>
@@ -953,19 +955,21 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white">Inboxes</h1>
-          <p className="text-white/40 text-sm mt-0.5">Manage sending accounts for cold outreach</p>
+          <h1 className="app-h1">Inboxes</h1>
+          <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+            Manage sending accounts for cold outreach.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {activeTab === "inboxes" && (<>
             <button
               onClick={() => { setShowImport(true); setImportResult(null); setShowMapping(false); setCsvHeaders([]); setImportFile(null); }}
-              className="px-4 py-2 bg-white/8 hover:bg-white/12 text-white/70 hover:text-white rounded-xl text-sm font-semibold transition-colors border border-white/10"
+              className="app-btn app-btn-secondary"
             >
               Import CSV
             </button>
-            <Link href="/inboxes/new" className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold transition-colors">
-              + Add Inbox
+            <Link href="/inboxes/new" className="app-btn app-btn-primary">
+              + Add inbox
             </Link>
           </>)}
           {activeTab === "domains" && (
@@ -2259,6 +2263,7 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
           </div>
         );
       })()}
+    </div>
     </div>
   );
 }
