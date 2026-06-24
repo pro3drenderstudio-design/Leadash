@@ -60,6 +60,7 @@ CREATE INDEX IF NOT EXISTS wa_messages_provider_idx
 
 ALTER TABLE whatsapp_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "wa_messages_admin" ON whatsapp_messages;
 CREATE POLICY "wa_messages_admin"
   ON whatsapp_messages
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));

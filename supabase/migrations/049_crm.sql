@@ -33,6 +33,7 @@ CREATE INDEX IF NOT EXISTS crm_contacts_phone_idx
 
 ALTER TABLE crm_contacts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "crm_contacts_admin" ON crm_contacts;
 CREATE POLICY "crm_contacts_admin"
   ON crm_contacts
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -87,6 +88,7 @@ CREATE INDEX IF NOT EXISTS crm_convos_snooze_idx
 
 ALTER TABLE crm_conversations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "crm_conversations_admin" ON crm_conversations;
 CREATE POLICY "crm_conversations_admin"
   ON crm_conversations
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -149,6 +151,7 @@ CREATE INDEX IF NOT EXISTS crm_messages_provider_idx
 
 ALTER TABLE crm_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "crm_messages_admin" ON crm_messages;
 CREATE POLICY "crm_messages_admin"
   ON crm_messages
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -170,6 +173,7 @@ CREATE INDEX IF NOT EXISTS crm_events_message_idx
 
 ALTER TABLE crm_message_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "crm_message_events_admin" ON crm_message_events;
 CREATE POLICY "crm_message_events_admin"
   ON crm_message_events
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -190,6 +194,7 @@ CREATE INDEX IF NOT EXISTS crm_notes_convo_idx
 
 ALTER TABLE crm_notes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "crm_notes_admin" ON crm_notes;
 CREATE POLICY "crm_notes_admin"
   ON crm_notes
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));

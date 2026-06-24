@@ -35,6 +35,7 @@ CREATE INDEX IF NOT EXISTS automation_flows_trigger_idx
 
 ALTER TABLE automation_flows ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "automation_flows_admin" ON automation_flows;
 CREATE POLICY "automation_flows_admin"
   ON automation_flows
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -56,6 +57,7 @@ CREATE INDEX IF NOT EXISTS flow_versions_flow_idx
 
 ALTER TABLE automation_flow_versions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "flow_versions_admin" ON automation_flow_versions;
 CREATE POLICY "flow_versions_admin"
   ON automation_flow_versions
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -94,6 +96,7 @@ CREATE INDEX IF NOT EXISTS executions_workspace_idx
 
 ALTER TABLE automation_executions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "executions_admin" ON automation_executions;
 CREATE POLICY "executions_admin"
   ON automation_executions
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -122,6 +125,7 @@ CREATE INDEX IF NOT EXISTS steps_execution_idx
 
 ALTER TABLE automation_execution_steps ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "execution_steps_admin" ON automation_execution_steps;
 CREATE POLICY "execution_steps_admin"
   ON automation_execution_steps
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));

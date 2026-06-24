@@ -58,10 +58,12 @@ CREATE INDEX IF NOT EXISTS funnel_states_bundle_offer_idx
 ALTER TABLE funnel_states ENABLE ROW LEVEL SECURITY;
 
 -- Users can read/write their own row; admins have full access
+DROP POLICY IF EXISTS "funnel_states_own" ON funnel_states;
 CREATE POLICY "funnel_states_own"
   ON funnel_states FOR ALL
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "funnel_states_admin" ON funnel_states;
 CREATE POLICY "funnel_states_admin"
   ON funnel_states
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));
@@ -72,6 +74,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$;
 
+DROP TRIGGER IF EXISTS funnel_states_updated_at ON funnel_states;
 CREATE TRIGGER funnel_states_updated_at
   BEFORE UPDATE ON funnel_states
   FOR EACH ROW EXECUTE FUNCTION update_funnel_states_updated_at();
@@ -103,10 +106,12 @@ CREATE INDEX IF NOT EXISTS entitlements_active_idx
 ALTER TABLE workspace_entitlements ENABLE ROW LEVEL SECURITY;
 
 -- Members can read their own workspace entitlements; admins have full access
+DROP POLICY IF EXISTS "entitlements_workspace_read" ON workspace_entitlements;
 CREATE POLICY "entitlements_workspace_read"
   ON workspace_entitlements FOR SELECT
   USING (is_workspace_member(workspace_id));
 
+DROP POLICY IF EXISTS "entitlements_admin" ON workspace_entitlements;
 CREATE POLICY "entitlements_admin"
   ON workspace_entitlements
   USING (EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid()));

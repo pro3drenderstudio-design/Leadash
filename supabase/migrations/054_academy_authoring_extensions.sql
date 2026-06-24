@@ -48,8 +48,10 @@ CREATE INDEX IF NOT EXISTS academy_lesson_blocks_lesson_idx
   ON academy_lesson_blocks (lesson_id, position);
 
 ALTER TABLE academy_lesson_blocks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "lesson_blocks_public_read" ON academy_lesson_blocks;
 CREATE POLICY "lesson_blocks_public_read"
   ON academy_lesson_blocks FOR SELECT USING (true);
+DROP POLICY IF EXISTS "lesson_blocks_admin_all" ON academy_lesson_blocks;
 CREATE POLICY "lesson_blocks_admin_all"
   ON academy_lesson_blocks USING (
     EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid())
@@ -77,8 +79,10 @@ CREATE INDEX IF NOT EXISTS academy_lesson_resources_lesson_idx
   ON academy_lesson_resources (lesson_id, position);
 
 ALTER TABLE academy_lesson_resources ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "lesson_resources_public_read" ON academy_lesson_resources;
 CREATE POLICY "lesson_resources_public_read"
   ON academy_lesson_resources FOR SELECT USING (true);
+DROP POLICY IF EXISTS "lesson_resources_admin_all" ON academy_lesson_resources;
 CREATE POLICY "lesson_resources_admin_all"
   ON academy_lesson_resources USING (
     EXISTS (SELECT 1 FROM admins WHERE user_id = auth.uid())
