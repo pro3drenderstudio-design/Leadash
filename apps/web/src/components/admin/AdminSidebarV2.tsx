@@ -155,14 +155,15 @@ export default function AdminSidebarV2({ adminEmail, adminRole, adminModules }: 
 
   return (
     <>
-      {/* Mobile top bar */}
+      {/* Mobile top bar — `flex` is a Tailwind class instead of an inline
+          `display: flex` so `lg:hidden` actually wins on desktop. The inline
+          display previously overrode the responsive utility and the bar
+          showed everywhere, burying page headers underneath. */}
       <div
-        className="v2-app fixed top-0 left-0 right-0 lg:hidden"
+        className="v2-app fixed top-0 left-0 right-0 lg:hidden flex items-center"
         style={{
           height: 48,
           zIndex: 30,
-          display: "flex",
-          alignItems: "center",
           padding: "0 16px",
           gap: 12,
           background: "var(--app-bg-sunken)",
@@ -390,12 +391,10 @@ export default function AdminSidebarV2({ adminEmail, adminRole, adminModules }: 
         </div>
       </aside>
 
-      {/* Desktop spacer */}
-      <div
-        aria-hidden
-        className="hidden lg:block v2-app"
-        style={{ width: "var(--app-sidebar-w)", flexShrink: 0 }}
-      />
+      {/* Desktop spacer removed — on desktop the aside is `position: sticky`
+          (see the @media rule below) which keeps it in normal flow, so a
+          separate spacer doubled the sidebar-column width and pushed content
+          240px to the right. The aside itself reserves its space now. */}
 
       <style>{`
         @media (max-width: 1023px) {

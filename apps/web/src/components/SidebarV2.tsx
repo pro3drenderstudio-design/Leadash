@@ -300,12 +300,9 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
         </div>
       </aside>
 
-      {/* Desktop spacer */}
-      <div
-        aria-hidden
-        style={{ width: "var(--app-sidebar-w)", flexShrink: 0 }}
-        className="hidden lg:block v2-app"
-      />
+      {/* Desktop spacer removed — same reason as in AdminSidebarV2: on
+          desktop the aside is sticky-positioned (in-flow), so a separate
+          spacer doubled the gap to the left of page content. */}
 
       <style>{`
         @media (max-width: 1023px) {

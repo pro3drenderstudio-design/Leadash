@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
+import LessonContentEditor from "./LessonContentEditor";
+import CourseBannerEditor from "./CourseBannerEditor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -588,6 +590,29 @@ export default function AdminAcademyPage() {
                       </label>
                     </div>
 
+                    {/* Lesson-level CTA — surfaces as a primary button under
+                        the description in the student player. Optional. */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label-xs">CTA text (optional)</label>
+                        <input
+                          value={(editingLesson as Record<string, unknown>).cta_text as string ?? ""}
+                          onChange={e => setEditingLesson(l => ({ ...l, cta_text: e.target.value }) as typeof editingLesson)}
+                          placeholder="Download workbook"
+                          className="input-base w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="label-xs">CTA URL (optional)</label>
+                        <input
+                          value={(editingLesson as Record<string, unknown>).cta_url as string ?? ""}
+                          onChange={e => setEditingLesson(l => ({ ...l, cta_url: e.target.value }) as typeof editingLesson)}
+                          placeholder="https://… or /academy/…"
+                          className="input-base w-full"
+                        />
+                      </div>
+                    </div>
+
                     {/* Video upload (video lessons only) */}
                     {(editingLesson.lesson_type ?? selectedLesson.lesson_type) === "video" && (
                       <div className="border border-dashed border-gray-700 rounded-xl p-5">
@@ -630,6 +655,13 @@ export default function AdminAcademyPage() {
                           <p className="text-sm text-red-400">Upload failed. Try again.</p>
                         )}
                       </div>
+                    )}
+
+                    {/* Lesson content extensions — text blocks + resources.
+                        Renders only after the lesson exists on the server so
+                        block/resource creation has a foreign key to point at. */}
+                    {selectedLesson.id && (
+                      <LessonContentEditor lessonId={selectedLesson.id} />
                     )}
                   </div>
                 </div>
@@ -917,6 +949,25 @@ export default function AdminAcademyPage() {
                     <div><span className="text-gray-600 text-xs">Certificate</span><br />{p.certificate_enabled ? "Yes" : "No"}</div>
                   </div>
                 )}
+
+                {/* Course banner editor — always visible, lives below the
+                    basic product fields. Authors don't need to click "Edit"
+                    to manage banner content. */}
+                <div className="mt-4 pt-4 border-t border-gray-800">
+                  <CourseBannerEditor
+                    productId={p.id}
+                    initial={p as unknown as {
+                      banner_image_url: string | null;
+                      banner_headline:  string | null;
+                      banner_sub:       string | null;
+                      banner_cta_text:  string | null;
+                      banner_cta_url:   string | null;
+                    }}
+                    onSaved={next => {
+                      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, ...next } : x));
+                    }}
+                  />
+                </div>
               </div>
             ))}
           </div>
