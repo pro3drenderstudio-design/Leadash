@@ -197,6 +197,48 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
           </button>
         </div>
 
+        {/* Search trigger — opens the global ⌘K palette */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("app:open-command-palette"))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            margin: "10px 12px 4px",
+            padding: "7px 10px",
+            background: "var(--app-surface)",
+            border: "1px solid var(--app-border-strong)",
+            borderRadius: "var(--app-radius-sm)",
+            color: "var(--app-text-quiet)",
+            fontSize: 12,
+            cursor: "pointer",
+            transition: "border-color var(--app-dur) var(--app-ease), color var(--app-dur) var(--app-ease)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-text-quiet)"; e.currentTarget.style.color = "var(--app-text)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.color = "var(--app-text-quiet)"; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <span style={{ flex: 1, textAlign: "left" }}>Search</span>
+          <span
+            style={{
+              fontSize: 10,
+              padding: "1px 5px",
+              borderRadius: 3,
+              background: "var(--app-bg-elevated)",
+              border: "1px solid var(--app-border-strong)",
+              color: "var(--app-text-muted)",
+              letterSpacing: "0.04em",
+              fontWeight: 500,
+            }}
+          >
+            ⌘K
+          </span>
+        </button>
+
         {/* Primary nav */}
         <nav className="app-sidebar-nav">
           {SECTIONS.map(s => <SectionLink key={s.id} section={s} />)}

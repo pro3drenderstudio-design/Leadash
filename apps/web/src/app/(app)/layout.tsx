@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getWorkspaceContext } from "@/lib/workspace/context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/SidebarV2";
+import CommandPaletteMount from "@/v2-app/CommandPaletteMount";
+import "@/v2-app/v2-app.css";
 import AppHeader from "@/components/AppHeader";
 import SectionTabs from "@/components/SectionTabs";
 import WorkspaceProvider from "@/components/WorkspaceProvider";
@@ -96,6 +98,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       initialMonthlyCredits={workspace.subscription_credits_balance ?? 0}
     >
     <SidebarProvider>
+      <CommandPaletteMount />
       <div className="flex h-screen overflow-hidden">
         <Sidebar
           workspaceName={workspace.name}

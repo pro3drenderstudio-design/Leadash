@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import AdminSidebar from "@/components/admin/AdminSidebarV2";
+import CommandPaletteMount from "@/v2-app/CommandPaletteMount";
 import "@/v2-app/v2-app.css";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import { resolveModules, type AdminModuleKey } from "@/lib/admin/modules";
@@ -35,6 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="v2-app" style={{ background: "var(--app-bg)" }}>
+    <CommandPaletteMount />
     <ImpersonationBanner />
     <div className="flex h-screen overflow-hidden">
       <AdminSidebar
