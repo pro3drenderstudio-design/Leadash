@@ -485,6 +485,39 @@ export default function AdminAcademyPage() {
         .academy-admin .ac-chip.success { color: #34d399; border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.08); }
         .academy-admin .ac-chip.warn    { color: #fbbf24; border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.08); }
         .academy-admin .ac-chip.info    { color: var(--app-accent); border-color: var(--app-accent-line); background: var(--app-accent-soft); }
+
+        /* Horizontal-scroll wrapper for wide tables on narrow viewports */
+        .academy-admin .ac-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .academy-admin .ac-table-scroll .ac-table { min-width: 720px; }
+
+        @media (max-width: 1023px) {
+          /* Course-detail: left-rail above, content below */
+          .academy-admin .acad-detail { flex-direction: column; min-height: auto; }
+          .academy-admin .acad-detail-rail {
+            width: 100% !important;
+            border-right: none !important;
+            border-bottom: 1px solid var(--app-border);
+            padding: 12px !important;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+          }
+          .academy-admin .acad-detail-rail > button { width: auto !important; flex: 1 1 auto; }
+          .academy-admin .acad-detail-rail > div:last-child { display: none; }
+
+          /* Curriculum: tree above, lesson editor below */
+          .academy-admin .acad-curriculum-split { flex-direction: column; height: auto !important; }
+          .academy-admin .acad-curriculum-tree {
+            width: 100% !important;
+            border-right: none !important;
+            border-bottom: 1px solid var(--app-border);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .academy-admin .ac-table th,
+          .academy-admin .ac-table td { padding: 9px 12px; font-size: 12px; }
+        }
       `}</style>
 
       {/* Top bar */}
@@ -628,7 +661,7 @@ export default function AdminAcademyPage() {
               </form>
 
               <div className="ac-card" style={{ overflow: "hidden" }}>
-                <table className="ac-table">
+                <div className="ac-table-scroll"><table className="ac-table">
                   <thead>
                     <tr>
                       <th>Cohort</th>
@@ -672,7 +705,7 @@ export default function AdminAcademyPage() {
                       <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No cohorts yet.</td></tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -684,7 +717,7 @@ export default function AdminAcademyPage() {
                 <h3 style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>All enrollments</h3>
                 <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>{enrollments.length} total</span>
               </div>
-              <table className="ac-table">
+              <div className="ac-table-scroll"><table className="ac-table">
                 <thead>
                   <tr>
                     <th>Workspace</th>
@@ -710,7 +743,7 @@ export default function AdminAcademyPage() {
                     <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No enrollments yet.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
@@ -755,7 +788,7 @@ export default function AdminAcademyPage() {
               </form>
 
               <div className="ac-card" style={{ overflow: "hidden" }}>
-                <table className="ac-table">
+                <div className="ac-table-scroll"><table className="ac-table">
                   <thead>
                     <tr>
                       <th>Code</th>
@@ -785,7 +818,7 @@ export default function AdminAcademyPage() {
                       <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No codes yet.</td></tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -954,9 +987,9 @@ export default function AdminAcademyPage() {
 
           {/* ── COURSE DETAIL (Kajabi-style) ──────────────────────────────── */}
           {openProduct && product && (
-            <div style={{ display: "flex", minHeight: "calc(100vh - 84px)" }}>
+            <div className="acad-detail" style={{ display: "flex", minHeight: "calc(100vh - 84px)" }}>
               {/* Left rail */}
-              <aside style={{
+              <aside className="acad-detail-rail" style={{
                 width: 220, flexShrink: 0,
                 borderRight: "1px solid var(--app-border)",
                 background: "var(--app-bg-sunken)",
@@ -1014,9 +1047,9 @@ export default function AdminAcademyPage() {
               {/* Right pane */}
               <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
                 {courseView === "curriculum" && (
-                  <div style={{ display: "flex", height: "calc(100vh - 84px)" }}>
+                  <div className="acad-curriculum-split" style={{ display: "flex", height: "calc(100vh - 84px)" }}>
                     {/* Section + lesson tree */}
-                    <div style={{
+                    <div className="acad-curriculum-tree" style={{
                       width: 300, flexShrink: 0,
                       borderRight: "1px solid var(--app-border)",
                       display: "flex", flexDirection: "column",
@@ -1375,7 +1408,7 @@ export default function AdminAcademyPage() {
                         <p style={{ fontSize: 13, color: "var(--app-text-quiet)" }}>No enrollments yet.</p>
                       ) : (
                         <div style={{ maxHeight: 320, overflowY: "auto" }}>
-                          <table className="ac-table">
+                          <div className="ac-table-scroll"><table className="ac-table">
                             <thead>
                               <tr>
                                 <th>Workspace</th>
@@ -1394,7 +1427,7 @@ export default function AdminAcademyPage() {
                                 </tr>
                               ))}
                             </tbody>
-                          </table>
+                          </table></div>
                         </div>
                       )}
                     </div>

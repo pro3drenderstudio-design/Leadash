@@ -675,3 +675,28 @@
 .v2-app .v2-legacy-bridge input:focus,
 .v2-app .v2-legacy-bridge textarea:focus,
 .v2-app .v2-legacy-bridge select:focus { border-color: var(--app-accent); outline: none; }
+
+/* ─── Responsive: sidebar drawer on mobile ───────────────────────────────
+ * Both SidebarV2 and AdminSidebarV2 render their root as `aside.v2-app`
+ * with a `data-open` attribute. Below 1024px we treat the sidebar as a
+ * fixed-position drawer that translates offscreen unless data-open="true".
+ * Above 1024px the sidebar stays in-flow and the inline `position: fixed`
+ * already set on the aside reserves the columns via a hidden lg:block
+ * spacer div sibling.
+ */
+@media (max-width: 1023px) {
+  .v2-app aside.v2-app[data-open] {
+    transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .v2-app aside.v2-app[data-open="false"] {
+    transform: translateX(-100%);
+  }
+  .v2-app aside.v2-app[data-open="true"] {
+    transform: translateX(0);
+  }
+}
+
+/* ─── Responsive: AppHeader + content padding ──────────────────────────── */
+@media (max-width: 768px) {
+  .v2-app .app-shell-content { padding: 16px; }
+}
