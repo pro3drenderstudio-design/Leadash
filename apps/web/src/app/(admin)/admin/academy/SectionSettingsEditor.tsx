@@ -53,27 +53,32 @@ export default function SectionSettingsEditor({ sectionId, initialCta, onSaved }
     }
   }
 
-  const input = "w-full bg-gray-950 border border-gray-800 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500";
-  const label = "block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1";
-
   return (
-    <div className="px-4 py-3 bg-gray-900/30 border-l-2 border-gray-700 text-xs space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Section CTA</span>
-        {msg && <span className="text-[10px] text-emerald-400">{msg}</span>}
+    <div style={{
+      padding: "12px 14px",
+      background: "var(--app-surface)",
+      borderLeft: "2px solid var(--app-border-strong)",
+      borderRadius: 4,
+      display: "flex", flexDirection: "column", gap: 10,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--app-text-quiet)", fontWeight: 600 }}>
+          Section CTA
+        </span>
+        {msg && <span style={{ fontSize: 10, color: "#34d399" }}>{msg}</span>}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <div>
-          <label className={label}>Label</label>
-          <input value={text} onChange={e => setText(e.target.value)} placeholder="Continue to next module" className={input} />
+          <label className="ac-label">Label</label>
+          <input value={text} onChange={e => setText(e.target.value)} placeholder="Continue to next module" className="ac-input" />
         </div>
         <div>
-          <label className={label}>URL</label>
-          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://… or /academy/…" className={input} />
+          <label className="ac-label">URL</label>
+          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://… or /academy/…" className="ac-input" />
         </div>
       </div>
-      <div className="flex justify-end">
-        <button onClick={save} disabled={saving} className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded">
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button onClick={save} disabled={saving} className="app-btn app-btn-primary" style={{ fontSize: 11, padding: "4px 10px" }}>
           {saving ? "Saving…" : "Save CTA"}
         </button>
       </div>

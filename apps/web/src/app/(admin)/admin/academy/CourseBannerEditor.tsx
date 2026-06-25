@@ -81,76 +81,77 @@ export default function CourseBannerEditor({ productId, initial, onSaved }: Prop
     }
   }
 
-  const label = "block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1";
-  const input = "w-full bg-gray-950 border border-gray-800 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500";
-
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-300">Course banner</span>
-        {msg && <span className="text-xs text-emerald-400">{msg}</span>}
+    <div style={{
+      background: "var(--app-bg-elevated)",
+      border: "1px solid var(--app-border)",
+      borderRadius: "var(--app-radius-lg)",
+      padding: 20,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>Course banner</span>
+        {msg && <span style={{ fontSize: 12, color: "#34d399" }}>{msg}</span>}
       </div>
 
-      <div>
-        <label className={label}>Image URL (optional)</label>
-        <input
-          value={fields.banner_image_url ?? ""}
-          onChange={e => setFields(f => ({ ...f, banner_image_url: e.target.value }))}
-          placeholder="https://…/banner.jpg"
-          className={input}
-        />
-      </div>
-
-      <div>
-        <label className={label}>Headline</label>
-        <input
-          value={fields.banner_headline ?? ""}
-          onChange={e => setFields(f => ({ ...f, banner_headline: e.target.value }))}
-          placeholder="Welcome to the challenge"
-          className={input}
-        />
-      </div>
-
-      <div>
-        <label className={label}>Subtitle</label>
-        <textarea
-          rows={2}
-          value={fields.banner_sub ?? ""}
-          onChange={e => setFields(f => ({ ...f, banner_sub: e.target.value }))}
-          placeholder="Short context line that sits under the headline."
-          className={input + " resize-none"}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label className={label}>CTA text</label>
+          <label className="ac-label">Image URL (optional)</label>
           <input
-            value={fields.banner_cta_text ?? ""}
-            onChange={e => setFields(f => ({ ...f, banner_cta_text: e.target.value }))}
-            placeholder="Start the challenge"
-            className={input}
+            value={fields.banner_image_url ?? ""}
+            onChange={e => setFields(f => ({ ...f, banner_image_url: e.target.value }))}
+            placeholder="https://…/banner.jpg"
+            className="ac-input"
           />
         </div>
+
         <div>
-          <label className={label}>CTA URL</label>
+          <label className="ac-label">Headline</label>
           <input
-            value={fields.banner_cta_url ?? ""}
-            onChange={e => setFields(f => ({ ...f, banner_cta_url: e.target.value }))}
-            placeholder="https://… or /academy/…"
-            className={input}
+            value={fields.banner_headline ?? ""}
+            onChange={e => setFields(f => ({ ...f, banner_headline: e.target.value }))}
+            placeholder="Welcome to the challenge"
+            className="ac-input"
           />
         </div>
-      </div>
 
-      <div className="flex justify-end pt-1">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded"
-        >
-          {saving ? "Saving…" : "Save banner"}
-        </button>
+        <div>
+          <label className="ac-label">Subtitle</label>
+          <textarea
+            rows={2}
+            value={fields.banner_sub ?? ""}
+            onChange={e => setFields(f => ({ ...f, banner_sub: e.target.value }))}
+            placeholder="Short context line that sits under the headline."
+            className="ac-textarea"
+            style={{ resize: "none" }}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label className="ac-label">CTA text</label>
+            <input
+              value={fields.banner_cta_text ?? ""}
+              onChange={e => setFields(f => ({ ...f, banner_cta_text: e.target.value }))}
+              placeholder="Start the challenge"
+              className="ac-input"
+            />
+          </div>
+          <div>
+            <label className="ac-label">CTA URL</label>
+            <input
+              value={fields.banner_cta_url ?? ""}
+              onChange={e => setFields(f => ({ ...f, banner_cta_url: e.target.value }))}
+              placeholder="https://… or /academy/…"
+              className="ac-input"
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
+          <button onClick={save} disabled={saving} className="app-btn app-btn-primary">
+            {saving ? "Saving…" : "Save banner"}
+          </button>
+        </div>
       </div>
     </div>
   );

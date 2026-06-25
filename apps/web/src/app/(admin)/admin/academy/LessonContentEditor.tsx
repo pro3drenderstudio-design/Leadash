@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import TiptapEditor from "./TiptapEditor";
 import SortableList, { DragHandle } from "./SortableList";
+import { useAcademyDialog } from "./AcademyDialog";
 
 type Block = {
   id?: string;
@@ -45,6 +46,7 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading]     = useState(true);
   const [msg, setMsg]             = useState<string | null>(null);
+  const dialog = useAcademyDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,7 +90,8 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
   }
 
   async function deleteBlock(id: string) {
-    if (!confirm("Delete this block?")) return;
+    const ok = await dialog.askConfirm("Delete this block?", { danger: true });
+    if (!ok) return;
     await fetch(`/api/admin/academy/lesson-blocks?id=${id}`, { method: "DELETE" });
     setBlocks(bs => bs.filter(b => b.id !== id));
   }
@@ -140,7 +143,8 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
   }
 
   async function deleteResource(id: string) {
-    if (!confirm("Delete this resource?")) return;
+    const ok = await dialog.askConfirm("Delete this resource?", { danger: true });
+    if (!ok) return;
     await fetch(`/api/admin/academy/lesson-resources?id=${id}`, { method: "DELETE" });
     setResources(rs => rs.filter(r => r.id !== id));
   }
@@ -178,54 +182,62 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
-  if (loading) return <div className="text-xs text-gray-500">Loading lesson content…</div>;
+  if (loading) return <div style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>Loading lesson content…</div>;
 
-  const card  = "rounded-lg border border-gray-800 bg-gray-900/40 p-3";
-  const label = "block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1";
-  const input = "w-full bg-gray-950 border border-gray-800 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500";
+  const cardStyle: React.CSSProperties = {
+    background: "var(--app-bg-elevated)",
+    border: "1px solid var(--app-border)",
+    borderRadius: "var(--app-radius)",
+    padding: 14,
+  };
 
   return (
-    <div className="space-y-6 mt-6 pt-6 border-t border-gray-800">
-      {msg && <div className="text-xs text-emerald-400">{msg}</div>}
+    <div style={{
+      display: "flex", flexDirection: "column", gap: 24,
+      marginTop: 24, paddingTop: 24,
+      borderTop: "1px solid var(--app-border)",
+    }}>
+      {msg && <div style={{ fontSize: 12, color: "#34d399" }}>{msg}</div>}
 
       {/* Blocks */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-300">Text blocks</span>
-          <div className="flex gap-2 text-xs">
-            <button onClick={() => addBlock("rich_text")} className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">+ Text</button>
-            <button onClick={() => addBlock("callout")}   className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">+ Callout</button>
-            <button onClick={() => addBlock("code")}      className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">+ Code</button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>Text blocks</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => addBlock("rich_text")} className="app-btn app-btn-ghost" style={{ fontSize: 11 }}>+ Text</button>
+            <button onClick={() => addBlock("callout")}   className="app-btn app-btn-ghost" style={{ fontSize: 11 }}>+ Callout</button>
+            <button onClick={() => addBlock("code")}      className="app-btn app-btn-ghost" style={{ fontSize: 11 }}>+ Code</button>
           </div>
         </div>
         {blocks.length === 0 ? (
-          <p className="text-xs text-gray-500 italic">No blocks yet. Add a text/callout/code block to surface content below the video.</p>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", fontStyle: "italic" }}>
+            No blocks yet. Add a text/callout/code block to surface content below the video.
+          </p>
         ) : (
           <SortableList<{ id: string; position: number; block_type: Block["block_type"]; content: string }>
             items={blocks.filter((b): b is Block & { id: string } => !!b.id)}
             onReorder={next => reorderBlocks(next)}
-            className="space-y-2"
             renderItem={(b, handle) => {
               const i = blocks.findIndex(x => x.id === b.id);
               return (
-                <div className={card}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                <div style={{ ...cardStyle, marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <DragHandle listeners={handle.listeners} label="Reorder block" />
                       <select
                         value={b.block_type}
                         onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, block_type: e.target.value as Block["block_type"] } : x))}
-                        className={input}
-                        style={{ width: 110 }}
+                        className="ac-select"
+                        style={{ width: 120 }}
                       >
                         <option value="rich_text">Rich text</option>
                         <option value="callout">Callout</option>
                         <option value="code">Code</option>
                       </select>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => saveBlock(b)}    className="px-2 py-0.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded">Save</button>
-                      <button onClick={() => b.id && deleteBlock(b.id)} className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300">Delete</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => saveBlock(b)} className="app-btn app-btn-primary" style={{ fontSize: 11, padding: "4px 10px" }}>Save</button>
+                      <button onClick={() => b.id && deleteBlock(b.id)} className="app-btn app-btn-ghost" style={{ fontSize: 11, color: "#f87171" }}>Delete</button>
                     </div>
                   </div>
                   {b.block_type === "rich_text" ? (
@@ -239,12 +251,12 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
                       rows={b.block_type === "code" ? 5 : 4}
                       value={b.content}
                       onChange={e => setBlocks(bs => bs.map((x, j) => j === i ? { ...x, content: e.target.value } : x))}
-                      placeholder={
-                        b.block_type === "code"
-                          ? "// code"
-                          : "Highlighted note for students"
-                      }
-                      className={input + (b.block_type === "code" ? " font-mono" : "") + " resize-none"}
+                      placeholder={b.block_type === "code" ? "// code" : "Highlighted note for students"}
+                      className="ac-textarea"
+                      style={{
+                        resize: "none",
+                        fontFamily: b.block_type === "code" ? "ui-monospace, SFMono-Regular, Menlo, monospace" : undefined,
+                      }}
                     />
                   )}
                 </div>
@@ -256,70 +268,74 @@ export default function LessonContentEditor({ lessonId }: { lessonId: string }) 
 
       {/* Resources */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-300">Resources</span>
-          <div className="flex gap-2 text-xs">
-            <button onClick={() => addResource("file")} className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">+ File</button>
-            <button onClick={() => addResource("link")} className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">+ Link</button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>Resources</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => addResource("file")} className="app-btn app-btn-ghost" style={{ fontSize: 11 }}>+ File</button>
+            <button onClick={() => addResource("link")} className="app-btn app-btn-ghost" style={{ fontSize: 11 }}>+ Link</button>
           </div>
         </div>
         {resources.length === 0 ? (
-          <p className="text-xs text-gray-500 italic">No resources yet. Attach a file URL (Supabase Storage) or external link.</p>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", fontStyle: "italic" }}>
+            No resources yet. Attach a file URL (Supabase Storage) or external link.
+          </p>
         ) : (
-          <div className="space-y-2">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {resources.map((r, i) => (
-              <div key={r.id ?? i} className={card}>
-                <div className="grid grid-cols-2 gap-2 mb-2">
+              <div key={r.id ?? i} style={cardStyle}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                   <div>
-                    <label className={label}>Label</label>
+                    <label className="ac-label">Label</label>
                     <input value={r.label}
                       onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                      className={input} />
+                      className="ac-input" />
                   </div>
                   <div>
-                    <label className={label}>Type</label>
+                    <label className="ac-label">Type</label>
                     <select value={r.resource_type}
                       onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, resource_type: e.target.value as Resource["resource_type"] } : x))}
-                      className={input}>
+                      className="ac-select">
                       <option value="file">File</option>
                       <option value="link">Link</option>
                     </select>
                   </div>
                 </div>
-                <div className="mb-2">
-                  <label className={label}>URL</label>
-                  <div className="flex gap-2">
+                <div style={{ marginBottom: 10 }}>
+                  <label className="ac-label">URL</label>
+                  <div style={{ display: "flex", gap: 8 }}>
                     <input value={r.url}
                       onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
                       placeholder={r.resource_type === "file" ? "Upload below or paste a URL" : "https://"}
-                      className={input + " flex-1"} />
+                      className="ac-input" style={{ flex: 1 }} />
                     {r.resource_type === "file" && (
                       <FileUploadButton onPick={file => uploadFileForResource(i, file)} />
                     )}
                   </div>
                   {r.resource_type === "file" && r.file_bytes && (
-                    <p className="text-[10px] text-gray-500 mt-1">
+                    <p style={{ fontSize: 10, color: "var(--app-text-quiet)", marginTop: 4 }}>
                       {r.file_mime ?? "file"} · {r.file_bytes > 1024 * 1024
                         ? `${(r.file_bytes / 1024 / 1024).toFixed(1)} MB`
                         : `${(r.file_bytes / 1024).toFixed(0)} KB`}
                     </p>
                   )}
                 </div>
-                <div className="mb-2">
-                  <label className={label}>Description (optional)</label>
+                <div style={{ marginBottom: 10 }}>
+                  <label className="ac-label">Description (optional)</label>
                   <input value={r.description ?? ""}
                     onChange={e => setResources(rs => rs.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
-                    className={input} />
+                    className="ac-input" />
                 </div>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => saveResource(r)} className="px-2 py-0.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded">Save</button>
-                  <button onClick={() => r.id && deleteResource(r.id)} className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300">Delete</button>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                  <button onClick={() => saveResource(r)} className="app-btn app-btn-primary" style={{ fontSize: 11, padding: "4px 10px" }}>Save</button>
+                  <button onClick={() => r.id && deleteResource(r.id)} className="app-btn app-btn-ghost" style={{ fontSize: 11, color: "#f87171" }}>Delete</button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {dialog.node}
     </div>
   );
 }
@@ -336,7 +352,8 @@ function FileUploadButton({ onPick }: { onPick: (file: File) => void }) {
       <button
         type="button"
         onClick={() => ref.current?.click()}
-        className="px-2 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded whitespace-nowrap"
+        className="app-btn app-btn-secondary"
+        style={{ fontSize: 12, whiteSpace: "nowrap" }}
       >
         Upload
       </button>

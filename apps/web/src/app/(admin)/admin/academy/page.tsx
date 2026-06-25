@@ -4,6 +4,7 @@ import LessonContentEditor from "./LessonContentEditor";
 import CourseBannerEditor from "./CourseBannerEditor";
 import SectionSettingsEditor from "./SectionSettingsEditor";
 import SortableList, { DragHandle } from "./SortableList";
+import { useAcademyDialog } from "./AcademyDialog";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft01Icon,
@@ -109,6 +110,8 @@ export default function AdminAcademyPage() {
     setTimeout(() => setMsg(null), 3500);
   };
 
+  const dialog = useAcademyDialog();
+
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
@@ -193,7 +196,7 @@ export default function AdminAcademyPage() {
 
   async function addSection() {
     if (!openProduct) return;
-    const title = prompt("Section title:");
+    const title = await dialog.askText("New section", { placeholder: "Section title" });
     if (!title) return;
     const res = await fetch("/api/admin/academy/sections", {
       method: "POST",
@@ -208,7 +211,11 @@ export default function AdminAcademyPage() {
   }
 
   async function deleteSection(id: string) {
-    if (!confirm("Delete section and all its lessons?")) return;
+    const ok = await dialog.askConfirm("Delete section?", {
+      body: "This also removes every lesson inside it. This action cannot be undone.",
+      danger: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/admin/academy/sections?id=${id}`, { method: "DELETE" }).then(r => r.json());
     if (res.ok) {
       setSections(s => s.filter(x => x.id !== id));
@@ -245,7 +252,7 @@ export default function AdminAcademyPage() {
 
   async function addLesson(type = "video") {
     if (!selectedSection) return notify("Select a section first", false);
-    const title = prompt(`Lesson title (${type}):`);
+    const title = await dialog.askText(`New ${type} lesson`, { placeholder: "Lesson title" });
     if (!title) return;
     const res = await fetch("/api/admin/academy/lessons", {
       method: "POST",
@@ -282,7 +289,11 @@ export default function AdminAcademyPage() {
   }
 
   async function deleteLesson(id: string) {
-    if (!confirm("Delete this lesson?")) return;
+    const ok = await dialog.askConfirm("Delete lesson?", {
+      body: "This action cannot be undone.",
+      danger: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/admin/academy/lessons?id=${id}`, { method: "DELETE" }).then(r => r.json());
     if (res.ok) {
       setLessons(l => l.filter(x => x.id !== id));
@@ -1394,6 +1405,7 @@ export default function AdminAcademyPage() {
           )}
         </main>
       )}
+      {dialog.node}
     </div>
   );
 }
