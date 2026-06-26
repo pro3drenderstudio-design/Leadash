@@ -98,6 +98,12 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
       flagged_for_review: exhausted ? await shouldFlagForReview(db, message_id) : false,
     }).eq("id", message_id);
 
+    if (exhausted) {
+      await db.from("crm_messages")
+        .update({ status: "failed", failed_reason: `${res.status}: ${errBody}`.slice(0, 500) })
+        .eq("provider_message_id", message_id);
+    }
+
     throw new Error(`Meta API error ${res.status}`);
   }
 
@@ -110,6 +116,15 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
     sent_at:             new Date().toISOString(),
     retry_count:         job.attemptsMade ?? 0,
   }).eq("id", message_id);
+
+  // crm_messages.provider_message_id was temporarily set to whatsapp_messages.id at
+  // enqueue time (before Meta returned a real wamid). Swap it to the real wamid here
+  // so the later delivery/read status webhook (matched by wamid) can find this row.
+  if (providerMessageId) {
+    await db.from("crm_messages")
+      .update({ status: "sent", provider_message_id: providerMessageId })
+      .eq("provider_message_id", message_id);
+  }
 
   console.log(`[whatsapp] sent phone=${phone_number} provider_id=${providerMessageId}`);
 }

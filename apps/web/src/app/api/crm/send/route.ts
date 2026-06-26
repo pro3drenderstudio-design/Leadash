@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
     await q.close();
 
     // Insert CRM message
-    await db.from("crm_messages").insert({
+    const { error: crmMsgErr } = await db.from("crm_messages").insert({
       conversation_id,
       contact_id:         contact.id,
       direction:          "outbound",
@@ -218,8 +218,9 @@ export async function POST(req: NextRequest) {
       wa_message_type:    windowOpen ? "text" : "template",
       provider_message_id: waMsgRecord?.id ?? null,
       sent_by:            user.id,
-      status:             "pending",
+      status:             "sent",
     });
+    if (crmMsgErr) console.error("[crm/send] failed to insert crm_messages:", crmMsgErr.message);
 
     // Update conversation
     await db.from("crm_conversations").update({

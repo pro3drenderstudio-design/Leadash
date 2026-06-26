@@ -29,6 +29,11 @@ const ALLOWED_KEYS = [
   "domain_markup_type",
   "domain_markup_value",
   "domain_registrar",
+  // CRM settings
+  "crm_business_hours",
+  "crm_canned_responses",
+  "crm_custom_fields",
+  "crm_sla_config",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];

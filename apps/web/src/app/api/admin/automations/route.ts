@@ -1,8 +1,11 @@
 /**
- * GET  /api/admin/automations          — list all flows
- * POST /api/admin/automations          — create new flow
- * PATCH /api/admin/automations?id=xxx  — update flow (definition, name, active, duplicate_policy)
- * DELETE /api/admin/automations?id=xxx — soft-delete (set is_active=false, not actually deleted)
+ * GET  /api/admin/automations                    — list all flows
+ * GET  /api/admin/automations?type=templates      — list system templates
+ * GET  /api/admin/automations?type=executions&flow_id=xxx — list executions with steps
+ * POST /api/admin/automations                    — create new flow
+ * POST /api/admin/automations (from_template_id) — create from template
+ * PATCH /api/admin/automations?id=xxx            — update flow (definition, name, active, duplicate_policy)
+ * DELETE /api/admin/automations?id=xxx           — soft-delete (set is_active=false, not actually deleted)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
@@ -17,13 +20,62 @@ async function requireAdmin() {
   return { user, db };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const type    = req.nextUrl.searchParams.get("type");
+  const flowId  = req.nextUrl.searchParams.get("flow_id");
+
+  // ── Templates ──────────────────────────────────────────────────────────────
+  if (type === "templates") {
+    const { data, error } = await ctx.db
+      .from("automation_templates")
+      .select("id, name, description, category, preview_img, definition, is_system, created_at")
+      .eq("is_system", true)
+      .order("created_at", { ascending: true });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ templates: data ?? [] });
+  }
+
+  // ── Executions ─────────────────────────────────────────────────────────────
+  if (type === "executions") {
+    if (!flowId) return NextResponse.json({ error: "flow_id required" }, { status: 400 });
+
+    const { data, error } = await ctx.db
+      .from("automation_executions")
+      .select(`
+        id,
+        status,
+        started_at,
+        completed_at,
+        contact_id,
+        chain_depth,
+        next_run_at,
+        automation_execution_steps (
+          id,
+          node_id,
+          node_type,
+          status,
+          started_at,
+          completed_at,
+          skip_reason,
+          output
+        )
+      `)
+      .eq("flow_id", flowId)
+      .order("started_at", { ascending: false })
+      .limit(200);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ executions: data ?? [] });
+  }
+
+  // ── Flows list ─────────────────────────────────────────────────────────────
   const { data, error } = await ctx.db
     .from("automation_flows")
-    .select("id, name, description, trigger_event, duplicate_policy, is_active, version, last_published_at, created_at, updated_at")
+    .select("id, name, description, trigger_event, duplicate_policy, is_active, version, last_published_at, run_count, last_run_at, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,14 +86,49 @@ export async function POST(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { name, description, trigger_event, duplicate_policy } = await req.json() as {
-    name: string;
+  const body = await req.json() as {
+    name?: string;
     description?: string;
-    trigger_event: string;
+    trigger_event?: string;
     duplicate_policy?: "deduplicate" | "parallel" | "restart";
+    from_template_id?: string;
   };
 
-  if (!name?.trim()) return NextResponse.json({ error: "Flow name is required" }, { status: 400 });
+  // ── Create from template ───────────────────────────────────────────────────
+  if (body.from_template_id) {
+    const { data: tmpl, error: tmplErr } = await ctx.db
+      .from("automation_templates")
+      .select("id, name, description, definition")
+      .eq("id", body.from_template_id)
+      .single();
+
+    if (tmplErr || !tmpl) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+
+    const name = body.name?.trim() || tmpl.name;
+    const { data, error } = await ctx.db
+      .from("automation_flows")
+      .insert({
+        name,
+        description:      tmpl.description ?? null,
+        trigger_event:    (tmpl.definition as Record<string, unknown>)?.trigger_event as string ?? "custom",
+        duplicate_policy: "deduplicate",
+        flow_definition:  tmpl.definition,
+        template_id:      body.from_template_id,
+        is_active:        false,
+        version:          1,
+        created_by:       ctx.user.id,
+      })
+      .select("id")
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ id: data.id }, { status: 201 });
+  }
+
+  // ── Create blank flow ──────────────────────────────────────────────────────
+  const { name, description, trigger_event, duplicate_policy } = body;
+
+  if (!name?.trim())         return NextResponse.json({ error: "Flow name is required" }, { status: 400 });
   if (!trigger_event?.trim()) return NextResponse.json({ error: "Trigger event is required" }, { status: 400 });
 
   const { data, error } = await ctx.db

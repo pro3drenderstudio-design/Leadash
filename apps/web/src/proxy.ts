@@ -31,6 +31,13 @@ const PUBLIC_PATHS = [
   "/api/public",
   "/vendor/login",
   "/api/vendor/login",
+  "/api/crm/inbound-whatsapp",
+  "/api/crm/inbound-email",
+  "/api/crm/inbound-instagram",
+  "/api/crm/inbound-facebook",
+  "/api/funnels/track",
+  "/api/funnels/submit",
+  "/f",
 ];
 
 function isPublic(path: string) {
