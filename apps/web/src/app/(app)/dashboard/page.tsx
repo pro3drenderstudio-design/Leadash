@@ -204,7 +204,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
+      <div className="dash-shell" style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* Greeting + quick actions */}
         <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -278,8 +278,8 @@ export default async function DashboardPage() {
 
           {/* Chart */}
           <div className="app-card" style={{ padding: 20 }}>
-            <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-              <div>
+            <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
                 <h2 className="app-h3">Email activity</h2>
                 <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>
                   Sends, opens &amp; replies — last 30 days
@@ -287,7 +287,7 @@ export default async function DashboardPage() {
               </div>
               <Link
                 href="/campaigns"
-                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4 }}
+                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
               >
                 View sequences <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.6} />
               </Link>
@@ -297,14 +297,14 @@ export default async function DashboardPage() {
 
           {/* Recent replies */}
           <div className="app-card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
-            <header style={{ padding: "16px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
+            <header style={{ padding: "16px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
                 <h2 className="app-h3">Recent replies</h2>
                 <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 2 }}>Latest CRM threads</p>
               </div>
               <Link
                 href="/crm"
-                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4 }}
+                style={{ fontSize: 12, color: "var(--app-text-quiet)", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
               >
                 Open CRM <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.6} />
               </Link>
@@ -392,10 +392,18 @@ export default async function DashboardPage() {
       </div>
 
       <style>{`
-        @media (max-width: 960px) {
+        @media (max-width: 1100px) {
+          .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .dash-split { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 720px) {
+          .dash-shell { padding: 20px 16px; gap: 18px; }
           .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .dash-stats > *:last-child { grid-column: span 2; }
-          .dash-split { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 420px) {
+          .dash-stats { grid-template-columns: minmax(0, 1fr); }
+          .dash-stats > *:last-child { grid-column: auto; }
         }
         .dash-reply-row:hover { background: var(--app-surface); }
       `}</style>

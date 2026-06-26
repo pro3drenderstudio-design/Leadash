@@ -90,13 +90,13 @@ export default function LeadPayDashboardClient() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-4">
         <div className="h-48 bg-white/4 rounded-3xl animate-pulse" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1,2,3].map(i => <div key={i} className="h-28 bg-white/4 rounded-2xl animate-pulse" />)}
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2 h-72 bg-white/4 rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 h-72 bg-white/4 rounded-2xl animate-pulse" />
           <div className="h-72 bg-white/4 rounded-2xl animate-pulse" />
         </div>
       </div>
@@ -106,23 +106,23 @@ export default function LeadPayDashboardClient() {
   if (noAccount || !account) {
     return (
       <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
-      <div className="max-w-2xl mx-auto px-6 py-24">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-24">
         {/* Hero onboarding */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             New feature
           </div>
-          <h1 className="text-4xl font-bold text-white tracking-tight mb-4">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
             Get paid in USD.<br />
             <span className="text-emerald-400">Receive in Naira.</span>
           </h1>
-          <p className="text-white/50 text-base leading-relaxed">
+          <p className="text-white/50 text-sm sm:text-base leading-relaxed">
             Invoice your international clients, collect payments securely, and withdraw straight to your Nigerian bank account.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
           {[
             { num: "01", label: "Invoice clients",   desc: "Send professional USD invoices to anyone, worldwide." },
             { num: "02", label: "Collect payments",  desc: "Clients pay via card — funds settle to your balance." },
