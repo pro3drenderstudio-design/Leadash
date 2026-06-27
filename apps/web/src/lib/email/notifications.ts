@@ -1120,6 +1120,96 @@ export async function sendCancellationConfirmationEmail(opts: {
   });
 }
 
+// ─── Offer Builder ────────────────────────────────────────────────────────────
+
+export async function sendOfferSaleAdminNotification(opts: {
+  offerName: string;
+  offerId: string;
+  buyerEmail: string;
+  buyerName: string | null;
+  totalNgn: number;
+  currency: "NGN" | "USD";
+}): Promise<void> {
+  const { offerName, offerId, buyerEmail, buyerName, totalNgn, currency } = opts;
+  const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(totalNgn);
+  const adminUrl = `${APP_URL}/admin/offers/${offerId}`;
+
+  await sendEmail({
+    to: OWNER_EMAIL,
+    subject: `[Offer Sale] ${offerName} — ${formatted}`,
+    text: [
+      `New offer purchase.`,
+      ``,
+      `Offer:    ${offerName}`,
+      `Buyer:    ${buyerName ?? buyerEmail} (${buyerEmail})`,
+      `Amount:   ${formatted}${currency === "USD" ? " (displayed as USD)" : ""}`,
+      ``,
+      `${adminUrl}`,
+    ].join("\n"),
+    html: `
+      <p style="font-family:sans-serif">New purchase on offer <strong>${offerName}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0;font-size:14px;font-family:sans-serif">
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Buyer</td><td>${buyerName ?? buyerEmail} (${buyerEmail})</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280">Amount</td><td><strong>${formatted}</strong></td></tr>
+      </table>
+      <p><a href="${adminUrl}" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">View Offer →</a></p>
+    `,
+  });
+}
+
+export async function sendOfferPurchaseReceiptEmail(opts: {
+  buyerEmail: string;
+  buyerName: string | null;
+  offerName: string;
+  lineItems: { label: string; amount_ngn: number }[];
+  totalNgn: number;
+}): Promise<void> {
+  const { buyerEmail, buyerName, offerName, lineItems, totalNgn } = opts;
+  const name = buyerName ?? "there";
+  const formatted = (n: number) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(n);
+
+  await sendEmail({
+    to: buyerEmail,
+    subject: `Your receipt — ${offerName}`,
+    text: [
+      `Hi ${name},`,
+      ``,
+      `Thanks for your purchase! Here's your receipt for ${offerName}:`,
+      ``,
+      ...lineItems.map(li => `${li.label}: ${formatted(li.amount_ngn)}`),
+      ``,
+      `Total: ${formatted(totalNgn)}`,
+      ``,
+      `Questions? Reply to this email or visit ${APP_URL}/support.`,
+      ``,
+      `— The Leadash Team`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+        <div style="background:linear-gradient(135deg,#1c1917,#1a1a1a);padding:28px 32px;border-radius:16px 16px 0 0;text-align:center">
+          <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px">Leadash</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+          <p style="font-size:16px;font-weight:600;color:#111;margin-top:0">✅ Purchase confirmed</p>
+          <p style="color:#6b7280;margin-bottom:24px">Hi ${name}, thanks for purchasing <strong style="color:#111">${offerName}</strong>! Here's your receipt:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+            ${lineItems.map(li => `
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#9ca3af">${li.label}</td>
+              <td style="padding:10px 0;color:#111;text-align:right">${formatted(li.amount_ngn)}</td>
+            </tr>`).join("")}
+            <tr>
+              <td style="padding:10px 0;color:#111;font-weight:700">Total</td>
+              <td style="padding:10px 0;color:#111;font-weight:700;text-align:right">${formatted(totalNgn)}</td>
+            </tr>
+          </table>
+          <p style="color:#9ca3af;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">Questions? Reply to this email or visit <a href="${APP_URL}/support" style="color:#f97316">${APP_URL}/support</a> — The Leadash Team</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 // ─── Microsoft inbox provisioning ────────────────────────────────────────────
 
 export async function sendMicrosoftProvisioningAlert(opts: {

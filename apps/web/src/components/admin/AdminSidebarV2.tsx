@@ -46,6 +46,7 @@ import {
   GitBranchIcon,
   Login03Icon,
   Logout03Icon,
+  Sale01Icon,
 } from "@/v2-app/icons";
 import "@/v2-app/v2-app.css";
 
@@ -101,6 +102,12 @@ const NAV: NavGroupDef[] = [
       { href: "/admin/automations",  label: "Automations",     icon: WorkflowSquare01Icon },
       { href: "/admin/crm",          label: "CRM inbox",       icon: CustomerService01Icon },
       { href: "/admin/crm-settings", label: "CRM settings",    icon: Configuration01Icon },
+    ],
+  },
+  {
+    label: "Monetization",
+    items: [
+      { href: "/admin/offers", label: "Offers", icon: Sale01Icon },
     ],
   },
   {

@@ -18,6 +18,7 @@ export type AdminModuleKey =
   | "leadpay"
   | "academy"
   | "funnel"
+  | "offers"
   | "support"
   | "infrastructure"
   | "team_config";
@@ -71,6 +72,12 @@ export const ADMIN_MODULES: AdminModule[] = [
     sidebarGroups: ["Funnel"],
   },
   {
+    key:           "offers",
+    label:         "Offers",
+    description:   "Sellable offer bundles, checkout pages, bumps/upsells, and discount codes.",
+    sidebarGroups: ["Monetization"],
+  },
+  {
     key:           "support",
     label:         "Support",
     description:   "Support tickets, broadcast emails, and notification settings.",
@@ -118,7 +125,7 @@ export const BUILTIN_ROLE_MODULES: Record<Exclude<AdminRole, "custom">, AdminMod
   // Read-only: visibility into everything except the team panel. (View-only at
   // the action level is still a future enhancement — for now this controls which
   // modules they can navigate into.)
-  readonly:    ["overview", "users_billing", "leadgen", "leadpay", "academy", "funnel", "support", "infrastructure"],
+  readonly:    ["overview", "users_billing", "leadgen", "leadpay", "academy", "funnel", "offers", "support", "infrastructure"],
 };
 
 export const ROLE_LABELS: Record<AdminRole, string> = {

@@ -159,6 +159,21 @@ export async function chargePaystackAuthorization(params: {
   return { reference: data.reference, status: data.status };
 }
 
+// ── Refunds ────────────────────────────────────────────────────────────────────
+
+export async function refundPaystackPayment(params: {
+  reference:   string;
+  amountKobo?: number; // omit for a full refund
+  reason?:     string;
+}): Promise<{ status: string }> {
+  const data = await paystackFetch<{ status: string }>("POST", "/refund", {
+    transaction: params.reference,
+    ...(params.amountKobo ? { amount: params.amountKobo } : {}),
+    ...(params.reason     ? { customer_note: params.reason, merchant_note: params.reason } : {}),
+  });
+  return { status: data.status };
+}
+
 // ── Webhook signature verification ────────────────────────────────────────────
 
 export function verifyPaystackSignature(rawBody: string, signature: string): boolean {

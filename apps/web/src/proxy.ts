@@ -38,6 +38,8 @@ const PUBLIC_PATHS = [
   "/api/funnels/track",
   "/api/funnels/submit",
   "/f",
+  "/o",
+  "/api/offers",
 ];
 
 function isPublic(path: string) {

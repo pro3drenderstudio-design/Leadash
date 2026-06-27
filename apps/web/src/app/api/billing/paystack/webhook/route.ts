@@ -509,6 +509,116 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // ── Offer purchase (Offer Builder) ───────────────────────────────────────
+    if (type === "offer_purchase") {
+      const purchaseId = meta.purchase_id as string | undefined;
+      if (purchaseId) {
+        const { data: purchase } = await db.from("offer_purchases").select("*").eq("id", purchaseId).maybeSingle();
+        if (purchase && purchase.status === "pending") {
+          const { paid } = await verifyPaystackPayment(data.reference);
+          if (paid) {
+            const { data: offer } = await db.from("offers").select("*").eq("id", purchase.offer_id).maybeSingle();
+            if (offer) {
+              const { fulfillAllGrants, fulfillGrant } = await import("@/lib/offers/granters");
+              const { sendOfferSaleAdminNotification, sendOfferPurchaseReceiptEmail } = await import("@/lib/email/notifications");
+
+              type OfferGrantLite = { id: string; type: string };
+              const baseGrants = (offer.grants ?? []) as OfferGrantLite[];
+
+              let grantedItems: Array<{ grant_id: string; type: string; status: string; detail?: string }>;
+              if (purchase.workspace_id && purchase.user_id) {
+                grantedItems = await fulfillAllGrants(db, offer.grants, {
+                  workspaceId: purchase.workspace_id,
+                  userId:      purchase.user_id,
+                  offerName:   offer.name,
+                  reference:   data.reference,
+                });
+
+                // Fulfill any order bumps the buyer added — line_items has no
+                // stable bump id, so match by label (admin-authored, unique per offer).
+                const lineItems = (purchase.line_items ?? []) as { kind: string; label: string; amount_ngn: number }[];
+                type OfferBumpLite = { id: string; label: string; is_active: boolean; grant: OfferGrantLite };
+                const bumps = (offer.bumps ?? []) as OfferBumpLite[];
+                for (const li of lineItems) {
+                  if (li.kind !== "bump") continue;
+                  const bump = bumps.find(b => b.label === li.label);
+                  if (!bump) continue;
+                  const item = await fulfillGrant(db, bump.grant as never, {
+                    workspaceId: purchase.workspace_id,
+                    userId:      purchase.user_id,
+                    offerName:   offer.name,
+                    reference:   data.reference,
+                  });
+                  grantedItems.push(item);
+                }
+              } else {
+                grantedItems = baseGrants.map((g) => ({
+                  grant_id: g.id, type: g.type, status: "pending_manual" as const,
+                  detail: "No workspace on purchase",
+                }));
+              }
+
+              await db.from("offer_purchases").update({
+                status:        "paid",
+                granted_at:    new Date().toISOString(),
+                granted_items: grantedItems,
+              }).eq("id", purchaseId);
+
+              // Increment discount code redemption count (fetch-then-write — low concurrency path).
+              if (purchase.discount_code_id) {
+                const { data: dc } = await db
+                  .from("offer_discount_codes")
+                  .select("redemptions")
+                  .eq("id", purchase.discount_code_id)
+                  .maybeSingle();
+                if (dc) {
+                  await db.from("offer_discount_codes")
+                    .update({ redemptions: dc.redemptions + 1 })
+                    .eq("id", purchase.discount_code_id);
+                }
+              }
+
+              // Notifications per offer settings.
+              if (offer.notify_admin) {
+                sendOfferSaleAdminNotification({
+                  offerName:  offer.name,
+                  offerId:    offer.id,
+                  buyerEmail: purchase.buyer_email ?? "unknown",
+                  buyerName:  purchase.buyer_name ?? null,
+                  totalNgn:   purchase.total_ngn,
+                  currency:   purchase.currency,
+                }).catch(e => console.error("[paystack] offer admin notify failed:", e));
+              }
+              if (offer.send_receipt && purchase.buyer_email) {
+                sendOfferPurchaseReceiptEmail({
+                  buyerEmail: purchase.buyer_email,
+                  buyerName:  purchase.buyer_name ?? null,
+                  offerName:  offer.name,
+                  lineItems:  (purchase.line_items ?? []) as { label: string; amount_ngn: number }[],
+                  totalNgn:   purchase.total_ngn,
+                }).catch(e => console.error("[paystack] offer receipt email failed:", e));
+              }
+              if (purchase.workspace_id && purchase.user_id) {
+                enqueueAutomation({
+                  event:        "user.offer_purchased",
+                  workspace_id: purchase.workspace_id,
+                  user_id:      purchase.user_id,
+                  payload: {
+                    offer_id:     offer.id,
+                    offer_name:   offer.name,
+                    line_items:   purchase.line_items,
+                    total_ngn:    purchase.total_ngn,
+                    send_whatsapp: offer.send_whatsapp,
+                  },
+                }).catch(e => console.error("[paystack] offer automation enqueue failed:", e));
+              }
+            }
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+
     // Domain purchase payment
     const domainRecordId = meta.domain_record_id as string | undefined;
     if (!domainRecordId || !workspaceId) {
