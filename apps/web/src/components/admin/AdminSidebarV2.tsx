@@ -43,7 +43,6 @@ import {
   WorkflowSquare01Icon,
   AnalyticsUpIcon,
   CustomerService01Icon,
-  Configuration01Icon,
   GitBranchIcon,
   Login03Icon,
   Logout03Icon,
