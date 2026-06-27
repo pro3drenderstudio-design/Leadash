@@ -5,6 +5,9 @@ import CourseBannerEditor from "./CourseBannerEditor";
 import SectionSettingsEditor from "./SectionSettingsEditor";
 import SortableList, { DragHandle } from "./SortableList";
 import { useAcademyDialog } from "./AcademyDialog";
+import ChallengeBuilder from "./ChallengeBuilder";
+import ChallengeFunnelMap from "./ChallengeFunnelMap";
+import ChallengeAnalytics from "./ChallengeAnalytics";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft01Icon,
@@ -26,13 +29,39 @@ import {
   LockedIcon,
   GlobeIcon,
   Video01Icon,
+  GitBranchIcon,
+  ChartBarLineIcon,
 } from "@hugeicons/core-free-icons";
+
+interface ChallengeConfig {
+  tagline?: string;
+  duration_days?: number;
+  cadence?: "daily" | "weekly";
+  grace_days?: number;
+  catchup_enabled?: boolean;
+  leaderboard_enabled?: boolean;
+  points_board_enabled?: boolean;
+  earnings_board_enabled?: boolean;
+  earnings_require_proof?: boolean;
+  earnings_reset?: "all_time" | "weekly" | "daily";
+  auto_advance_offer?: {
+    enabled: boolean; trigger: string; window_hours: number;
+    target_product_id?: string; discount_type: string; discount_value: number;
+  };
+  reminders?: {
+    email: boolean; whatsapp: boolean;
+    daily_unlock_time: string; timezone: string; nudge_missed: boolean;
+  };
+  [key: string]: unknown;
+}
 
 interface Product {
   id: string; slug: string; name: string; price_ngn: number;
   compare_price_ngn: number | null; credits_grant: number; leadash_months: number;
   is_active: boolean; is_published: boolean; certificate_enabled: boolean;
   completion_threshold_pct: number; trailer_playback_id: string | null;
+  product_type?: "course" | "challenge";
+  challenge_config?: ChallengeConfig | null;
 }
 interface Section {
   id: string; product_id: string; title: string; position: number; is_published: boolean;
@@ -62,8 +91,9 @@ interface DiscountCode {
 }
 interface WorkspaceOption { id: string; name: string; }
 
-type TopNav = "courses" | "cohorts" | "enrollments" | "codes" | "access";
+type TopNav = "courses" | "funnels" | "cohorts" | "enrollments" | "codes" | "access";
 type CourseView = "curriculum" | "details" | "pricing" | "settings";
+type ChallengeView = "builder" | "analytics";
 type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
 
 function fmt(n: number) { return `₦${n.toLocaleString("en-NG")}`; }
@@ -92,6 +122,8 @@ export default function AdminAcademyPage() {
 
   const [openProduct,    setOpenProduct]    = useState<string | null>(null);
   const [courseView,     setCourseView]     = useState<CourseView>("curriculum");
+  const [challengeView,  setChallengeView]  = useState<ChallengeView>("builder");
+  const [creatingChallenge, setCreatingChallenge] = useState(false);
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [selectedLesson,  setSelectedLesson]  = useState<Lesson | null>(null);
   const [editingLesson,   setEditingLesson]   = useState<Partial<Lesson>>({});
@@ -139,6 +171,41 @@ export default function AdminAcademyPage() {
       .catch(() => {});
     return () => ac.abort();
   }, []);
+
+  async function createChallenge() {
+    const name = window.prompt("Challenge name", "30-Day Challenge");
+    if (!name) return;
+    setCreatingChallenge(true);
+    try {
+      const res = await fetch("/api/admin/academy/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, product_type: "challenge" }),
+      });
+      const d = await res.json();
+      if (!res.ok) { notify(d.error ?? "Failed to create challenge", false); return; }
+      await load();
+      setOpenProduct(d.product.id);
+      setChallengeView("builder");
+      notify("Challenge created");
+    } catch {
+      notify("Network error", false);
+    } finally {
+      setCreatingChallenge(false);
+    }
+  }
+
+  async function saveProductFields(id: string, updates: Record<string, unknown>) {
+    const res = await fetch("/api/admin/academy/products", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    const d = await res.json();
+    if (!res.ok) { notify(d.error ?? "Save failed", false); throw new Error(d.error ?? "Save failed"); }
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...d.product } : p));
+    notify("Saved");
+  }
 
   useEffect(() => {
     const ac = new AbortController();
@@ -577,6 +644,7 @@ export default function AdminAcademyPage() {
           <nav style={{ display: "flex", gap: 4, marginTop: 18 }}>
             {([
               { key: "courses",     label: "Courses",        icon: BookOpen02Icon },
+              { key: "funnels",     label: "Funnels",         icon: GitBranchIcon },
               { key: "cohorts",     label: "Cohorts",        icon: Calendar03Icon },
               { key: "enrollments", label: "Enrollments",    icon: UserMultipleIcon },
               { key: "codes",       label: "Discount codes", icon: Tag01Icon },
@@ -618,7 +686,24 @@ export default function AdminAcademyPage() {
         <main style={{ padding: openProduct ? 0 : "24px 28px" }}>
           {/* ── Top-level COURSES gallery ─────────────────────────────────── */}
           {!openProduct && top === "courses" && (
-            <CoursesGallery products={products} onOpen={id => { setOpenProduct(id); setCourseView("curriculum"); }} />
+            <CoursesGallery
+              products={products}
+              onOpen={id => {
+                setOpenProduct(id);
+                setCourseView("curriculum");
+                setChallengeView("builder");
+              }}
+              onCreateChallenge={createChallenge}
+              creatingChallenge={creatingChallenge}
+            />
+          )}
+
+          {/* ── FUNNELS ───────────────────────────────────────────────────── */}
+          {!openProduct && top === "funnels" && (
+            <ChallengeFunnelMap
+              onOpenBuilder={id => { setOpenProduct(id); setChallengeView("builder"); }}
+              onToast={notify}
+            />
           )}
 
           {/* ── COHORTS ───────────────────────────────────────────────────── */}
@@ -985,8 +1070,58 @@ export default function AdminAcademyPage() {
             </div>
           )}
 
+          {/* ── CHALLENGE BUILDER / ANALYTICS ─────────────────────────────── */}
+          {openProduct && product && product.product_type === "challenge" && (
+            <div>
+              <div style={{ display: "flex", gap: 4, padding: "0 24px", borderBottom: "1px solid var(--app-border)" }}>
+                {([
+                  { key: "builder",   label: "Builder",   icon: GitBranchIcon },
+                  { key: "analytics", label: "Analytics", icon: ChartBarLineIcon },
+                ] as { key: ChallengeView; label: string; icon: typeof GitBranchIcon }[]).map(v => {
+                  const active = challengeView === v.key;
+                  return (
+                    <button
+                      key={v.key}
+                      onClick={() => setChallengeView(v.key)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "11px 4px", marginRight: 18,
+                        fontSize: 13, fontWeight: active ? 600 : 400,
+                        color: active ? "var(--app-text)" : "var(--app-text-muted)",
+                        background: "transparent", border: "none",
+                        borderBottom: `2px solid ${active ? "var(--app-accent)" : "transparent"}`,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <HugeiconsIcon icon={v.icon} size={14} strokeWidth={1.8} />
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {challengeView === "builder" ? (
+                <ChallengeBuilder
+                  product={{
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    is_published: product.is_published,
+                    product_type: "challenge",
+                    challenge_config: product.challenge_config ?? null,
+                    price_ngn: product.price_ngn,
+                    compare_price_ngn: product.compare_price_ngn,
+                  }}
+                  onSave={async (updates) => { await saveProductFields(product.id, updates); }}
+                  onToast={notify}
+                />
+              ) : (
+                <ChallengeAnalytics productId={product.id} productName={product.name} onToast={notify} />
+              )}
+            </div>
+          )}
+
           {/* ── COURSE DETAIL (Kajabi-style) ──────────────────────────────── */}
-          {openProduct && product && (
+          {openProduct && product && product.product_type !== "challenge" && (
             <div className="acad-detail" style={{ display: "flex", minHeight: "calc(100vh - 84px)" }}>
               {/* Left rail */}
               <aside className="acad-detail-rail" style={{
@@ -1445,66 +1580,90 @@ export default function AdminAcademyPage() {
 
 // ─── Courses gallery ──────────────────────────────────────────────────────────
 
-function CoursesGallery({ products, onOpen }: { products: Product[]; onOpen: (id: string) => void }) {
-  if (products.length === 0) {
-    return (
-      <div className="ac-card" style={{ padding: 60, textAlign: "center" }}>
-        <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>No courses yet.</p>
-        <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 6 }}>
-          Add a product row in the academy_products table to get started — courses are bootstrapped via migration.
-        </p>
-      </div>
-    );
-  }
+function CoursesGallery({ products, onOpen, onCreateChallenge, creatingChallenge }: {
+  products: Product[];
+  onOpen: (id: string) => void;
+  onCreateChallenge: () => void;
+  creatingChallenge: boolean;
+}) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-      gap: 16,
-    }}>
-      {products.map(p => (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <button
-          key={p.id}
-          onClick={() => onOpen(p.id)}
-          className="ac-card"
-          style={{
-            textAlign: "left",
-            padding: 0,
-            overflow: "hidden",
-            cursor: "pointer",
-            transition: "all var(--app-dur) var(--app-ease)",
-            border: "1px solid var(--app-border)",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--app-border)"; e.currentTarget.style.transform = "translateY(0)"; }}
+          onClick={onCreateChallenge}
+          disabled={creatingChallenge}
+          className="app-btn app-btn-primary"
+          style={{ opacity: creatingChallenge ? 0.6 : 1, cursor: creatingChallenge ? "default" : "pointer" }}
         >
-          <div style={{
-            aspectRatio: "16 / 9",
-            background: "linear-gradient(135deg, var(--app-accent-soft), var(--app-surface-strong))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--app-accent)",
-            borderBottom: "1px solid var(--app-border)",
-          }}>
-            <HugeiconsIcon icon={BookOpen02Icon} size={36} strokeWidth={1.4} />
-          </div>
-          <div style={{ padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {p.name}
-              </h3>
-              <span className={`ac-chip ${p.is_published ? "success" : ""}`}>{p.is_published ? "Live" : "Draft"}</span>
-            </div>
-            <p style={{ fontSize: 11, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginBottom: 12 }}>{p.slug}</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)" }}>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.price_ngn)}</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--app-accent)" }}>
-                Open
-                <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.8} />
-              </span>
-            </div>
-          </div>
+          <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} />
+          {creatingChallenge ? "Creating…" : "New challenge"}
         </button>
-      ))}
+      </div>
+      {products.length === 0 ? (
+        <div className="ac-card" style={{ padding: 60, textAlign: "center" }}>
+          <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>No courses yet.</p>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 6 }}>
+            Add a product row in the academy_products table to get started — courses are bootstrapped via migration.
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+          gap: 16,
+        }}>
+          {products.map(p => {
+            const isChallenge = p.product_type === "challenge";
+            return (
+              <button
+                key={p.id}
+                onClick={() => onOpen(p.id)}
+                className="ac-card"
+                style={{
+                  textAlign: "left",
+                  padding: 0,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  transition: "all var(--app-dur) var(--app-ease)",
+                  border: `1px solid ${isChallenge ? "var(--app-accent-line)" : "var(--app-border)"}`,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = isChallenge ? "var(--app-accent-line)" : "var(--app-border)"; e.currentTarget.style.transform = "translateY(0)"; }}
+              >
+                <div style={{
+                  aspectRatio: "16 / 9",
+                  background: isChallenge
+                    ? "linear-gradient(135deg, var(--app-accent-soft), var(--app-surface-strong))"
+                    : "linear-gradient(135deg, rgba(96,165,250,0.12), var(--app-surface-strong))",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: isChallenge ? "var(--app-accent)" : "#60A5FA",
+                  borderBottom: "1px solid var(--app-border)",
+                }}>
+                  <HugeiconsIcon icon={isChallenge ? GitBranchIcon : BookOpen02Icon} size={36} strokeWidth={1.4} />
+                </div>
+                <div style={{ padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.name}
+                    </h3>
+                    <span className={`ac-chip ${p.is_published ? "success" : ""}`}>{p.is_published ? "Live" : "Draft"}</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginBottom: 12 }}>
+                    {p.slug} {isChallenge && <span style={{ color: "var(--app-accent)" }}>· Challenge</span>}
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)" }}>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.price_ngn)}</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--app-accent)" }}>
+                      Open
+                      <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.8} />
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

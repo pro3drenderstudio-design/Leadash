@@ -1,5 +1,35 @@
 // ─── Core entities ────────────────────────────────────────────────────────────
 
+export interface ChallengeConfig {
+  tagline?: string;
+  duration_days?: number;
+  cadence?: "daily" | "weekly" | "custom";
+  start_mode?: "fixed_cohort" | "rolling" | "enrollment" | "cohort";
+  grace_days?: number;
+  catchup_enabled?: boolean;
+  leaderboard_enabled?: boolean;
+  points_board_enabled?: boolean;
+  earnings_board_enabled?: boolean;
+  earnings_require_proof?: boolean;
+  earnings_reset?: "all_time" | "weekly" | "daily";
+  auto_advance_offer?: {
+    enabled: boolean;
+    trigger: string;
+    window_hours: number;
+    target_product_id?: string;
+    discount_type: string;
+    discount_value: number;
+  };
+  reminders?: {
+    email: boolean;
+    whatsapp: boolean;
+    daily_unlock_time: string;
+    timezone: string;
+    nudge_missed: boolean;
+  };
+  [key: string]: unknown;
+}
+
 export interface AcademyProduct {
   id: string;
   slug: string;
@@ -18,6 +48,42 @@ export interface AcademyProduct {
   is_active: boolean;
   is_published: boolean;
   created_at: string;
+  product_type: "course" | "challenge";
+  challenge_config: ChallengeConfig | null;
+  challenge_winners: Array<{ rank: number; enrollment_id: string; awarded_at: string }> | null;
+}
+
+export type AcademyChallengeTaskType = "lesson" | "proof" | "self_check" | "metric" | "live" | "quiz";
+
+export interface AcademyChallengeTask {
+  id: string;
+  product_id: string;
+  day: number;
+  position: number;
+  task_type: AcademyChallengeTaskType;
+  title: string;
+  points: number;
+  lesson_id: string | null;
+  proof_config: { accepts: string[]; prompt: string } | null;
+  metric_config: { source: "leadash_outbox" | "manual"; metric: string; target: number } | null;
+  live_session_id: string | null;
+  quiz_config: Record<string, unknown> | null;
+  is_published: boolean;
+  created_at: string;
+}
+
+export interface AcademyChallengeCompletion {
+  id: string;
+  enrollment_id: string;
+  task_id: string;
+  product_id: string;
+  day: number;
+  status: "completed" | "skipped";
+  proof_files: { url: string; name: string; type: string }[] | null;
+  proof_text: string | null;
+  metric_value: number | null;
+  points_awarded: number;
+  completed_at: string;
 }
 
 export interface AcademySection {
@@ -202,6 +268,10 @@ export interface AcademyGamification {
   streak_days: number;
   last_active_date: string | null;
   badges: string[];
+  reported_earnings_cents: number;
+  earnings_proof_url: string | null;
+  earnings_verified: boolean;
+  grace_days_used: number;
 }
 
 // ─── Composite / view types ───────────────────────────────────────────────────

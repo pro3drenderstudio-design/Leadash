@@ -33,7 +33,20 @@ const PATCHABLE_FIELDS = new Set([
   "banner_sub",
   "banner_cta_text",
   "banner_cta_url",
+  // Challenge fields added in migration 059
+  "product_type",
+  "challenge_config",
+  "challenge_winners",
 ]);
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
 
 export async function PATCH(req: NextRequest) {
   const db = await requireAdmin(req);
@@ -57,6 +70,64 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { data, error } = await db.from("academy_products").update(updates).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ product: data });
+}
+
+// POST — create a new product (course or challenge). Products are bootstrapped
+// via migration in most cases; this lets an admin add new challenges from the UI.
+export async function POST(req: NextRequest) {
+  const db = await requireAdmin(req);
+  if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  let body: { name?: string; product_type?: "course" | "challenge" };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  const name = body.name?.trim();
+  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
+  const productType = body.product_type === "challenge" ? "challenge" : "course";
+
+  const baseSlug = slugify(name) || "product";
+  let slug = baseSlug;
+  let id = baseSlug;
+  for (let i = 1; i <= 50; i++) {
+    const { data: existing } = await db.from("academy_products").select("id").eq("id", id).maybeSingle();
+    if (!existing) break;
+    slug = `${baseSlug}-${i + 1}`;
+    id = slug;
+  }
+
+  const insert: Record<string, unknown> = {
+    id,
+    slug,
+    name,
+    description: null,
+    price_ngn: 0,
+    credits_grant: 0,
+    leadash_months: 0,
+    pricing_type: "free",
+    is_active: true,
+    is_published: false,
+    certificate_enabled: false,
+    completion_threshold_pct: 100,
+    product_type: productType,
+  };
+  if (productType === "challenge") {
+    insert.challenge_config = {
+      duration_days: 30,
+      cadence: "daily",
+      start_mode: "enrollment",
+      grace_days: 2,
+      catchup_enabled: true,
+      leaderboard_enabled: true,
+      points_board_enabled: true,
+      earnings_board_enabled: true,
+      earnings_require_proof: true,
+      earnings_reset: "all_time",
+    };
+  }
+
+  const { data, error } = await db.from("academy_products").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ product: data });
 }
