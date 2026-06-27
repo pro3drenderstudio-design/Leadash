@@ -43,6 +43,8 @@ import {
   WorkflowSquare01Icon,
   AnalyticsUpIcon,
   CustomerService01Icon,
+  Configuration01Icon,
+  GitBranchIcon,
   Login03Icon,
   Logout03Icon,
 } from "@/v2-app/icons";
@@ -95,9 +97,11 @@ const NAV: NavGroupDef[] = [
   {
     label: "Funnel",
     items: [
-      { href: "/admin/funnel",      label: "Funnel settings", icon: AnalyticsUpIcon },
-      { href: "/admin/automations", label: "Automations",     icon: WorkflowSquare01Icon },
-      { href: "/admin/crm",         label: "CRM inbox",       icon: CustomerService01Icon },
+      { href: "/admin/funnels",      label: "Funnels",         icon: GitBranchIcon },
+      { href: "/admin/funnel",       label: "Funnel settings", icon: AnalyticsUpIcon },
+      { href: "/admin/automations",  label: "Automations",     icon: WorkflowSquare01Icon },
+      { href: "/admin/crm",          label: "CRM inbox",       icon: CustomerService01Icon },
+      { href: "/admin/crm-settings", label: "CRM settings",    icon: Configuration01Icon },
     ],
   },
   {
