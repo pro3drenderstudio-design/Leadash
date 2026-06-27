@@ -91,7 +91,11 @@ export async function POST(req: NextRequest) {
   let slug = baseSlug;
   let id = baseSlug;
   for (let i = 1; i <= 50; i++) {
-    const { data: existing } = await db.from("academy_products").select("id").eq("id", id).maybeSingle();
+    const { data: existing } = await db
+      .from("academy_products")
+      .select("id")
+      .or(`id.eq.${id},slug.eq.${slug}`)
+      .maybeSingle();
     if (!existing) break;
     slug = `${baseSlug}-${i + 1}`;
     id = slug;

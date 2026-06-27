@@ -124,6 +124,7 @@ export default function AdminAcademyPage() {
   const [courseView,     setCourseView]     = useState<CourseView>("curriculum");
   const [challengeView,  setChallengeView]  = useState<ChallengeView>("builder");
   const [creatingChallenge, setCreatingChallenge] = useState(false);
+  const [productFilter,  setProductFilter]  = useState<"all" | "course" | "challenge">("all");
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [selectedLesson,  setSelectedLesson]  = useState<Lesson | null>(null);
   const [editingLesson,   setEditingLesson]   = useState<Partial<Lesson>>({});
@@ -172,22 +173,26 @@ export default function AdminAcademyPage() {
     return () => ac.abort();
   }, []);
 
-  async function createChallenge() {
-    const name = window.prompt("Challenge name", "30-Day Challenge");
+  async function createProduct(productType: "course" | "challenge") {
+    const name = window.prompt(
+      productType === "challenge" ? "Challenge name" : "Course name",
+      productType === "challenge" ? "30-Day Challenge" : "New Course"
+    );
     if (!name) return;
     setCreatingChallenge(true);
     try {
       const res = await fetch("/api/admin/academy/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, product_type: "challenge" }),
+        body: JSON.stringify({ name, product_type: productType }),
       });
       const d = await res.json();
-      if (!res.ok) { notify(d.error ?? "Failed to create challenge", false); return; }
+      if (!res.ok) { notify(d.error ?? `Failed to create ${productType}`, false); return; }
       await load();
       setOpenProduct(d.product.id);
+      setCourseView("curriculum");
       setChallengeView("builder");
-      notify("Challenge created");
+      notify(productType === "challenge" ? "Challenge created" : "Course created");
     } catch {
       notify("Network error", false);
     } finally {
@@ -693,8 +698,10 @@ export default function AdminAcademyPage() {
                 setCourseView("curriculum");
                 setChallengeView("builder");
               }}
-              onCreateChallenge={createChallenge}
-              creatingChallenge={creatingChallenge}
+              onCreateProduct={createProduct}
+              creating={creatingChallenge}
+              filter={productFilter}
+              onFilterChange={setProductFilter}
             />
           )}
 
@@ -1580,30 +1587,86 @@ export default function AdminAcademyPage() {
 
 // ─── Courses gallery ──────────────────────────────────────────────────────────
 
-function CoursesGallery({ products, onOpen, onCreateChallenge, creatingChallenge }: {
+function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, onFilterChange }: {
   products: Product[];
   onOpen: (id: string) => void;
-  onCreateChallenge: () => void;
-  creatingChallenge: boolean;
+  onCreateProduct: (type: "course" | "challenge") => void;
+  creating: boolean;
+  filter: "all" | "course" | "challenge";
+  onFilterChange: (f: "all" | "course" | "challenge") => void;
 }) {
+  const filtered = products.filter(p => {
+    if (filter === "all") return true;
+    if (filter === "challenge") return p.product_type === "challenge";
+    return (p.product_type ?? "course") === "course";
+  });
+  const counts = {
+    all:       products.length,
+    course:    products.filter(p => (p.product_type ?? "course") === "course").length,
+    challenge: products.filter(p => p.product_type === "challenge").length,
+  };
+
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button
-          onClick={onCreateChallenge}
-          disabled={creatingChallenge}
-          className="app-btn app-btn-primary"
-          style={{ opacity: creatingChallenge ? 0.6 : 1, cursor: creatingChallenge ? "default" : "pointer" }}
-        >
-          <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} />
-          {creatingChallenge ? "Creating…" : "New challenge"}
-        </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4, background: "var(--app-bg-sunken)", border: "1px solid var(--app-border)", borderRadius: 8, padding: 3 }}>
+          {([
+            { key: "all",       label: "All" },
+            { key: "course",    label: "Courses" },
+            { key: "challenge", label: "Challenges" },
+          ] as { key: "all" | "course" | "challenge"; label: string }[]).map(f => {
+            const active = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => onFilterChange(f.key)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "6px 11px", fontSize: 12.5,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? "var(--app-text)" : "var(--app-text-muted)",
+                  background: active ? "var(--app-surface-strong)" : "transparent",
+                  border: "none", borderRadius: 6, cursor: "pointer",
+                }}
+              >
+                {f.label}
+                <span style={{ fontSize: 10.5, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  {counts[f.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => onCreateProduct("course")}
+            disabled={creating}
+            className="app-btn app-btn-secondary"
+            style={{ opacity: creating ? 0.6 : 1, cursor: creating ? "default" : "pointer" }}
+          >
+            <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} />
+            New course
+          </button>
+          <button
+            onClick={() => onCreateProduct("challenge")}
+            disabled={creating}
+            className="app-btn app-btn-primary"
+            style={{ opacity: creating ? 0.6 : 1, cursor: creating ? "default" : "pointer" }}
+          >
+            <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} />
+            {creating ? "Creating…" : "New challenge"}
+          </button>
+        </div>
       </div>
-      {products.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="ac-card" style={{ padding: 60, textAlign: "center" }}>
-          <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>No courses yet.</p>
+          <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>
+            {products.length === 0 ? "No courses yet." : `No ${filter === "all" ? "products" : filter + "s"} yet.`}
+          </p>
           <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginTop: 6 }}>
-            Add a product row in the academy_products table to get started — courses are bootstrapped via migration.
+            {products.length === 0
+              ? "Use the buttons above to create your first course or challenge."
+              : "Try a different filter, or create one with the buttons above."}
           </p>
         </div>
       ) : (
@@ -1612,7 +1675,7 @@ function CoursesGallery({ products, onOpen, onCreateChallenge, creatingChallenge
           gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
           gap: 16,
         }}>
-          {products.map(p => {
+          {filtered.map(p => {
             const isChallenge = p.product_type === "challenge";
             return (
               <button
