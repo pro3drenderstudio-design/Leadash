@@ -197,6 +197,7 @@ function CountdownBlock({ block }: { block: Block }) {
         targetMs = Number(stored);
       } else {
         targetMs = new Date((p.target_date as string) ?? "").getTime();
+        if (Number.isNaN(targetMs)) targetMs = Date.now() + 30 * 60_000;
       }
       const diff = Math.max(0, targetMs - Date.now());
       const d = Math.floor(diff / 86_400_000);
@@ -253,7 +254,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
 
     case "body-text":
       return (
-        <div style={{ padding: "12px 24px" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "12px 24px" }}>
           <p style={{ color: (p.color as string) ?? "#999", textAlign: (p.align as "left"|"center"|"right") ?? "left", fontSize: "1rem", lineHeight: 1.7 }}>
             {(p.text as string) || ""}
           </p>
@@ -262,7 +263,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
 
     case "list":
       return (
-        <div style={{ padding: "12px 24px" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "12px 24px" }}>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {((p.items as string[]) ?? []).map((item, i) => (
               <li key={i} style={{ color: (p.color as string) ?? "#ccc", display: "flex", gap: "8px", alignItems: "flex-start", marginBottom: "6px", fontSize: "0.875rem" }}>
@@ -276,7 +277,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
 
     case "image":
       return p.src ? (
-        <div style={{ padding: "8px 24px", textAlign: "center" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "8px 24px", textAlign: "center" }}>
           {p.href ? (
             <a href={p.href as string}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -305,6 +306,11 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
     case "hero":
       return (
         <div style={{ backgroundColor: (p.bg_color as string) ?? "#0c0c0f", padding: "64px 24px", textAlign: "center" }}>
+          {Boolean(p.eyebrow) && (
+            <div style={{ display: "inline-block", backgroundColor: "rgba(249,115,22,.12)", color: "#fb923c", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.1em", padding: "6px 13px", borderRadius: "999px", marginBottom: "22px" }}>
+              {p.eyebrow as string}
+            </div>
+          )}
           <h1 style={{ color: (p.text_color as string) ?? "#fff", fontSize: "clamp(2rem, 5vw, 3.5rem)", fontWeight: 800, marginBottom: "16px", lineHeight: 1.1 }}>
             {(p.headline as string) || ""}
           </h1>
@@ -339,7 +345,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
             </div>
             <div>
               <p style={{ color: "#fff", fontWeight: 600, margin: 0 }}>{p.author as string}</p>
-              <p style={{ color: "#666", fontSize: "0.75rem", margin: "2px 0 0" }}>{p.title as string}</p>
+              <p style={{ color: "#666", fontSize: "0.75rem", margin: "2px 0 0" }}>{p.role as string}</p>
             </div>
           </div>
         </div>
@@ -370,7 +376,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
     case "faq-accordion": {
       const items = (p.items as Array<{q:string;a:string}>) ?? [];
       return (
-        <div style={{ padding: "24px" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "24px" }}>
           {items.map((item, i) => (
             <details key={i} style={{ borderBottom: "1px solid #333", marginBottom: "8px" }}>
               <summary style={{ color: "#fff", fontWeight: 600, padding: "12px 0", cursor: "pointer", listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -400,11 +406,11 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
 
     case "cta-button":
       return (
-        <div style={{ padding: "16px 24px", textAlign: "center" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "16px 24px", textAlign: "center" }}>
           <a
             href={(p.url as string) ?? "#"}
             style={{
-              backgroundColor: (p.bg_color as string) ?? "#f97316",
+              backgroundColor: (p.accent_color as string) ?? "#f97316",
               color: (p.text_color as string) ?? "#fff",
               padding: p.size === "lg" ? "16px 48px" : p.size === "sm" ? "8px 24px" : "12px 32px",
               borderRadius: "8px",
@@ -427,7 +433,7 @@ function PublicBlock({ block, pageId, sessionId }: { block: Block; pageId: strin
 
     case "divider":
       return (
-        <div style={{ padding: "8px 24px" }}>
+        <div style={{ backgroundColor: (p.bg_color as string) ?? "transparent", padding: "8px 24px" }}>
           <hr style={{ border: "none", borderTop: `${(p.thickness as string) ?? "1px"} solid ${(p.color as string) ?? "#333"}` }} />
         </div>
       );
@@ -492,7 +498,7 @@ export default function FunnelPageRenderer({
     fetch("/api/funnels/track", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ type: "event", session_id: sid, page_id: pageId, event_type: "pageview" }),
+      body:    JSON.stringify({ type: "event", session_id: sid, page_id: pageId, event_type: "view" }),
     }).catch(() => {});
   }, [funnelId, pageId]);
 

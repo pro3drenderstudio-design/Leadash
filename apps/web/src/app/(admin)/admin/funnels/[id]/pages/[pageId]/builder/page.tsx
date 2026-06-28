@@ -85,21 +85,21 @@ function genId() { return `b_${Math.random().toString(36).slice(2,9)}`; }
 
 function defaultProps(type: BlockType): Record<string, unknown> {
   switch (type) {
-    case "headline":       return { text:"A short, punchy headline", align:"center", color:"#ffffff", bg_color:"transparent" };
+    case "headline":       return { text:"A short, punchy headline", align:"center", color:"#ffffff", bg_color:"transparent", size:"4xl", weight:"bold" };
     case "body-text":      return { text:"Add supporting copy here. Click to edit this paragraph directly on the canvas.", align:"left", color:"#9aa4b2", bg_color:"transparent" };
     case "list":           return { items:["First key benefit","Second key benefit","Third key benefit"], bg_color:"transparent" };
     case "image":          return { src:"", alt:"", bg_color:"transparent" };
-    case "video":          return { caption:"Watch the 2-minute overview", bg_color:"#0c0c0f" };
-    case "hero":           return { eyebrow:"FREE · 30-DAY CHALLENGE", headline:"Your Compelling Headline Here", subtext:"Your subheadline that builds interest and drives action.", cta_text:"Get Started Free", bg_color:"#0c0c0f" };
-    case "countdown-timer":return { label:"Enrollment closes in", accent_color:"#f97316", bg_color:"#14161c" };
+    case "video":          return { url:"", caption:"Watch the 2-minute overview", bg_color:"#0c0c0f" };
+    case "hero":           return { eyebrow:"FREE · 30-DAY CHALLENGE", headline:"Your Compelling Headline Here", subtext:"Your subheadline that builds interest and drives action.", cta_text:"Get Started Free", cta_url:"", bg_color:"#0c0c0f" };
+    case "countdown-timer":return { label:"Enrollment closes in", accent_color:"#f97316", bg_color:"#14161c", evergreen:true, duration_minutes:30, target_date:"" };
     case "testimonial":    return { quote:"This product completely changed how I approach outreach.", author:"Jane Doe", role:"Founder, AcmeCo", bg_color:"#0c0c0f" };
-    case "pricing-card":   return { title:"Full Package", price:"₦135,000", period:"one-time", cta_text:"Get Access", bg_color:"#0e1017", features:["Feature one","Feature two","Feature three"] };
+    case "pricing-card":   return { title:"Full Package", price:"₦135,000", period:"one-time", cta_text:"Get Access", cta_url:"", bg_color:"#0e1017", features:["Feature one","Feature two","Feature three"] };
     case "faq-accordion":  return { bg_color:"#0c0c0f", items:[{q:"How does this work?",a:"You sign up and get instant access to everything."},{q:"Is there a guarantee?",a:"Yes — 30-day money back guarantee, no questions asked."}] };
     case "stats-bar":      return { bg_color:"#0c0c0f", items:[{value:"1,200+",label:"Customers"},{value:"4.9",label:"Avg rating"},{value:"30+",label:"Countries"}] };
-    case "cta-button":     return { text:"Get Started Free", accent_color:"#f97316", bg_color:"#0c0c0f" };
-    case "optin-form":     return { title:"Get instant free access", button_text:"Send Me Access", fine_print:"No spam. Unsubscribe anytime.", bg_color:"#0e1017" };
+    case "cta-button":     return { text:"Get Started Free", url:"", accent_color:"#f97316", bg_color:"#0c0c0f" };
+    case "optin-form":     return { title:"Get instant free access", button_text:"Send Me Access", fine_print:"No spam. Unsubscribe anytime.", bg_color:"#0e1017", redirect_url:"", fields:[{type:"name",label:"Full name",required:false},{type:"email",label:"Email address",required:true}] };
     case "section":        return { bg_color:"#0c0c0f" };
-    case "two-column":     return { bg_color:"#0c0c0f" };
+    case "two-column":     return { bg_color:"#0c0c0f", left:"Left column content", right:"Right column content" };
     case "spacer":         return { height:48 };
     case "divider":        return { bg_color:"transparent" };
     case "custom-html":    return { html:"<p>Custom HTML goes here</p>" };
@@ -237,21 +237,28 @@ function BlockContent({ block, device, preview, onCommitProp, onFocus, onCommitI
         </div>
       );
 
-    case "optin-form":
+    case "optin-form": {
+      const fields = (p.fields as Array<{type:string;label:string;required:boolean}>) ?? [];
       return (
         <div style={{background:bg,padding:mob?"40px 22px":"50px 32px"}}>
           <div style={{maxWidth:430,margin:"0 auto",background:"#0c0c0f",border:"1px solid rgba(255,255,255,0.08)",borderRadius:18,padding:"30px 26px",boxShadow:"0 24px 60px -24px rgba(0,0,0,.75)"}}>
             <E tag="h3" k="title" style={{fontSize:22,fontWeight:700,color:"#fff",textAlign:"center",marginBottom:18,display:"block"}} />
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {["Full name","Email address"].map(ph=>(
-                <div key={ph} style={{border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 13px",color:"#5b6678",fontSize:14,background:"#08090d"}}>{ph}</div>
-              ))}
+              {fields.length>0
+                ? fields.map((f,idx)=>(
+                  <div key={idx} style={{border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 13px",color:"#5b6678",fontSize:14,background:"#08090d"}}>
+                    {f.label||f.type}{f.required&&" *"}
+                  </div>
+                ))
+                : <div style={{border:"1px dashed rgba(249,115,22,.5)",borderRadius:10,padding:"12px 13px",color:"#fb923c",fontSize:12,background:"#08090d"}}>No fields configured — add fields in the settings panel</div>
+              }
               <E tag="div" k="button_text" style={{background:"linear-gradient(180deg,#fb923c,#f97316)",color:"#fff",fontWeight:700,fontSize:15,padding:"13px",borderRadius:10,textAlign:"center",boxShadow:"0 8px 20px -8px rgba(249,115,22,.6)"}} />
             </div>
             <E tag="p" k="fine_print" style={{textAlign:"center",color:"#5b6678",fontSize:11,marginTop:13,display:"block"}} />
           </div>
         </div>
       );
+    }
 
     case "testimonial":
       return (
@@ -296,12 +303,15 @@ function BlockContent({ block, device, preview, onCommitProp, onFocus, onCommitI
       );
     }
 
-    case "headline":
+    case "headline": {
+      const sizeMap: Record<string,[number,number]> = { xl:[18,20], "2xl":[22,24], "3xl":[26,30], "4xl":[30,36], "5xl":[36,48] };
+      const [sMob,sDesk] = sizeMap[(p.size as string)] ?? sizeMap["4xl"];
       return (
         <div style={{background:bg,padding:"16px 28px"}}>
-          <E tag="h2" k="text" style={{fontSize:mob?26:34,fontWeight:700,color:(p.color as string)??"#fff",textAlign:(p.align as React.CSSProperties["textAlign"])??"center",lineHeight:1.15,letterSpacing:"-0.01em",display:"block"}} />
+          <E tag="h2" k="text" style={{fontSize:mob?sMob:sDesk,fontWeight:p.weight==="bold"?700:600,color:(p.color as string)??"#fff",textAlign:(p.align as React.CSSProperties["textAlign"])??"center",lineHeight:1.15,letterSpacing:"-0.01em",display:"block"}} />
         </div>
       );
+    }
 
     case "body-text":
       return (
@@ -379,9 +389,12 @@ function BlockContent({ block, device, preview, onCommitProp, onFocus, onCommitI
     case "two-column":
       return (
         <div style={{background:bg,padding:"28px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          {[0,1].map(i=>(
-            <div key={i} style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:10,padding:"28px 16px",textAlign:"center",color:"#3a4252",fontSize:12}}>Column {i+1}</div>
-          ))}
+          <div style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:10,padding:"20px 16px"}}>
+            <E tag="p" k="left" style={{color:"#cbd2dc",fontSize:14,lineHeight:1.5,display:"block"}} />
+          </div>
+          <div style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:10,padding:"20px 16px"}}>
+            <E tag="p" k="right" style={{color:"#cbd2dc",fontSize:14,lineHeight:1.5,display:"block"}} />
+          </div>
         </div>
       );
 
@@ -1038,6 +1051,77 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
       </div>
     );
   }
+  function segCtl(key:string, opts:[string,string][]) {
+    if(!b) return null;
+    const cur=(b.props[key] as string)??opts[0][0];
+    return (
+      <div style={{display:"flex",gap:4,background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:3}}>
+        {opts.map(([v,l])=>(
+          <button key={v} onClick={()=>onSetProps(b.id,{[key]:v})}
+            style={{flex:1,padding:"6px 4px",border:"none",borderRadius:6,background:cur===v?AC:"transparent",color:cur===v?"#fff":"#7c8aa0",cursor:"pointer",fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  function toggleCtl(key:string) {
+    if(!b) return null;
+    const on=Boolean(b.props[key]);
+    return (
+      <button onClick={()=>onSetProps(b.id,{[key]:!on})}
+        style={{display:"flex",alignItems:"center",gap:8,border:"none",background:"transparent",cursor:"pointer",padding:0,fontFamily:"inherit"}}>
+        <span style={{width:34,height:19,borderRadius:999,background:on?AC:"#2a3142",position:"relative",transition:"background .15s",flexShrink:0}}>
+          <span style={{position:"absolute",top:2,left:on?17:2,width:15,height:15,borderRadius:999,background:"#fff",transition:"left .15s"}} />
+        </span>
+        <span style={{fontSize:12.5,color:"#cbd2dc"}}>{on?"On":"Off"}</span>
+      </button>
+    );
+  }
+  function fieldsCtl() {
+    if(!b) return null;
+    const fields=(b.props.fields as Array<{type:string;label:string;required:boolean}>)??[];
+    function update(idx:number, patch:Partial<{type:string;label:string;required:boolean}>) {
+      const next=fields.map((f,i)=>i===idx?{...f,...patch}:f);
+      onSetProps(b!.id,{fields:next});
+    }
+    function remove(idx:number) {
+      onSetProps(b!.id,{fields:fields.filter((_,i)=>i!==idx)});
+    }
+    function add() {
+      onSetProps(b!.id,{fields:[...fields,{type:`field_${fields.length+1}`,label:"New field",required:false}]});
+    }
+    return (
+      <div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+          {fields.map((f,idx)=>(
+            <div key={idx} style={{display:"flex",flexDirection:"column",gap:6,padding:"9px 10px",background:"#0a0e16",border:"1px solid rgba(255,255,255,0.07)",borderRadius:8}}>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={f.label} onChange={e=>update(idx,{label:e.target.value})} placeholder="Label" style={{...IS,flex:1,padding:"6px 8px",fontSize:12}} />
+                <button onClick={()=>remove(idx)} style={{border:"none",background:"transparent",color:"#5b6678",cursor:"pointer",padding:2,flexShrink:0}}>
+                  <Icon paths={["M5 12h14"]} size={15} sw={2} />
+                </button>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={f.type} onChange={e=>update(idx,{type:e.target.value})} placeholder="field_key" style={{...IS,flex:1,padding:"6px 8px",fontSize:11.5,fontFamily:"monospace"}} />
+                <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#7c8aa0",whiteSpace:"nowrap"}}>
+                  <input type="checkbox" checked={f.required} onChange={e=>update(idx,{required:e.target.checked})} />
+                  Required
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={add}
+          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:8,background:`${AC}18`,border:`1px dashed ${AC}66`,borderRadius:8,color:AC,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+          <Icon paths={["M12 5v14","M5 12h14"]} size={14} sw={2.4} /> Add field
+        </button>
+        <p style={{fontSize:10.5,color:"#5b6678",marginTop:8,lineHeight:1.4}}>
+          Use &quot;email&quot; as the field key to render an email input. The key is used as the data field name on submission.
+        </p>
+      </div>
+    );
+  }
   function itemsCtl(kind:"stats"|"faq"|"list"|"pricing") {
     if(!b) return null;
     const items=(b.props.items as unknown[])??[];
@@ -1070,28 +1154,31 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
     if(!b) return null;
     const t=b.type;
     const hasStyle=t==="headline"||t==="body-text"||t==="countdown-timer"||t==="cta-button"||b.props.bg_color!==undefined;
+    const evergreen=Boolean(b.props.evergreen);
     return (
       <div>
         <SL text="Content" />
-        {t==="hero"&&<><Field label="Eyebrow">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Button label">{textCtl("cta_text")}</Field></>}
-        {t==="countdown-timer"&&<Field label="Label">{textCtl("label")}</Field>}
-        {t==="video"&&<Field label="Caption">{textCtl("caption")}</Field>}
-        {t==="optin-form"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Fine print">{textCtl("fine_print")}</Field></>}
+        {t==="hero"&&<><Field label="Eyebrow">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Button label">{textCtl("cta_text")}</Field><Field label="Button URL">{textCtl("cta_url")}</Field></>}
+        {t==="countdown-timer"&&<><Field label="Label">{textCtl("label")}</Field><Field label="Evergreen (per-visitor timer)">{toggleCtl("evergreen")}</Field>{evergreen?<Field label="Duration (minutes)">{numCtl("duration_minutes")}</Field>:<Field label="Target date & time"><input type="datetime-local" value={(b.props.target_date as string)??""} onChange={e=>onSetProps(b.id,{target_date:e.target.value})} style={IS} /></Field>}</>}
+        {t==="video"&&<><Field label="Video URL (YouTube)">{textCtl("url")}</Field><Field label="Caption">{textCtl("caption")}</Field></>}
+        {t==="optin-form"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Form fields">{fieldsCtl()}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Fine print">{textCtl("fine_print")}</Field><Field label="Redirect URL after submit (optional)">{textCtl("redirect_url")}</Field></>}
         {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("author")}</Field><Field label="Role">{textCtl("role")}</Field></>}
         {(t==="headline"||t==="body-text")&&<Field label="Text">{areaCtl("text")}</Field>}
-        {t==="cta-button"&&<Field label="Button label">{textCtl("text")}</Field>}
-        {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("cta_text")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
+        {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field></>}
+        {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("cta_text")}</Field><Field label="Button URL">{textCtl("cta_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
         {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
         {t==="faq-accordion"&&<Field label="Questions">{itemsCtl("faq")}</Field>}
         {t==="list"&&<Field label="Items">{itemsCtl("list")}</Field>}
         {t==="spacer"&&<Field label="Height">{numCtl("height")}</Field>}
         {t==="image"&&<><Field label="Image URL">{textCtl("src")}</Field><Field label="Alt text">{textCtl("alt")}</Field></>}
+        {t==="two-column"&&<><Field label="Left column text">{areaCtl("left")}</Field><Field label="Right column text">{areaCtl("right")}</Field></>}
         {t==="custom-html"&&<Field label="HTML"><textarea value={(b.props.html as string)??""}  onChange={e=>onSetProps(b.id,{html:e.target.value})} rows={6} style={{...IS,resize:"vertical" as const,fontFamily:"monospace"}} /></Field>}
-        {["section","two-column","divider"].includes(t)&&<p style={{fontSize:12,color:"#7c8aa0",lineHeight:1.5,marginBottom:8}}>This block has no text content. Adjust its style below.</p>}
+        {["section","divider"].includes(t)&&<p style={{fontSize:12,color:"#7c8aa0",lineHeight:1.5,marginBottom:8}}>This block has no text content. Adjust its style below.</p>}
         {hasStyle&&(
           <>
             <div style={{height:18}} />
             <SL text="Style" />
+            {t==="headline"&&<Field label="Size">{segCtl("size",[["2xl","S"],["3xl","M"],["4xl","L"],["5xl","XL"]])}</Field>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
             {(t==="countdown-timer"||t==="cta-button")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
             {b.props.bg_color!==undefined&&<Field label="Background">{colorCtl("bg_color")}</Field>}
@@ -1103,11 +1190,10 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
 
   function PageSettings() {
     const s=page.settings??{};
-    const c=page.connection??{};
-    const conns=[["academy","Leadash Academy"],["paystack","Paystack"],["redirect","Redirect URL"],["none","None"]] as const;
     const pInp=(val:string,onChange:(v:string)=>void)=>(
       <input value={val} onChange={e=>onChange(e.target.value)} style={IS} />
     );
+    const bgVal=(s.bg_color as string)??"#0c0c0f";
     return (
       <div>
         <SL text="SEO & sharing" />
@@ -1122,16 +1208,14 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
           </div>
         </Field>
         <div style={{height:18}} />
-        <SL text="Connection" />
-        <Field label="On submit, send leads to">
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {conns.map(([v,l])=>(
-              <button key={v} onClick={()=>onSetPage({connection:{...c,type:v}})}
-                style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",background:c.type===v?`${AC}1f`:"#0a0e16",border:`1px solid ${c.type===v?`${AC}88`:"rgba(255,255,255,0.08)"}`,borderRadius:8,color:c.type===v?"#eaeff6":"#9aa4b2",fontSize:13,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-                <span style={{width:15,height:15,borderRadius:999,border:`2px solid ${c.type===v?AC:"#3a4252"}`,flexShrink:0,background:c.type===v?AC:"transparent",boxShadow:c.type===v?"inset 0 0 0 2px #0b101a":"none"}} />
-                {l}
-              </button>
-            ))}
+        <SL text="Style" />
+        <Field label="Background color">
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{position:"relative",width:34,height:34,borderRadius:8,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:bgVal}}>
+              <input type="color" value={bgVal} onChange={e=>onSetPage({settings:{...s,bg_color:e.target.value}})}
+                style={{position:"absolute",inset:-4,width:42,height:42,border:"none",padding:0,cursor:"pointer",background:"transparent"}} />
+            </div>
+            <input value={bgVal} onChange={e=>onSetPage({settings:{...s,bg_color:e.target.value}})} style={{...IS,fontFamily:"monospace",fontSize:12}} />
           </div>
         </Field>
         <div style={{height:18}} />

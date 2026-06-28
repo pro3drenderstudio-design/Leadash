@@ -390,7 +390,7 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
           rows={8}
           className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/40 resize-none"
         />
-        <p className="text-[10px] text-white/30 mt-1">e.g. {`{"primary_color":"#f97316","font":"Inter"}`}</p>
+        <p className="text-[10px] text-white/30 mt-1">e.g. {`{"bg_color":"#0c0c0f","font":"Inter"}`} — used as the page-wide fallback when a page doesn&apos;t set its own background color or block colors don&apos;t override it.</p>
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
