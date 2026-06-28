@@ -13,23 +13,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const { db, workspaceId, userId } = auth;
 
-  const [lessonRes, enrollmentRes] = await Promise.all([
-    db.from("academy_lessons").select("*, academy_sections(product_id)").eq("id", id).single(),
-    db.from("academy_enrollments")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("workspace_id", workspaceId)
-      .eq("product_id",
-        db.from("academy_lessons").select("product_id").eq("id", id)
-      )
-      .maybeSingle(),
-  ]);
+  const { data: lesson } = await db
+    .from("academy_lessons").select("*, academy_sections(product_id)").eq("id", id).single();
 
-  const lesson = lessonRes.data;
   if (!lesson) return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
   if (!lesson.mux_playback_id) return NextResponse.json({ error: "No video" }, { status: 404 });
 
-  const enrollment = enrollmentRes.data;
+  const productId = (lesson.academy_sections as { product_id: string } | null)?.product_id;
+
+  const { data: enrollment } = await db
+    .from("academy_enrollments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
+    .eq("product_id", productId)
+    .maybeSingle();
 
   // Allow free preview without enrollment
   if (!lesson.is_free_preview && !enrollment)

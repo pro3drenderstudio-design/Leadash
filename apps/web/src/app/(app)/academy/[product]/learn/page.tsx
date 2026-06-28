@@ -12,6 +12,15 @@ import { lessonDuration } from "@/types/academy";
 interface ChallengeConfig {
   duration_days?: number;
   week_titles?: string[];
+  auto_advance_offer?: {
+    enabled?: boolean;
+    trigger?: string;
+    trigger_day?: number;
+    window_hours?: number;
+    target_product_id?: string;
+    discount_type?: string;
+    discount_value?: number;
+  };
 }
 
 interface ChallengeTask {
@@ -163,6 +172,11 @@ function ChallengeDashboard({ slug }: { slug: string }) {
     </div>
   );
 
+  // A learner who hasn't completed a single task yet has no academy_gamification
+  // row at all (it's created lazily on first completion) — default it so the
+  // dashboard renders a normal "0 points / day 1" state instead of crashing.
+  const gam = state.gamification ?? { points: 0, streak_days: 0, last_active_date: null, reported_earnings_cents: 0, grace_days_used: 0 };
+
   const cfg = state.product.challenge_config;
   const totalDays = cfg?.duration_days ?? 30;
   const currentDay = state.days_completed.length > 0 ? Math.max(...state.days_completed) + 1 : 1;
@@ -170,15 +184,15 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   const weekNum = Math.ceil(cappedDay / 7);
   const pctComplete = Math.round((state.days_completed.length / totalDays) * 100);
   const daysToGrad = totalDays - state.days_completed.length;
-  const graceLeft = 2 - (state.gamification.grace_days_used ?? 0);
+  const graceLeft = 2 - (gam.grace_days_used ?? 0);
 
   // Tasks for today
   const todayTasks = state.tasks.filter(t => t.day === cappedDay);
   const todayPoints = todayTasks.reduce((a, t) => a + t.points, 0);
 
   // Reported earnings
-  const earnedDollars = (state.gamification.reported_earnings_cents ?? 0) / 100;
-  const earnPct = Math.min((state.gamification.reported_earnings_cents ?? 0) / 250000, 1);
+  const earnedDollars = (gam.reported_earnings_cents ?? 0) / 100;
+  const earnPct = Math.min((gam.reported_earnings_cents ?? 0) / 250000, 1);
 
   // Current week days (7 days starting from week start)
   const weekStart = (weekNum - 1) * 7 + 1;
@@ -240,7 +254,7 @@ function ChallengeDashboard({ slug }: { slug: string }) {
           {/* Streak */}
           <div style={{ background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: "var(--app-radius-lg)", padding: "20px 18px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 6 }}>🔥</div>
-            <p style={{ fontSize: 28, fontWeight: 800, color: "#F97316", marginBottom: 2 }}>{state.gamification.streak_days}</p>
+            <p style={{ fontSize: 28, fontWeight: 800, color: "#F97316", marginBottom: 2 }}>{gam.streak_days}</p>
             <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 4 }}>day streak</p>
             <p style={{ fontSize: 11, color: graceLeft > 0 ? "var(--app-warning)" : "var(--app-danger)" }}>
               {graceLeft} grace day{graceLeft !== 1 ? "s" : ""} left
@@ -249,7 +263,7 @@ function ChallengeDashboard({ slug }: { slug: string }) {
 
           {/* Points */}
           <div style={{ background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: "var(--app-radius-lg)", padding: "20px 18px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-            <p style={{ fontSize: 28, fontWeight: 800, color: "#A78BFA", marginBottom: 2 }}>{state.gamification.points.toLocaleString()}</p>
+            <p style={{ fontSize: 28, fontWeight: 800, color: "#A78BFA", marginBottom: 2 }}>{gam.points.toLocaleString()}</p>
             <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 6 }}>points earned</p>
             <Link href={`/academy/${slug}/leaderboard`}
               style={{ fontSize: 12, color: "#60A5FA", textDecoration: "none" }}>
@@ -320,19 +334,28 @@ function ChallengeDashboard({ slug }: { slug: string }) {
         </div>
 
         {/* Academy Package offer teaser */}
-        {state.offer_unlocked && (
-          <div style={{ background: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(14,14,19,0.5))", border: "1px solid rgba(251,191,36,0.30)", borderRadius: "var(--app-radius-lg)", padding: "20px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 24, flexShrink: 0 }}>🎁</span>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: "var(--app-warning)", marginBottom: 2 }}>Your Academy Package offer is unlocked!</p>
-              <p style={{ fontSize: 12, color: "var(--app-text-muted)" }}>₦50,000 challenger discount · expires in 58h</p>
+        {state.offer_unlocked && (() => {
+          const offerCfg = cfg?.auto_advance_offer;
+          const discountText = offerCfg?.discount_type === "percent"
+            ? `${offerCfg.discount_value}% off`
+            : offerCfg?.discount_value
+              ? `₦${offerCfg.discount_value.toLocaleString()} off`
+              : "A special discount";
+          const targetSlug = offerCfg?.target_product_id || "academy";
+          return (
+            <div style={{ background: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(14,14,19,0.5))", border: "1px solid rgba(251,191,36,0.30)", borderRadius: "var(--app-radius-lg)", padding: "20px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 24, flexShrink: 0 }}>🎁</span>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--app-warning)", marginBottom: 2 }}>Your Academy Package offer is unlocked!</p>
+                <p style={{ fontSize: 12, color: "var(--app-text-muted)" }}>{discountText} for challengers · limited time</p>
+              </div>
+              <Link href={`/academy/${targetSlug}`}
+                style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.35)", color: "var(--app-warning)", fontWeight: 600, fontSize: 12, padding: "9px 16px", borderRadius: "var(--app-radius)", textDecoration: "none", flexShrink: 0 }}>
+                See offer →
+              </Link>
             </div>
-            <Link href="/academy/academy-package"
-              style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.35)", color: "var(--app-warning)", fontWeight: 600, fontSize: 12, padding: "9px 16px", borderRadius: "var(--app-radius)", textDecoration: "none", flexShrink: 0 }}>
-              See offer →
-            </Link>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Revenue modal */}
@@ -341,10 +364,14 @@ function ChallengeDashboard({ slug }: { slug: string }) {
           productId={state.product.id}
           onClose={() => setShowRevenueModal(false)}
           onLogged={(cents) => {
-            setState(prev => prev ? {
-              ...prev,
-              gamification: { ...prev.gamification, reported_earnings_cents: (prev.gamification.reported_earnings_cents ?? 0) + cents },
-            } : prev);
+            setState(prev => {
+              if (!prev) return prev;
+              const prevGam = prev.gamification ?? { points: 0, streak_days: 0, last_active_date: null, reported_earnings_cents: 0, grace_days_used: 0 };
+              return {
+                ...prev,
+                gamification: { ...prevGam, reported_earnings_cents: (prevGam.reported_earnings_cents ?? 0) + cents },
+              };
+            });
           }}
         />
       )}

@@ -63,14 +63,18 @@ function ChallengeSalesPage({ product, onReload }: { product: ProductWithChallen
   const { d, h, m, s } = useCountdown(closeTarget);
 
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   async function handleFreeEnroll() {
     if (product.price_ngn > 0) return;
     setEnrolling(true);
+    setEnrollError(null);
     try {
       await wsPost("/api/academy/enroll", { product_id: product.id });
       window.location.href = `/academy/${slug}/learn`;
-    } catch {
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setEnrollError(err?.message ?? "Failed to enroll. Please try again.");
       setEnrolling(false);
     }
   }
@@ -143,6 +147,9 @@ function ChallengeSalesPage({ product, onReload }: { product: ProductWithChallen
               </span>
             )}
           </div>
+          {enrollError && (
+            <p style={{ color: "var(--app-danger, #f87171)", fontSize: 13, marginBottom: 12 }}>{enrollError}</p>
+          )}
           <p style={{ color: "var(--app-text-quiet)", fontSize: 12, marginBottom: 28 }}>7-day money-back guarantee · No questions asked</p>
 
           {/* Countdown timer */}

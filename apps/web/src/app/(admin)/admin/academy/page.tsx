@@ -62,6 +62,7 @@ interface Product {
   completion_threshold_pct: number; trailer_playback_id: string | null;
   product_type?: "course" | "challenge";
   challenge_config?: ChallengeConfig | null;
+  pricing_type?: string;
 }
 interface Section {
   id: string; product_id: string; title: string; position: number; is_published: boolean;
@@ -483,6 +484,7 @@ export default function AdminAcademyPage() {
     }).then(r => r.json());
     if (res.product) {
       setProducts(p => p.map(x => x.id === id ? res.product : x));
+      setEditProduct({});
       notify("Product saved");
     }
     else notify(res.error ?? "Error", false);
@@ -1117,6 +1119,9 @@ export default function AdminAcademyPage() {
                     challenge_config: product.challenge_config ?? null,
                     price_ngn: product.price_ngn,
                     compare_price_ngn: product.compare_price_ngn,
+                    pricing_type: product.pricing_type,
+                    certificate_enabled: product.certificate_enabled,
+                    completion_threshold_pct: product.completion_threshold_pct,
                   }}
                   onSave={async (updates) => { await saveProductFields(product.id, updates); }}
                   onToast={notify}

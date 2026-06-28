@@ -13,7 +13,10 @@ async function requireAdmin() {
 type Setting = { enabled: boolean; beta_workspaces: string[] };
 
 function normalize(raw: unknown): Setting {
-  const v = (raw ?? {}) as Record<string, unknown>;
+  // admin_settings.value is stored as text in the live DB, not jsonb as originally
+  // migrated — values written as JSON strings come back unparsed, so decode first.
+  const parsed = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return {}; } })() : raw;
+  const v = (parsed ?? {}) as Record<string, unknown>;
   return {
     enabled:         typeof v.enabled === "boolean" ? v.enabled : true,
     beta_workspaces: Array.isArray(v.beta_workspaces) ? (v.beta_workspaces as string[]) : [],

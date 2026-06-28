@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { db, workspaceId } = auth;
 
-  const [productsRes, enrollmentsRes, cohortsRes, certificatesRes] = await Promise.all([
+  const [publishedProductsRes, enrollmentsRes, cohortsRes, certificatesRes] = await Promise.all([
     db.from("academy_products").select("*").eq("is_active", true).eq("is_published", true).order("price_ngn"),
     userId
       ? db.from("academy_enrollments").select("*").eq("user_id", userId).eq("workspace_id", workspaceId)
@@ -27,6 +27,17 @@ export async function GET(req: NextRequest) {
   const enrollments  = enrollmentsRes.data  ?? [];
   const cohorts      = cohortsRes.data      ?? [];
   const certificates = certificatesRes.data ?? [];
+
+  // A learner who is already enrolled must keep seeing their product even if an
+  // admin later unpublishes it from new sales — fetch those separately and merge.
+  let productsData = publishedProductsRes.data ?? [];
+  const publishedIds = new Set(productsData.map((p: { id: string }) => p.id));
+  const enrolledOnlyIds = [...new Set(enrollments.map((e: { product_id: string }) => e.product_id))]
+    .filter(id => !publishedIds.has(id));
+  if (enrolledOnlyIds.length > 0) {
+    const { data: extraProducts } = await db.from("academy_products").select("*").in("id", enrolledOnlyIds);
+    productsData = [...productsData, ...(extraProducts ?? [])];
+  }
 
   // Fetch sections + lessons for all products
   const { data: sections } = await db.from("academy_sections").select("*").order("position");
@@ -47,7 +58,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const products = ((productsRes.data ?? []) as any[]).map(p => {
+  const products = (productsData as any[]).map(p => {
     const enrollment = (enrollments as any[]).find(e => e.product_id === p.id) ?? null;
     const cohort = enrollment?.cohort_id
       ? (cohorts as any[]).find(c => c.id === enrollment.cohort_id) ?? null

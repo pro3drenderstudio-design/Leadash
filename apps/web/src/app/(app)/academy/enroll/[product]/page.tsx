@@ -63,7 +63,7 @@ export default function EnrollPage() {
     setPaying(true);
     setError(null);
     try {
-      const res = await wsPost<{ url?: string; error?: string }>("/api/academy/enroll", {
+      const res = await wsPost<{ url?: string; enrolled?: boolean; error?: string }>("/api/academy/enroll", {
         product_id:   product.id,
         cohort_id:    cohortId || null,
         phone:        phone || null,
@@ -71,7 +71,8 @@ export default function EnrollPage() {
         discount_code_id:  discountResult?.code_id ?? null,
         callback_url: `${window.location.origin}/academy/enroll/${productId}/success`,
       });
-      if (res.url) { window.location.href = res.url; }
+      if (res.enrolled) { window.location.href = `/academy/${productId}/learn`; }
+      else if (res.url) { window.location.href = res.url; }
       else setError(res.error ?? "Failed to start payment");
     } catch {
       setError("Payment failed. Please try again.");
@@ -166,11 +167,12 @@ export default function EnrollPage() {
 
           <button onClick={handleEnroll} disabled={paying}
             className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-60 text-white font-bold py-4 rounded-xl text-base transition-colors flex items-center justify-center gap-2">
-            {paying ? "Redirecting…" : `Pay ${formatNgn(displayPrice)} with Paystack`}
+            {paying ? (displayPrice === 0 ? "Enrolling…" : "Redirecting…") : displayPrice === 0 ? "Enroll Free" : `Pay ${formatNgn(displayPrice)} with Paystack`}
           </button>
 
           <p className="text-xs text-white/30 text-center">
-            Secure payment. You'll get {product.credits_grant.toLocaleString()} Leadash credits immediately.
+            {displayPrice === 0 ? "No payment required. " : "Secure payment. "}
+            You'll get {product.credits_grant.toLocaleString()} Leadash credits immediately.
           </p>
         </div>
       </div>

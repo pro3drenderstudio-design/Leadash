@@ -44,7 +44,7 @@ interface ChallengeState {
     last_active_date: string | null;
     reported_earnings_cents: number;
     grace_days_used: number;
-  };
+  } | null;
   tasks: ChallengeTask[];
   days_completed: number[];
   offer_unlocked: boolean;
@@ -393,6 +393,25 @@ export default function ChallengeDayPage() {
   const dayIsDone = state.days_completed.includes(dayNum);
   const allIndividuallyDone = dayTasks.every(t => taskDone[t.id]);
 
+  // Guard against deep-linking to a day that hasn't unlocked yet per its drip
+  // schedule — without this, a learner could complete future days early.
+  const dayIsLocked = !dayIsDone && dayTasks.length > 0 && !dayTasks.every(t => t.unlocked);
+  if (dayIsLocked) return (
+    <div className="v2-app" style={{ minHeight: "100vh", background: "var(--app-bg)", padding: "22px 22px 90px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center", paddingTop: 80 }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 8 }}>Day {dayNum} hasn&apos;t unlocked yet</h1>
+        <p style={{ fontSize: 13, color: "var(--app-text-muted)", marginBottom: 24 }}>
+          Come back once your previous days are complete — one day at a time keeps the streak meaningful.
+        </p>
+        <Link href={`/academy/${slug}/learn`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--app-accent)", textDecoration: "none" }}>
+          ← Back to dashboard
+        </Link>
+      </div>
+    </div>
+  );
+
   function markTaskDone(taskId: string) {
     setTaskDone(prev => ({ ...prev, [taskId]: true }));
   }
@@ -402,12 +421,20 @@ export default function ChallengeDayPage() {
     setSubmitting(true);
     const undone = dayTasks.filter(t => !taskDone[t.id]);
     try {
+      // Use the API's own response for streak/points/gamification — never the
+      // possibly-stale (or, for a learner's very first completion, still-null)
+      // local `state.gamification`.
+      let lastResult: { gamification: ChallengeState["gamification"]; streak_days: number; points_awarded: number } | null = null;
       for (const t of undone) {
-        await wsPost("/api/academy/task-completion", { task_id: t.id });
+        lastResult = await wsPost("/api/academy/task-completion", { task_id: t.id });
       }
-      const newStreak = (state?.gamification.streak_days ?? 0) + 1;
+      const newStreak = lastResult?.streak_days ?? (state?.gamification?.streak_days ?? 0) + 1;
       setToast(`+${totalPoints} points · 🔥 ${newStreak}-day streak!`);
-      setState(prev => prev ? { ...prev, days_completed: [...prev.days_completed, dayNum] } : prev);
+      setState(prev => prev ? {
+        ...prev,
+        days_completed: [...prev.days_completed, dayNum],
+        gamification: lastResult?.gamification ?? prev.gamification,
+      } : prev);
       setTaskDone(prev => {
         const next = { ...prev };
         for (const t of dayTasks) next[t.id] = true;

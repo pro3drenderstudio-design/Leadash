@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     .select("*")
     .eq("workspace_id", workspaceId)
     .eq("product_id", taskRow.product_id)
-    .eq("status", "active")
+    .in("status", ["active", "completed"])
     .maybeSingle();
 
   if (enrollmentError) return NextResponse.json({ error: enrollmentError.message }, { status: 500 });
@@ -110,14 +110,15 @@ export async function POST(req: NextRequest) {
 
   const enrollmentRow = enrollment as EnrollmentRow;
 
-  // Fetch product challenge_config
+  // Fetch product challenge_config + completion threshold
   const { data: product } = await db
     .from("academy_products")
-    .select("challenge_config")
+    .select("challenge_config, completion_threshold_pct")
     .eq("id", taskRow.product_id)
     .maybeSingle();
 
   const challengeConfig = (product?.challenge_config ?? null) as ChallengeConfig | null;
+  const completionThresholdPct = product?.completion_threshold_pct ?? 100;
 
   // Fetch cohort if applicable
   let cohort: CohortRow | null = null;
@@ -273,8 +274,9 @@ export async function POST(req: NextRequest) {
         .eq("task_id", task_id);
     }
 
-    // Check if the entire challenge is complete (all days done)
+    // Check if the challenge is complete per its completion threshold (e.g. 80% of days)
     const totalDurationDays = challengeConfig?.duration_days ?? 30;
+    const requiredDays = Math.ceil(totalDurationDays * (completionThresholdPct / 100));
     const { data: allCompletions } = await db
       .from("academy_challenge_completions")
       .select("day")
@@ -283,7 +285,7 @@ export async function POST(req: NextRequest) {
     const completedDays = new Set(
       ((allCompletions ?? []) as { day: number }[]).map((c) => c.day)
     );
-    if (completedDays.size >= totalDurationDays) {
+    if (completedDays.size >= requiredDays) {
       await db
         .from("academy_enrollments")
         .update({ status: "completed", completed_at: new Date().toISOString() })

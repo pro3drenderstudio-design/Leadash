@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
+import LessonContentEditor from "./LessonContentEditor";
 import {
   Settings02Icon,
   Calendar03Icon,
@@ -35,6 +36,7 @@ interface ChallengeConfig {
   tagline?: string;
   duration_days?: number;
   cadence?: "daily" | "weekly";
+  start_mode?: "enrollment" | "cohort";
   grace_days?: number;
   catchup_enabled?: boolean;
   leaderboard_enabled?: boolean;
@@ -45,6 +47,7 @@ interface ChallengeConfig {
   auto_advance_offer?: {
     enabled: boolean;
     trigger: string;
+    trigger_day?: number;
     window_hours: number;
     target_product_id?: string;
     discount_type: string;
@@ -59,6 +62,21 @@ interface ChallengeConfig {
   };
 }
 
+interface ProofConfig {
+  accepts: Array<"image" | "file" | "link" | "text">;
+  prompt: string;
+}
+
+interface MetricConfig {
+  source: "leadash_outbox" | "manual";
+  metric: string;
+  target: number;
+}
+
+interface QuizConfig {
+  questions: Array<{ q: string; a: string }>;
+}
+
 interface ChallengeTask {
   id: string;
   product_id: string;
@@ -68,7 +86,32 @@ interface ChallengeTask {
   title: string;
   points: number;
   is_published: boolean;
+  lesson_id?: string | null;
+  proof_config?: ProofConfig | null;
+  metric_config?: MetricConfig | null;
+  live_session_id?: string | null;
+  quiz_config?: QuizConfig | null;
 }
+
+interface AcademyLessonOption {
+  id: string;
+  title: string;
+  lesson_type: string;
+}
+
+interface LiveSessionOption {
+  id: string;
+  lesson_id: string;
+  scheduled_at: string;
+  duration_mins: number;
+  platform: string;
+  join_url: string;
+  lesson_title?: string;
+}
+
+const DEFAULT_PROOF_CONFIG: ProofConfig = { accepts: ["image", "link"], prompt: "" };
+const DEFAULT_METRIC_CONFIG: MetricConfig = { source: "leadash_outbox", metric: "messages_sent", target: 20 };
+const DEFAULT_QUIZ_CONFIG: QuizConfig = { questions: [{ q: "", a: "" }] };
 
 interface ChallengeBuilderProps {
   product: {
@@ -80,6 +123,9 @@ interface ChallengeBuilderProps {
     challenge_config: ChallengeConfig | null;
     price_ngn: number;
     compare_price_ngn: number | null;
+    pricing_type?: string;
+    certificate_enabled?: boolean;
+    completion_threshold_pct?: number;
   };
   onSave: (updates: Record<string, unknown>) => Promise<void>;
   onToast: (msg: string) => void;
@@ -177,7 +223,8 @@ const DEFAULT_CONFIG: ChallengeConfig = {
   earnings_reset: "all_time",
   auto_advance_offer: {
     enabled: false,
-    trigger: "day_15_complete",
+    trigger: "day_complete",
+    trigger_day: 1,
     window_hours: 48,
     discount_type: "percent",
     discount_value: 20,
@@ -315,11 +362,34 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   const [saving, setSaving] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(true);
 
+  // Settings tab — access & pricing, completion, certificate (persisted on academy_products, not challenge_config)
+  const [settingsPricingType, setSettingsPricingType] = useState(product.pricing_type ?? (product.price_ngn > 0 ? "one_time" : "free"));
+  const [settingsPriceNgn, setSettingsPriceNgn] = useState(product.price_ngn);
+  const [settingsCompareAtNgn, setSettingsCompareAtNgn] = useState(product.compare_price_ngn ?? 0);
+  const [settingsCompletionPct, setSettingsCompletionPct] = useState(product.completion_threshold_pct ?? 100);
+  const [settingsCertificate, setSettingsCertificate] = useState(product.certificate_enabled ?? true);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   // Day editor state
   const [dayTitle, setDayTitle] = useState("");
   const [dayTaskTypes, setDayTaskTypes] = useState<string[]>([]);
   const [dayPoints, setDayPoints] = useState(30);
   const [savingDay, setSavingDay] = useState(false);
+
+  // Per-type detail config — re-synced from the matching task whenever selectedDay/tasks change
+  const [dayLessonId, setDayLessonId] = useState<string>("");
+  const [dayProofConfig, setDayProofConfig] = useState<ProofConfig>(DEFAULT_PROOF_CONFIG);
+  const [dayMetricConfig, setDayMetricConfig] = useState<MetricConfig>(DEFAULT_METRIC_CONFIG);
+  const [dayLiveSessionId, setDayLiveSessionId] = useState<string>("");
+  const [dayQuizConfig, setDayQuizConfig] = useState<QuizConfig>(DEFAULT_QUIZ_CONFIG);
+
+  // Lessons + live sessions available to link from this product (for the lesson/live pickers)
+  const [lessons, setLessons] = useState<AcademyLessonOption[]>([]);
+  const [liveSessionOptions, setLiveSessionOptions] = useState<LiveSessionOption[]>([]);
+  const [creatingLesson, setCreatingLesson] = useState(false);
+  const [creatingLiveSession, setCreatingLiveSession] = useState(false);
+  const [showLiveForm, setShowLiveForm] = useState(false);
+  const [liveForm, setLiveForm] = useState({ title: "", scheduled_at: "", duration_mins: 60, platform: "zoom", join_url: "" });
 
   // Load tasks on mount
   useEffect(() => {
@@ -331,16 +401,53 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
       .finally(() => setLoadingTasks(false));
   }, [product.id]);
 
-  // Sync day editor when day changes
+  // Load lessons + live sessions available to link (for the lesson/live task-type pickers)
+  const reloadLessons = useCallback(() => {
+    fetch(`/api/admin/academy/lessons?product_id=${product.id}`)
+      .then(r => r.json())
+      .then(d => setLessons((d.lessons ?? []).map((l: { id: string; title: string; lesson_type: string }) => ({ id: l.id, title: l.title, lesson_type: l.lesson_type }))))
+      .catch(() => {});
+  }, [product.id]);
+  const reloadLiveSessions = useCallback(() => {
+    fetch(`/api/admin/academy/live-sessions?product_id=${product.id}`)
+      .then(r => r.json())
+      .then(d => setLiveSessionOptions(d.sessions ?? []))
+      .catch(() => {});
+  }, [product.id]);
+  useEffect(() => { reloadLessons(); reloadLiveSessions(); }, [reloadLessons, reloadLiveSessions]);
+
+  // Sync day editor when day changes — reads each task's config by its OWN
+  // task_type (not array index), so a day with e.g. ["lesson","metric"] correctly
+  // restores the lesson_id on the lesson task and the metric_config on the metric task.
   useEffect(() => {
     const dayTasks = tasks.filter(t => t.day === selectedDay);
     if (dayTasks.length > 0) {
       setDayTitle(dayTasks[0].title || `Day ${selectedDay}`);
       setDayTaskTypes(dayTasks.map(t => t.task_type));
       setDayPoints(dayTasks.reduce((s, t) => s + t.points, 0));
+
+      const lessonTask = dayTasks.find(t => t.task_type === "lesson");
+      setDayLessonId(lessonTask?.lesson_id ?? "");
+
+      const proofTask = dayTasks.find(t => t.task_type === "proof");
+      setDayProofConfig(proofTask?.proof_config ?? DEFAULT_PROOF_CONFIG);
+
+      const metricTask = dayTasks.find(t => t.task_type === "metric");
+      setDayMetricConfig(metricTask?.metric_config ?? DEFAULT_METRIC_CONFIG);
+
+      const liveTask = dayTasks.find(t => t.task_type === "live");
+      setDayLiveSessionId(liveTask?.live_session_id ?? "");
+
+      const quizTask = dayTasks.find(t => t.task_type === "quiz");
+      setDayQuizConfig(quizTask?.quiz_config ?? DEFAULT_QUIZ_CONFIG);
     } else {
       // Use seed data
       const seed = SEED_DAYS[selectedDay - 1];
+      setDayProofConfig(DEFAULT_PROOF_CONFIG);
+      setDayMetricConfig(DEFAULT_METRIC_CONFIG);
+      setDayLiveSessionId("");
+      setDayQuizConfig(DEFAULT_QUIZ_CONFIG);
+      setDayLessonId("");
       if (seed) {
         setDayTitle(seed.title);
         setDayTaskTypes(seed.types);
@@ -363,50 +470,86 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
   }, [config, onSave, onToast]);
 
+  // Settings tab — saves both the academy_products columns (pricing, completion,
+  // certificate) and the challenge_config's start_mode in one action.
+  const saveSettings = useCallback(async () => {
+    setSavingSettings(true);
+    try {
+      await onSave({
+        pricing_type: settingsPricingType,
+        price_ngn: settingsPricingType === "free" ? 0 : settingsPriceNgn,
+        compare_price_ngn: settingsCompareAtNgn > 0 ? settingsCompareAtNgn : null,
+        completion_threshold_pct: settingsCompletionPct,
+        certificate_enabled: settingsCertificate,
+        challenge_config: config,
+      });
+      onToast("Settings saved");
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [onSave, onToast, settingsPricingType, settingsPriceNgn, settingsCompareAtNgn, settingsCompletionPct, settingsCertificate, config]);
+
+  // Per-type config to persist for the currently selected day's task types.
+  function configFor(type: string): Record<string, unknown> {
+    if (type === "lesson") return { lesson_id: dayLessonId || null };
+    if (type === "proof") return { proof_config: dayProofConfig };
+    if (type === "metric") return { metric_config: dayMetricConfig };
+    if (type === "live") return { live_session_id: dayLiveSessionId || null };
+    if (type === "quiz") return { quiz_config: dayQuizConfig };
+    return {};
+  }
+
+  // Reconciles the day's tasks against `dayTaskTypes` by TYPE (not array index),
+  // so adding/removing a task type actually creates/deletes the right row instead
+  // of silently dropping the change and reverting on the next tasks-sync.
   async function saveTask() {
     setSavingDay(true);
     try {
       const dayTasks = tasks.filter(t => t.day === selectedDay);
-      if (dayTasks.length > 0) {
-        // Update existing (just the first one; update all with new title/points)
-        const promises = dayTasks.map((t, idx) => {
-          const newType = dayTaskTypes[idx] ?? dayTaskTypes[0] ?? "lesson";
-          return fetch("/api/admin/academy/challenge-tasks", {
+      const existingTypes = new Set<string>(dayTasks.map(t => t.task_type));
+      const wantedTypes = new Set(dayTaskTypes);
+      const ptsEach = Math.floor(dayPoints / (dayTaskTypes.length || 1));
+
+      const toUpdate = dayTasks.filter(t => wantedTypes.has(t.task_type));
+      const toDelete = dayTasks.filter(t => !wantedTypes.has(t.task_type));
+      const toCreate = dayTaskTypes.filter(type => !existingTypes.has(type));
+
+      const [updated, , created] = await Promise.all([
+        Promise.all(toUpdate.map(t =>
+          fetch("/api/admin/academy/challenge-tasks", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: t.id, title: dayTitle, points: Math.floor(dayPoints / dayTasks.length), task_type: newType }),
-          }).then(r => r.json());
-        });
-        const results = await Promise.all(promises);
-        setTasks(prev => {
-          let next = [...prev];
-          results.forEach(r => {
-            if (r.task) next = next.map(x => x.id === r.task.id ? r.task : x);
-          });
-          return next;
-        });
-      } else {
-        // Create tasks for this day
-        const ptsEach = Math.floor(dayPoints / (dayTaskTypes.length || 1));
-        const newTasks: ChallengeTask[] = [];
-        for (let i = 0; i < dayTaskTypes.length; i++) {
-          const res = await fetch("/api/admin/academy/challenge-tasks", {
+            body: JSON.stringify({ id: t.id, title: dayTitle, points: ptsEach, ...configFor(t.task_type) }),
+          }).then(r => r.json())
+        )),
+        Promise.all(toDelete.map(t =>
+          fetch(`/api/admin/academy/challenge-tasks?id=${t.id}`, { method: "DELETE" })
+        )),
+        Promise.all(toCreate.map((type, i) =>
+          fetch("/api/admin/academy/challenge-tasks", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               product_id: product.id,
               day: selectedDay,
-              task_type: dayTaskTypes[i],
+              task_type: type,
               title: dayTitle,
               points: ptsEach,
-              position: i,
+              position: toUpdate.length + i,
               is_published: true,
+              ...configFor(type),
             }),
-          }).then(r => r.json());
-          if (res.task) newTasks.push(res.task);
-        }
-        setTasks(prev => [...prev, ...newTasks]);
-      }
+          }).then(r => r.json())
+        )),
+      ]);
+
+      const deletedIds = new Set(toDelete.map(t => t.id));
+      setTasks(prev => {
+        let next = prev.filter(t => !deletedIds.has(t.id));
+        for (const r of updated) if (r.task) next = next.map(x => x.id === r.task.id ? r.task : x);
+        for (const r of created) if (r.task) next = [...next, r.task];
+        return next;
+      });
       onToast(`Day ${selectedDay} saved`);
     } finally {
       setSavingDay(false);
@@ -449,6 +592,65 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
     setSelectedDay(nextDay);
     onToast(`Duplicated to Day ${nextDay}`);
+  }
+
+  async function createLesson() {
+    setCreatingLesson(true);
+    try {
+      let sectionId: string | undefined;
+      const sectionsRes = await fetch(`/api/admin/academy/sections?product_id=${product.id}`).then(r => r.json());
+      sectionId = sectionsRes.sections?.[0]?.id;
+      if (!sectionId) {
+        const newSection = await fetch("/api/admin/academy/sections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ product_id: product.id, title: "Challenge lessons" }),
+        }).then(r => r.json());
+        sectionId = newSection.section?.id;
+      }
+      if (!sectionId) { onToast("Could not create a section for this lesson"); return; }
+
+      const res = await fetch("/api/admin/academy/lessons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section_id: sectionId,
+          product_id: product.id,
+          title: dayTitle || `Day ${selectedDay}`,
+          lesson_type: "video",
+        }),
+      }).then(r => r.json());
+
+      if (res.lesson) {
+        setDayLessonId(res.lesson.id);
+        reloadLessons();
+        onToast("Lesson created — upload its video below");
+      } else {
+        onToast(res.error ?? "Failed to create lesson");
+      }
+    } finally {
+      setCreatingLesson(false);
+    }
+  }
+
+  async function createLiveSession(form: { title: string; scheduled_at: string; duration_mins: number; platform: string; join_url: string }) {
+    setCreatingLiveSession(true);
+    try {
+      const res = await fetch("/api/admin/academy/live-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: product.id, ...form }),
+      }).then(r => r.json());
+      if (res.session) {
+        setDayLiveSessionId(res.session.id);
+        reloadLiveSessions();
+        onToast("Live session created");
+      } else {
+        onToast(res.error ?? "Failed to create live session");
+      }
+    } finally {
+      setCreatingLiveSession(false);
+    }
   }
 
   async function addDay() {
@@ -859,6 +1061,199 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                   </div>
                 </div>
 
+                {/* Per-type detail editors — what each enabled task type actually needs configured */}
+                {dayTaskTypes.includes("lesson") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Lesson video</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <select
+                        style={{ ...inputStyle, cursor: "pointer" }}
+                        value={dayLessonId}
+                        onChange={e => setDayLessonId(e.target.value)}
+                      >
+                        <option value="">Select a lesson…</option>
+                        {lessons.map(l => (
+                          <option key={l.id} value={l.id}>{l.title}</option>
+                        ))}
+                      </select>
+                      <button style={btnDefault} onClick={createLesson} disabled={creatingLesson}>
+                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
+                        {creatingLesson ? "Creating…" : "New"}
+                      </button>
+                    </div>
+                    {dayLessonId && (
+                      <div style={{ marginTop: 14, borderTop: "1px solid var(--app-border)", paddingTop: 14 }}>
+                        <LessonContentEditor lessonId={dayLessonId} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {dayTaskTypes.includes("proof") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Proof submission</label>
+                    <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
+                      {(["image", "file", "link", "text"] as const).map(kind => {
+                        const checked = dayProofConfig.accepts.includes(kind);
+                        return (
+                          <label key={kind} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--app-text)", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => setDayProofConfig(prev => ({
+                                ...prev,
+                                accepts: checked ? prev.accepts.filter(a => a !== kind) : [...prev.accepts, kind],
+                              }))}
+                            />
+                            {kind[0].toUpperCase() + kind.slice(1)}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <label style={labelStyle}>Prompt shown to learner</label>
+                    <textarea
+                      style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+                      value={dayProofConfig.prompt}
+                      onChange={e => setDayProofConfig(prev => ({ ...prev, prompt: e.target.value }))}
+                      placeholder="e.g. Screenshot proof that you sent your 20 messages"
+                    />
+                  </div>
+                )}
+
+                {dayTaskTypes.includes("metric") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Hit metric</label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      <div>
+                        <label style={{ ...labelStyle, marginBottom: 4 }}>Source</label>
+                        <select
+                          style={{ ...inputStyle, cursor: "pointer" }}
+                          value={dayMetricConfig.source}
+                          onChange={e => setDayMetricConfig(prev => ({ ...prev, source: e.target.value as MetricConfig["source"] }))}
+                        >
+                          <option value="leadash_outbox">Leadash outbox (auto)</option>
+                          <option value="manual">Manual self-report</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ ...labelStyle, marginBottom: 4 }}>Metric</label>
+                        <input
+                          style={inputStyle}
+                          value={dayMetricConfig.metric}
+                          onChange={e => setDayMetricConfig(prev => ({ ...prev, metric: e.target.value }))}
+                          placeholder="messages_sent"
+                        />
+                      </div>
+                      <div>
+                        <label style={{ ...labelStyle, marginBottom: 4 }}>Target</label>
+                        <input
+                          type="number"
+                          style={inputStyle}
+                          value={dayMetricConfig.target}
+                          onChange={e => setDayMetricConfig(prev => ({ ...prev, target: parseInt(e.target.value) || 0 }))}
+                          min={1}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {dayTaskTypes.includes("live") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Live session</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <select
+                        style={{ ...inputStyle, cursor: "pointer" }}
+                        value={dayLiveSessionId}
+                        onChange={e => setDayLiveSessionId(e.target.value)}
+                      >
+                        <option value="">Select a session…</option>
+                        {liveSessionOptions.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.lesson_title || "Live session"} · {new Date(s.scheduled_at).toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                      <button style={btnDefault} onClick={() => setShowLiveForm(v => !v)}>
+                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
+                        New
+                      </button>
+                    </div>
+                    {showLiveForm && (
+                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--app-border)", paddingTop: 12 }}>
+                        <input style={inputStyle} placeholder="Session title" value={liveForm.title}
+                          onChange={e => setLiveForm(f => ({ ...f, title: e.target.value }))} />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+                          <input type="datetime-local" style={inputStyle} value={liveForm.scheduled_at}
+                            onChange={e => setLiveForm(f => ({ ...f, scheduled_at: e.target.value }))} />
+                          <input type="number" style={inputStyle} placeholder="Mins" value={liveForm.duration_mins}
+                            onChange={e => setLiveForm(f => ({ ...f, duration_mins: parseInt(e.target.value) || 60 }))} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
+                          <select style={{ ...inputStyle, cursor: "pointer" }} value={liveForm.platform}
+                            onChange={e => setLiveForm(f => ({ ...f, platform: e.target.value }))}>
+                            <option value="zoom">Zoom</option>
+                            <option value="meet">Google Meet</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                          <input style={inputStyle} placeholder="Join URL" value={liveForm.join_url}
+                            onChange={e => setLiveForm(f => ({ ...f, join_url: e.target.value }))} />
+                        </div>
+                        <button
+                          style={btnPrimary}
+                          disabled={creatingLiveSession || !liveForm.title || !liveForm.scheduled_at || !liveForm.join_url}
+                          onClick={async () => { await createLiveSession(liveForm); setShowLiveForm(false); }}
+                        >
+                          {creatingLiveSession ? "Creating…" : "Create session"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {dayTaskTypes.includes("quiz") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Quiz questions</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {dayQuizConfig.questions.map((q, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              style={inputStyle}
+                              placeholder={`Question ${i + 1}`}
+                              value={q.q}
+                              onChange={e => setDayQuizConfig(prev => ({
+                                questions: prev.questions.map((x, j) => j === i ? { ...x, q: e.target.value } : x),
+                              }))}
+                            />
+                            <input
+                              style={inputStyle}
+                              placeholder="Answer"
+                              value={q.a}
+                              onChange={e => setDayQuizConfig(prev => ({
+                                questions: prev.questions.map((x, j) => j === i ? { ...x, a: e.target.value } : x),
+                              }))}
+                            />
+                          </div>
+                          <button
+                            style={{ ...btnGhost, color: "var(--app-danger)", marginTop: 4 }}
+                            onClick={() => setDayQuizConfig(prev => ({ questions: prev.questions.filter((_, j) => j !== i) }))}
+                          >
+                            <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        style={btnGhost}
+                        onClick={() => setDayQuizConfig(prev => ({ questions: [...prev.questions, { q: "", a: "" }] }))}
+                      >
+                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
+                        Add question
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Points + unlocks */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   <div>
@@ -1178,7 +1573,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                 onChange={v => setConfig(c => ({
                   ...c,
                   auto_advance_offer: {
-                    ...(c.auto_advance_offer ?? { trigger: "day_15_complete", window_hours: 48, discount_type: "percent", discount_value: 20 }),
+                    ...(c.auto_advance_offer ?? { trigger: "day_complete", trigger_day: 1, window_hours: 48, discount_type: "percent", discount_value: 20 }),
                     enabled: v,
                   },
                 }))}
@@ -1187,21 +1582,38 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
 
             {config.auto_advance_offer?.enabled && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 16, borderTop: "1px solid var(--app-border)" }}>
-                <div>
-                  <label style={labelStyle}>Trigger</label>
-                  <select
-                    style={inputStyle}
-                    value={config.auto_advance_offer?.trigger ?? "day_15_complete"}
-                    onChange={e => setConfig(c => ({
-                      ...c,
-                      auto_advance_offer: { ...c.auto_advance_offer!, trigger: e.target.value },
-                    }))}
-                  >
-                    <option value="day_15_complete">Day 15 completed</option>
-                    <option value="day_20_complete">Day 20 completed</option>
-                    <option value="first_earnings">First earnings reported</option>
-                    <option value="graduated">Challenge graduated</option>
-                  </select>
+                <div style={{ display: "grid", gridTemplateColumns: config.auto_advance_offer?.trigger === "day_complete" ? "1fr 140px" : "1fr", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Trigger</label>
+                    <select
+                      style={inputStyle}
+                      value={config.auto_advance_offer?.trigger ?? "day_complete"}
+                      onChange={e => setConfig(c => ({
+                        ...c,
+                        auto_advance_offer: { ...c.auto_advance_offer!, trigger: e.target.value },
+                      }))}
+                    >
+                      <option value="day_complete">After a specific day completed</option>
+                      <option value="first_earnings">First earnings reported</option>
+                      <option value="graduate">Challenge graduated</option>
+                    </select>
+                  </div>
+                  {config.auto_advance_offer?.trigger === "day_complete" && (
+                    <div>
+                      <label style={labelStyle}>Day</label>
+                      <input
+                        type="number"
+                        style={inputStyle}
+                        min={1}
+                        max={config.duration_days ?? 30}
+                        value={config.auto_advance_offer?.trigger_day ?? 1}
+                        onChange={e => setConfig(c => ({
+                          ...c,
+                          auto_advance_offer: { ...c.auto_advance_offer!, trigger_day: parseInt(e.target.value) || 1 },
+                        }))}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                   <div>
@@ -1399,20 +1811,23 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
               {[
                 { value: "free",       label: "Free",        desc: "Anyone can join" },
-                { value: "paid",       label: "Paid",        desc: "One-time purchase" },
-                { value: "cohort",     label: "Cohort only", desc: "Admin assigns access" },
+                { value: "one_time",   label: "Paid",        desc: "One-time purchase" },
+                { value: "cohort_only", label: "Cohort only", desc: "Admin assigns access" },
               ].map(opt => {
-                const active = (product.price_ngn === 0 && opt.value === "free")
-                  || (product.price_ngn > 0 && opt.value === "paid")
-                  || opt.value === "cohort";
+                const active = settingsPricingType === opt.value;
                 return (
-                  <div key={opt.value} style={{
-                    padding: 14,
-                    borderRadius: 10,
-                    border: `1.5px solid ${active ? "var(--app-accent-line)" : "var(--app-border)"}`,
-                    background: active ? "var(--app-accent-soft)" : "var(--app-surface)",
-                    cursor: "pointer",
-                  }}>
+                  <button
+                    key={opt.value}
+                    onClick={() => setSettingsPricingType(opt.value)}
+                    style={{
+                      padding: 14,
+                      borderRadius: 10,
+                      border: `1.5px solid ${active ? "var(--app-accent-line)" : "var(--app-border)"}`,
+                      background: active ? "var(--app-accent-soft)" : "var(--app-surface)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "inherit",
+                    }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{
                         width: 14,
@@ -1429,19 +1844,30 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                       <span style={{ fontSize: 13, fontWeight: 600, color: active ? "var(--app-accent)" : "var(--app-text)" }}>{opt.label}</span>
                     </div>
                     <p style={{ fontSize: 11, color: "var(--app-text-quiet)", paddingLeft: 22 }}>{opt.desc}</p>
-                  </div>
+                  </button>
                 );
               })}
             </div>
-            {product.price_ngn > 0 && (
+            {settingsPricingType !== "free" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
                   <label style={labelStyle}>Price (₦)</label>
-                  <input type="number" style={inputStyle} defaultValue={product.price_ngn} />
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    value={settingsPriceNgn}
+                    onChange={e => setSettingsPriceNgn(parseInt(e.target.value) || 0)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>Compare-at price (₦)</label>
-                  <input type="number" style={inputStyle} defaultValue={product.compare_price_ngn ?? ""} />
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    value={settingsCompareAtNgn || ""}
+                    onChange={e => setSettingsCompareAtNgn(parseInt(e.target.value) || 0)}
+                    placeholder="Optional"
+                  />
                 </div>
               </div>
             )}
@@ -1497,18 +1923,25 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={labelStyle}>Start mode</label>
-                <select style={inputStyle}>
-                  <option value="rolling">Rolling (join any time)</option>
-                  <option value="cohort_start">Cohort start date</option>
-                  <option value="manual">Manual unlock</option>
+                <select
+                  style={inputStyle}
+                  value={config.start_mode ?? "enrollment"}
+                  onChange={e => setConfig(c => ({ ...c, start_mode: e.target.value as ChallengeConfig["start_mode"] }))}
+                >
+                  <option value="enrollment">Rolling (starts on enrollment)</option>
+                  <option value="cohort">Fixed cohort start date</option>
                 </select>
               </div>
               <div>
                 <label style={labelStyle}>Completion threshold</label>
-                <select style={inputStyle}>
-                  <option value="100">100% — all 30 days</option>
-                  <option value="90">90% — 27+ days</option>
-                  <option value="80">80% — 24+ days</option>
+                <select
+                  style={inputStyle}
+                  value={settingsCompletionPct}
+                  onChange={e => setSettingsCompletionPct(parseInt(e.target.value))}
+                >
+                  <option value="100">100% — all {config.duration_days ?? 30} days</option>
+                  <option value="90">90% — {Math.ceil((config.duration_days ?? 30) * 0.9)}+ days</option>
+                  <option value="80">80% — {Math.ceil((config.duration_days ?? 30) * 0.8)}+ days</option>
                 </select>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1516,7 +1949,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                   <p style={{ fontSize: 13, fontWeight: 500 }}>Issue completion certificate</p>
                   <p style={{ fontSize: 11, color: "var(--app-text-quiet)", marginTop: 2 }}>PDF certificate when challenge is completed</p>
                 </div>
-                <Toggle on={true} onChange={() => {}} />
+                <Toggle on={settingsCertificate} onChange={setSettingsCertificate} />
               </div>
             </div>
           </div>
@@ -1535,20 +1968,17 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "var(--app-danger)" }}>Refund window</p>
                 <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginTop: 6, lineHeight: 1.6 }}>
-                  The default refund window is 7 days after enrollment. Challengers who have completed more than Day 3
-                  are not eligible for refunds. Configure this before you go live.
+                  Refunds for academy purchases are handled platform-wide from billing settings, not per-challenge.
+                  Refunding a purchase there revokes the learner&apos;s enrollment and removes them from the leaderboard.
                 </p>
-                <button style={{ ...btnDefault, marginTop: 12, borderColor: "rgba(248,113,113,0.3)", color: "var(--app-danger)" }}>
-                  Configure refunds
-                </button>
               </div>
             </div>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button style={btnPrimary} onClick={saveConfig} disabled={saving}>
+            <button style={btnPrimary} onClick={saveSettings} disabled={savingSettings}>
               <HugeiconsIcon icon={FloppyDiskIcon} size={13} strokeWidth={2} />
-              {saving ? "Saving…" : "Save settings"}
+              {savingSettings ? "Saving…" : "Save settings"}
             </button>
           </div>
         </div>

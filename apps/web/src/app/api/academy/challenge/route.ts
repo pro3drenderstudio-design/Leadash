@@ -8,6 +8,7 @@ interface ChallengeConfig {
   auto_advance_offer?: {
     enabled?: boolean;
     trigger?: string;
+    trigger_day?: number;
     window_hours?: number;
     target_product_id?: string;
     discount_type?: string;
@@ -97,10 +98,11 @@ export async function GET(req: NextRequest) {
   const productSlug = req.nextUrl.searchParams.get("product_slug");
   if (!productId && !productSlug) return NextResponse.json({ error: "product_id or product_slug required" }, { status: 400 });
 
-  // Resolve product by id or slug
-  const productRes = productId
-    ? await db.from("academy_products").select("*").eq("id", productId).maybeSingle()
-    : await db.from("academy_products").select("*").eq("slug", productSlug as string).maybeSingle();
+  // Resolve product by id or slug — the route param passed in by the learner UI
+  // can legitimately be either (e.g. "challenge-30" is this product's id, while
+  // its slug is "30-day-challenge"), so match against both columns.
+  const lookupValue = (productId ?? productSlug) as string;
+  const productRes = await db.from("academy_products").select("*").or(`id.eq.${lookupValue},slug.eq.${lookupValue}`).maybeSingle();
 
   if (productRes.error) return NextResponse.json({ error: productRes.error.message }, { status: 500 });
   if (!productRes.data) return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -192,23 +194,32 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Check if auto-advance offer is unlocked
+  // Check if auto-advance offer is unlocked. Trigger types:
+  //  - "day_complete": unlocks `window_hours` after the learner finishes a specific
+  //    day (`trigger_day`, default 1) — the early-upsell case ("after Day 1...").
+  //  - "graduate": unlocks once the whole challenge is completed.
+  //  - "first_earnings": unlocks as soon as any revenue has been reported.
   let offerUnlocked = false;
   if (enrollment && challengeConfig?.auto_advance_offer?.enabled) {
-    const trigger = challengeConfig.auto_advance_offer.trigger ?? "graduate";
+    const offerCfg = challengeConfig.auto_advance_offer;
+    const trigger = offerCfg.trigger ?? "graduate";
+    const windowHours = offerCfg.window_hours ?? 24;
+
     if (trigger === "graduate" && enrollment.status === "completed") {
       offerUnlocked = true;
     } else if (trigger === "day_complete") {
-      const windowHours = challengeConfig.auto_advance_offer.window_hours ?? 24;
-      const durationDays = challengeConfig.duration_days ?? 30;
-      if (daysCompleted.length >= durationDays) {
-        const lastCompletedAt = completionMap.size > 0
-          ? Math.max(...Array.from(completionMap.values()).map((c) => new Date(c.completed_at).getTime()))
+      const triggerDay = offerCfg.trigger_day ?? 1;
+      if (daysCompleted.includes(triggerDay)) {
+        const dayCompletions = Array.from(completionMap.values()).filter((c) => c.day === triggerDay);
+        const completedAt = dayCompletions.length > 0
+          ? Math.max(...dayCompletions.map((c) => new Date(c.completed_at).getTime()))
           : 0;
-        if (lastCompletedAt > 0 && Date.now() - lastCompletedAt <= windowHours * 3_600_000) {
+        if (completedAt > 0 && Date.now() - completedAt <= windowHours * 3_600_000) {
           offerUnlocked = true;
         }
       }
+    } else if (trigger === "first_earnings") {
+      offerUnlocked = (gamification?.reported_earnings_cents ?? 0) > 0;
     }
   }
 

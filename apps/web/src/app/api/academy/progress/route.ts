@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       .eq("user_id", userId)
       .eq("workspace_id", workspaceId)
       .eq("product_id", product_id)
-      .eq("status", "active")
+      .in("status", ["active", "completed"])
       .maybeSingle(),
     db.from("academy_lessons").select("*").eq("id", lesson_id).single(),
   ]);
