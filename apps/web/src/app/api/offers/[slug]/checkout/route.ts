@@ -167,9 +167,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     } else {
       // 'create' or 'invite' — provision a new auth user + workspace.
       const created = await createWorkspaceForBuyer(db, {
-        email:    buyer.email!.toLowerCase(),
-        fullName: buyer.full_name?.trim() || buyer.email!.split("@")[0],
-        action:   offer.no_workspace_action,
+        email:           buyer.email!.toLowerCase(),
+        fullName:        buyer.full_name?.trim() || buyer.email!.split("@")[0],
+        action:          offer.no_workspace_action,
+        postSignupPath:  offer.grants.some(g => g.type === "inbox") ? "/inboxes/new" : "/dashboard",
       });
       if (!created) {
         return NextResponse.json({ error: "Account setup failed. Please try again." }, { status: 500 });
@@ -264,7 +265,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
 async function createWorkspaceForBuyer(
   db: ReturnType<typeof createAdminClient>,
-  opts: { email: string; fullName: string; action: "create" | "invite" },
+  opts: { email: string; fullName: string; action: "create" | "invite"; postSignupPath?: string },
 ): Promise<{ userId: string; workspaceId: string } | null> {
   const tempPassword = crypto.randomUUID().replace(/-/g, "") + "Aa1!";
 
@@ -319,7 +320,7 @@ async function createWorkspaceForBuyer(
   const { data: linkData } = await db.auth.admin.generateLink({
     type:    linkType,
     email:   opts.email,
-    options: { redirectTo: `${APP_URL}/dashboard` },
+    options: { redirectTo: `${APP_URL}${opts.postSignupPath ?? "/dashboard"}` },
   });
   const actionLink = linkData?.properties?.action_link;
   if (actionLink) {

@@ -8,14 +8,24 @@
  * previous file; only the chrome and form styling changed.
  */
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AuthShell from "../components/AuthShell";
 import { Button, Input, Field, Icon } from "@/v2-app";
 import { EyeIcon, ViewOffSlashIcon, AlertCircleIcon } from "@/v2-app/icons";
 
-export default function LoginPage() {
+// Only honor a same-origin relative path (e.g. "/inboxes/new") so this can't
+// be used as an open redirect — same rule as /api/auth/callback's `next` param.
+function safeRedirectParam(value: string | null): string | null {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+function LoginPageInner() {
+  const searchParams = useSearchParams();
+  const redirectTarget = safeRedirectParam(searchParams.get("redirect"));
+
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
   const [showPassword, setShow]           = useState(false);
@@ -27,9 +37,10 @@ export default function LoginPage() {
     setGoogleLoading(true);
     setError("");
     const supabase = createClient();
+    const next = redirectTarget ? `?next=${encodeURIComponent(redirectTarget)}` : "";
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/api/auth/callback${next}` },
     });
     if (error) { setError(error.message); setGoogleLoading(false); }
   }
@@ -41,7 +52,7 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); }
-    else window.location.href = "/dashboard";
+    else window.location.href = redirectTarget ?? "/dashboard";
   }
 
   return (
@@ -151,6 +162,14 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }
 

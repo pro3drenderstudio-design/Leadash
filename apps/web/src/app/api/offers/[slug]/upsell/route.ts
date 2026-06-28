@@ -50,14 +50,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   if (!accept) {
     await db.from("offer_purchases").update({ [statusColumn]: "declined" }).eq("id", purchase.id);
     // After declining the upsell, surface the downsell (if any) for the frontend to show next.
-    if (stage === "upsell" && offer.downsell) {
+    if (stage === "upsell" && offer.downsell?.is_active) {
       return NextResponse.json({ ok: true, downsell: offer.downsell });
     }
     return NextResponse.json({ ok: true });
   }
 
   // ── accept === true ──────────────────────────────────────────────────────────
-  if (!offerItem) {
+  if (!offerItem || !offerItem.is_active) {
     return NextResponse.json({ error: `This offer has no ${stage} configured` }, { status: 400 });
   }
   if (!purchase.paystack_reference) {

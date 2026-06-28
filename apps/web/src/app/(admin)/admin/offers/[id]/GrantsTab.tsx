@@ -268,7 +268,8 @@ function GrantControls({
           </div>
         </div>
       );
-    case "academy":
+    case "academy": {
+      const isOrphaned = !loadingAcademy && !!grant.productId && !academyProducts.some(p => p.id === grant.productId);
       return (
         <div style={{ maxWidth: 360 }}>
           <label style={labelStyle}>Academy product</label>
@@ -282,12 +283,19 @@ function GrantControls({
             }}
           >
             <option value="">{loadingAcademy ? "Loading…" : "Select a product…"}</option>
+            {isOrphaned && <option value={grant.productId}>⚠ Unknown product ({grant.productId})</option>}
             {academyProducts.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {isOrphaned && (
+            <p style={{ fontSize: 12, color: "var(--app-warning, #f59e0b)", marginTop: 6 }}>
+              This product no longer exists. Re-select a product or this grant will fail to fulfil at checkout.
+            </p>
+          )}
         </div>
       );
+    }
     case "ip":
       return (
         <div style={{ maxWidth: 360 }}>

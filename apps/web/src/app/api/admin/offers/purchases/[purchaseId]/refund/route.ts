@@ -31,19 +31,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pu
   if (typedPurchase.status !== "paid") {
     return NextResponse.json({ error: `Purchase status is '${typedPurchase.status}' — only 'paid' purchases can be refunded` }, { status: 400 });
   }
-  if (!typedPurchase.paystack_reference) {
-    return NextResponse.json({ error: "Purchase has no Paystack reference" }, { status: 400 });
-  }
 
   // ── Call Paystack first — never mark refunded unless this succeeds ────────
-  try {
-    await refundPaystackPayment({ reference: typedPurchase.paystack_reference, reason: "Offer purchase refund (admin)" });
-  } catch (err) {
-    console.error("[offers/refund] Paystack refund failed:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Paystack refund failed" },
-      { status: 502 },
-    );
+  // Free purchases (price 0, or fully covered by a 100%-off promo code) never
+  // get a Paystack reference at all — there's nothing to refund financially,
+  // so skip straight to revoking access. Paid purchases must have one.
+  const isFreePurchase = typedPurchase.total_ngn === 0;
+  if (!isFreePurchase) {
+    if (!typedPurchase.paystack_reference) {
+      return NextResponse.json({ error: "Purchase has no Paystack reference" }, { status: 400 });
+    }
+    try {
+      await refundPaystackPayment({ reference: typedPurchase.paystack_reference, reason: "Offer purchase refund (admin)" });
+    } catch (err) {
+      console.error("[offers/refund] Paystack refund failed:", err);
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Paystack refund failed" },
+        { status: 502 },
+      );
+    }
   }
 
   const refundedAt = new Date().toISOString();
@@ -73,7 +79,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pu
       if (!grant) continue;
       await revokeGrant(db, grant, {
         workspaceId: typedPurchase.workspace_id,
-        reference:   typedPurchase.paystack_reference,
+        reference:   typedPurchase.paystack_reference ?? `free:${typedPurchase.id}`,
       });
     }
   }

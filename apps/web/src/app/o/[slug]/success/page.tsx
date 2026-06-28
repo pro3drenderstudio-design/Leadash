@@ -248,7 +248,7 @@ function PaidConfirmation({ slug, purchase, offer }: { slug: string; purchase: O
   const [localPurchase, setLocalPurchase] = useState(purchase);
   const localOffer = offer;
   const [stage, setStage] = useState<UpsellStage>(() => {
-    if (localPurchase.upsell_status === null && localOffer.upsell) return "upsell";
+    if (localPurchase.upsell_status === null && localOffer.upsell?.is_active) return "upsell";
     return "resolved";
   });
   const [downsell, setDownsell] = useState<Offer["downsell"] | null>(null);
@@ -398,6 +398,7 @@ function ConfirmationView({ purchase, offer, isAuthed }: { purchase: OfferPurcha
 
   const communityGrant = offer.grants.find(g => g.type === "community") as CommunityGrant | undefined;
   const hasCommunityGrant = purchase.granted_items.some(gi => gi.type === "community") && communityGrant?.inviteUrl;
+  const hasInboxGrant = purchase.granted_items.some(gi => gi.type === "inbox");
 
   // Bump line items don't carry a grant_id back-reference, so we can't map them
   // 1:1 to a granted_items status. Every fulfilled grant (including bump grants)
@@ -408,6 +409,8 @@ function ConfirmationView({ purchase, offer, isAuthed }: { purchase: OfferPurcha
   const unmatchedBumpCount = Math.max(0, bumpLineItems.length - Math.max(0, purchase.granted_items.length - offer.grants.length));
 
   const dashboardHref = isAuthed ? "/dashboard" : "/login";
+  const inboxSetupHref = isAuthed ? "/inboxes/new" : "/login?redirect=/inboxes/new";
+  const quickLinkCount = (hasInboxGrant ? 1 : 0) + (hasCommunityGrant ? 1 : 0) + 1;
 
   return (
     <div className="v2-app" style={pageBgStyle}>
@@ -484,7 +487,22 @@ function ConfirmationView({ purchase, offer, isAuthed }: { purchase: OfferPurcha
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: hasCommunityGrant ? "1fr 1fr" : "1fr", gap: 14, marginBottom: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${quickLinkCount}, 1fr)`, gap: 14, marginBottom: 32 }}>
+          {hasInboxGrant && (
+            <Link
+              href={inboxSetupHref}
+              style={{
+                ...cardStyle, padding: 18, textDecoration: "none", display: "flex", flexDirection: "column", gap: 8,
+                border: "1px solid var(--app-accent-line, rgba(52,211,153,0.35))",
+              }}
+            >
+              <HugeiconsIcon icon={GRANT_ICONS.inbox} size={20} strokeWidth={1.6} color="var(--app-accent)" />
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: "var(--app-text)" }}>Set up your inboxes</p>
+              <p style={{ fontSize: 12, color: "var(--app-text-muted)" }}>
+                {isAuthed ? "Buy or connect a domain, then add inboxes" : "Sign in to start setting them up"}
+              </p>
+            </Link>
+          )}
           {hasCommunityGrant && communityGrant && (
             <a
               href={communityGrant.inviteUrl}

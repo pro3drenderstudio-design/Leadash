@@ -62,6 +62,8 @@ export default function OfferBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
+  const loadSeq = useRef(0);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -69,19 +71,25 @@ export default function OfferBuilderPage() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   }, []);
 
+  // Dev-mode Strict Mode double-invokes this effect, firing two concurrent
+  // GET requests. Guard against the stale one clobbering local edits made
+  // (or a save completed) while it was in flight.
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/offers/${offerId}`);
       const d = await res.json();
+      if (seq !== loadSeq.current || dirtyRef.current) return;
       if (res.ok) setOffer(d.offer);
       else showToast(d.error ?? "Failed to load offer");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [offerId, showToast]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
 
   function updateOffer(patch: Partial<Offer>) {
     setOffer(prev => (prev ? { ...prev, ...patch } : prev));
@@ -113,14 +121,18 @@ export default function OfferBuilderPage() {
     if (!offer) return;
     setSaving(true);
     try {
+      const body: Record<string, unknown> = {};
+      if (dirty) for (const key of SAVE_FIELDS) body[key] = offer[key];
+      body.status = status;
       const res = await fetch(`/api/admin/offers/${offerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       const d = await res.json();
       if (!res.ok) { showToast(d.error ?? "Failed to update status"); return; }
       setOffer(d.offer);
+      setDirty(false);
       showToast(status === "active" ? "Offer published" : "Offer paused");
     } finally {
       setSaving(false);

@@ -3,8 +3,15 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon, Download01Icon } from "@hugeicons/core-free-icons";
-import type { Offer, OfferAnalytics } from "@/types/offers";
-import { cardStyle, btnGhost } from "../shared";
+import type { Offer, OfferAnalytics, OfferPurchase } from "@/types/offers";
+import { cardStyle, btnGhost, btnDefault, Chip } from "../shared";
+
+const STATUS_CHIP: Record<OfferPurchase["status"], { label: string; color: string; bg: string; border: string }> = {
+  paid:     { label: "Paid",     color: "var(--app-success)", bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.25)" },
+  pending:  { label: "Pending",  color: "var(--app-warning)", bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.25)" },
+  refunded: { label: "Refunded", color: "var(--app-text-muted)", bg: "var(--app-surface)", border: "var(--app-border)" },
+  failed:   { label: "Failed",   color: "var(--app-danger)", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)" },
+};
 
 const FUNNEL_STAGE_META: Record<string, { label: string; color: string }> = {
   view: { label: "Viewed checkout", color: "var(--app-info)" },
@@ -20,7 +27,9 @@ export default function OfferAnalyticsPage() {
 
   const [offer, setOffer] = useState<Offer | null>(null);
   const [data, setData] = useState<OfferAnalytics | null>(null);
+  const [purchases, setPurchases] = useState<OfferPurchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -31,18 +40,34 @@ export default function OfferAnalyticsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [offerRes, analyticsRes] = await Promise.all([
+      const [offerRes, analyticsRes, purchasesRes] = await Promise.all([
         fetch(`/api/admin/offers/${offerId}`).then(r => r.json()),
         fetch(`/api/admin/offers/${offerId}/analytics`).then(r => r.json()),
+        fetch(`/api/admin/offers/${offerId}/purchases`).then(r => r.json()),
       ]);
       if (offerRes.offer) setOffer(offerRes.offer);
       if (analyticsRes.tiles) setData(analyticsRes);
+      if (purchasesRes.purchases) setPurchases(purchasesRes.purchases);
     } finally {
       setLoading(false);
     }
   }, [offerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function refundPurchase(purchase: OfferPurchase) {
+    if (!window.confirm(`Refund ${purchase.buyer_email ?? "this buyer"} ₦${purchase.total_ngn.toLocaleString("en-NG")}? This revokes any granted access and cannot be undone.`)) return;
+    setRefundingId(purchase.id);
+    try {
+      const res = await fetch(`/api/admin/offers/purchases/${purchase.id}/refund`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? "Refund failed"); return; }
+      setPurchases(prev => prev.map(p => (p.id === purchase.id ? (d.purchase as OfferPurchase) : p)));
+      showToast("Purchase refunded");
+    } finally {
+      setRefundingId(null);
+    }
+  }
 
   if (loading || !offer || !data) {
     return (
@@ -215,6 +240,59 @@ export default function OfferAnalyticsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Purchases */}
+        <div style={{ ...cardStyle, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Purchases</h3>
+          {purchases.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: "var(--app-text-quiet)" }}>No purchases yet.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--app-text-quiet)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <th style={{ padding: "0 10px 10px 0", fontWeight: 600 }}>Buyer</th>
+                  <th style={{ padding: "0 10px 10px 0", fontWeight: 600 }}>Amount</th>
+                  <th style={{ padding: "0 10px 10px 0", fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: "0 10px 10px 0", fontWeight: 600 }}>Date</th>
+                  <th style={{ padding: "0 0 10px 0", fontWeight: 600 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.map(p => {
+                  const chip = STATUS_CHIP[p.status];
+                  return (
+                    <tr key={p.id} style={{ borderTop: "1px solid var(--app-border)" }}>
+                      <td style={{ padding: "10px 10px 10px 0" }}>
+                        <div style={{ color: "var(--app-text)" }}>{p.buyer_name || "—"}</div>
+                        <div style={{ fontSize: 11.5, color: "var(--app-text-quiet)" }}>{p.buyer_email ?? "—"}</div>
+                      </td>
+                      <td style={{ padding: "10px 10px 10px 0", fontFamily: "ui-monospace, monospace" }}>
+                        ₦{p.total_ngn.toLocaleString("en-NG")}
+                      </td>
+                      <td style={{ padding: "10px 10px 10px 0" }}>
+                        <Chip label={chip.label} color={chip.color} bg={chip.bg} border={chip.border} />
+                      </td>
+                      <td style={{ padding: "10px 10px 10px 0", color: "var(--app-text-muted)" }}>
+                        {new Date(p.created_at).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}
+                      </td>
+                      <td style={{ padding: "10px 0", textAlign: "right" }}>
+                        {p.status === "paid" && (
+                          <button
+                            onClick={() => refundPurchase(p)}
+                            disabled={refundingId === p.id}
+                            style={{ ...btnDefault, opacity: refundingId === p.id ? 0.6 : 1, cursor: refundingId === p.id ? "not-allowed" : "pointer" }}
+                          >
+                            {refundingId === p.id ? "Refunding…" : "Refund"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </main>
 
