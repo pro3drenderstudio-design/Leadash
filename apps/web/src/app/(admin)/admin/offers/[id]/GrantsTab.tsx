@@ -9,6 +9,7 @@ import { cardStyle, inputStyle, labelStyle } from "./shared";
 import { GRANT_ICONS, GRANT_HINTS } from "../grantIcons";
 
 interface AcademyProductOption { id: string; name: string; product_type?: string }
+interface PlanOption { plan_id: string; name: string }
 
 interface Props {
   grants: OfferGrant[];
@@ -18,6 +19,8 @@ interface Props {
 export default function GrantsTab({ grants, onChange }: Props) {
   const [academyProducts, setAcademyProducts] = useState<AcademyProductOption[]>([]);
   const [loadingAcademy, setLoadingAcademy] = useState(true);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -26,6 +29,11 @@ export default function GrantsTab({ grants, onChange }: Props) {
       .then(d => { if (!ac.signal.aborted) setAcademyProducts(d.products ?? []); })
       .catch(() => {})
       .finally(() => { if (!ac.signal.aborted) setLoadingAcademy(false); });
+    fetch("/api/admin/plans", { signal: ac.signal })
+      .then(r => r.json())
+      .then(d => { if (!ac.signal.aborted) setPlanOptions(d.plans ?? []); })
+      .catch(() => {})
+      .finally(() => { if (!ac.signal.aborted) setLoadingPlans(false); });
     return () => ac.abort();
   }, []);
 
@@ -70,6 +78,8 @@ export default function GrantsTab({ grants, onChange }: Props) {
               dragListeners={handle.listeners}
               academyProducts={academyProducts}
               loadingAcademy={loadingAcademy}
+              planOptions={planOptions}
+              loadingPlans={loadingPlans}
               onUpdate={patch => updateGrant(grant.id, patch)}
               onRemove={() => removeGrant(grant.id)}
             />
@@ -127,12 +137,14 @@ export default function GrantsTab({ grants, onChange }: Props) {
 // ── Single grant card ──────────────────────────────────────────────────────────
 
 function GrantCard({
-  grant, dragListeners, academyProducts, loadingAcademy, onUpdate, onRemove,
+  grant, dragListeners, academyProducts, loadingAcademy, planOptions, loadingPlans, onUpdate, onRemove,
 }: {
   grant: OfferGrant;
   dragListeners: Record<string, unknown> | undefined;
   academyProducts: AcademyProductOption[];
   loadingAcademy: boolean;
+  planOptions: PlanOption[];
+  loadingPlans: boolean;
   onUpdate: (patch: Partial<OfferGrant>) => void;
   onRemove: () => void;
 }) {
@@ -169,7 +181,7 @@ function GrantCard({
           </div>
           <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginBottom: 12 }}>{grantLine(grant)}</p>
 
-          <GrantControls grant={grant} academyProducts={academyProducts} loadingAcademy={loadingAcademy} onUpdate={onUpdate} />
+          <GrantControls grant={grant} academyProducts={academyProducts} loadingAcademy={loadingAcademy} planOptions={planOptions} loadingPlans={loadingPlans} onUpdate={onUpdate} />
         </div>
         <button
           onClick={onRemove}
@@ -186,23 +198,27 @@ function GrantCard({
 }
 
 function GrantControls({
-  grant, academyProducts, loadingAcademy, onUpdate,
+  grant, academyProducts, loadingAcademy, planOptions, loadingPlans, onUpdate,
 }: {
   grant: OfferGrant;
   academyProducts: AcademyProductOption[];
   loadingAcademy: boolean;
+  planOptions: PlanOption[];
+  loadingPlans: boolean;
   onUpdate: (patch: Partial<OfferGrant>) => void;
 }) {
   switch (grant.type) {
-    case "plan":
+    case "plan": {
+      const isOrphanedPlan = !loadingPlans && !!grant.tier && !planOptions.some(p => p.plan_id === grant.tier);
       return (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 360 }}>
           <div>
             <label style={labelStyle}>Tier</label>
-            <select style={inputStyle} value={grant.tier} onChange={e => onUpdate({ tier: e.target.value as "starter" | "growth" | "scale" })}>
-              <option value="starter">Starter</option>
-              <option value="growth">Growth</option>
-              <option value="scale">Scale</option>
+            <select style={inputStyle} value={grant.tier} disabled={loadingPlans} onChange={e => onUpdate({ tier: e.target.value })}>
+              {isOrphanedPlan && <option value={grant.tier}>⚠ Unknown plan ({grant.tier})</option>}
+              {planOptions.map(p => (
+                <option key={p.plan_id} value={p.plan_id}>{p.name}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -211,6 +227,7 @@ function GrantControls({
           </div>
         </div>
       );
+    }
     case "inbox":
       return (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, maxWidth: 480 }}>

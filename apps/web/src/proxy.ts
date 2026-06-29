@@ -111,7 +111,7 @@ export async function proxy(request: NextRequest) {
     if (!verifiedUser) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("redirectTo", pathname);
+      url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
     }
     const adminClient = createSupabaseAdminClient(
@@ -136,7 +136,7 @@ export async function proxy(request: NextRequest) {
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirectTo", pathname);
+    url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 

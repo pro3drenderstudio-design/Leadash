@@ -1,19 +1,32 @@
 "use client";
-import React, { useEffect, useState, useReducer, useRef, useCallback } from "react";
+import React, { useEffect, useState, useReducer, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { DndContext, DragOverlay, useDraggable, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { Block, BlockType } from "@/lib/funnel-blocks/types";
+import {
+  defaultBlock,
+  findBlock,
+  walkBlocks,
+  normalizeLegacyBlocks,
+  insertBlock as treeInsertBlock,
+  moveBlock as treeMoveBlock,
+  removeBlock as treeRemoveBlock,
+  duplicateBlock as treeDuplicateBlock,
+  updateBlockProps,
+  updateBlockLayout,
+  updateBlockItem,
+  addBlockItem,
+  removeBlockItem,
+  setColumnPreset,
+} from "@/lib/funnel-blocks/tree";
+import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/icons";
+import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
+import type { BlockRenderContext } from "@/lib/funnel-blocks/render/BlockRenderer";
+import { createClient } from "@/lib/supabase/client";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+const AC = "#f97316";
 
-type BlockType =
-  | "section" | "two-column" | "spacer" | "divider"
-  | "headline" | "body-text" | "list"
-  | "image" | "video"
-  | "hero" | "countdown-timer" | "testimonial" | "pricing-card" | "faq-accordion" | "stats-bar"
-  | "cta-button" | "optin-form" | "custom-html";
-
-interface Block { id: string; type: BlockType; props: Record<string, unknown> }
 type Device = "desktop" | "tablet" | "mobile";
-type DragCarrier = { kind: "new"; type: BlockType } | { kind: "move"; id: string } | null;
 
 interface PageData {
   id: string; funnel_id: string; name: string; slug: string;
@@ -41,384 +54,15 @@ function histReducer(s: HistState, a: HistAction): HistState {
   }
 }
 
-// ── Block library ──────────────────────────────────────────────────────────────
-
-const LABELS: Record<BlockType, string> = {
-  "section":"Section","two-column":"Columns","spacer":"Spacer","divider":"Divider",
-  "headline":"Headline","body-text":"Paragraph","list":"Bullet List",
-  "image":"Image","video":"Video / VSL",
-  "hero":"Hero","countdown-timer":"Countdown","testimonial":"Testimonial",
-  "pricing-card":"Pricing","faq-accordion":"FAQ","stats-bar":"Stats Bar",
-  "cta-button":"CTA Button","optin-form":"Opt-in Form","custom-html":"Custom HTML",
-};
-
-const ICONS: Partial<Record<BlockType, string[]>> = {
-  "countdown-timer":["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M12 8v4l3 2"],
-  "hero":           ["M3 4h18v7H3z","M6 15h7","M6 18h4"],
-  "stats-bar":      ["M5 20V11","M12 20V4","M19 20v-7"],
-  "video":          ["M3 5h18v14H3z","M10 9l5 3-5 3z"],
-  "optin-form":     ["M4 6h16v12H4z","M4 10h16","M7 14h6"],
-  "testimonial":    ["M5 4h14v11H9l-4 4z","M8 8h8","M8 11h5"],
-  "faq-accordion":  ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M9.6 9a2.4 2.4 0 1 1 3 2.3c-.8.4-1 .8-1 1.5","M12 16h.01"],
-  "headline":       ["M5 6h14","M12 6v12"],
-  "body-text":      ["M5 6h14","M5 10h14","M5 14h9"],
-  "list":           ["M9 6h11","M9 12h11","M9 18h11","M4.5 6h.01","M4.5 12h.01","M4.5 18h.01"],
-  "image":          ["M3 5h18v14H3z","M3 16l5-5 4 4 3-3 6 6"],
-  "cta-button":     ["M3 9h18v6H3z"],
-  "pricing-card":   ["M6 3h9l3 3v15H6z","M9 9h6","M9 13h6","M9 17h4"],
-  "divider":        ["M3 12h18"],
-  "spacer":         ["M3 5h18","M3 19h18","M12 8v8"],
-  "section":        ["M3 4h18v16H3z"],
-  "two-column":     ["M4 4h7v16H4z","M13 4h7v16h-7z"],
-  "custom-html":    ["M10 20l4-16","M6.5 7.5l-4 4 4 4","M17.5 16.5l4-4-4-4"],
-};
-
-const LIB_GROUPS: { group: string; types: BlockType[] }[] = [
-  { group:"Layout",     types:["section","two-column","spacer","divider"] },
-  { group:"Text",       types:["headline","body-text","list"] },
-  { group:"Media",      types:["image","video"] },
-  { group:"Conversion", types:["hero","optin-form","cta-button","countdown-timer","pricing-card","testimonial","stats-bar","faq-accordion"] },
-  { group:"Other",      types:["custom-html"] },
-];
-
 function genId() { return `b_${Math.random().toString(36).slice(2,9)}`; }
 
-function defaultProps(type: BlockType): Record<string, unknown> {
-  switch (type) {
-    case "headline":       return { text:"A short, punchy headline", align:"center", color:"#ffffff", bg_color:"transparent", size:"4xl", weight:"bold" };
-    case "body-text":      return { text:"Add supporting copy here. Click to edit this paragraph directly on the canvas.", align:"left", color:"#9aa4b2", bg_color:"transparent" };
-    case "list":           return { items:["First key benefit","Second key benefit","Third key benefit"], bg_color:"transparent" };
-    case "image":          return { src:"", alt:"", bg_color:"transparent" };
-    case "video":          return { url:"", caption:"Watch the 2-minute overview", bg_color:"#0c0c0f" };
-    case "hero":           return { eyebrow:"FREE · 30-DAY CHALLENGE", headline:"Your Compelling Headline Here", subtext:"Your subheadline that builds interest and drives action.", cta_text:"Get Started Free", cta_url:"", bg_color:"#0c0c0f" };
-    case "countdown-timer":return { label:"Enrollment closes in", accent_color:"#f97316", bg_color:"#14161c", evergreen:true, duration_minutes:30, target_date:"" };
-    case "testimonial":    return { quote:"This product completely changed how I approach outreach.", author:"Jane Doe", role:"Founder, AcmeCo", bg_color:"#0c0c0f" };
-    case "pricing-card":   return { title:"Full Package", price:"₦135,000", period:"one-time", cta_text:"Get Access", cta_url:"", bg_color:"#0e1017", features:["Feature one","Feature two","Feature three"] };
-    case "faq-accordion":  return { bg_color:"#0c0c0f", items:[{q:"How does this work?",a:"You sign up and get instant access to everything."},{q:"Is there a guarantee?",a:"Yes — 30-day money back guarantee, no questions asked."}] };
-    case "stats-bar":      return { bg_color:"#0c0c0f", items:[{value:"1,200+",label:"Customers"},{value:"4.9",label:"Avg rating"},{value:"30+",label:"Countries"}] };
-    case "cta-button":     return { text:"Get Started Free", url:"", accent_color:"#f97316", bg_color:"#0c0c0f" };
-    case "optin-form":     return { title:"Get instant free access", button_text:"Send Me Access", fine_print:"No spam. Unsubscribe anytime.", bg_color:"#0e1017", redirect_url:"", fields:[{type:"name",label:"Full name",required:false},{type:"email",label:"Email address",required:true}] };
-    case "section":        return { bg_color:"#0c0c0f" };
-    case "two-column":     return { bg_color:"#0c0c0f", left:"Left column content", right:"Right column content" };
-    case "spacer":         return { height:48 };
-    case "divider":        return { bg_color:"transparent" };
-    case "custom-html":    return { html:"<p>Custom HTML goes here</p>" };
-    default:               return {};
-  }
-}
-
-// ── SVG Icon ───────────────────────────────────────────────────────────────────
-
-function Icon({ paths, size=16, sw=1.8 }: { paths:string[]; size?:number; sw?:number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
-      {paths.map((d,i)=><path key={i} d={d}/>)}
-    </svg>
-  );
-}
-
-function BlockIcon({ type, size=16 }: { type:BlockType; size?:number }) {
-  return <Icon paths={ICONS[type]??["M4 4h16v16H4z"]} size={size} sw={1.7} />;
-}
-
-// ── Editable (inline contentEditable) ─────────────────────────────────────────
-
-interface EditableProps {
-  tag?: keyof React.JSX.IntrinsicElements;
-  value: string;
-  editable: boolean;
-  style?: React.CSSProperties;
-  onCommit: (val:string) => void;
-  onFocus?: () => void;
-}
-
-function Editable({ tag="div", value, editable, style, onCommit, onFocus }: EditableProps) {
-  const ref = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (el && el.textContent !== (value??"")) el.textContent = value??"";
-  }, [value]);
-
-  const props: Record<string, unknown> = {
-    ref,
-    contentEditable: editable || undefined,
-    suppressContentEditableWarning: true,
-    spellCheck: false,
-    style: { ...style, outline:"none", cursor: editable ? "text" : undefined },
-  };
-  if (editable) {
-    props.onMouseDown = (e: React.MouseEvent) => { e.stopPropagation(); onFocus?.(); };
-    props.onClick     = (e: React.MouseEvent) => e.stopPropagation();
-    props.onBlur      = (e: React.FocusEvent<HTMLElement>) => onCommit(e.currentTarget.textContent??"");
-  }
-  return React.createElement(tag as string, props);
-}
-
-// ── Block Content ──────────────────────────────────────────────────────────────
-
-interface BContentProps {
-  block: Block; device: Device; preview: boolean;
-  onCommitProp: (key:string, val:string) => void;
-  onFocus: () => void;
-  onCommitItem: (idx:number, field:string|null, val:string) => void;
-}
-
-function BlockContent({ block, device, preview, onCommitProp, onFocus, onCommitItem }: BContentProps) {
-  const p = block.props;
-  const mob = device === "mobile";
-  const ed = !preview;
-  const ac = (p.accent_color as string) ?? "#f97316";
-  const bg = (p.bg_color as string) || "transparent";
-
-  const E = ({ tag="div", k, style }: { tag?:keyof React.JSX.IntrinsicElements; k:string; style:React.CSSProperties }) => (
-    <Editable tag={tag} value={(p[k] as string)??""} editable={ed} style={style}
-      onCommit={v => onCommitProp(k, v)} onFocus={onFocus} />
-  );
-
-  switch (block.type) {
-    case "countdown-timer":
-      return (
-        <div style={{background:bg,padding:"13px 20px",display:"flex",alignItems:"center",justifyContent:"center",gap:16,flexWrap:"wrap",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
-          <E k="label" style={{color:"#aeb6c2",fontSize:13,fontWeight:500}} />
-          <div style={{display:"flex",gap:7}}>
-            {[["02","Days"],["11","Hrs"],["46","Min"],["09","Sec"]].map(([v,l])=>(
-              <div key={l} style={{textAlign:"center"}}>
-                <div style={{background:ac,color:"#fff",fontWeight:700,fontSize:17,borderRadius:7,padding:"5px 9px",minWidth:42,fontVariantNumeric:"tabular-nums"}}>{v}</div>
-                <div style={{color:"#6b7280",fontSize:8.5,marginTop:3,textTransform:"uppercase",letterSpacing:".08em"}}>{l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-
-    case "hero":
-      return (
-        <div style={{background:bg,padding:mob?"46px 24px 40px":"66px 32px 56px",textAlign:"center"}}>
-          <div style={{display:"inline-block",background:"rgba(249,115,22,.12)",color:"#fb923c",fontSize:11.5,fontWeight:600,letterSpacing:".1em",padding:"6px 13px",borderRadius:999,marginBottom:22}}>
-            {(p.eyebrow as string)||"FREE · 30-DAY CHALLENGE"}
-          </div>
-          <E tag="h1" k="headline" style={{fontSize:mob?29:46,lineHeight:1.07,fontWeight:800,color:"#fff",maxWidth:760,margin:"0 auto 18px",letterSpacing:"-0.02em",display:"block"}} />
-          <E tag="p" k="subtext" style={{fontSize:mob?15:18,lineHeight:1.6,color:"#9aa4b2",maxWidth:560,margin:"0 auto 30px",display:"block"}} />
-          <div style={{display:"flex",justifyContent:"center"}}>
-            <E tag="span" k="cta_text" style={{display:"inline-flex",background:"linear-gradient(180deg,#fb923c,#f97316)",color:"#fff",fontWeight:700,fontSize:16,padding:"15px 34px",borderRadius:11,boxShadow:"0 12px 28px -8px rgba(249,115,22,.55)"}} />
-          </div>
-          <p style={{color:"#5b6678",fontSize:12,marginTop:15}}>Join 1,200+ founders · No card required</p>
-        </div>
-      );
-
-    case "stats-bar": {
-      const items = (p.items as Array<{value:string;label:string}>)??[];
-      return (
-        <div style={{background:bg,padding:"10px 32px 46px",display:"flex",justifyContent:"center",gap:mob?22:64,flexWrap:"wrap"}}>
-          {items.map((it,idx)=>(
-            <div key={idx} style={{textAlign:"center"}}>
-              <Editable tag="div" value={it.value} editable={ed} style={{fontSize:34,fontWeight:800,color:"#fb923c",letterSpacing:"-0.01em"}}
-                onCommit={v=>onCommitItem(idx,"value",v)} onFocus={onFocus} />
-              <Editable tag="div" value={it.label} editable={ed} style={{fontSize:12.5,color:"#8b95a3",marginTop:4}}
-                onCommit={v=>onCommitItem(idx,"label",v)} onFocus={onFocus} />
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    case "video":
-      return (
-        <div style={{background:bg,padding:"8px 32px 42px"}}>
-          <div style={{maxWidth:680,margin:"0 auto"}}>
-            <div style={{aspectRatio:"16/9",borderRadius:14,background:"linear-gradient(135deg,#1a1f2b,#0f1622)",border:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div style={{width:64,height:64,borderRadius:999,background:"rgba(249,115,22,.96)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 12px 32px -6px rgba(249,115,22,.6)"}}>
-                <Icon paths={["M9 6l9 6-9 6z"]} size={24} sw={1} />
-              </div>
-            </div>
-            <E tag="p" k="caption" style={{textAlign:"center",color:"#8b95a3",fontSize:13,marginTop:13,display:"block"}} />
-          </div>
-        </div>
-      );
-
-    case "optin-form": {
-      const fields = (p.fields as Array<{type:string;label:string;required:boolean}>) ?? [];
-      return (
-        <div style={{background:bg,padding:mob?"40px 22px":"50px 32px"}}>
-          <div style={{maxWidth:430,margin:"0 auto",background:"#0c0c0f",border:"1px solid rgba(255,255,255,0.08)",borderRadius:18,padding:"30px 26px",boxShadow:"0 24px 60px -24px rgba(0,0,0,.75)"}}>
-            <E tag="h3" k="title" style={{fontSize:22,fontWeight:700,color:"#fff",textAlign:"center",marginBottom:18,display:"block"}} />
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {fields.length>0
-                ? fields.map((f,idx)=>(
-                  <div key={idx} style={{border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 13px",color:"#5b6678",fontSize:14,background:"#08090d"}}>
-                    {f.label||f.type}{f.required&&" *"}
-                  </div>
-                ))
-                : <div style={{border:"1px dashed rgba(249,115,22,.5)",borderRadius:10,padding:"12px 13px",color:"#fb923c",fontSize:12,background:"#08090d"}}>No fields configured — add fields in the settings panel</div>
-              }
-              <E tag="div" k="button_text" style={{background:"linear-gradient(180deg,#fb923c,#f97316)",color:"#fff",fontWeight:700,fontSize:15,padding:"13px",borderRadius:10,textAlign:"center",boxShadow:"0 8px 20px -8px rgba(249,115,22,.6)"}} />
-            </div>
-            <E tag="p" k="fine_print" style={{textAlign:"center",color:"#5b6678",fontSize:11,marginTop:13,display:"block"}} />
-          </div>
-        </div>
-      );
-    }
-
-    case "testimonial":
-      return (
-        <div style={{background:bg,padding:"46px 32px"}}>
-          <div style={{maxWidth:600,margin:"0 auto",textAlign:"center"}}>
-            <div style={{color:"#f97316",fontSize:34,lineHeight:0.6,marginBottom:14,fontFamily:"Georgia,serif"}}>&ldquo;</div>
-            <E tag="p" k="quote" style={{fontSize:mob?18:22,lineHeight:1.5,color:"#e7ecf3",fontWeight:500,marginBottom:22,display:"block"}} />
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              <div style={{width:44,height:44,borderRadius:999,background:"linear-gradient(135deg,#fb923c,#b45309)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,flexShrink:0}}>
-                {((p.author as string)||"A").trim()[0]||"A"}
-              </div>
-              <div style={{textAlign:"left"}}>
-                <E tag="div" k="author" style={{color:"#fff",fontWeight:600,fontSize:14}} />
-                <E tag="div" k="role"   style={{color:"#8b95a3",fontSize:12}} />
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-
-    case "faq-accordion": {
-      const items = (p.items as Array<{q:string;a:string}>)??[];
-      return (
-        <div style={{background:bg,padding:"42px 32px 56px"}}>
-          <div style={{maxWidth:620,margin:"0 auto"}}>
-            <h3 style={{textAlign:"center",color:"#fff",fontSize:22,fontWeight:700,marginBottom:22}}>Questions, answered</h3>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {items.map((it,idx)=>(
-                <div key={idx} style={{background:"#101218",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"15px 18px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
-                    <Editable tag="div" value={it.q} editable={ed} style={{color:"#e7ecf3",fontWeight:600,fontSize:15}}
-                      onCommit={v=>onCommitItem(idx,"q",v)} onFocus={onFocus} />
-                    <span style={{color:"#5b6678",flexShrink:0}}><Icon paths={["M6 9l6 6 6-6"]} size={18} /></span>
-                  </div>
-                  <Editable tag="p" value={it.a} editable={ed} style={{color:"#8b95a3",fontSize:13,lineHeight:1.6,marginTop:8}}
-                    onCommit={v=>onCommitItem(idx,"a",v)} onFocus={onFocus} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    case "headline": {
-      const sizeMap: Record<string,[number,number]> = { xl:[18,20], "2xl":[22,24], "3xl":[26,30], "4xl":[30,36], "5xl":[36,48] };
-      const [sMob,sDesk] = sizeMap[(p.size as string)] ?? sizeMap["4xl"];
-      return (
-        <div style={{background:bg,padding:"16px 28px"}}>
-          <E tag="h2" k="text" style={{fontSize:mob?sMob:sDesk,fontWeight:p.weight==="bold"?700:600,color:(p.color as string)??"#fff",textAlign:(p.align as React.CSSProperties["textAlign"])??"center",lineHeight:1.15,letterSpacing:"-0.01em",display:"block"}} />
-        </div>
-      );
-    }
-
-    case "body-text":
-      return (
-        <div style={{background:bg,padding:"10px 28px"}}>
-          <E tag="p" k="text" style={{fontSize:16,lineHeight:1.7,color:(p.color as string)??"#9aa4b2",textAlign:(p.align as React.CSSProperties["textAlign"])??"left",maxWidth:680,margin:p.align==="center"?"0 auto":"0",display:"block"}} />
-        </div>
-      );
-
-    case "list": {
-      const items = (p.items as string[])??[];
-      return (
-        <div style={{background:bg,padding:"12px 28px"}}>
-          <div style={{maxWidth:560,margin:"0 auto",display:"flex",flexDirection:"column",gap:11}}>
-            {items.map((it,idx)=>(
-              <div key={idx} style={{display:"flex",gap:11,alignItems:"flex-start"}}>
-                <span style={{color:"#f97316",flexShrink:0,marginTop:1}}><Icon paths={["M5 12l4 4 10-10"]} size={18} sw={2.4} /></span>
-                <Editable tag="span" value={it} editable={ed} style={{color:"#cbd2dc",fontSize:15,lineHeight:1.5}}
-                  onCommit={v=>onCommitItem(idx,null,v)} onFocus={onFocus} />
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    case "cta-button":
-      return (
-        <div style={{background:bg,padding:"24px 28px",textAlign:"center"}}>
-          <E tag="span" k="text" style={{display:"inline-flex",background:ac,color:"#fff",fontWeight:700,fontSize:16,padding:"15px 34px",borderRadius:11,boxShadow:`0 12px 28px -8px ${ac}88`}} />
-        </div>
-      );
-
-    case "pricing-card": {
-      const features = (p.features as string[])??[];
-      return (
-        <div style={{background:bg,padding:"48px 32px"}}>
-          <div style={{maxWidth:380,margin:"0 auto",background:"#0c0c0f",border:"1px solid rgba(249,115,22,.4)",borderRadius:18,padding:"28px 26px",textAlign:"center",boxShadow:"0 0 0 4px rgba(249,115,22,.08)"}}>
-            <E tag="div" k="title"    style={{color:"#e7ecf3",fontSize:15,fontWeight:600,marginBottom:8}} />
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:6,marginBottom:20}}>
-              <E tag="span" k="price"  style={{color:"#fff",fontSize:38,fontWeight:800,letterSpacing:"-0.02em"}} />
-              <E tag="span" k="period" style={{color:"#8b95a3",fontSize:13}} />
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:22,textAlign:"left"}}>
-              {features.map((f,idx)=>(
-                <div key={idx} style={{display:"flex",gap:9,alignItems:"center"}}>
-                  <span style={{color:"#f97316"}}><Icon paths={["M5 12l4 4 10-10"]} size={16} sw={2.4} /></span>
-                  <Editable tag="span" value={f} editable={ed} style={{color:"#cbd2dc",fontSize:13.5}}
-                    onCommit={v=>onCommitItem(idx,null,v)} onFocus={onFocus} />
-                </div>
-              ))}
-            </div>
-            <E tag="div" k="cta_text" style={{background:"linear-gradient(180deg,#fb923c,#f97316)",color:"#fff",fontWeight:700,fontSize:15,padding:"13px",borderRadius:10}} />
-          </div>
-        </div>
-      );
-    }
-
-    case "divider":
-      return <div style={{background:bg,padding:"8px 28px"}}><div style={{height:1,background:"rgba(255,255,255,0.1)",maxWidth:680,margin:"0 auto"}} /></div>;
-
-    case "spacer":
-      return (
-        <div style={{height:(p.height as number)??48,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {!preview && <span style={{color:"#3a4252",fontSize:10,letterSpacing:".1em",textTransform:"uppercase"}}>Spacer · {p.height as number}px</span>}
-        </div>
-      );
-
-    case "section":
-      return (
-        <div style={{background:bg,padding:"40px 28px",border:preview?"none":"1px dashed rgba(255,255,255,0.08)",textAlign:"center"}}>
-          <span style={{color:"#3a4252",fontSize:12}}>Empty section — drop blocks inside</span>
-        </div>
-      );
-
-    case "two-column":
-      return (
-        <div style={{background:bg,padding:"28px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <div style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:10,padding:"20px 16px"}}>
-            <E tag="p" k="left" style={{color:"#cbd2dc",fontSize:14,lineHeight:1.5,display:"block"}} />
-          </div>
-          <div style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:10,padding:"20px 16px"}}>
-            <E tag="p" k="right" style={{color:"#cbd2dc",fontSize:14,lineHeight:1.5,display:"block"}} />
-          </div>
-        </div>
-      );
-
-    case "image":
-      return (
-        <div style={{background:bg,padding:"8px 28px",textAlign:"center"}}>
-          {p.src
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={p.src as string} alt={(p.alt as string)??""}  style={{maxWidth:"100%",borderRadius:10}} />
-            : <div style={{border:"1px dashed rgba(255,255,255,0.1)",borderRadius:12,padding:"40px",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-                <div style={{color:"#3a4252"}}><Icon paths={["M3 5h18v14H3z","M3 16l5-5 4 4 3-3 6 6"]} size={28} /></div>
-                <span style={{color:"#3a4252",fontSize:12}}>Image — set URL in properties panel</span>
-              </div>
-          }
-        </div>
-      );
-
-    case "custom-html":
-      return <div style={{padding:"8px 28px"}} dangerouslySetInnerHTML={{__html:(p.html as string)??""}} />;
-
-    default:
-      return <div style={{padding:24,color:"#555",textAlign:"center"}}>{block.type}</div>;
-  }
-}
+const COLUMN_PRESETS: { label: string; widths: number[] }[] = [
+  { label: "1",     widths: [100] },
+  { label: "50/50", widths: [50, 50] },
+  { label: "33/33/33", widths: [33.33, 33.33, 33.34] },
+  { label: "30/70", widths: [30, 70] },
+  { label: "70/30", widths: [70, 30] },
+];
 
 // ── Main Builder ───────────────────────────────────────────────────────────────
 
@@ -427,7 +71,6 @@ export default function BuilderPage() {
   const router    = useRouter();
   const funnelId  = params.id     as string;
   const pageId    = params.pageId as string;
-  const AC = "#f97316";
 
   // Remote data
   const [page,       setPage]       = useState<PageData|null>(null);
@@ -441,9 +84,6 @@ export default function BuilderPage() {
 
   // UI state
   const [selectedId,  setSelectedId]  = useState<string|null>(null);
-  const [hoverId,     setHoverId]     = useState<string|null>(null);
-  const [hoverInsert, setHoverInsert] = useState<number|null>(null);
-  const [dragInsert,  setDragInsert]  = useState<number|null>(null);
   const [device,      setDevice]      = useState<Device>("desktop");
   const [zoom,        setZoom]        = useState(1);
   const [preview,     setPreview]     = useState(false);
@@ -452,9 +92,10 @@ export default function BuilderPage() {
   const [search,      setSearch]      = useState("");
   const [toast,       setToastMsg]    = useState<string|null>(null);
   const [saveStatus,  setSaveStatus]  = useState<"idle"|"saved">("idle");
+  const [activeDrag,  setActiveDrag]  = useState<{ label: string } | null>(null);
 
-  const dragCarrier = useRef<DragCarrier>(null);
   const toastTimer  = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const previewSessionId = useRef(`preview_${genId()}`);
 
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -466,7 +107,7 @@ export default function BuilderPage() {
       const pd = await pr.json() as { page?: PageData };
       if (pd.page) {
         setPage(pd.page);
-        dispatch({ type:"commit", next:(pd.page.blocks??[]) as Block[] });
+        dispatch({ type:"commit", next: normalizeLegacyBlocks((pd.page.blocks??[]) as unknown[]) });
       }
       if (fr.ok) {
         const fd = await fr.json() as { funnel?: { slug:string; name:string } };
@@ -489,83 +130,72 @@ export default function BuilderPage() {
   const commitBlocks = useCallback((next: Block[]) => dispatch({ type:"commit", next }), []);
   const setLive      = useCallback((next: Block[]) => dispatch({ type:"setLive", next }), []);
 
-  function insertAt(idx: number, type: BlockType) {
-    const nid = genId();
-    const next = [...blocks];
-    next.splice(idx, 0, { id:nid, type, props:defaultProps(type) });
-    commitBlocks(next);
-    setSelectedId(nid);
-  }
-
   function addBlock(type: BlockType) {
-    insertAt(blocks.length, type);
+    const block = defaultBlock(type);
+    commitBlocks(treeInsertBlock(blocks, null, blocks.length, block));
+    setSelectedId(block.id);
     showToast(`${LABELS[type]} added`);
   }
 
-  function moveTo(id: string, idx: number) {
-    const i = blocks.findIndex(b => b.id===id);
-    if (i < 0) return;
-    const next = [...blocks];
-    const [x] = next.splice(i, 1);
-    const j = i < idx ? idx-1 : idx;
-    next.splice(j, 0, x);
-    commitBlocks(next);
+  function quickInsert(parentId: string | null, index: number, type: BlockType = "body-text") {
+    const block = defaultBlock(type);
+    commitBlocks(treeInsertBlock(blocks, parentId, index, block));
+    setSelectedId(block.id);
   }
 
-  function moveBlock(id: string, dir: -1|1) {
-    const i = blocks.findIndex(b=>b.id===id);
-    const j = i+dir;
-    if (j<0||j>=blocks.length) return;
-    const next = [...blocks];
-    const [x] = next.splice(i,1);
-    next.splice(j,0,x);
-    commitBlocks(next);
+  function nudgeBlock(id: string, dir: -1 | 1) {
+    const flat: string[] = [];
+    let parentOf: string | null = null;
+    let foundParent: string | null = null;
+    walkBlocks(blocks, (b, _d, pid) => { if (b.id === id) foundParent = pid; });
+    parentOf = foundParent;
+    const siblings = parentOf === null ? blocks : (findBlock(blocks, parentOf)?.children ?? []);
+    const i = siblings.findIndex(b => b.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= siblings.length) return;
+    commitBlocks(treeMoveBlock(blocks, id, parentOf, j));
   }
 
-  function duplicateBlock(id: string) {
-    const nid = genId();
-    const i = blocks.findIndex(b=>b.id===id);
-    const next = [...blocks];
-    next.splice(i+1, 0, { ...JSON.parse(JSON.stringify(blocks[i])), id:nid });
-    commitBlocks(next);
-    setSelectedId(nid);
+  function duplicateBlockHandler(id: string) {
+    const { tree, newId } = treeDuplicateBlock(blocks, id);
+    commitBlocks(tree);
+    if (newId) setSelectedId(newId);
     showToast("Block duplicated");
   }
 
-  function removeBlock(id: string) {
-    commitBlocks(blocks.filter(b=>b.id!==id));
+  function removeBlockHandler(id: string) {
+    commitBlocks(treeRemoveBlock(blocks, id));
     if (selectedId===id) setSelectedId(null);
   }
 
   // setProps = live update (no history push, for right-panel typing)
   function setProps(id: string, patch: Record<string, unknown>) {
-    setLive(blocks.map(b => b.id===id ? {...b, props:{...b.props,...patch}} : b));
+    setLive(updateBlockProps(blocks, id, patch));
+  }
+
+  function setLayout(id: string, patch: Record<string, unknown>) {
+    setLive(updateBlockLayout(blocks, id, patch));
   }
 
   // commitProp = push to history (for inline edit onBlur)
   function commitProp(id: string, key: string, val: string) {
-    commitBlocks(blocks.map(b => b.id===id ? {...b, props:{...b.props,[key]:val}} : b));
+    commitBlocks(updateBlockProps(blocks, id, { [key]: val }));
   }
 
   function commitItem(id: string, idx: number, field: string|null, val: string) {
-    commitBlocks(blocks.map(b => {
-      if (b.id!==id) return b;
-      const items = [...(b.props.items as unknown[])];
-      if (field===null) {
-        items[idx] = val;
-      } else {
-        items[idx] = { ...(items[idx] as Record<string,unknown>), [field]:val };
-      }
-      return {...b, props:{...b.props,items}};
-    }));
+    commitBlocks(updateBlockItem(blocks, id, idx, field, val));
   }
 
   function addItem(id: string, item: unknown) {
-    commitBlocks(blocks.map(b => b.id!==id ? b : {...b, props:{...b.props,items:[...(b.props.items as unknown[]),item]}}));
+    commitBlocks(addBlockItem(blocks, id, item));
   }
 
   function removeItem(id: string, idx: number) {
-    commitBlocks(blocks.map(b => b.id!==id ? b : {...b, props:{...b.props,items:(b.props.items as unknown[]).filter((_,j)=>j!==idx)}}));
+    commitBlocks(removeBlockItem(blocks, id, idx));
+  }
+
+  function applyColumnPreset(rowId: string, widths: number[]) {
+    commitBlocks(setColumnPreset(blocks, rowId, widths));
   }
 
   // ── Page settings helpers ─────────────────────────────────────────────────
@@ -591,21 +221,47 @@ export default function BuilderPage() {
     showToast("Page published — live now");
   }
 
-  // ── Drag helpers ──────────────────────────────────────────────────────────
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    const idx = dragInsert;
-    const d   = dragCarrier.current;
-    if (d && idx!=null) {
-      if (d.kind==="new") insertAt(idx, d.type);
-      else moveTo(d.id, idx);
+  // ── dnd-kit drag handlers ─────────────────────────────────────────────────
+  function handleDragStart(e: DragStartEvent) {
+    const data = e.active.data.current as { kind: "new"; type: BlockType } | { kind: "move"; id: string } | undefined;
+    if (!data) return;
+    if (data.kind === "new") setActiveDrag({ label: LABELS[data.type] });
+    else {
+      const blk = findBlock(blocks, data.id);
+      setActiveDrag({ label: blk ? LABELS[blk.type] : "Block" });
     }
-    dragCarrier.current = null;
-    setDragInsert(null);
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveDrag(null);
+    const { active, over } = e;
+    if (!over) return;
+    const activeData = active.data.current as { kind: "new"; type: BlockType } | { kind: "move"; id: string } | undefined;
+    const overData = over.data.current as { parentId: string | null; index: number } | undefined;
+    if (!activeData || !overData) return;
+
+    if (activeData.kind === "new") {
+      const block = defaultBlock(activeData.type);
+      commitBlocks(treeInsertBlock(blocks, overData.parentId, overData.index, block));
+      setSelectedId(block.id);
+    } else {
+      commitBlocks(treeMoveBlock(blocks, activeData.id, overData.parentId, overData.index));
+    }
   }
 
   // ── Device widths ─────────────────────────────────────────────────────────
   const deviceW = { desktop:980, tablet:800, mobile:390 }[device];
+
+  const layersFlat = useMemo(() => {
+    const out: { block: Block; depth: number }[] = [];
+    walkBlocks(blocks, (b, depth) => out.push({ block: b, depth }));
+    return out;
+  }, [blocks]);
+
+  const videoBlocks = useMemo(
+    () => layersFlat.filter(({ block }) => block.type === "video").map(({ block }, i) => ({ id: block.id, label: (block.props.caption as string) || `Video ${i + 1}` })),
+    [layersFlat],
+  );
 
   if (loading) {
     return (
@@ -624,11 +280,30 @@ export default function BuilderPage() {
 
   const canUndo = hist.past.length > 1;
   const canRedo = hist.future.length > 0;
-  const selectedBlock = blocks.find(b=>b.id===selectedId)??null;
+  const selectedBlock = selectedId ? findBlock(blocks, selectedId) : null;
   const isDraft = page.status !== "published";
+  const pageLayout = (page.settings?.layout as { width_mode?: "boxed"|"full"; max_width?: number }) ?? {};
+  const pageMaxWidth = pageLayout.max_width ?? 1100;
+
+  const blockCtx: BlockRenderContext = {
+    mode: preview ? "live" : "edit",
+    pageMaxWidth,
+    selectedId,
+    pageId: page.id,
+    sessionId: previewSessionId.current,
+    onCommitProp: commitProp,
+    onCommitItem: commitItem,
+    onSelect: setSelectedId,
+    onDuplicate: duplicateBlockHandler,
+    onRemove: removeBlockHandler,
+    onMoveUp: id => nudgeBlock(id, -1),
+    onMoveDown: id => nudgeBlock(id, 1),
+    onQuickInsert: quickInsert,
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
     <div style={{display:"flex",flexDirection:"column",height:"100vh",width:"100%",background:"#0a0e16",overflow:"hidden",fontFamily:"'Geist','Segoe UI',system-ui,sans-serif",color:"#e2e8f0"}}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
@@ -778,17 +453,7 @@ export default function BuilderPage() {
                       <div style={{fontSize:10,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase",color:"#5b6678",marginBottom:9,paddingLeft:2}}>{g.group}</div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                         {items.map(type=>(
-                          <div key={type} draggable
-                            onDragStart={()=>{ dragCarrier.current={kind:"new",type}; }}
-                            onDragEnd={()=>{ dragCarrier.current=null; setDragInsert(null); }}
-                            onClick={()=>addBlock(type)}
-                            title="Click to add or drag to position"
-                            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,padding:"13px 6px",background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,cursor:"grab",transition:"all .12s"}}
-                            onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=`${AC}99`;el.style.background=`${AC}14`;}}
-                            onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor="rgba(255,255,255,0.06)";el.style.background="rgba(255,255,255,0.025)";}}>
-                            <div style={{color:"#aeb6c2"}}><BlockIcon type={type} size={19} /></div>
-                            <span style={{fontSize:11,color:"#9aa4b2",fontWeight:500,textAlign:"center",lineHeight:1.2}}>{LABELS[type]}</span>
-                          </div>
+                          <PaletteSwatch key={type} type={type} onClick={()=>addBlock(type)} />
                         ))}
                       </div>
                     </div>
@@ -799,17 +464,15 @@ export default function BuilderPage() {
               <div style={{flex:1,overflow:"auto",padding:10}}>
                 <div style={{fontSize:10,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase",color:"#5b6678",margin:"4px 4px 10px"}}>Page structure</div>
                 <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                  {blocks.map((b,i)=>{
+                  {layersFlat.map(({block:b,depth})=>{
                     const sel=selectedId===b.id;
                     return (
-                      <div key={b.id} onClick={()=>setSelectedId(b.id)} draggable
-                        onDragStart={()=>{ dragCarrier.current={kind:"move",id:b.id}; }}
-                        style={{display:"flex",alignItems:"center",gap:9,padding:"8px 9px",borderRadius:8,cursor:"pointer",background:sel?`${AC}1f`:"transparent",border:`1px solid ${sel?`${AC}66`:"transparent"}`}}
+                      <div key={b.id} onClick={()=>setSelectedId(b.id)}
+                        style={{display:"flex",alignItems:"center",gap:9,padding:"8px 9px",paddingLeft:9+depth*16,borderRadius:8,cursor:"pointer",background:sel?`${AC}1f`:"transparent",border:`1px solid ${sel?`${AC}66`:"transparent"}`}}
                         onMouseEnter={e=>{if(!sel)(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,0.04)";}}
                         onMouseLeave={e=>{if(!sel)(e.currentTarget as HTMLElement).style.background="transparent";}}>
                         <span style={{color:sel?AC:"#6b7280",flexShrink:0}}><BlockIcon type={b.type} size={15} /></span>
                         <span style={{flex:1,fontSize:12.5,color:sel?"#eaeff6":"#9aa4b2",fontWeight:sel?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{LABELS[b.type]}</span>
-                        <span style={{color:"#3a4252",fontSize:10,fontFamily:"monospace"}}>{i+1}</span>
                       </div>
                     );
                   })}
@@ -822,92 +485,15 @@ export default function BuilderPage() {
         {/* CANVAS */}
         <div
           onClick={()=>setSelectedId(null)}
-          onDragOver={e=>e.preventDefault()}
-          onDrop={onDrop}
-          onDragLeave={()=>setDragInsert(null)}
           style={{flex:"1 1 auto",minWidth:0,overflow:"auto",background:"radial-gradient(120% 80% at 50% 0,#11192b 0%,#0a0e16 55%)",position:"relative"}}
         >
           <div style={{minHeight:"100%",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:preview?"0":"34px 34px 140px"}}>
-            <div style={{width:preview?"100%":deviceW,maxWidth:preview?1100:"none",transform:`scale(${zoom})`,transformOrigin:"top center",transition:"width .28s ease"}}>
+            <div style={{width:preview?"100%":deviceW,transform:`scale(${zoom})`,transformOrigin:"top center",transition:"width .28s ease"}}>
               <div
                 onClick={e=>e.stopPropagation()}
                 style={{background:"#0c0c0f",borderRadius:preview?0:device==="mobile"?30:device==="tablet"?20:14,overflow:"hidden",boxShadow:preview?"none":"0 40px 90px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,0.07)",minHeight:400}}
               >
-                {/* Insert zone before first block */}
-                {!preview && (
-                  <InsertZone idx={0} dragInsert={dragInsert} hoverInsert={hoverInsert}
-                    onHover={()=>setHoverInsert(0)} onLeave={()=>setHoverInsert(h=>h===0?null:h)}
-                    onDragOver={()=>setDragInsert(0)}
-                    onClick={()=>insertAt(0,"body-text")} />
-                )}
-
-                {blocks.length === 0 && !preview && (
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,textAlign:"center",padding:32}}>
-                    <div style={{width:48,height:48,borderRadius:12,background:"rgba(255,255,255,0.04)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
-                      <Icon paths={["M12 4v16m8-8H4"]} size={22} />
-                    </div>
-                    <p style={{color:"rgba(255,255,255,0.2)",fontSize:14}}>Click a block on the left to add it</p>
-                  </div>
-                )}
-
-                {blocks.map((b,i)=>{
-                  const sel = selectedId===b.id;
-                  const hov = hoverId===b.id && !sel;
-                  return (
-                    <React.Fragment key={b.id}>
-                      <div
-                        onMouseEnter={()=>setHoverId(b.id)}
-                        onMouseLeave={()=>setHoverId(hv=>hv===b.id?null:hv)}
-                        onClick={e=>{e.stopPropagation();setSelectedId(b.id);}}
-                        onDragOver={e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();setDragInsert((e.clientY-r.top)<r.height/2?i:i+1);}}
-                        style={{position:"relative",boxShadow:sel?`inset 0 0 0 2px ${AC}`:(hov?`inset 0 0 0 1px ${AC}66`:"none"),cursor:preview?"default":"pointer",transition:"box-shadow .12s"}}
-                      >
-                        <BlockContent block={b} device={device} preview={preview}
-                          onCommitProp={(key,val)=>commitProp(b.id,key,val)}
-                          onFocus={()=>setSelectedId(b.id)}
-                          onCommitItem={(idx,field,val)=>commitItem(b.id,idx,field,val)}
-                        />
-                        {/* Selected block label */}
-                        {sel && !preview && (
-                          <div style={{position:"absolute",top:0,left:0,background:AC,color:"#fff",fontSize:9.5,fontWeight:600,padding:"2px 8px",borderBottomRightRadius:7,letterSpacing:".05em",textTransform:"uppercase",pointerEvents:"none",zIndex:15}}>
-                            {LABELS[b.type]}
-                          </div>
-                        )}
-                        {/* Floating block toolbar */}
-                        {sel && !preview && (
-                          <div onClick={e=>e.stopPropagation()}
-                            style={{position:"absolute",top:-15,right:10,display:"flex",alignItems:"center",gap:1,background:"#161c28",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:2,boxShadow:"0 8px 24px -6px rgba(0,0,0,.6)",zIndex:20}}>
-                            {/* Drag handle */}
-                            <div draggable onDragStart={()=>{ dragCarrier.current={kind:"move",id:b.id}; }} title="Drag to reorder"
-                              style={{width:24,height:26,display:"flex",alignItems:"center",justifyContent:"center",color:"#5b6678",cursor:"grab"}}>
-                              <Icon paths={["M9 6h.01","M9 12h.01","M9 18h.01","M15 6h.01","M15 12h.01","M15 18h.01"]} size={15} sw={2.6} />
-                            </div>
-                            {([
-                              [["M12 19V5","M6 11l6-6 6 6"],()=>moveBlock(b.id,-1),"Move up"],
-                              [["M12 5v14","M6 13l6 6 6-6"],()=>moveBlock(b.id,1),"Move down"],
-                              [["M9 9h11v11H9z","M5 15V5h10"],()=>duplicateBlock(b.id),"Duplicate"],
-                              [["M4 7h16","M6 7l1 13h10l1-13","M9 7V4h6v3"],()=>removeBlock(b.id),"Delete",true],
-                            ] as [string[],()=>void,string,boolean?][]).map(([paths,fn,title,danger])=>(
-                              <button key={title} onClick={e=>{e.stopPropagation();fn();}} title={title}
-                                style={{width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",color:danger?"#f87171":"#cbd2dc",borderRadius:6,cursor:"pointer"}}
-                                onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.08)")}
-                                onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
-                                <Icon paths={paths} size={15} />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {/* Insert zone after each block */}
-                      {!preview && (
-                        <InsertZone idx={i+1} dragInsert={dragInsert} hoverInsert={hoverInsert}
-                          onHover={()=>setHoverInsert(i+1)} onLeave={()=>setHoverInsert(h=>h===i+1?null:h)}
-                          onDragOver={()=>setDragInsert(i+1)}
-                          onClick={()=>insertAt(i+1,"body-text")} />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                <BlockTree blocks={blocks} ctx={blockCtx} />
               </div>
             </div>
           </div>
@@ -929,11 +515,15 @@ export default function BuilderPage() {
               page={page}
               onDeselect={()=>setSelectedId(null)}
               onSetProps={setProps}
+              onSetLayout={setLayout}
               onSetPage={setPageField}
               onCommitItem={commitItem}
               onAddItem={addItem}
               onRemoveItem={removeItem}
+              onColumnPreset={applyColumnPreset}
               onSave={()=>save()}
+              funnelId={funnelId}
+              videoBlocks={videoBlocks}
             />
           </aside>
         )}
@@ -947,30 +537,156 @@ export default function BuilderPage() {
         </div>
       )}
     </div>
+    <DragOverlay>
+      {activeDrag && (
+        <div style={{padding:"8px 14px",background:"#161c28",border:`1px solid ${AC}88`,borderRadius:8,color:"#eaeff6",fontSize:12.5,fontWeight:600,boxShadow:"0 10px 30px -8px rgba(0,0,0,.7)"}}>
+          {activeDrag.label}
+        </div>
+      )}
+    </DragOverlay>
+    </DndContext>
   );
 }
 
-// ── Insert Zone component ─────────────────────────────────────────────────────
+// ── Palette swatch (dnd-kit draggable) ────────────────────────────────────────
 
-function InsertZone({ idx, dragInsert, hoverInsert, onHover, onLeave, onDragOver, onClick }:
-  { idx:number; dragInsert:number|null; hoverInsert:number|null;
-    onHover:()=>void; onLeave:()=>void; onDragOver:()=>void; onClick:()=>void }) {
-  const active = dragInsert===idx;
-  const hov    = hoverInsert===idx;
-  const AC = "#f97316";
+function PaletteSwatch({ type, onClick }: { type: BlockType; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:${type}`,
+    data: { kind: "new", type },
+  });
   return (
     <div
-      onMouseEnter={onHover} onMouseLeave={onLeave}
-      onDragOver={e=>{e.preventDefault();onDragOver();}}
-      onClick={e=>{e.stopPropagation();onClick();}}
-      style={{position:"relative",height:active?20:13,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}
-    >
-      {active && <div style={{position:"absolute",left:14,right:14,height:2.5,background:AC,borderRadius:3,boxShadow:`0 0 10px ${AC}`}} />}
-      {(hov||active) && (
-        <div style={{position:"absolute",width:22,height:22,borderRadius:999,background:AC,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 10px ${AC}88`,zIndex:10}}>
-          <Icon paths={["M12 5v14","M5 12h14"]} size={13} sw={2.6} />
+      ref={setNodeRef} {...listeners} {...attributes}
+      onClick={onClick}
+      onMouseEnter={()=>setHover(true)}
+      onMouseLeave={()=>setHover(false)}
+      title="Click to add or drag to position"
+      style={{
+        display:"flex",flexDirection:"column",alignItems:"center",gap:7,padding:"13px 6px",
+        background: hover ? `${AC}14` : "rgba(255,255,255,0.025)",
+        border:`1px solid ${hover ? `${AC}99` : "rgba(255,255,255,0.06)"}`,
+        borderRadius:10,cursor:"grab",transition:"all .12s",opacity:isDragging?0.4:1,
+      }}>
+      <div style={{color:"#aeb6c2"}}><BlockIcon type={type} size={19} /></div>
+      <span style={{fontSize:11,color:"#9aa4b2",fontWeight:500,textAlign:"center",lineHeight:1.2}}>{LABELS[type]}</span>
+    </div>
+  );
+}
+
+// ── Image upload field (Supabase Storage) ──────────────────────────────────────
+
+function ImageUploadField({ value, onChange, funnelId }: { value?: string; onChange: (url: string) => void; funnelId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) { setError("Unsupported file type"); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("File exceeds 5MB"); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("funnel_id", funnelId);
+      const res = await fetch("/api/admin/funnels/media/upload", { method: "POST", body: fd });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error || "Upload failed");
+      onChange(data.url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const smallBtn: React.CSSProperties = { padding:"4px 9px",background:"rgba(10,14,22,0.85)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:6,color:"#eaeff6",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit" };
+
+  return (
+    <div>
+      {value ? (
+        <div style={{ position:"relative", borderRadius:8, overflow:"hidden", border:"1px solid rgba(255,255,255,0.09)" }}>
+          <img src={value} alt="" style={{ width:"100%", height:110, objectFit:"cover", display:"block" }} />
+          <div style={{ position:"absolute", top:6, right:6, display:"flex", gap:6 }}>
+            <button onClick={()=>inputRef.current?.click()} style={smallBtn} disabled={uploading}>{uploading?"…":"Replace"}</button>
+            <button onClick={()=>onChange("")} style={smallBtn}>Remove</button>
+          </div>
         </div>
+      ) : (
+        <button onClick={()=>inputRef.current?.click()} disabled={uploading}
+          style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"22px 10px", background:"rgba(255,255,255,0.025)", border:"1px dashed rgba(255,255,255,0.18)", borderRadius:8, color:"#9aa4b2", fontSize:12.5, cursor:uploading?"default":"pointer", fontFamily:"inherit" }}>
+          {uploading ? "Uploading…" : "Click to upload image"}
+        </button>
       )}
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display:"none" }}
+        onChange={e=>{ const f=e.target.files?.[0]; if (f) handleFile(f); e.target.value=""; }} />
+      {error && <p style={{ fontSize:11, color:"#f87171", marginTop:6 }}>{error}</p>}
+    </div>
+  );
+}
+
+// ── Video upload field (direct browser → Supabase Storage, bypasses our API
+// route since a real video file would exceed Vercel's function body/duration
+// limits if proxied like ImageUploadField above) ───────────────────────────
+
+const VIDEO_MIME = ["video/mp4", "video/webm"];
+const VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+
+function VideoUploadField({ value, onChange, funnelId }: { value?: string; onChange: (url: string) => void; funnelId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    if (!VIDEO_MIME.includes(file.type)) { setError("Unsupported file type — use MP4 or WebM"); return; }
+    if (file.size > VIDEO_MAX_BYTES) { setError("File exceeds 500MB"); return; }
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-");
+      const path = `${funnelId}/video-${Date.now()}-${safeName}`;
+      const { error: uploadErr } = await supabase.storage.from("funnel-media").upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadErr) throw new Error(uploadErr.message);
+      const { data: pub } = supabase.storage.from("funnel-media").getPublicUrl(path);
+      onChange(pub.publicUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const smallBtn: React.CSSProperties = { padding:"4px 9px",background:"rgba(10,14,22,0.85)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:6,color:"#eaeff6",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit" };
+  const isPlayable = Boolean(value) && !/youtu\.?be/.test(value!);
+
+  return (
+    <div>
+      {value ? (
+        <div style={{ position:"relative", borderRadius:8, overflow:"hidden", border:"1px solid rgba(255,255,255,0.09)", background:"#000" }}>
+          {isPlayable ? (
+            <video src={value} controls style={{ width:"100%", height:110, objectFit:"cover", display:"block" }} />
+          ) : (
+            <div style={{ height:110, display:"flex", alignItems:"center", justifyContent:"center", color:"#5b6678", fontSize:11.5, padding:"0 14px", textAlign:"center" }}>
+              External video URL set
+            </div>
+          )}
+          <div style={{ position:"absolute", top:6, right:6, display:"flex", gap:6 }}>
+            <button onClick={()=>inputRef.current?.click()} style={smallBtn} disabled={uploading}>{uploading?"…":"Replace"}</button>
+            <button onClick={()=>onChange("")} style={smallBtn}>Remove</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={()=>inputRef.current?.click()} disabled={uploading}
+          style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"22px 10px", background:"rgba(255,255,255,0.025)", border:"1px dashed rgba(255,255,255,0.18)", borderRadius:8, color:"#9aa4b2", fontSize:12.5, cursor:uploading?"default":"pointer", fontFamily:"inherit" }}>
+          {uploading ? "Uploading…" : "Click to upload video (MP4/WebM, up to 500MB)"}
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="video/mp4,video/webm" style={{ display:"none" }}
+        onChange={e=>{ const f=e.target.files?.[0]; if (f) handleFile(f); e.target.value=""; }} />
+      {error && <p style={{ fontSize:11, color:"#f87171", marginTop:6 }}>{error}</p>}
     </div>
   );
 }
@@ -978,18 +694,20 @@ function InsertZone({ idx, dragInsert, hoverInsert, onHover, onLeave, onDragOver
 // ── Right Panel ───────────────────────────────────────────────────────────────
 
 interface RPProps {
-  selectedBlock: Block|null; page: PageData;
+  selectedBlock: Block|null; page: PageData; funnelId: string;
   onDeselect: ()=>void;
   onSetProps: (id:string, patch:Record<string,unknown>)=>void;
+  onSetLayout: (id:string, patch:Record<string,unknown>)=>void;
   onSetPage: (patch:Partial<PageData>)=>void;
   onCommitItem: (id:string, idx:number, field:string|null, val:string)=>void;
   onAddItem: (id:string, item:unknown)=>void;
   onRemoveItem: (id:string, idx:number)=>void;
+  onColumnPreset: (rowId:string, widths:number[])=>void;
   onSave: ()=>void;
+  videoBlocks: { id:string; label:string }[];
 }
 
-function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, onCommitItem, onAddItem, onRemoveItem, onSave }: RPProps) {
-  const AC = "#f97316";
+function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks }: RPProps) {
   const IS: React.CSSProperties = { width:"100%",background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:"8px 10px",color:"#e7ecf3",fontSize:13,fontFamily:"inherit" };
 
   function Field({ label, children }: { label:string; children:React.ReactNode }) {
@@ -1041,24 +759,42 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
       </div>
     );
   }
-  function numCtl(key:string) {
+  function numCtl(key:string, opts?: { min?:number; max?:number; default?:number; suffix?:string }) {
     if(!b) return null;
-    const val=(b.props[key] as number)??48;
+    const min=opts?.min??8, max=opts?.max??160, def=opts?.default??48, suffix=opts?.suffix??"px";
+    const val=(b.props[key] as number)??def;
     return (
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <input type="range" min={8} max={160} value={val} onChange={e=>onSetProps(b.id,{[key]:+e.target.value})} style={{flex:1,accentColor:AC}} />
-        <span style={{fontSize:12,color:"#9aa4b2",fontFamily:"monospace",minWidth:46,textAlign:"right"}}>{val}px</span>
+        <input type="range" min={min} max={max} value={val} onChange={e=>onSetProps(b.id,{[key]:+e.target.value})} style={{flex:1,accentColor:AC}} />
+        <span style={{fontSize:12,color:"#9aa4b2",fontFamily:"monospace",minWidth:46,textAlign:"right"}}>{val}{suffix}</span>
       </div>
     );
   }
-  function segCtl(key:string, opts:[string,string][]) {
+  function ctaSizeCtl() {
     if(!b) return null;
-    const cur=(b.props[key] as string)??opts[0][0];
+    const opts: ["sm"|"md"|"lg",string][] = [["sm","S"],["md","M"],["lg","L"]];
+    const cur=(b.props.size as string)??"md";
     return (
       <div style={{display:"flex",gap:4,background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:3}}>
         {opts.map(([v,l])=>(
-          <button key={v} onClick={()=>onSetProps(b.id,{[key]:v})}
+          <button key={v} onClick={()=>onSetProps(b.id,{size:v})}
             style={{flex:1,padding:"6px 4px",border:"none",borderRadius:6,background:cur===v?AC:"transparent",color:cur===v?"#fff":"#7c8aa0",cursor:"pointer",fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  function headlineSizeCtl() {
+    if(!b) return null;
+    const remOpts: [number,string][] = [[1.5,"S"],[1.875,"M"],[2.25,"L"],[3,"XL"]];
+    const cur = b.props.size as { value:number; unit:string } | undefined;
+    const curVal = cur?.value ?? 2.25;
+    return (
+      <div style={{display:"flex",gap:4,background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:3}}>
+        {remOpts.map(([v,l])=>(
+          <button key={l} onClick={()=>onSetProps(b.id,{size:{value:v,unit:"rem"}})}
+            style={{flex:1,padding:"6px 4px",border:"none",borderRadius:6,background:curVal===v?AC:"transparent",color:curVal===v?"#fff":"#7c8aa0",cursor:"pointer",fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
             {l}
           </button>
         ))}
@@ -1076,6 +812,97 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
         </span>
         <span style={{fontSize:12.5,color:"#cbd2dc"}}>{on?"On":"Off"}</span>
       </button>
+    );
+  }
+  function revealCtl() {
+    if(!b) return null;
+    const sourceId = b.layout?.reveal_source_block_id ?? "";
+    const seconds = b.layout?.reveal_after_seconds ?? 300;
+    return (
+      <div>
+        <select style={IS} value={sourceId} onChange={e=>onSetLayout(b.id,{ reveal_source_block_id: e.target.value || undefined, reveal_after_seconds: e.target.value ? seconds : undefined })}>
+          <option value="">Always visible</option>
+          {videoBlocks.map(v=>(<option key={v.id} value={v.id}>{v.label}</option>))}
+        </select>
+        {Boolean(sourceId) && (
+          <div style={{marginTop:8,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:"#7c8aa0",whiteSpace:"nowrap"}}>after</span>
+            <input type="number" min={0} value={seconds} onChange={e=>onSetLayout(b.id,{reveal_after_seconds:+e.target.value||0})} style={{...IS,width:80}} />
+            <span style={{fontSize:11,color:"#7c8aa0",whiteSpace:"nowrap"}}>seconds</span>
+          </div>
+        )}
+        {videoBlocks.length===0 && <p style={{fontSize:10.5,color:"#5b6678",marginTop:6,lineHeight:1.4}}>Add a video block to the page to enable a timed reveal.</p>}
+      </div>
+    );
+  }
+  function layoutToggleCtl(key: "boxed") {
+    if(!b) return null;
+    const on = Boolean(b.layout?.[key]);
+    return (
+      <button onClick={()=>onSetLayout(b.id,{[key]:!on})}
+        style={{display:"flex",alignItems:"center",gap:8,border:"none",background:"transparent",cursor:"pointer",padding:0,fontFamily:"inherit"}}>
+        <span style={{width:34,height:19,borderRadius:999,background:on?AC:"#2a3142",position:"relative",transition:"background .15s",flexShrink:0}}>
+          <span style={{position:"absolute",top:2,left:on?17:2,width:15,height:15,borderRadius:999,background:"#fff",transition:"left .15s"}} />
+        </span>
+        <span style={{fontSize:12.5,color:"#cbd2dc"}}>{on?"Boxed":"Full width"}</span>
+      </button>
+    );
+  }
+  function layoutColorCtl(key:"border_color"|"bg_overlay_color", fallback:string) {
+    if(!b) return null;
+    const v=(b.layout?.[key] as string)??fallback;
+    return (
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{position:"relative",width:34,height:34,borderRadius:8,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:v}}>
+          <input type="color" value={v} onChange={e=>onSetLayout(b.id,{[key]:e.target.value})}
+            style={{position:"absolute",inset:-4,width:42,height:42,border:"none",padding:0,cursor:"pointer",background:"transparent"}} />
+        </div>
+        <input value={v} onChange={e=>onSetLayout(b.id,{[key]:e.target.value})} style={{...IS,fontFamily:"monospace",fontSize:12}} />
+      </div>
+    );
+  }
+  function layoutRangeRow(label:string, val:number, onChange:(v:number)=>void, min=0, max=100, fmt=(v:number)=>`${v}px`) {
+    return (
+      <div style={{marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+          <span style={{fontSize:10.5,color:"#7c8aa0"}}>{label}</span>
+          <span style={{fontSize:11,color:"#9aa4b2",fontFamily:"monospace"}}>{fmt(val)}</span>
+        </div>
+        <input type="range" min={min} max={max} value={val} onChange={e=>onChange(+e.target.value)} style={{width:"100%",accentColor:AC}} />
+      </div>
+    );
+  }
+  function paddingCtl() {
+    if(!b) return null;
+    const pt=b.layout?.padding_top?.value??0;
+    const pb=b.layout?.padding_bottom?.value??0;
+    return (
+      <div>
+        {layoutRangeRow("Top", pt, v=>onSetLayout(b.id,{padding_top:{value:v,unit:"px"}}), 0, 200)}
+        {layoutRangeRow("Bottom", pb, v=>onSetLayout(b.id,{padding_bottom:{value:v,unit:"px"}}), 0, 200)}
+      </div>
+    );
+  }
+  function borderCtl() {
+    if(!b) return null;
+    const bw=b.layout?.border_width??0;
+    const br=b.layout?.border_radius??0;
+    return (
+      <div>
+        <Field label="Color">{layoutColorCtl("border_color","#2a3142")}</Field>
+        {layoutRangeRow("Width", bw, v=>onSetLayout(b.id,{border_width:v}), 0, 12)}
+        {layoutRangeRow("Radius", br, v=>onSetLayout(b.id,{border_radius:v}), 0, 40)}
+      </div>
+    );
+  }
+  function bgOverlayCtl() {
+    if(!b) return null;
+    const op=b.layout?.bg_overlay_opacity??0.4;
+    return (
+      <div>
+        <Field label="Overlay color">{layoutColorCtl("bg_overlay_color","#000000")}</Field>
+        {layoutRangeRow("Overlay opacity", op, v=>onSetLayout(b.id,{bg_overlay_opacity:v}), 0, 1, v=>`${Math.round(v*100)}%`)}
+      </div>
     );
   }
   function fieldsCtl() {
@@ -1125,14 +952,14 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
   function itemsCtl(kind:"stats"|"faq"|"list"|"pricing") {
     if(!b) return null;
     const items=(b.props.items as unknown[])??[];
-    const blank=kind==="stats"?{value:"0",label:"Label"}:kind==="faq"?{q:"New question?",a:"Answer."}:"New item";
+    const blank=kind==="stats"?{value:"0",label:"Label"}:kind==="faq"?{q:"New question?",a:"Answer."}:{text:"New item"};
     return (
       <div>
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
           {items.map((it,idx)=>(
             <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",background:"#0a0e16",border:"1px solid rgba(255,255,255,0.07)",borderRadius:8}}>
               <span style={{flex:1,fontSize:12,color:"#9aa4b2",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                {kind==="stats"?`${(it as {value:string;label:string}).value} · ${(it as {value:string;label:string}).label}`:kind==="faq"?(it as {q:string}).q:(it as string)}
+                {kind==="stats"?`${(it as {value:string;label:string}).value} · ${(it as {value:string;label:string}).label}`:kind==="faq"?(it as {q:string}).q:(it as {text:string}).text}
               </span>
               <button onClick={()=>onRemoveItem(b.id,idx)}
                 style={{border:"none",background:"transparent",color:"#5b6678",cursor:"pointer",padding:2}}>
@@ -1150,37 +977,80 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
     );
   }
 
+  function columnPresetCtl() {
+    if(!b) return null;
+    const current = (b.children ?? []).map(c => c.layout?.width?.value);
+    return (
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {COLUMN_PRESETS.map(preset=>{
+          const active = current.length===preset.widths.length && current.every((w,i)=>Math.abs((w??0)-preset.widths[i])<0.5);
+          return (
+            <button key={preset.label} onClick={()=>onColumnPreset(b.id,preset.widths)}
+              style={{padding:"8px 6px",border:`1px solid ${active?AC:"rgba(255,255,255,0.09)"}`,borderRadius:8,background:active?`${AC}1f`:"#0a0e16",color:active?"#fcd9b6":"#9aa4b2",cursor:"pointer",fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   function BlockSettings() {
     if(!b) return null;
     const t=b.type;
     const hasStyle=t==="headline"||t==="body-text"||t==="countdown-timer"||t==="cta-button"||b.props.bg_color!==undefined;
     const evergreen=Boolean(b.props.evergreen);
+    const noContent = ["section","row","column","divider"].includes(t);
     return (
       <div>
+        {t==="row" && (
+          <>
+            <SL text="Columns" />
+            {columnPresetCtl()}
+            <div style={{height:18}} />
+          </>
+        )}
         <SL text="Content" />
-        {t==="hero"&&<><Field label="Eyebrow">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Button label">{textCtl("cta_text")}</Field><Field label="Button URL">{textCtl("cta_url")}</Field></>}
+        {t==="hero"&&<><Field label="Eyebrow">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field></>}
         {t==="countdown-timer"&&<><Field label="Label">{textCtl("label")}</Field><Field label="Evergreen (per-visitor timer)">{toggleCtl("evergreen")}</Field>{evergreen?<Field label="Duration (minutes)">{numCtl("duration_minutes")}</Field>:<Field label="Target date & time"><input type="datetime-local" value={(b.props.target_date as string)??""} onChange={e=>onSetProps(b.id,{target_date:e.target.value})} style={IS} /></Field>}</>}
-        {t==="video"&&<><Field label="Video URL (YouTube)">{textCtl("url")}</Field><Field label="Caption">{textCtl("caption")}</Field></>}
+        {t==="video"&&<><Field label="Video"><VideoUploadField value={b.props.url as string} onChange={url=>onSetProps(b.id,{url})} funnelId={funnelId} /></Field><Field label="Or paste a video / YouTube URL">{textCtl("url")}</Field><Field label="Caption">{textCtl("caption")}</Field></>}
         {t==="optin-form"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Form fields">{fieldsCtl()}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Fine print">{textCtl("fine_print")}</Field><Field label="Redirect URL after submit (optional)">{textCtl("redirect_url")}</Field></>}
-        {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("author")}</Field><Field label="Role">{textCtl("role")}</Field></>}
+        {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("name")}</Field><Field label="Role">{textCtl("role")}</Field><Field label="Video review (optional)"><VideoUploadField value={b.props.video_url as string} onChange={url=>onSetProps(b.id,{video_url:url})} funnelId={funnelId} /></Field>{Boolean(b.props.video_url)&&<Field label="Video caption">{textCtl("video_caption")}</Field>}</>}
         {(t==="headline"||t==="body-text")&&<Field label="Text">{areaCtl("text")}</Field>}
-        {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field></>}
-        {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("cta_text")}</Field><Field label="Button URL">{textCtl("cta_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
+        {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field><Field label="Reveal after video reaches…">{revealCtl()}</Field></>}
+        {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
         {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
         {t==="faq-accordion"&&<Field label="Questions">{itemsCtl("faq")}</Field>}
         {t==="list"&&<Field label="Items">{itemsCtl("list")}</Field>}
         {t==="spacer"&&<Field label="Height">{numCtl("height")}</Field>}
-        {t==="image"&&<><Field label="Image URL">{textCtl("src")}</Field><Field label="Alt text">{textCtl("alt")}</Field></>}
-        {t==="two-column"&&<><Field label="Left column text">{areaCtl("left")}</Field><Field label="Right column text">{areaCtl("right")}</Field></>}
+        {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field><Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:0})}</Field></>}
         {t==="custom-html"&&<Field label="HTML"><textarea value={(b.props.html as string)??""}  onChange={e=>onSetProps(b.id,{html:e.target.value})} rows={6} style={{...IS,resize:"vertical" as const,fontFamily:"monospace"}} /></Field>}
-        {["section","divider"].includes(t)&&<p style={{fontSize:12,color:"#7c8aa0",lineHeight:1.5,marginBottom:8}}>This block has no text content. Adjust its style below.</p>}
+        {noContent&&<p style={{fontSize:12,color:"#7c8aa0",lineHeight:1.5,marginBottom:8}}>This block has no text content. Adjust its style below.</p>}
+        {(t==="section"||t==="row"||t==="column")&&(
+          <>
+            <div style={{height:18}} />
+            <SL text="Layout" />
+            {(t==="section"||t==="row")&&<Field label="Width">{layoutToggleCtl("boxed")}</Field>}
+            <Field label="Padding">{paddingCtl()}</Field>
+            {(t==="section"||t==="row")&&(
+              <>
+                <Field label="Background image"><ImageUploadField value={b.layout?.bg_image} onChange={url=>onSetLayout(b.id,{bg_image:url||undefined})} funnelId={funnelId} /></Field>
+                {Boolean(b.layout?.bg_image)&&bgOverlayCtl()}
+              </>
+            )}
+            <div style={{height:6}} />
+            <SL text="Border" />
+            {borderCtl()}
+          </>
+        )}
         {hasStyle&&(
           <>
             <div style={{height:18}} />
             <SL text="Style" />
-            {t==="headline"&&<Field label="Size">{segCtl("size",[["2xl","S"],["3xl","M"],["4xl","L"],["5xl","XL"]])}</Field>}
+            {t==="headline"&&<Field label="Size">{headlineSizeCtl()}</Field>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
-            {(t==="countdown-timer"||t==="cta-button")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
+            {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{toggleCtl("full_width")}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
+            {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="list")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
             {b.props.bg_color!==undefined&&<Field label="Background">{colorCtl("bg_color")}</Field>}
           </>
         )}
@@ -1190,6 +1060,7 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
 
   function PageSettings() {
     const s=page.settings??{};
+    const layout=(s.layout as { width_mode?:"boxed"|"full"; max_width?:number })??{};
     const pInp=(val:string,onChange:(v:string)=>void)=>(
       <input value={val} onChange={e=>onChange(e.target.value)} style={IS} />
     );
@@ -1206,6 +1077,21 @@ function RightPanel({ selectedBlock:b, page, onDeselect, onSetProps, onSetPage, 
             <span style={{fontSize:12,color:"#5b6678",fontFamily:"monospace",background:"#080b12",border:"1px solid rgba(255,255,255,0.09)",borderRight:"none",borderRadius:"8px 0 0 8px",padding:"8px 8px"}}>/</span>
             <input value={page.slug} onChange={e=>onSetPage({slug:e.target.value})} style={{...IS,borderRadius:"0 8px 8px 0",fontFamily:"monospace",fontSize:12}} />
           </div>
+        </Field>
+        <div style={{height:18}} />
+        <SL text="Layout" />
+        <Field label="Page width">
+          <div style={{display:"flex",gap:4,background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:3}}>
+            {(["boxed","full"] as const).map(m=>(
+              <button key={m} onClick={()=>onSetPage({settings:{...s,layout:{...layout,width_mode:m}}})}
+                style={{flex:1,padding:"6px 4px",border:"none",borderRadius:6,background:(layout.width_mode??"boxed")===m?AC:"transparent",color:(layout.width_mode??"boxed")===m?"#fff":"#7c8aa0",cursor:"pointer",fontSize:11.5,fontWeight:600,fontFamily:"inherit",textTransform:"capitalize"}}>
+                {m}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Max width (px)">
+          <input type="number" value={layout.max_width??1100} onChange={e=>onSetPage({settings:{...s,layout:{...layout,max_width:+e.target.value}}})} style={IS} />
         </Field>
         <div style={{height:18}} />
         <SL text="Style" />

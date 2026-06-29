@@ -52,5 +52,15 @@ export async function POST(req: NextRequest) {
   // Create default workspace settings
   await db.from("workspace_settings").insert({ workspace_id: workspace.id });
 
+  // Link any anonymous CRM contact (e.g. a funnel opt-in lead) created under
+  // this same email before the person had an account, so their journey shows
+  // up as one contact timeline instead of two disconnected records.
+  if (user.email) {
+    await db.from("crm_contacts")
+      .update({ user_id: user.id, workspace_id: workspace.id })
+      .ilike("email", user.email)
+      .is("user_id", null);
+  }
+
   return NextResponse.json(workspace, { status: 201 });
 }

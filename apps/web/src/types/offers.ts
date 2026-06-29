@@ -1,6 +1,6 @@
 // ─── Grants — discriminated union, the core building block of an offer ────────
 
-export interface PlanGrant      { id: string; type: "plan";      tier: "starter" | "growth" | "scale"; months: number }
+export interface PlanGrant      { id: string; type: "plan";      tier: string; months: number }
 export interface InboxGrant     { id: string; type: "inbox";     qty: number; freeMonths: number; after: "bill" | "free" | "cancel" }
 export interface CreditsGrant   { id: string; type: "credits";   qty: number; recurring: boolean }
 export interface CommunityGrant { id: string; type: "community"; inviteUrl: string; label: string }

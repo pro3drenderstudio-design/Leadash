@@ -1,12 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
+import { Block } from "@/lib/funnel-blocks/types";
 import FunnelPageRenderer from "./FunnelPageRenderer";
-
-interface Block {
-  id:    string;
-  type:  string;
-  props: Record<string, unknown>;
-}
 
 interface PublicPageProps {
   params: Promise<{ funnelSlug: string; pageSlug: string }>;

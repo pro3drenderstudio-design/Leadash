@@ -180,6 +180,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     }
   }
 
+  // Link any anonymous CRM contact (e.g. a funnel opt-in lead) created under
+  // this same email before the buyer had an account/workspace, so their
+  // journey (opt-in → challenge → purchase) shows up as one contact timeline.
+  if (workspaceId && userId) {
+    await db.from("crm_contacts")
+      .update({ user_id: userId, workspace_id: workspaceId })
+      .ilike("email", buyer.email!)
+      .is("user_id", null);
+  }
+
   // ── Currency for display purposes only — actual charge is always NGN/kobo ──
   const currency: "NGN" | "USD" = offer.currency_mode === "usd_only" ? "USD" : "NGN";
 

@@ -59,6 +59,8 @@ const TRIGGER_LABELS: Record<string, string> = {
   "user.bundle_purchased":       "Bundle purchased",
   "user.bundle_renewed":         "Bundle renewed",
   "user.bundle_expired":         "Bundle expired",
+  "challenge.daily_reminder":    "Daily challenge reminder",
+  "challenge.day_missed":        "Challenge day missed",
   "trigger_funnel_optin":        "Funnel Optin",
   "trigger_funnel_purchase":     "Purchase Completed",
   "trigger_billing_payment_failed": "Payment Failed",

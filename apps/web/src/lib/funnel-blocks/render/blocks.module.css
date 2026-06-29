@@ -1,0 +1,11 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .row > * {
+    flex-basis: 100% !important;
+    width: 100% !important;
+  }
+}

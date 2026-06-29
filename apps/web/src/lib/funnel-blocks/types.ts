@@ -1,0 +1,49 @@
+export type BlockType =
+  | "row" | "column"
+  | "section" | "spacer" | "divider"
+  | "headline" | "body-text" | "list"
+  | "image" | "video"
+  | "hero" | "countdown-timer" | "testimonial" | "pricing-card" | "faq-accordion" | "stats-bar"
+  | "cta-button" | "optin-form" | "custom-html";
+
+export type SizeUnit = "px" | "rem" | "%";
+
+export interface SizeValue {
+  value: number;
+  unit: SizeUnit;
+}
+
+export interface BlockLayout {
+  width?: SizeValue;
+  max_width?: SizeValue | "none";
+  boxed?: boolean;
+  padding_top?: { value: number; unit: "px" | "rem" };
+  padding_bottom?: { value: number; unit: "px" | "rem" };
+  bg_image?: string;
+  bg_overlay_color?: string;
+  bg_overlay_opacity?: number;
+  border_color?: string;
+  border_width?: number;
+  border_radius?: number;
+  reveal_source_block_id?: string;
+  reveal_after_seconds?: number;
+}
+
+export interface Block {
+  id: string;
+  type: BlockType;
+  props: Record<string, unknown>;
+  layout?: BlockLayout;
+  children?: Block[];
+}
+
+export interface PageLayoutSettings {
+  width_mode?: "boxed" | "full";
+  max_width?: number;
+}
+
+export const CONTAINER_TYPES: BlockType[] = ["row", "column", "section"];
+
+export function isContainerType(type: BlockType): boolean {
+  return CONTAINER_TYPES.includes(type);
+}

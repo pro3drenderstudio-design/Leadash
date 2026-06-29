@@ -21,6 +21,7 @@ interface ChallengeTask {
   is_published: boolean;
   unlocked: boolean;
   completed: boolean;
+  lesson_id?: string | null;
   // Optional extended fields from API
   description?: string | null;
   live_session?: {
@@ -290,7 +291,7 @@ function LiveCard({ task }: { task: ChallengeTask }) {
 
 // ─── Task card ────────────────────────────────────────────────────────────────
 
-function TaskCard({ task, done, onComplete }: { task: ChallengeTask; done: boolean; onComplete: () => void }) {
+function TaskCard({ task, done, onComplete, productSlug }: { task: ChallengeTask; done: boolean; onComplete: () => void; productSlug: string }) {
   const color = taskColor(task.task_type);
   const icon = TASK_ICONS[task.task_type] ?? "●";
 
@@ -314,12 +315,17 @@ function TaskCard({ task, done, onComplete }: { task: ChallengeTask; done: boole
 
       {/* Type-specific body */}
       {task.task_type === "lesson" && (
-        <div style={{ background: "#07070A", borderRadius: "var(--app-radius)", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, position: "relative", overflow: "hidden" }}>
-          <div style={{ width: 52, height: 52, borderRadius: 999, background: color + "22", border: `2px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer" }}>▶</div>
-          {task.video_playback_id && (
-            <p style={{ position: "absolute", bottom: 8, right: 10, fontSize: 10, color: "rgba(255,255,255,0.3)" }}>Video available</p>
-          )}
-        </div>
+        task.lesson_id ? (
+          <Link href={`/academy/${productSlug}/learn/${task.lesson_id}`}
+            style={{ background: "#07070A", borderRadius: "var(--app-radius)", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, position: "relative", overflow: "hidden", textDecoration: "none" }}>
+            <div style={{ width: 52, height: 52, borderRadius: 999, background: color + "22", border: `2px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>▶</div>
+            <p style={{ position: "absolute", bottom: 8, right: 10, fontSize: 10, color: "rgba(255,255,255,0.4)" }}>Watch lesson →</p>
+          </Link>
+        ) : (
+          <div style={{ background: "#07070A", borderRadius: "var(--app-radius)", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, position: "relative", overflow: "hidden" }}>
+            <div style={{ width: 52, height: 52, borderRadius: 999, background: color + "22", border: `2px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>▶</div>
+          </div>
+        )
       )}
 
       {task.task_type === "proof" && (
@@ -484,7 +490,7 @@ export default function ChallengeDayPage() {
           </div>
         ) : (
           dayTasks.map(task => (
-            <TaskCard key={task.id} task={task} done={taskDone[task.id] ?? false} onComplete={() => markTaskDone(task.id)} />
+            <TaskCard key={task.id} task={task} done={taskDone[task.id] ?? false} onComplete={() => markTaskDone(task.id)} productSlug={slug} />
           ))
         )}
 
