@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#07070A">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect x="250" y="170" width="700" height="120" rx="16" fill="#0E0E13" stroke="#ffffff14"/>
+    <rect x="280" y="210" width="44" height="44" rx="10" fill="#F9731622" stroke="#F9731640"/>
+    <rect x="345" y="218" width="240" height="14" rx="7" fill="#ffffff22"/>
+    <rect x="345" y="244" width="150" height="12" rx="6" fill="#ffffff12"/>
+    <rect x="820" y="212" width="100" height="38" rx="9" fill="#F97316"/>
+    <rect x="250" y="320" width="700" height="120" rx="16" fill="#0E0E13" stroke="#ffffff14"/>
+    <rect x="280" y="360" width="44" height="44" rx="10" fill="#60A5FA22" stroke="#60A5FA40"/>
+    <rect x="345" y="368" width="240" height="14" rx="7" fill="#ffffff22"/>
+    <rect x="345" y="394" width="150" height="12" rx="6" fill="#ffffff12"/>
+    <rect x="250" y="470" width="700" height="120" rx="16" fill="#0E0E13" stroke="#ffffff14"/>
+    <rect x="280" y="510" width="44" height="44" rx="10" fill="#34D39922" stroke="#34D39940"/>
+    <rect x="345" y="518" width="240" height="14" rx="7" fill="#ffffff22"/>
+    <rect x="345" y="544" width="150" height="12" rx="6" fill="#ffffff12"/>
+  </svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:'Geist','Segoe UI',system-ui,-apple-system,sans-serif;background:#07070A;color:#F5F5F7;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18);background-clip:padding-box}
+  ::-webkit-scrollbar-track{background:transparent}
+  [contenteditable]:focus{outline:none}
+  input,textarea,select{font-family:inherit}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100%;background:#07070A;color:#F5F5F7;overflow:hidden;font-family:'Geist','Segoe UI',system-ui,-apple-system,sans-serif">
+  {{ chrome }}
+  <div style="flex:1;min-height:0;overflow:auto;position:relative">
+    {{ body }}
+  </div>
+  {{ switcher }}
+  {{ toastEl }}
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#F97316&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;library&quot;,&quot;options&quot;:[&quot;library&quot;,&quot;builder&quot;,&quot;analytics&quot;,&quot;checkout&quot;,&quot;success&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  C = {
+    bg:'#07070A', elev:'#0E0E13', sunken:'#050507', card:'#0E0E13',
+    surf:'rgba(255,255,255,0.02)', surfStrong:'rgba(255,255,255,0.05)',
+    bd:'rgba(255,255,255,0.06)', bdStrong:'rgba(255,255,255,0.10)',
+    tx:'#F5F5F7', mut:'#9A9AA8', quiet:'#5B5B68', faint:'#2A2A33',
+    ac:'#F97316', acH:'#FB7E2A', acSoft:'rgba(249,115,22,0.12)', acLine:'rgba(249,115,22,0.30)',
+    ok:'#34D399', okSoft:'rgba(52,211,153,0.10)', warn:'#FBBF24', warnSoft:'rgba(251,191,36,0.10)',
+    danger:'#F87171', info:'#60A5FA', infoSoft:'rgba(96,165,250,0.10)', violet:'#A78BFA', pink:'#F472B6', cyan:'#22D3EE',
+  };
+  mono = "'Geist Mono', ui-monospace, monospace";
+
+  // ── grant registry ──
+  GRANTS = {
+    plan:{ label:'Leadash Plan', color:'#60A5FA', icon:['M3 13h2l2-8 3 16 3-10 2 4h4'] },
+    inbox:{ label:'Inbox Credits', color:'#F97316', icon:['M3 7l9 6 9-6','M3 7v10h18V7z'] },
+    credits:{ label:'Lead Credits', color:'#A78BFA', icon:['M12 2v20','M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'] },
+    community:{ label:'Community Access', color:'#34D399', icon:['M16 11a4 4 0 1 0-8 0','M2 21a7 7 0 0 1 14 0','M19 8v6','M22 11h-6'] },
+    academy:{ label:'Academy Product', color:'#F472B6', icon:['M22 10L12 5 2 10l10 5 10-5z','M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5'] },
+    ip:{ label:'Dedicated IP', color:'#22D3EE', icon:['M4 7h16v10H4z','M8 11h2','M8 14h6'] },
+    seats:{ label:'Team Seats', color:'#FBBF24', icon:['M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z','M2 20a7 7 0 0 1 14 0','M17 11a3 3 0 1 0-2-5','M19 20a7 7 0 0 0-4-6.3'] },
+    custom:{ label:'Custom Perk', color:'#9A9AA8', icon:['M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.5-.8z'] },
+  };
+
+  PLAN_TIERS = { free:'Free', starter:'Starter', growth:'Growth', scale:'Scale' };
+
+  // ── seed offers ──
+  OFFERS = [
+    { id:'bundle', name:'The $10k Academy Bundle', status:'active', price:250000, compareAt:450000, model:'one_time', cur:'NGN',
+      grants:[ {type:'plan',tier:'growth',months:12}, {type:'inbox',qty:20,freeMonths:12}, {type:'community',name:'Private WhatsApp Community'} ],
+      views:1840, sales:75, rev:18750000, cr:4.1, color:'#F97316' },
+    { id:'inboxes', name:'10 Inboxes — 3 Months Free', status:'active', price:10000, compareAt:25000, model:'one_time', cur:'NGN',
+      grants:[ {type:'inbox',qty:10,freeMonths:3} ], views:3200, sales:412, rev:4120000, cr:12.9, color:'#60A5FA' },
+    { id:'credits', name:'5,000 Lead Credits Top-up', status:'active', price:15000, compareAt:0, model:'one_time', cur:'NGN',
+      grants:[ {type:'credits',qty:5000} ], views:980, sales:143, rev:2145000, cr:14.6, color:'#A78BFA' },
+    { id:'optin', name:'Free Outreach Course Opt-in', status:'active', price:0, compareAt:0, model:'free', cur:'NGN',
+      grants:[ {type:'academy',name:'Free Outreach Course'} ], views:12400, sales:2990, rev:0, cr:24.1, color:'#34D399' },
+    { id:'challenge', name:'30-Day $0 → $2,500 Challenge', status:'active', price:10000, compareAt:25000, model:'one_time', cur:'NGN',
+      grants:[ {type:'academy',name:'30-Day Challenge'}, {type:'community',name:'Challenge cohort group'} ], views:1226, sales:221, rev:2210000, cr:18.0, color:'#F472B6' },
+    { id:'ip', name:'Dedicated IP Add-on', status:'draft', price:35000, compareAt:0, model:'recurring', interval:'monthly', cur:'NGN',
+      grants:[ {type:'ip',name:'Dedicated sending IP'} ], views:0, sales:0, rev:0, cr:0, color:'#22D3EE' },
+    { id:'scale', name:'Scale Plan — 7-Day Trial', status:'paused', price:120000, compareAt:0, model:'trial', trialDays:7, interval:'monthly', cur:'NGN',
+      grants:[ {type:'plan',tier:'scale',months:1}, {type:'seats',qty:5} ], views:540, sales:38, rev:4560000, cr:7.0, color:'#FBBF24' },
+  ];
+
+  BUILDER_TABS = [
+    ['grants','What\u2019s included',['M3 7l9-4 9 4-9 4z','M3 7v8l9 4 9-4V7']],
+    ['pricing','Pricing',['M12 2v20','M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6']],
+    ['checkout','Checkout page',['M4 5h16v14H4z','M4 9h16','M8 13h7','M8 16h4']],
+    ['upsells','Bumps & Upsells',['M5 12h14','M12 5v14','M3 3h2','M19 3h2']],
+    ['promo','Promotion',['M9 9h.01','M15 15h.01','M15 9l-6 6','M3 3h7l11 11-7 7L3 10z']],
+    ['sharing','Sharing & Funnel',['M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z','M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z','M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6z','M8.6 13.5l6.8 3.9','M15.4 6.6L8.6 10.5']],
+    ['settings','Settings',['M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z','M19 12a7 7 0 0 0-.15-1.5l2-1.5-2-3.5-2.3 1a7 7 0 0 0-2.6-1.5L13.5 2h-3l-.45 2.5a7 7 0 0 0-2.6 1.5l-2.3-1-2 3.5 2 1.5A7 7 0 0 0 3 12a7 7 0 0 0 .15 1.5l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 2.6 1.5L10.5 22h3l.45-2.5a7 7 0 0 0 2.6-1.5l2.3 1 2-3.5-2-1.5A7 7 0 0 0 19 12z']],
+  ];
+
+  ADMIN_SCREENS = [['library','Library'],['builder','Builder'],['analytics','Analytics']];
+  BUYER_SCREENS = [['checkout','Checkout'],['success','Confirmation']];
+
+  state = {
+    screen: this.props.startScreen || 'library',
+    builderTab: 'grants',
+    editingOffer: 'bundle',
+    // live checkout state
+    bumpAdded: false,
+    coCur: 'NGN',
+    purchased: false,
+    coupon: '',
+    couponApplied: false,
+    toast: null,
+  };
+  _toastClear=null;
+  ac(){ return this.props.accentColor || this.C.ac; } // accent
+  toast(m){ this.setState({toast:m}); if(this._toastClear) clearTimeout(this._toastClear); this._toastClear=setTimeout(()=>this.setState({toast:null}),2200); }
+  go(screen){ this.setState({screen}); }
+  ic(paths,size=16,sw=1.7){ return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'},(paths||[]).map((d,i)=>React.createElement('path',{key:i,d}))); }
+  offer(id){ return this.OFFERS.find(o=>o.id===(id||this.state.editingOffer)) || this.OFFERS[0]; }
+  fmtMoney(n,cur){ if(n===0) return cur==='USD'?'$0':'Free'; const usd=cur==='USD'; const v=usd?Math.round(n/1500):n; return (usd?'$':'\u20a6')+v.toLocaleString(); }
+  grantLine(g){ const G=this.GRANTS[g.type];
+    if(g.type==='plan') return (this.PLAN_TIERS[g.tier]||'Plan')+' plan \u00b7 '+g.months+' month'+(g.months>1?'s':'');
+    if(g.type==='inbox') return g.qty+' sending inboxes'+(g.freeMonths?' \u00b7 free for '+g.freeMonths+' months':'');
+    if(g.type==='credits') return g.qty.toLocaleString()+' lead credits';
+    if(g.type==='seats') return g.qty+' team seats';
+    return g.name||G.label; }
+
+  // ── shared primitives ──
+  chip(label,tone){ const C=this.C; const m={ ok:[C.ok,C.okSoft,'rgba(52,211,153,0.25)'], warn:[C.warn,C.warnSoft,'rgba(251,191,36,0.25)'], info:[C.ac,C.acSoft,C.acLine], plain:[C.mut,C.surf,C.bd], blue:[C.info,C.infoSoft,'rgba(96,165,250,0.25)'], danger:[C.danger,'rgba(248,113,113,0.1)','rgba(248,113,113,0.25)'] }; const [c,b,bd]=m[tone]||m.plain;
+    return React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',borderRadius:999,fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',color:c,background:b,border:'1px solid '+bd}}, label); }
+  statusChip(s){ return s==='active'?this.chip('Live','ok'):s==='draft'?this.chip('Draft','plain'):this.chip('Paused','warn'); }
+  card(children,style){ const C=this.C; return React.createElement('div',{style:{background:C.elev,border:'1px solid '+C.bd,borderRadius:12,...style}}, children); }
+  btn(label,{onClick,primary,ghost,icon,small,danger,full,disabled}={}){ const C=this.C,h=React.createElement;
+    const base={display:'inline-flex',alignItems:'center',justifyContent:'center',gap:7,fontFamily:'inherit',fontWeight:600,fontSize:small?12.5:13.5,padding:small?'7px 12px':'9px 16px',borderRadius:9,cursor:disabled?'not-allowed':'pointer',border:'1px solid transparent',transition:'all .15s',width:full?'100%':'auto',opacity:disabled?0.5:1};
+    let st; if(primary) st={...base,background:this.ac(),color:'#fff',boxShadow:'0 6px 16px -8px '+this.ac()};
+    else if(danger) st={...base,background:'transparent',border:'1px solid '+C.bdStrong,color:C.danger};
+    else if(ghost) st={...base,background:'transparent',color:C.mut};
+    else st={...base,background:C.surfStrong,border:'1px solid '+C.bdStrong,color:C.tx};
+    return h('button',{onClick:disabled?undefined:onClick,style:st}, icon?this.ic(icon,small?14:15,2):null, label); }
+  grantIcon(type,size=18,box=36){ const G=this.GRANTS[type]; const C=this.C; return React.createElement('div',{style:{width:box,height:box,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:G.color,background:G.color+'1c',border:'1px solid '+G.color+'33'}}, this.ic(G.icon,size,1.7)); }
+  progress(pct,color,h2=6){ const C=this.C; return React.createElement('div',{style:{height:h2,background:C.surfStrong,borderRadius:999,overflow:'hidden'}}, React.createElement('div',{style:{height:'100%',width:Math.min(100,pct)+'%',background:color||this.ac(),borderRadius:999,transition:'width .5s cubic-bezier(0.16,1,0.3,1)'}})); }
+  sectionLabel(t,right){ const C=this.C,h=React.createElement; return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}, h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.12em',textTransform:'uppercase',color:C.quiet}},t), right||null); }
+  field(label,control,hint){ const C=this.C,h=React.createElement; return h('div',{style:{marginBottom:16}}, label?h('label',{style:{display:'block',fontSize:11,fontWeight:600,color:C.mut,marginBottom:7,textTransform:'uppercase',letterSpacing:'.06em'}},label):null, control, hint?h('p',{style:{fontSize:11,color:C.quiet,marginTop:6,lineHeight:1.5}},hint):null); }
+  inp(val,opts={}){ const C=this.C; const {style,...rest}=opts; return React.createElement('input',{defaultValue:val,...rest,style:{width:'100%',background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'10px 12px',color:C.tx,fontSize:13.5,fontFamily:'inherit',...style}}); }
+  area(val,rows){ const C=this.C; return React.createElement('textarea',{defaultValue:val,rows:rows||3,style:{width:'100%',background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'10px 12px',color:C.tx,fontSize:13.5,fontFamily:'inherit',resize:'vertical',lineHeight:1.5}}); }
+  selectBox(opts,i,onChange){ const C=this.C,h=React.createElement; return h('div',{style:{position:'relative'}}, h('select',{defaultValue:opts[i],onChange,style:{width:'100%',appearance:'none',background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'10px 34px 10px 12px',color:C.tx,fontSize:13.5,fontFamily:'inherit',cursor:'pointer'}}, opts.map(o=>h('option',{key:o,value:o},o))), h('span',{style:{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',color:C.quiet,pointerEvents:'none'}},this.ic(['M6 9l6 6 6-6'],15,2))); }
+  toggle(on,onClick){ const C=this.C,h=React.createElement; return h('button',{onClick,style:{position:'relative',width:40,height:23,borderRadius:999,border:'none',cursor:'pointer',background:on?this.ac():C.surfStrong,flexShrink:0,transition:'background .18s'}}, h('span',{style:{position:'absolute',top:3,left:on?20:3,width:17,height:17,borderRadius:'50%',background:'#fff',transition:'left .18s cubic-bezier(0.16,1,0.3,1)'}})); }
+  rowToggle(title,desc,on,onClick){ const C=this.C,h=React.createElement; return this.card(h('div',{style:{display:'flex',alignItems:'center',gap:16,padding:'15px 18px'}}, h('div',{style:{flex:1}}, h('div',{style:{fontSize:13.5,fontWeight:600,color:C.tx,marginBottom:3}},title), h('div',{style:{fontSize:12,color:C.quiet,lineHeight:1.5}},desc)), this.toggle(on,onClick)),{marginBottom:10}); }
+
+  // ── CHROME ──
+  chrome(){ const C=this.C,h=React.createElement,s=this.state;
+    const isAdmin=['library','builder','analytics'].includes(s.screen);
+    if(!isAdmin){ // buyer chrome is minimal (inside screens), show a thin preview bar
+      return h('header',{style:{flex:'0 0 auto',background:C.sunken,borderBottom:'1px solid '+C.bd,height:44,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 18px'}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:9,fontSize:12,color:C.quiet}}, this.ic(['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z','M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],15,1.7), 'Buyer preview \u00b7 ', h('span',{style:{color:C.mut,fontFamily:this.mono}},'leadash.io/o/10k-academy-bundle')),
+        h('div',{style:{display:'flex',alignItems:'center',gap:8}}, h('span',{style:{fontSize:11,color:C.quiet}},'This is what your customer sees'), this.btn('Back to builder',{small:true,ghost:true,onClick:()=>this.go('builder')}))); }
+    const off=this.offer();
+    const titles={ library:'Offers', builder:off.name, analytics:off.name+' \u2014 Analytics' };
+    const crumbs={ library:['Monetization','Offers'], builder:['Monetization','Offers',off.name], analytics:['Monetization','Offers',off.name,'Analytics'] };
+    return h('header',{style:{flex:'0 0 auto',background:C.sunken,borderBottom:'1px solid '+C.bd}},
+      h('div',{style:{padding:'14px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:16}},
+        h('div',{style:{minWidth:0}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:7,fontSize:11.5,color:C.quiet,marginBottom:6}}, crumbs[s.screen].flatMap((c,i,a)=>[ h('span',{key:'c'+i,style:{color:i===a.length-1?C.mut:C.quiet,cursor:i===0?'default':'pointer'},onClick:i<a.length-1&&i>0?()=>this.go(i===1?'library':'builder'):undefined},c), i<a.length-1?h('span',{key:'s'+i,style:{color:C.faint}},'/'):null ])),
+          h('div',{style:{display:'flex',alignItems:'center',gap:10}}, h('h1',{style:{fontSize:20,fontWeight:600,letterSpacing:'-0.01em',color:C.tx}},titles[s.screen]), s.screen!=='library'?this.statusChip(off.status):this.chip(this.OFFERS.filter(o=>o.status==='active').length+' live','ok'))),
+        h('div',{style:{display:'flex',alignItems:'center',gap:10,flexShrink:0}},
+          s.screen==='library'?this.btn('New offer',{primary:true,small:true,icon:['M12 5v14','M5 12h14'],onClick:()=>{this.setState({editingOffer:'bundle',screen:'builder',builderTab:'grants'});}}):null,
+          s.screen==='builder'?this.btn('Preview checkout',{ghost:true,small:true,icon:['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z','M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],onClick:()=>this.go('checkout')}):null,
+          s.screen==='builder'?this.btn('Save & publish',{primary:true,small:true,onClick:()=>this.toast('Offer saved & published')}):null,
+          s.screen==='analytics'?this.btn('Export',{small:true,onClick:()=>this.toast('Report exported')}):null)),
+      s.screen==='builder'?this.builderTabBar():null); }
+
+  builderTabBar(){ const C=this.C,h=React.createElement,s=this.state;
+    return h('div',{style:{display:'flex',gap:2,padding:'0 18px',overflowX:'auto'}}, this.BUILDER_TABS.map(([k,label,icon])=>{ const a=s.builderTab===k;
+      return h('button',{key:k,onClick:()=>this.setState({builderTab:k}),style:{display:'inline-flex',alignItems:'center',gap:7,padding:'11px 13px',fontSize:13,fontWeight:a?600:500,fontFamily:'inherit',color:a?C.tx:C.mut,background:'transparent',border:'none',borderBottom:'2px solid '+(a?this.ac():'transparent'),cursor:'pointer',whiteSpace:'nowrap'}}, this.ic(icon,15,1.7), label); })); }
+
+  // ── SWITCHER ──
+  switcher(){ const C=this.C,h=React.createElement,s=this.state;
+    const isAdmin=['library','builder','analytics'].includes(s.screen);
+    const list=isAdmin?this.ADMIN_SCREENS:this.BUYER_SCREENS;
+    const roleBtn=(label,active,target)=>h('button',{onClick:()=>this.go(target),style:{padding:'5px 13px',borderRadius:7,fontSize:12,fontWeight:600,fontFamily:'inherit',border:'none',cursor:'pointer',background:active?this.ac():'transparent',color:active?'#fff':C.mut}},label);
+    return h('div',{style:{position:'absolute',bottom:16,left:'50%',transform:'translateX(-50%)',zIndex:80,display:'flex',alignItems:'center',gap:8,background:'rgba(14,14,19,0.92)',backdropFilter:'blur(12px)',border:'1px solid '+C.bdStrong,borderRadius:13,padding:6,boxShadow:'0 16px 50px -12px rgba(0,0,0,0.7)'}},
+      h('div',{style:{display:'flex',gap:2,background:C.bg,borderRadius:9,padding:3}}, roleBtn('Admin',isAdmin,'library'), roleBtn('Buyer',!isAdmin,'checkout')),
+      h('div',{style:{width:1,height:22,background:C.bd}}),
+      h('div',{style:{display:'flex',gap:2}}, list.map(([k,label])=>{ const a=s.screen===k; return h('button',{key:k,onClick:()=>this.go(k),style:{padding:'5px 11px',borderRadius:7,fontSize:12,fontWeight:a?600:500,fontFamily:'inherit',border:'none',cursor:'pointer',background:a?C.surfStrong:'transparent',color:a?C.tx:C.quiet}},label); }))); }
+
+  body(){ switch(this.state.screen){
+    case 'library': return this.scrLibrary();
+    case 'builder': return this.scrBuilder();
+    case 'analytics': return this.scrAnalytics();
+    case 'checkout': return this.scrCheckout();
+    case 'success': return this.scrSuccess();
+    default: return null;
+  } }
+
+  scrLibrary(){ const C=this.C,h=React.createElement,s=this.state;
+    const totRev=this.OFFERS.reduce((a,o)=>a+o.rev,0), totSales=this.OFFERS.reduce((a,o)=>a+o.sales,0);
+    const tile=(label,val,sub,tone)=>h('div',{style:{flex:'1 1 0',minWidth:150,background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'15px 18px'}}, h('div',{style:{fontSize:11,color:C.quiet,marginBottom:7}},label), h('div',{style:{fontSize:23,fontWeight:700,fontFamily:this.mono,color:tone||C.tx,letterSpacing:'-0.01em'}},val), sub?h('div',{style:{fontSize:11,color:C.mut,marginTop:4}},sub):null);
+    const priceLabel=(o)=>{ if(o.model==='free') return 'Free'; const base=this.fmtMoney(o.price,o.cur); if(o.model==='recurring') return base+'/mo'; if(o.model==='trial') return o.trialDays+'d trial \u2192 '+base+'/mo'; return base; };
+    const offerRow=(o)=>h('div',{key:o.id,onClick:()=>this.setState({editingOffer:o.id,screen:'builder',builderTab:'grants'}),style:{display:'grid',gridTemplateColumns:'minmax(260px,2.4fr) 1.6fr 1fr 1fr 1fr 88px',alignItems:'center',gap:14,padding:'15px 18px',borderBottom:'1px solid '+C.bd,cursor:'pointer',transition:'background .12s'},onMouseEnter:e=>e.currentTarget.style.background=C.surf,onMouseLeave:e=>e.currentTarget.style.background='transparent'},
+      h('div',{style:{display:'flex',alignItems:'center',gap:13,minWidth:0}},
+        h('div',{style:{width:40,height:40,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:o.color,background:o.color+'18',border:'1px solid '+o.color+'30'}},this.ic(['M3 7l9-4 9 4-9 4z','M3 7v8l9 4 9-4V7'],19,1.6)),
+        h('div',{style:{minWidth:0}}, h('div',{style:{fontSize:14,fontWeight:600,color:C.tx,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},o.name), h('div',{style:{fontSize:11.5,color:C.quiet,marginTop:2}},o.grants.length+' grant'+(o.grants.length>1?'s':'')+' \u00b7 '+priceLabel(o)))),
+      h('div',{style:{display:'flex',gap:5,flexWrap:'wrap'}}, o.grants.slice(0,4).map((g,i)=>h('span',{key:i,style:{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:7,fontSize:10.5,fontWeight:600,color:this.GRANTS[g.type].color,background:this.GRANTS[g.type].color+'16',border:'1px solid '+this.GRANTS[g.type].color+'2a'}}, this.ic(this.GRANTS[g.type].icon,11,2), this.GRANTS[g.type].label.split(' ')[0]))),
+      h('div',{style:{fontSize:13,fontFamily:this.mono,color:C.mut}},o.views.toLocaleString(),h('span',{style:{fontSize:10.5,color:C.quiet,marginLeft:4}},'views')),
+      h('div',{style:{fontSize:13,fontFamily:this.mono,color:C.tx}},o.sales.toLocaleString(),h('span',{style:{fontSize:10.5,color:C.quiet,marginLeft:4}},o.cr?'\u00b7 '+o.cr+'%':'')),
+      h('div',{style:{fontSize:13.5,fontWeight:600,fontFamily:this.mono,color:o.rev>0?C.ok:C.quiet}},o.rev>0?this.fmtMoney(o.rev,'NGN'):'\u2014'),
+      h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:10}}, this.statusChip(o.status), h('span',{style:{color:C.quiet}},this.ic(['M9 6l6 6-6 6'],15,2))));
+    return h('div',{style:{padding:'24px 24px 90px'}}, h('div',{style:{maxWidth:1180,margin:'0 auto'}},
+      h('div',{style:{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}, tile('Total revenue',this.fmtMoney(totRev,'NGN'),'from offers',C.ok), tile('Offers live',''+this.OFFERS.filter(o=>o.status==='active').length,'of '+this.OFFERS.length+' total'), tile('Total sales',totSales.toLocaleString(),'all-time'), tile('Avg conversion','13.4%','views \u2192 purchase',C.tx), tile('Active funnels','3','using these offers')),
+      this.card([
+        h('div',{key:'hd',style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 18px',borderBottom:'1px solid '+C.bd}}, h('div',{style:{display:'flex',alignItems:'center',gap:10}}, h('span',{style:{fontSize:14,fontWeight:600,color:C.tx}},'All offers'), this.chip(this.OFFERS.length+'','plain')), h('div',{style:{display:'flex',gap:8}}, h('div',{style:{position:'relative',display:'flex',alignItems:'center'}}, h('span',{style:{position:'absolute',left:11,color:C.quiet}},this.ic(['M11 11a6 6 0 1 0-12 0 6 6 0 0 0 12 0z','M20 20l-5-5'],14,1.8)), h('input',{placeholder:'Search offers',style:{background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'8px 12px 8px 32px',color:C.tx,fontSize:12.5,fontFamily:'inherit',width:180}})), this.selectBox(['All status','Live','Draft','Paused'],0))),
+        h('div',{key:'th',style:{display:'grid',gridTemplateColumns:'minmax(260px,2.4fr) 1.6fr 1fr 1fr 1fr 88px',gap:14,padding:'10px 18px',borderBottom:'1px solid '+C.bd,fontSize:10,fontWeight:600,color:C.quiet,textTransform:'uppercase',letterSpacing:'.07em'}}, h('span',null,'Offer'), h('span',null,'Includes'), h('span',null,'Views'), h('span',null,'Sales'), h('span',null,'Revenue'), h('span',{style:{textAlign:'right'}},'Status')),
+        h('div',{key:'rows'}, this.OFFERS.map(offerRow))
+      ],{padding:0,overflow:'hidden'})));
+  }
+
+  scrBuilder(){ const C=this.C,h=React.createElement,s=this.state;
+    let panel;
+    switch(s.builderTab){
+      case 'grants': panel=this.bGrants(); break;
+      case 'pricing': panel=this.bPricing(); break;
+      case 'checkout': panel=this.bCheckout(); break;
+      case 'upsells': panel=this.bUpsells(); break;
+      case 'promo': panel=this.bPromo(); break;
+      case 'sharing': panel=this.bSharing(); break;
+      case 'settings': panel=this.bSettings(); break;
+      default: panel=this.bGrants();
+    }
+    const full=['checkout'].includes(s.builderTab);
+    return h('div',{style:{padding:'22px 24px 90px'}}, h('div',{style:{maxWidth:full?1180:1080,margin:'0 auto'}},
+      full?panel:h('div',{style:{display:'grid',gridTemplateColumns:'1fr 380px',gap:20,alignItems:'start'}}, h('div',{style:{minWidth:0}},panel), this.offerSummary())));
+  }
+
+  // live offer-summary rail (right side of builder)
+  offerSummary(){ const C=this.C,h=React.createElement,o=this.offer();
+    const valueOf=(g)=>{ if(g.type==='plan') return g.tier==='scale'?120000*g.months:g.tier==='growth'?45000*g.months:18000*g.months; if(g.type==='inbox') return g.qty*2500*(g.freeMonths||1); if(g.type==='credits') return g.qty*3; if(g.type==='community') return 50000; if(g.type==='academy') return 25000; if(g.type==='ip') return 35000; if(g.type==='seats') return g.qty*15000; return 20000; };
+    const totalValue=o.grants.reduce((a,g)=>a+valueOf(g),0);
+    const priceTxt=o.model==='free'?'Free':this.fmtMoney(o.price,'NGN')+(o.model==='recurring'?'/mo':o.model==='trial'?' after trial':'');
+    return h('div',{style:{position:'sticky',top:0}},
+      this.card([
+        h('div',{key:'top',style:{padding:'16px 18px',borderBottom:'1px solid '+C.bd,display:'flex',alignItems:'center',justifyContent:'space-between'}}, h('span',{style:{fontSize:11,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.quiet}},'Offer summary'), this.statusChip(o.status)),
+        h('div',{key:'body',style:{padding:'18px'}},
+          h('div',{style:{fontSize:16,fontWeight:700,color:C.tx,letterSpacing:'-0.01em',marginBottom:4}},o.name),
+          h('div',{style:{display:'flex',alignItems:'baseline',gap:8,marginBottom:16}}, h('span',{style:{fontSize:24,fontWeight:700,fontFamily:this.mono,color:this.ac()}},priceTxt), o.compareAt>0?h('span',{style:{fontSize:13,color:C.quiet,textDecoration:'line-through',fontFamily:this.mono}},this.fmtMoney(o.compareAt,'NGN')):null),
+          h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.quiet,marginBottom:10}},'Customer gets'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:9}}, o.grants.map((g,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:11}}, this.grantIcon(g.type,15,30), h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:12.5,fontWeight:600,color:C.tx}},this.GRANTS[g.type].label), h('div',{style:{fontSize:11,color:C.quiet,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},this.grantLine(g))), h('span',{style:{color:C.ok,flexShrink:0}},this.ic(['M5 12l4 4 10-10'],14,2.4))))),
+          totalValue>o.price?h('div',{style:{marginTop:16,paddingTop:14,borderTop:'1px solid '+C.bd,display:'flex',alignItems:'center',justifyContent:'space-between'}}, h('span',{style:{fontSize:12,color:C.mut}},'Total value'), h('span',{style:{fontSize:13,fontWeight:600,fontFamily:this.mono,color:C.tx}},this.fmtMoney(totalValue,'NGN'))):null,
+          o.model!=='free'&&totalValue>o.price?h('div',{style:{marginTop:8,padding:'8px 12px',borderRadius:8,background:C.okSoft,border:'1px solid rgba(52,211,153,0.2)',display:'flex',alignItems:'center',justifyContent:'space-between'}}, h('span',{style:{fontSize:11.5,fontWeight:600,color:C.ok}},'They save'), h('span',{style:{fontSize:12.5,fontWeight:700,fontFamily:this.mono,color:C.ok}},this.fmtMoney(totalValue-o.price,'NGN'))):null)
+      ],{overflow:'hidden'}),
+      h('button',{onClick:()=>this.go('checkout'),style:{marginTop:12,width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'10px',borderRadius:9,background:'transparent',border:'1px solid '+C.bdStrong,color:C.mut,fontSize:12.5,fontWeight:600,fontFamily:'inherit',cursor:'pointer'}}, this.ic(['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z','M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],15,1.8), 'Preview checkout page'));
+  }
+
+  // ── GRANTS TAB ──
+  bGrants(){ const C=this.C,h=React.createElement,o=this.offer();
+    const grantCard=(g,i)=>{ const G=this.GRANTS[g.type];
+      return h('div',{key:i,style:{display:'flex',alignItems:'flex-start',gap:13,padding:'15px 16px',background:C.elev,border:'1px solid '+C.bd,borderRadius:11,marginBottom:10}},
+        h('div',{style:{cursor:'grab',color:C.faint,marginTop:6,flexShrink:0}},this.ic(['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],16,2.4)),
+        this.grantIcon(g.type,19,40),
+        h('div',{style:{flex:1,minWidth:0}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}}, h('span',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},G.label), this.chip('Auto-fulfilled','ok')),
+          this.grantControls(g)),
+        h('button',{onClick:()=>this.toast('Remove '+G.label),style:{background:'transparent',border:'none',color:C.quiet,cursor:'pointer',flexShrink:0}},this.ic(['M18 6L6 18','M6 6l12 12'],16,1.8))); };
+    return h('div',null,
+      h('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',marginBottom:16}}, h('div',null, h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'What\u2019s included'), h('p',{style:{fontSize:12.5,color:C.mut}},'Stack the things this offer grants. Each is fulfilled automatically on payment.')), this.chip(o.grants.length+' grants','plain')),
+      h('div',null, o.grants.map(grantCard)),
+      // add-grant picker
+      h('div',{style:{marginTop:8}}, this.sectionLabel('Add a grant'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}, Object.keys(this.GRANTS).map(t=>{ const G=this.GRANTS[t];
+          return h('button',{key:t,onClick:()=>this.toast('Add '+G.label),style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:9,padding:'13px',background:C.bg,border:'1px solid '+C.bd,borderRadius:10,cursor:'pointer',textAlign:'left',transition:'border-color .15s'},onMouseEnter:e=>e.currentTarget.style.borderColor=G.color+'66',onMouseLeave:e=>e.currentTarget.style.borderColor=C.bd},
+            this.grantIcon(t,17,34), h('div',null, h('div',{style:{fontSize:12.5,fontWeight:600,color:C.tx}},G.label), h('div',{style:{fontSize:10.5,color:C.quiet,marginTop:2}},this.grantHint(t)))); }))));
+  }
+  grantHint(t){ return ({plan:'Tier + months of access',inbox:'N inboxes, free period',credits:'One-time credit top-up',community:'WhatsApp / group invite',academy:'Course or challenge',ip:'Dedicated sending IP',seats:'Extra team members',custom:'Manual perk you fulfil'})[t]; }
+  grantControls(g){ const C=this.C,h=React.createElement;
+    const mini=(label,control)=>h('div',null, h('div',{style:{fontSize:10,color:C.quiet,marginBottom:4,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},label), control);
+    const num=(v,w)=>this.inp(v,{type:'number',style:{padding:'7px 10px',fontSize:13,width:w||80}});
+    const sel=(opts,i)=>this.selectBox(opts,i);
+    if(g.type==='plan') return h('div',{style:{display:'flex',gap:10}}, h('div',{style:{flex:1}},mini('Plan tier',sel(['Starter','Growth','Scale'],g.tier==='scale'?2:g.tier==='growth'?1:0))), h('div',{style:{width:110}},mini('Months free',num(g.months,'100%'))));
+    if(g.type==='inbox') return h('div',{style:{display:'flex',gap:10}}, h('div',{style:{width:110}},mini('Inboxes',num(g.qty,'100%'))), h('div',{style:{width:130}},mini('Free for (months)',num(g.freeMonths,'100%'))), h('div',{style:{flex:1}},mini('Billing after',sel(['Customer pays','Stays free','Cancel'],0))));
+    if(g.type==='credits') return h('div',{style:{display:'flex',gap:10}}, h('div',{style:{width:140}},mini('Credits',num(g.qty,'100%'))), h('div',{style:{flex:1}},mini('Type',sel(['One-time grant','Monthly recurring'],0))));
+    if(g.type==='seats') return h('div',{style:{width:140}},mini('Seats',num(g.qty,'100%')));
+    if(g.type==='community') return mini('Invite link sent on purchase',this.inp(g.name==='Private WhatsApp Community'?'https://chat.whatsapp.com/AcademyVIP':g.name,{style:{padding:'7px 10px',fontSize:12.5}}));
+    if(g.type==='academy') return mini('Academy product',sel(['Free Outreach Course','30-Day Challenge','Full Academy Package'],g.name==='30-Day Challenge'?1:0));
+    if(g.type==='ip') return mini('Dedicated IP','');
+    return mini('Perk description',this.inp(g.name||'',{style:{padding:'7px 10px',fontSize:12.5}}));
+  }
+
+  // ── PRICING TAB ──
+  bPricing(){ const C=this.C,h=React.createElement,o=this.offer();
+    const models=[['one_time','One-time','Single payment',['M12 2v20','M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6']],['recurring','Subscription','Monthly or annual',['M3 12a9 9 0 0 1 15-6.7L21 8','M21 3v5h-5','M21 12a9 9 0 0 1-15 6.7L3 16','M3 21v-5h5']],['trial','Trial \u2192 paid','Free trial then bills',['M12 8v4l3 2','M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z']],['free','Free','\u20a60 \u2014 lead magnet',['M20 12v8H4v-8','M2 7h20v5H2z','M12 22V7','M12 7H8a2 2 0 1 1 2-2 2 2 0 0 1 2 2 2 2 0 0 1 2-2 2 2 0 1 1-2 2z']],['plan','Payment plan','Split into installments',['M3 7h18v10H3z','M3 11h18']],['pwyw','Pay what you want','Customer sets price',['M12 2l2.4 7.4H22l-6 4.3 2.3 7.3L12 16.7 5.7 21l2.3-7.3-6-4.3h7.6z']]];
+    const modelCard=(m)=>{ const on=o.model===m[0]||(m[0]==='plan'&&o.model==='payment_plan');
+      return h('button',{key:m[0],onClick:()=>this.toast(m[1]+' pricing'),style:{display:'flex',alignItems:'flex-start',gap:11,padding:'13px 14px',background:on?this.ac()+'12':C.bg,border:'1px solid '+(on?this.ac()+'66':C.bd),borderRadius:10,cursor:'pointer',textAlign:'left'}},
+        h('span',{style:{width:32,height:32,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:on?this.ac():C.mut,background:on?this.ac()+'1c':C.surfStrong}},this.ic(m[3],17,1.7)),
+        h('div',null, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx,marginBottom:2}},m[1]), h('div',{style:{fontSize:11,color:C.quiet,lineHeight:1.4}},m[2])),
+        on?h('span',{style:{marginLeft:'auto',color:this.ac()}},this.ic(['M5 12l4 4 10-10'],15,2.4)):null); };
+    return h('div',null,
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Pricing'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'How customers pay for this offer.'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:22}}, models.map(modelCard)),
+      this.card([
+        this.sectionLabel('Price details'),
+        h('div',{key:'r',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
+          this.field('Price', h('div',{style:{display:'flex',gap:8}}, this.selectBox(['\u20a6 NGN','$ USD'],0,e=>this.setState({coCur:e.target.value.includes('USD')?'USD':'NGN'})), this.inp(o.price.toLocaleString(),{style:{flex:1}}))),
+          this.field('Compare-at (shows a discount)', this.inp(o.compareAt>0?o.compareAt.toLocaleString():'',{placeholder:'Optional'}))),
+        h('div',{key:'r2',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
+          this.field('Billing interval', this.selectBox(['One-time','Monthly','Quarterly','Annual'],o.model==='recurring'?(o.interval==='monthly'?1:3):0)),
+          this.field('Charge currency to buyer', this.selectBox(['Auto by location','Always \u20a6 NGN','Always $ USD'],0))),
+        h('div',{key:'multi',style:{marginTop:4,padding:'12px 14px',background:C.bg,border:'1px solid '+C.bd,borderRadius:9,display:'flex',alignItems:'center',gap:10}}, h('span',{style:{color:C.info}},this.ic(['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z','M2 12h20','M12 2a15 15 0 0 1 0 20','M12 2a15 15 0 0 0 0 20'],17,1.6)), h('div',{style:{flex:1,fontSize:12,color:C.mut,lineHeight:1.5}},'Multi-currency is on. Nigerian buyers pay in \u20a6 via Paystack; international buyers see $ at \u20a61,500 \u2248 $1.'), this.chip('Live','ok'))
+      ],{padding:18,marginBottom:16}),
+      o.model==='trial'?this.card([ this.sectionLabel('Trial'), h('div',{key:'g',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}, this.field('Trial length', h('div',{style:{display:'flex',gap:8}}, this.inp('7',{type:'number',style:{width:80}}), this.selectBox(['Days','Weeks'],0))), this.field('Then bill', this.inp('\u20a6120,000 / month'))) ],{padding:18,marginBottom:16}):null,
+      this.rowToggle('Add a payment-plan option at checkout','Let buyers split the price into 3 monthly installments (e.g. \u20a690,000 \u00d7 3).', o.id==='bundle', ()=>this.toast('Payment plan toggled')));
+  }
+  // ── CHECKOUT PAGE EDITOR (full width: controls + live preview) ──
+  bCheckout(){ const C=this.C,h=React.createElement,o=this.offer();
+    const ctrl=h('div',{style:{minWidth:0}},
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Checkout page'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'Design what the buyer sees. Changes preview live on the right.'),
+      this.card([ this.sectionLabel('Content'),
+        this.field('Headline', this.inp('Get The $10k Academy Bundle')),
+        this.field('Subhead', this.area('Everything you need to land clients and scale \u2014 one full year of Leadash Growth, 20 done-for-you inboxes, and the private community.',2)),
+        this.field('Highlight badge', this.inp('\ud83d\udd25 Founding member price \u2014 55% off')),
+      ],{padding:18,marginBottom:14}),
+      this.card([ this.sectionLabel('Layout & trust'),
+        this.field('Layout', h('div',{style:{display:'flex',gap:8}}, ['Two-column','Single card','Long-form'].map((l,i)=>h('button',{key:l,onClick:()=>this.toast(l+' layout'),style:{flex:1,padding:'9px',borderRadius:8,fontSize:12.5,fontWeight:600,fontFamily:'inherit',cursor:'pointer',background:i===0?this.ac()+'14':C.bg,border:'1px solid '+(i===0?this.ac()+'55':C.bd),color:i===0?C.tx:C.mut}},l)))),
+        this.rowToggleInline('Show "total value" & savings stack',true),
+        this.rowToggleInline('Show countdown timer',o.id==='bundle'),
+        this.rowToggleInline('Show testimonials',true),
+        this.rowToggleInline('Money-back guarantee badge',true),
+      ],{padding:18,marginBottom:14}),
+      this.card([ this.sectionLabel('Buyer fields'),
+        h('div',{key:'f',style:{display:'flex',flexDirection:'column',gap:8}}, [['Full name',true,true],['Email',true,true],['Phone / WhatsApp',true,false],['Company (optional)',false,false],['How did you hear about us?',false,false]].map(([f,on,req])=>h('div',{key:f,style:{display:'flex',alignItems:'center',gap:11,padding:'10px 12px',background:C.bg,border:'1px solid '+C.bd,borderRadius:9}}, this.toggle(on,()=>this.toast(f)), h('span',{style:{flex:1,fontSize:13,color:on?C.tx:C.quiet}},f), req?this.chip('Required','plain'):h('span',{style:{fontSize:11,color:C.quiet}},'Optional')))),
+        h('button',{key:'add',onClick:()=>this.toast('Add custom field'),style:{marginTop:10,display:'inline-flex',alignItems:'center',gap:6,fontSize:12.5,color:this.ac(),background:'transparent',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:600,padding:0}},this.ic(['M12 5v14','M5 12h14'],14,2),'Add custom field')
+      ],{padding:18})
+    );
+    return h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'}}, ctrl,
+      h('div',{style:{position:'sticky',top:0}}, h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.quiet,marginBottom:10,display:'flex',alignItems:'center',gap:8}},'Live preview', h('span',{style:{width:6,height:6,borderRadius:999,background:C.ok,animation:'pulse 2s infinite'}})), h('div',{style:{transform:'scale(0.92)',transformOrigin:'top center'}}, this.checkoutCard(true))));
+  }
+  rowToggleInline(label,on){ const C=this.C,h=React.createElement; return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'11px 0',borderBottom:'1px solid '+C.bd}}, h('span',{style:{fontSize:13,color:C.tx}},label), this.toggle(on,()=>this.toast(label))); }
+
+  // ── BUMPS & UPSELLS ──
+  bUpsells(){ const C=this.C,h=React.createElement,o=this.offer();
+    return h('div',null,
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Bumps & upsells'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'Increase order value before and after the sale.'),
+      this.card([ h('div',{key:'h',style:{display:'flex',alignItems:'center',gap:9,marginBottom:6}}, h('span',{style:{color:this.ac()}},this.ic(['M5 12h14','M12 5v14'],17,2)), h('span',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},'Order bump'), this.chip('On checkout','info')),
+        h('p',{style:{fontSize:12,color:C.quiet,lineHeight:1.6,marginBottom:14}},'A one-click add-on shown as a checkbox on the checkout page.'),
+        h('div',{key:'bump',style:{display:'flex',alignItems:'center',gap:13,padding:'13px 15px',background:C.bg,border:'1px dashed '+this.ac()+'66',borderRadius:10}}, this.grantIcon('ip',18,38), h('div',{style:{flex:1}}, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx}},'Add a Dedicated IP \u2014 \u20a635,000/mo'), h('div',{style:{fontSize:11.5,color:C.quiet}},'Better deliverability for high-volume senders')), this.chip('Active','ok')),
+        this.btn('Add another bump',{small:true,ghost:true,icon:['M12 5v14','M5 12h14'],onClick:()=>this.toast('Add order bump')})
+      ],{padding:18,marginBottom:14,display:'flex',flexDirection:'column',gap:12}),
+      this.card([ h('div',{key:'h',style:{display:'flex',alignItems:'center',gap:9,marginBottom:6}}, h('span',{style:{color:C.violet}},this.ic(['M5 12h14','M13 6l6 6-6 6'],17,2)), h('span',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},'One-click upsell'), this.chip('After purchase','plain')),
+        h('p',{style:{fontSize:12,color:C.quiet,lineHeight:1.6,marginBottom:14}},'Shown immediately after payment \u2014 no card re-entry needed.'),
+        h('div',{key:'up',style:{display:'flex',alignItems:'center',gap:13,padding:'13px 15px',background:C.bg,border:'1px solid '+C.bd,borderRadius:10}}, this.grantIcon('academy',18,38), h('div',{style:{flex:1}}, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx}},'1-on-1 Onboarding Call \u2014 \u20a625,000'), h('div',{style:{fontSize:11.5,color:C.quiet}},'45-min strategy session with a coach')), this.toggle(true,()=>{})),
+        h('div',{key:'down',style:{display:'flex',alignItems:'center',gap:13,padding:'13px 15px',background:C.bg,border:'1px solid '+C.bd,borderRadius:10,marginTop:8}}, h('div',{style:{width:38,height:38,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:C.mut,background:C.surfStrong}},this.ic(['M5 12h14','M11 6l-6 6 6 6'],18,1.8)), h('div',{style:{flex:1}}, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx}},'Downsell: split into 2 payments'), h('div',{style:{fontSize:11.5,color:C.quiet}},'If they decline the upsell')), this.toggle(true,()=>{}))
+      ],{padding:18,display:'flex',flexDirection:'column',gap:0}));
+  }
+
+  // ── PROMOTION ──
+  bPromo(){ const C=this.C,h=React.createElement,o=this.offer();
+    const codes=[['EARLYBIRD','25% off','142 used','#34D399'],['MIZARK50','\u20a650,000 off','38 used','#F97316'],['VIP','100% off','manual','#A78BFA']];
+    return h('div',null,
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Promotion'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'Discounts, urgency and scarcity to lift conversion.'),
+      this.card([ this.sectionLabel('Discount codes', this.btn('New code',{small:true,ghost:true,icon:['M12 5v14','M5 12h14'],onClick:()=>this.toast('New discount code')})),
+        h('div',{key:'l',style:{display:'flex',flexDirection:'column',gap:8}}, codes.map(([code,off,used,c])=>h('div',{key:code,style:{display:'flex',alignItems:'center',gap:13,padding:'12px 14px',background:C.bg,border:'1px solid '+C.bd,borderRadius:10}}, h('span',{style:{fontFamily:this.mono,fontSize:13,fontWeight:600,color:c,background:c+'18',border:'1px dashed '+c+'55',padding:'5px 10px',borderRadius:7}},code), h('span',{style:{fontSize:13,fontWeight:600,color:C.tx}},off), h('span',{style:{flex:1,fontSize:11.5,color:C.quiet}},used), this.toggle(true,()=>{}))))
+      ],{padding:18,marginBottom:14}),
+      this.rowToggle('Expiring offer + countdown timer','Show a live countdown on the checkout page. Closing the offer hides the buy button.', o.id==='bundle', ()=>this.toast('Countdown toggled')),
+      o.id==='bundle'?this.card([ h('div',{key:'g',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}, this.field('Offer closes', this.inp('2026-07-04 23:59')), this.field('When expired', this.selectBox(['Hide buy button','Redirect to waitlist','Show full price'],0))) ],{padding:'4px 18px 6px',marginBottom:14}):null,
+      this.rowToggle('Limit available spots (scarcity)','Cap total sales. Shows "X left" and auto-closes when sold out.', o.id==='scale', ()=>this.toast('Stock limit toggled')),
+      this.rowToggle('Abandoned-checkout recovery','Email + WhatsApp buyers who started but didn\u2019t finish, after 1h and 24h.', true, ()=>this.toast('Recovery toggled')));
+  }
+
+  // ── SHARING & FUNNEL ──
+  bSharing(){ const C=this.C,h=React.createElement,o=this.offer();
+    const link='leadash.io/o/'+(o.id==='bundle'?'10k-academy-bundle':o.id);
+    const embed='<'+'script src="leadash.io/embed.js" data-offer="'+o.id+'">';
+    const linkRow=(label,url,icon)=>h('div',{style:{display:'flex',alignItems:'center',gap:12,padding:'13px 15px',background:C.bg,border:'1px solid '+C.bd,borderRadius:10}}, h('span',{style:{color:C.quiet}},this.ic(icon,16,1.7)), h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:11,color:C.quiet,marginBottom:2}},label), h('div',{style:{fontSize:12.5,fontFamily:this.mono,color:C.tx,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},url)), this.btn('Copy',{small:true,ghost:true,onClick:()=>this.toast('Copied to clipboard')}));
+    return h('div',null,
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Sharing & funnel'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'Every offer has a checkout link \u2014 share it directly or drop it into a funnel.'),
+      this.card([ this.sectionLabel('Checkout links'),
+        h('div',{key:'l',style:{display:'flex',flexDirection:'column',gap:9}}, linkRow('Public checkout page','https://'+link,['M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1','M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1']), linkRow('Pre-filled for a known contact','https://'+link+'?c={contact_id}',['M16 11a4 4 0 1 0-8 0','M2 21a7 7 0 0 1 14 0']), linkRow('Embed button (snippet)',embed,['M8 9l-4 3 4 3','M16 9l4 3-4 3','M13 6l-2 12']))
+      ],{padding:18,marginBottom:14}),
+      this.card([ this.sectionLabel('Used in funnels'),
+        h('div',{key:'f',style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'2px 0 10px'}}, ['Free opt-in','Free course','30-Day Challenge','This offer'].map((n,i,a)=>h('div',{key:n,style:{display:'flex',alignItems:'center',gap:8}}, h('span',{style:{fontSize:12,fontWeight:600,padding:'6px 11px',borderRadius:8,color:i===a.length-1?'#fff':C.mut,background:i===a.length-1?this.ac():C.bg,border:'1px solid '+(i===a.length-1?'transparent':C.bd)}},n), i<a.length-1?h('span',{style:{color:C.faint}},this.ic(['M5 12h14','M13 6l6 6-6 6'],14,2)):null))),
+        h('p',{style:{fontSize:12,color:C.quiet,lineHeight:1.6}},'This offer is the paid step in 1 funnel. Add it to more from the Funnel Map.'),
+        this.btn('Add to a funnel',{small:true,ghost:true,icon:['M3 7l9-4 9 4-9 4z','M3 7v8l9 4 9-4V7'],onClick:()=>this.toast('Add to funnel')})
+      ],{padding:18,marginBottom:14,display:'flex',flexDirection:'column',gap:12}),
+      this.card([ this.sectionLabel('QR & social'),
+        h('div',{style:{display:'flex',gap:14,alignItems:'center'}}, h('div',{style:{width:80,height:80,borderRadius:10,background:'#fff',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}, this.ic(['M3 3h7v7H3z','M14 3h7v7h-7z','M3 14h7v7H3z','M14 14h3v3h-3z','M20 14h1v1h-1z','M14 20h3v1h-3z','M20 20h1v1h-1z'],46,1.4)), h('div',{style:{flex:1}}, h('p',{style:{fontSize:12.5,color:C.mut,lineHeight:1.6,marginBottom:10}},'Download a QR for flyers and live events, or share an auto-generated social card.'), h('div',{style:{display:'flex',gap:8}}, this.btn('Download QR',{small:true,ghost:true,onClick:()=>this.toast('QR downloaded')}), this.btn('Social card',{small:true,ghost:true,onClick:()=>this.toast('Social card')}))))
+      ],{padding:18}));
+  }
+
+  // ── SETTINGS ──
+  bSettings(){ const C=this.C,h=React.createElement,o=this.offer();
+    return h('div',null,
+      h('h2',{style:{fontSize:16,fontWeight:600,color:C.tx,marginBottom:3}},'Settings'),
+      h('p',{style:{fontSize:12.5,color:C.mut,marginBottom:18}},'Fulfillment, access and post-purchase behavior.'),
+      this.card([ this.sectionLabel('Fulfillment'),
+        this.rowToggleInline('Auto-grant everything on payment',true),
+        this.rowToggleInline('Require manual approval before granting',false),
+        this.field('When a buyer has no Leadash workspace', this.selectBox(['Create one & send login','Send signup invite','Attach to existing by email'],0)),
+      ],{padding:18,marginBottom:14}),
+      this.card([ this.sectionLabel('After purchase'),
+        this.field('Redirect to', this.selectBox(['Confirmation page (default)','Custom URL','Straight to dashboard'],0)),
+        this.rowToggleInline('Send branded receipt email',true),
+        this.rowToggleInline('Send WhatsApp confirmation',true),
+        this.rowToggleInline('Notify me on every sale',true),
+      ],{padding:18,marginBottom:14}),
+      this.card([ this.sectionLabel('Refunds & access'),
+        this.field('Refund window', this.selectBox(['7 days','14 days','30 days','No refunds'],0)),
+        h('p',{key:'p',style:{fontSize:11.5,color:C.quiet,lineHeight:1.6,margin:'2px 0 0'}},'Refunding revokes all granted entitlements (plan months, inbox credits, community access) automatically.')
+      ],{padding:18,marginBottom:14}),
+      h('div',{style:{display:'flex',gap:10}}, this.btn(o.status==='active'?'Pause offer':'Publish offer',{onClick:()=>this.toast(o.status==='active'?'Offer paused':'Offer published')}), this.btn('Duplicate',{ghost:true,onClick:()=>this.toast('Offer duplicated')}), h('div',{style:{flex:1}}), this.btn('Delete offer',{danger:true,onClick:()=>this.toast('Delete offer')})));
+  }
+  // ── ANALYTICS ──
+  scrAnalytics(){ const C=this.C,h=React.createElement,o=this.offer();
+    const tile=(label,val,sub,tone)=>h('div',{style:{background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'16px 18px'}}, h('div',{style:{fontSize:11,color:C.quiet,marginBottom:8}},label), h('div',{style:{fontSize:24,fontWeight:700,fontFamily:this.mono,color:tone||C.tx,letterSpacing:'-0.01em'}},val), sub?h('div',{style:{fontSize:11,color:C.mut,marginTop:5,display:'flex',alignItems:'center',gap:5}},sub):null);
+    const up=h('span',{style:{color:C.ok,display:'inline-flex',alignItems:'center',gap:3}},this.ic(['M7 17L17 7','M9 7h8v8'],12,2.2));
+    const funnel=[['Checkout views',1840,100,C.info],['Started checkout',1102,59.9,C.violet],['Added payment info',358,19.5,C.warn],['Purchased',75,4.1,C.ok]];
+    // revenue sparkline (28 days)
+    const spark=[3,5,4,6,8,7,9,12,10,14,13,16,15,18,17,20,19,22,24,21,26,28,25,30,29,33,31,36];
+    const maxS=Math.max(...spark);
+    return h('div',{style:{padding:'24px 24px 90px'}}, h('div',{style:{maxWidth:1120,margin:'0 auto'}},
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:18}},
+        tile('Revenue',this.fmtMoney(o.rev,'NGN'),[up,'18% vs last 30d'],C.ok),
+        tile('Sales',''+o.sales,[up,'+12 this week']),
+        tile('Checkout views',o.views.toLocaleString(),'last 30 days'),
+        tile('Conversion',o.cr+'%','views \u2192 purchase',C.tx),
+        tile('Refund rate','1.3%','1 of 75',C.mut)),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1.3fr 1fr',gap:16,alignItems:'start',marginBottom:16}},
+        this.card([ h('div',{key:'h',style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18}}, h('div',null, h('div',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},'Revenue'), h('div',{style:{fontSize:11.5,color:C.quiet,marginTop:2}},'Last 28 days')), h('div',{style:{fontSize:18,fontWeight:700,fontFamily:this.mono,color:C.ok}},this.fmtMoney(o.rev,'NGN'))),
+          h('div',{key:'c',style:{display:'flex',alignItems:'flex-end',gap:3,height:120}}, spark.map((v,i)=>h('div',{key:i,style:{flex:1,height:(v/maxS*110)+'px',borderRadius:'3px 3px 0 0',background:i===spark.length-1?C.ok:'linear-gradient(180deg,'+C.ok+'88,'+C.ok+'22)'}})))
+        ],{padding:18}),
+        this.card([ this.sectionLabel('Checkout funnel'),
+          h('div',{key:'f',style:{display:'flex',flexDirection:'column',gap:12}}, funnel.map((st,i)=>h('div',{key:i},
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:5}}, h('span',{style:{fontSize:12.5,color:C.mut}},st[0]), h('div',{style:{display:'flex',alignItems:'baseline',gap:7}}, h('span',{style:{fontSize:13,fontWeight:600,fontFamily:this.mono,color:C.tx}},st[1].toLocaleString()), h('span',{style:{fontSize:11,fontFamily:this.mono,color:C.quiet}},st[2]+'%'))),
+            this.progress(st[2],st[3],7))))
+        ],{padding:18})),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        this.card([ this.sectionLabel('Revenue by grant'),
+          h('div',{key:'g',style:{display:'flex',flexDirection:'column',gap:11}}, [['Base bundle',o.rev,C.ac],['Order bump: Dedicated IP',1330000,C.cyan],['Upsell: Onboarding call',875000,C.violet]].map(([n,v,c])=>h('div',{key:n,style:{display:'flex',alignItems:'center',gap:11}}, h('span',{style:{width:9,height:9,borderRadius:3,background:c,flexShrink:0}}), h('span',{style:{flex:1,fontSize:12.5,color:C.tx}},n), h('span',{style:{fontSize:12.5,fontWeight:600,fontFamily:this.mono,color:C.mut}},this.fmtMoney(v,'NGN')))))
+        ],{padding:18}),
+        this.card([ this.sectionLabel('Discount code performance'),
+          h('div',{key:'d',style:{display:'flex',flexDirection:'column',gap:0}}, [['EARLYBIRD',42,'\u20a6420k'],['MIZARK50',18,'\u20a6900k'],['VIP',6,'\u2014']].map(([code,uses,rev],i,a)=>h('div',{key:code,style:{display:'flex',alignItems:'center',gap:11,padding:'10px 0',borderBottom:i<a.length-1?'1px solid '+C.bd:'none'}}, h('span',{style:{fontFamily:this.mono,fontSize:12,color:this.ac()}},code), h('span',{style:{flex:1,fontSize:11.5,color:C.quiet}},uses+' redemptions'), h('span',{style:{fontSize:12.5,fontWeight:600,fontFamily:this.mono,color:C.tx}},rev))))
+        ],{padding:18}))));
+  }
+
+  // ── BUYER: shared checkout card (used in editor preview + live page) ──
+  checkoutCard(preview){ const C=this.C,h=React.createElement,s=this.state,o=this.offer('bundle');
+    const cur=s.coCur;
+    const base=o.price, bump=35000;
+    const discount=s.couponApplied?Math.round(base*0.25):0;
+    const total=base-discount+(s.bumpAdded?bump:0);
+    const fmt=(n)=>cur==='USD'?'$'+Math.round(n/1500).toLocaleString():'\u20a6'+n.toLocaleString();
+    const grantRow=(g,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:12,padding:'11px 0',borderBottom:i<o.grants.length-1?'1px solid '+C.bd:'none'}}, this.grantIcon(g.type,17,34), h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},this.GRANTS[g.type].label), h('div',{style:{fontSize:11.5,color:C.quiet}},this.grantLine(g))), h('span',{style:{color:C.ok,flexShrink:0}},this.ic(['M5 12l4 4 10-10'],15,2.4)));
+    const field=(label,ph,type)=>h('div',null, h('label',{style:{display:'block',fontSize:11,fontWeight:600,color:C.mut,marginBottom:6}},label), h('input',{placeholder:ph,type:type||'text',style:{width:'100%',background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'11px 13px',color:C.tx,fontSize:13.5,fontFamily:'inherit'}}));
+    // left: value stack
+    const left=h('div',{style:{padding:'4px 4px 4px 0'}},
+      h('div',{style:{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:999,fontSize:11.5,fontWeight:600,color:this.ac(),background:this.ac()+'16',border:'1px solid '+this.ac()+'33',marginBottom:16}},'\ud83d\udd25 Founding member price \u2014 55% off'),
+      h('h1',{style:{fontSize:26,fontWeight:800,letterSpacing:'-0.02em',color:'#fff',lineHeight:1.15,marginBottom:10}},'Get The $10k Academy Bundle'),
+      h('p',{style:{fontSize:14,lineHeight:1.6,color:C.mut,marginBottom:20}},'Everything you need to land clients and scale \u2014 one full year of Leadash Growth, 20 done-for-you inboxes, and the private community.'),
+      this.card([ h('div',{key:'t',style:{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.quiet,padding:'14px 16px 4px'}},'Everything included'), h('div',{style:{padding:'0 16px 8px'}}, o.grants.map(grantRow)) ],{marginBottom:14}),
+      h('div',{style:{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:7,fontSize:12,color:C.mut}}, h('span',{style:{color:C.ok}},this.ic(['M9 12l2 2 4-4','M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z'],16,1.7)),'7-day money-back guarantee'),
+        h('div',{style:{display:'flex',alignItems:'center',gap:7,fontSize:12,color:C.mut}}, h('span',{style:{color:C.ok}},this.ic(['M6 10V8a6 6 0 0 1 12 0v2','M5 10h14v10H5z'],16,1.7)),'Secure Paystack checkout')),
+      h('div',{style:{marginTop:18,padding:'14px 16px',background:'linear-gradient(135deg,'+this.ac()+'14,transparent)',border:'1px solid '+this.ac()+'2a',borderRadius:11,display:'flex',gap:11,alignItems:'center'}}, h('div',{style:{display:'flex'}},[0,1,2].map(i=>h('div',{key:i,style:{width:30,height:30,borderRadius:999,marginLeft:i?-8:0,border:'2px solid '+C.elev,background:['#60A5FA','#34D399','#F472B6'][i]}}))), h('p',{style:{fontSize:12,color:C.mut,lineHeight:1.5}},h('strong',{style:{color:C.tx}},'1,200+ founders'),' have joined. "Best money I\u2019ve spent on my business." \u2014 Tunde B.')));
+    // right: payment box
+    const right=h('div',{style:{position:preview?'static':'sticky',top:20}}, this.card([
+      h('div',{key:'cd',style:{padding:'14px 18px',background:C.sunken,borderBottom:'1px solid '+C.bd,display:'flex',alignItems:'center',justifyContent:'space-between'}}, h('span',{style:{fontSize:12.5,fontWeight:600,color:C.warn,display:'flex',alignItems:'center',gap:7}}, this.ic(['M12 8v4l3 2','M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z'],15,1.8),'Offer ends in'), h('div',{style:{display:'flex',gap:5}}, [['02','d'],['11','h'],['46','m']].map(([v,u])=>h('span',{key:u,style:{fontFamily:this.mono,fontSize:13,fontWeight:700,color:C.tx,background:C.bg,border:'1px solid '+C.bd,borderRadius:6,padding:'3px 7px'}},v,h('span',{style:{color:C.quiet,fontWeight:400}},u))))),
+      h('div',{key:'bd',style:{padding:'18px'}},
+        h('div',{style:{display:'flex',alignItems:'baseline',gap:10,marginBottom:4}}, h('span',{style:{fontSize:30,fontWeight:800,fontFamily:this.mono,color:'#fff'}},fmt(base)), o.compareAt>0?h('span',{style:{fontSize:15,color:C.quiet,textDecoration:'line-through',fontFamily:this.mono}},fmt(o.compareAt)):null, h('span',{style:{fontSize:11.5,fontWeight:600,color:C.ok,background:C.okSoft,padding:'2px 7px',borderRadius:6}},'Save '+fmt(o.compareAt-base))),
+        h('p',{style:{fontSize:11.5,color:C.quiet,marginBottom:16}},'One-time payment \u00b7 instant access'),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:11,marginBottom:14}}, field('Full name','Ada Okeke'), field('Email','ada@company.com','email'), field('WhatsApp number','+234 …')),
+        // order bump
+        h('label',{onClick:()=>this.setState(st=>({bumpAdded:!st.bumpAdded})),style:{display:'flex',alignItems:'flex-start',gap:11,padding:'12px 13px',borderRadius:10,cursor:'pointer',background:s.bumpAdded?this.ac()+'12':C.bg,border:'1px '+(s.bumpAdded?'solid '+this.ac()+'55':'dashed '+C.bdStrong),marginBottom:14}},
+          h('span',{style:{width:20,height:20,borderRadius:6,flexShrink:0,marginTop:1,display:'flex',alignItems:'center',justifyContent:'center',background:s.bumpAdded?this.ac():'transparent',border:'2px solid '+(s.bumpAdded?this.ac():C.bdStrong),color:'#fff'}}, s.bumpAdded?this.ic(['M5 12l4 4 10-10'],12,3):null),
+          h('div',null, h('div',{style:{fontSize:12.5,fontWeight:600,color:C.tx,marginBottom:2}},'Yes, add a Dedicated IP \u2014 ',h('span',{style:{color:this.ac()}},fmt(bump)+'/mo')), h('div',{style:{fontSize:11,color:C.quiet,lineHeight:1.5}},'Maximize deliverability with your own sending IP.'))),
+        // coupon
+        s.couponApplied?h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 12px',background:C.okSoft,border:'1px solid rgba(52,211,153,0.25)',borderRadius:8,marginBottom:12}}, h('span',{style:{fontSize:12,color:C.ok,fontWeight:600,display:'flex',alignItems:'center',gap:6}},this.ic(['M5 12l4 4 10-10'],14,2.4),'EARLYBIRD \u2014 25% off applied'), h('button',{onClick:()=>this.setState({couponApplied:false}),style:{background:'transparent',border:'none',color:C.quiet,cursor:'pointer',fontSize:11}},'Remove')):h('div',{style:{display:'flex',gap:8,marginBottom:14}}, h('input',{placeholder:'Discount code',defaultValue:'EARLYBIRD',style:{flex:1,background:C.bg,border:'1px solid '+C.bdStrong,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:12.5,fontFamily:this.mono}}), this.btn('Apply',{small:true,onClick:()=>this.setState({couponApplied:true})})),
+        // totals
+        h('div',{style:{padding:'12px 0',borderTop:'1px solid '+C.bd,borderBottom:'1px solid '+C.bd,marginBottom:14,display:'flex',flexDirection:'column',gap:7}},
+          h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,color:C.mut}}, h('span',null,'Bundle'), h('span',{style:{fontFamily:this.mono}},fmt(base))),
+          s.bumpAdded?h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,color:C.mut}}, h('span',null,'Dedicated IP'), h('span',{style:{fontFamily:this.mono}},fmt(bump))):null,
+          discount>0?h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,color:C.ok}}, h('span',null,'Discount (25%)'), h('span',{style:{fontFamily:this.mono}},'\u2212'+fmt(discount))):null,
+          h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginTop:3}}, h('span',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},'Total'), h('span',{style:{fontSize:20,fontWeight:800,fontFamily:this.mono,color:'#fff'}},fmt(total)))),
+        h('button',{onClick:()=>{ if(!preview) this.setState({purchased:true,screen:'success'}); },style:{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'13px',borderRadius:10,background:this.ac(),color:'#fff',fontSize:14.5,fontWeight:700,fontFamily:'inherit',border:'none',cursor:'pointer',boxShadow:'0 8px 20px -8px '+this.ac()}}, this.ic(['M6 10V8a6 6 0 0 1 12 0v2','M5 10h14v10H5z'],17,2), 'Complete purchase \u2014 '+fmt(total)),
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:12,fontSize:11,color:C.quiet}}, this.ic(['M6 10V8a6 6 0 0 1 12 0v2','M5 10h14v10H5z'],13,1.7),'Secured by Paystack \u00b7 \u20a6 / $ accepted'))
+    ],{overflow:'hidden'}));
+    if(preview) return right; // editor preview shows just the payment card
+    return h('div',{style:{display:'grid',gridTemplateColumns:'1.15fr 0.85fr',gap:32,alignItems:'start'}}, left, right);
+  }
+
+  scrCheckout(){ const C=this.C,h=React.createElement;
+    return h('div',{style:{minHeight:'100%',background:'radial-gradient(ellipse at top,rgba(249,115,22,0.06),transparent 55%),'+C.bg}},
+      h('div',{style:{maxWidth:1040,margin:'0 auto',padding:'34px 24px 90px'}},
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:28}}, h('div',{style:{display:'flex',alignItems:'center',gap:10}}, h('div',{style:{width:28,height:28,borderRadius:7,background:this.ac(),display:'flex',alignItems:'center',justifyContent:'center',color:'#fff'}},this.ic(['M5 7l7-4 7 4v8l-7 4-7-4z'],16,2)), h('span',{style:{fontSize:15,fontWeight:600,color:C.tx}},'Leadash')), h('div',{style:{display:'flex',alignItems:'center',gap:7,fontSize:12,color:C.quiet}}, this.ic(['M6 10V8a6 6 0 0 1 12 0v2','M5 10h14v10H5z'],14,1.7),'Secure checkout')),
+        this.checkoutCard(false)));
+  }
+
+  scrSuccess(){ const C=this.C,h=React.createElement,o=this.offer('bundle');
+    const grantRow=(g,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:13,padding:'14px 16px',background:C.bg,border:'1px solid '+C.bd,borderRadius:11}}, this.grantIcon(g.type,18,40), h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},this.GRANTS[g.type].label), h('div',{style:{fontSize:11.5,color:C.quiet}},this.grantLine(g))), h('span',{style:{fontSize:11,fontWeight:600,color:C.ok,background:C.okSoft,padding:'3px 9px',borderRadius:999,display:'flex',alignItems:'center',gap:5}},this.ic(['M5 12l4 4 10-10'],12,2.6),'Active'));
+    return h('div',{style:{minHeight:'100%',background:'radial-gradient(ellipse at top,rgba(52,211,153,0.08),transparent 50%),'+C.bg}},
+      h('div',{style:{maxWidth:620,margin:'0 auto',padding:'48px 24px 90px',textAlign:'center'}},
+        h('div',{style:{width:64,height:64,borderRadius:999,margin:'0 auto 22px',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',background:'linear-gradient(135deg,'+C.ok+','+C.ok+'bb)',boxShadow:'0 12px 30px -8px '+C.ok}}, this.ic(['M5 12l4 4 10-10'],32,2.4)),
+        h('h1',{style:{fontSize:28,fontWeight:800,letterSpacing:'-0.02em',color:'#fff',marginBottom:10}},'You\u2019re all set, Ada \ud83c\udf89'),
+        h('p',{style:{fontSize:15,lineHeight:1.6,color:C.mut,marginBottom:8}},'Payment received. Everything below is already active in your Leadash workspace.'),
+        h('p',{style:{fontSize:12.5,color:C.quiet,marginBottom:28}},'Receipt sent to ada@company.com \u00b7 Order #LD-29481'),
+        h('div',{style:{textAlign:'left'}}, h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.quiet,marginBottom:12}},'What you unlocked'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginBottom:14}}, o.grants.map(grantRow),
+            h('div',{style:{display:'flex',alignItems:'center',gap:13,padding:'14px 16px',background:C.bg,border:'1px solid '+C.bd,borderRadius:11}}, this.grantIcon('ip',18,40), h('div',{style:{flex:1}}, h('div',{style:{fontSize:13.5,fontWeight:600,color:C.tx}},'Dedicated IP'), h('div',{style:{fontSize:11.5,color:C.quiet}},'Order bump \u00b7 \u20a635,000/mo')), h('span',{style:{fontSize:11,fontWeight:600,color:C.ok,background:C.okSoft,padding:'3px 9px',borderRadius:999,display:'flex',alignItems:'center',gap:5}},this.ic(['M5 12l4 4 10-10'],12,2.6),'Active')))),
+        // next steps
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:4,textAlign:'left'}},
+          h('a',{href:'#',onClick:e=>{e.preventDefault();this.toast('Open WhatsApp community');},style:{display:'flex',alignItems:'center',gap:11,padding:'14px 16px',background:C.elev,border:'1px solid '+C.bd,borderRadius:11,textDecoration:'none',cursor:'pointer'}}, h('span',{style:{color:C.ok}},this.ic(['M16 11a4 4 0 1 0-8 0','M2 21a7 7 0 0 1 14 0','M19 8v6','M22 11h-6'],18,1.7)), h('div',null, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx}},'Join the community'), h('div',{style:{fontSize:11,color:C.quiet}},'Private WhatsApp group'))),
+          h('a',{href:'#',onClick:e=>{e.preventDefault();this.toast('Go to dashboard');},style:{display:'flex',alignItems:'center',gap:11,padding:'14px 16px',background:C.elev,border:'1px solid '+C.bd,borderRadius:11,textDecoration:'none',cursor:'pointer'}}, h('span',{style:{color:this.ac()}},this.ic(['M3 13h8V3H3z','M13 21h8V11h-8z','M13 3v6h8V3z','M3 17v4h8v-4z'],18,1.7)), h('div',null, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx}},'Go to dashboard'), h('div',{style:{fontSize:11,color:C.quiet}},'Set up your inboxes')))),
+        h('div',{style:{marginTop:24}}, this.btn('Enter Leadash \u2192',{primary:true,onClick:()=>this.toast('Launching workspace')}))));
+  }
+  todo(n){ return React.createElement('div',{style:{padding:60,color:this.C.quiet,fontSize:14}}, n+' \u2014 coming up'); }
+
+  renderVals(){ const s=this.state,C=this.C,h=React.createElement;
+    const toastEl=s.toast?h('div',{style:{position:'absolute',bottom:74,left:'50%',transform:'translateX(-50%)',zIndex:90,background:'#1A1A22',border:'1px solid '+C.bdStrong,color:C.tx,fontSize:13,fontWeight:500,padding:'10px 18px',borderRadius:10,boxShadow:'0 16px 40px -10px rgba(0,0,0,.6)',display:'flex',alignItems:'center',gap:9}}, h('span',{style:{color:this.ac()}},this.ic(['M5 12l4 4 10-10'],15,2.4)), s.toast):null;
+    return { chrome:this.chrome(), body:this.body(), switcher:this.switcher(), toastEl };
+  }
+}
+</script>
+</body>
+</html>
