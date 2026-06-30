@@ -11,6 +11,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { fulfillAllGrants } from "@/lib/offers/granters";
+import { enqueueAutomation } from "@/lib/queue/client";
 import type { Offer, OfferLineItem, GrantedItem } from "@/types/offers";
 
 const APP_URL    = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
@@ -23,6 +24,7 @@ interface CheckoutBody {
   bump_ids?: string[];
   discount_code?: string;
   event?: "started" | "payment_added";
+  funnel_id?: string;
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -193,6 +195,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   // ── Currency for display purposes only — actual charge is always NGN/kobo ──
   const currency: "NGN" | "USD" = offer.currency_mode === "usd_only" ? "USD" : "NGN";
 
+  // Last-touch funnel attribution (set client-side when the buyer arrived via
+  // an in-funnel CTA) — validated against a real funnel so a stale/forged id
+  // never breaks checkout or gets stored as garbage.
+  let funnelId: string | null = null;
+  if (body.funnel_id) {
+    const { data: attributedFunnel } = await db.from("funnels").select("id").eq("id", body.funnel_id).maybeSingle();
+    funnelId = attributedFunnel?.id ?? null;
+  }
+
   const { data: purchase, error: purchaseErr } = await db
     .from("offer_purchases")
     .insert({
@@ -209,6 +220,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       total_ngn,
       currency,
       status:           "pending",
+      funnel_id:        funnelId,
     })
     .select()
     .single();
@@ -244,6 +256,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     }
 
     await db.from("offer_checkout_events").insert({ offer_id: offer.id, session_id: sessionId, event_type: "purchased" });
+
+    if (workspaceId && userId) {
+      enqueueAutomation({
+        event:        "offers.purchase_created",
+        workspace_id: workspaceId,
+        user_id:      userId,
+        payload:      { offer_id: offer.id, offer_name: offer.name, total_ngn: 0, purchase_id: purchase.id },
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ free: true, purchase_id: purchase.id });
   }

@@ -292,6 +292,20 @@ export async function POST(req: NextRequest) {
         .eq("id", enrollmentRow.id);
     }
 
+    // Fire generalized day-completion event for all products and all days
+    enqueueAutomation({
+      event:        "academy.challenge_day_completed",
+      workspace_id: enrollmentRow.workspace_id,
+      user_id:      userId,
+      payload:      {
+        product_id:     taskRow.product_id,
+        day:            taskRow.day,
+        points_awarded: pointsAwarded,
+        streak_days:    newStreakDays || (gamification?.streak_days ?? 0),
+        enrollment_id:  enrollmentRow.id,
+      },
+    }).catch(() => {});
+
     // Legacy funnel compat: the 30-Day Challenge's Day-1 completion drives the
     // Mizark bundle-upsell automation via funnel_states, predating challenge_config.
     if (taskRow.product_id === "challenge-30" && taskRow.day === 1) {

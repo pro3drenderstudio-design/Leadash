@@ -26,6 +26,7 @@ import {
 } from "@/types/offers";
 import { GRANT_ICONS } from "@/app/(admin)/admin/offers/grantIcons";
 import { createClient } from "@/lib/supabase/client";
+import { trackPurchase } from "@/lib/tracking/pixels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,6 +263,27 @@ function PaidConfirmation({ slug, purchase, offer }: { slug: string; purchase: O
       setIsAuthed(!!data.user);
     }).catch(() => setIsAuthed(false));
   }, []);
+
+  // Fire the funnel's Purchase pixel event once the deal is final (after any
+  // upsell/downsell has been resolved, so the value reflects the full total).
+  // Deduped via sessionStorage so refreshing this page doesn't double-count.
+  useEffect(() => {
+    if (stage !== "resolved" || !localPurchase.funnel_id) return;
+    const dedupeKey = `ld_purchase_tracked_${localPurchase.id}`;
+    if (sessionStorage.getItem(dedupeKey)) return;
+    sessionStorage.setItem(dedupeKey, "1");
+
+    fetch(`/api/public/funnels/${localPurchase.funnel_id}/tracking`)
+      .then(res => res.json())
+      .then((d: { tracking?: Record<string, string> }) => {
+        trackPurchase(d.tracking, {
+          value: localPurchase.total_ngn,
+          currency: localPurchase.currency,
+          orderId: localPurchase.id,
+        });
+      })
+      .catch(() => {});
+  }, [stage, localPurchase.funnel_id, localPurchase.id, localPurchase.total_ngn, localPurchase.currency]);
 
   async function respondToOffer(stageArg: "upsell" | "downsell", accept: boolean) {
     setUpsellBusy(true);

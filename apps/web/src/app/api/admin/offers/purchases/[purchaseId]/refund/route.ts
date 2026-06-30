@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { refundPaystackPayment } from "@/lib/billing/paystack";
 import { revokeGrant } from "@/lib/offers/granters";
+import { enqueueAutomation } from "@/lib/queue/client";
 import type { Offer, OfferBump, OfferPurchase, GrantedItem, OfferGrant } from "@/types/offers";
 
 async function requireAdmin() {
@@ -82,6 +83,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pu
         reference:   typedPurchase.paystack_reference ?? `free:${typedPurchase.id}`,
       });
     }
+  }
+
+  if (typedPurchase.workspace_id && typedPurchase.user_id) {
+    enqueueAutomation({
+      event:        "offers.refund_issued",
+      workspace_id: typedPurchase.workspace_id,
+      user_id:      typedPurchase.user_id,
+      payload:      { offer_id: typedPurchase.offer_id, total_ngn: typedPurchase.total_ngn, reason: "admin_refund" },
+    }).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, purchase: updated as OfferPurchase });

@@ -449,6 +449,11 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug }: Lay
       bump_ids: bumpIds,
     };
     if (discountCode.trim()) payload.discount_code = discountCode.trim();
+    // Last-touch funnel attribution, set by FunnelPageRenderer when the buyer
+    // arrived here via an in-funnel CTA — read back on the success page to
+    // fire that funnel's Purchase pixel event.
+    const lastFunnelId = sessionStorage.getItem("ld_last_funnel_id");
+    if (lastFunnelId) payload.funnel_id = lastFunnelId;
 
     try {
       const res = await fetch(`/api/offers/${slug}/checkout`, {

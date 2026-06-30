@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -83,6 +84,13 @@ export async function POST(req: NextRequest) {
         ]);
       }
     }
+
+    enqueueAutomation({
+      event:        "academy.enrollment_created",
+      workspace_id: workspaceId,
+      user_id:      userId,
+      payload:      { product_id, enrollment_id: enrollment.id, access_type: "free" },
+    }).catch(() => {});
 
     return NextResponse.json({ enrolled: true, enrollment_id: enrollment.id });
   }

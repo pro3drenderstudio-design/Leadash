@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -100,6 +101,13 @@ export async function POST(req: NextRequest) {
     paystack_reference: reference,
     status:             "paid",
   }).throwOnError().then(() => {}).catch(() => {});
+
+  enqueueAutomation({
+    event:        "academy.enrollment_created",
+    workspace_id: workspaceId,
+    user_id:      userId ?? null,
+    payload:      { product_id: productId, enrollment_id: enrollment.id, access_type: "paid" },
+  }).catch(() => {});
 
   return NextResponse.json({ status: "enrolled", enrollment_id: enrollment.id });
 }

@@ -50,8 +50,8 @@ export async function enqueueWhatsapp(data: {
 /** Enqueue an automation trigger event */
 export async function enqueueAutomation(data: {
   event:        string;
-  workspace_id: string;
-  user_id:      string;
+  workspace_id: string | null;
+  user_id:      string | null;
   payload:      Record<string, unknown>;
 }) {
   const q = automationQueue();

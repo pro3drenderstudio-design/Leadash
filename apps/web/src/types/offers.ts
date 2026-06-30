@@ -196,6 +196,7 @@ export interface OfferPurchase {
   offer_id: string;
   workspace_id: string | null;
   user_id: string | null;
+  funnel_id: string | null;
   buyer_name: string | null;
   buyer_email: string | null;
   buyer_phone: string | null;

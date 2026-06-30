@@ -125,6 +125,17 @@ export async function GET(req: NextRequest) {
       tasksByDay.get(t.day)!.push(t);
     }
 
+    // Batch-fetch gamification for streak-break detection
+    const { data: gamRows } = await db
+      .from("academy_gamification")
+      .select("enrollment_id, streak_days, last_active_date")
+      .in("enrollment_id", (enrollments as EnrollmentRow[]).map(e => e.id));
+    const gamByEnrollment = new Map<string, { streak_days: number; last_active_date: string | null }>(
+      ((gamRows ?? []) as { enrollment_id: string; streak_days: number; last_active_date: string | null }[]).map(
+        g => [g.enrollment_id, { streak_days: g.streak_days, last_active_date: g.last_active_date }],
+      ),
+    );
+
     for (const enrollment of enrollments as EnrollmentRow[]) {
       let startAt = new Date(enrollment.enrolled_at).getTime();
       if ((startMode === "cohort" || startMode === "fixed_cohort") && enrollment.cohort_id) {
@@ -163,6 +174,37 @@ export async function GET(req: NextRequest) {
           sent++;
         } catch (err) {
           console.error(`[challenge-reminders] daily reminder failed enrollment=${enrollment.id}:`, err instanceof Error ? err.message : err);
+        }
+      }
+
+      // ── Streak broken detection ──────────────────────────────────────────────
+      const gam = gamByEnrollment.get(enrollment.id);
+      if (gam && gam.streak_days > 0 && gam.last_active_date) {
+        const graceDays = (product.challenge_config?.grace_days as number | undefined) ?? 0;
+        const todayStr = new Date().toISOString().split("T")[0];
+        const diffDays = Math.round(
+          (new Date(todayStr).getTime() - new Date(gam.last_active_date).getTime()) / 86_400_000,
+        );
+        const streakBrokenKey = `streak_broken_${day}`;
+        if (diffDays > graceDays + 1 && !sentMap[streakBrokenKey]) {
+          try {
+            await enqueueAutomation({
+              event:        "academy.streak_broken",
+              workspace_id: enrollment.workspace_id,
+              user_id:      enrollment.user_id,
+              payload:      {
+                product_id:       product.id,
+                enrollment_id:    enrollment.id,
+                streak_days_lost: gam.streak_days,
+                days_missed:      diffDays - 1,
+              },
+            });
+            sentMap[streakBrokenKey] = true;
+            await db.from("academy_enrollments").update({ reminders_sent: sentMap }).eq("id", enrollment.id);
+            sent++;
+          } catch (err) {
+            console.error(`[challenge-reminders] streak broken failed enrollment=${enrollment.id}:`, err instanceof Error ? err.message : err);
+          }
         }
       }
 

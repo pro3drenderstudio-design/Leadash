@@ -168,6 +168,13 @@ export async function fulfillGrant(
           }
         }
 
+        enqueueAutomation({
+          event:        "academy.enrollment_created",
+          workspace_id: ctx.workspaceId,
+          user_id:      ctx.userId,
+          payload:      { product_id: grant.productId, enrollment_id: enrollment?.id ?? null, access_type: "admin_granted" },
+        }).catch(() => {});
+
         return { grant_id: grant.id, type: grant.type, status: "granted" };
       }
 
@@ -200,6 +207,12 @@ export async function fulfillGrant(
 
       // ── Custom grant — never auto-fulfilled ────────────────────────────────
       case "custom": {
+        enqueueAutomation({
+          event:        "offers.custom_grant_pending",
+          workspace_id: ctx.workspaceId,
+          user_id:      ctx.userId,
+          payload:      { offer_name: ctx.offerName, reference: ctx.reference, description: grant.description ?? null },
+        }).catch(() => {});
         return { grant_id: grant.id, type: grant.type, status: "pending_manual", detail: grant.description || "Requires manual fulfillment" };
       }
 

@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -128,5 +129,16 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Fire crm.tag_added whenever tags are updated, so automations can react to tag changes
+  if ("tags" in body && data.workspace_id && data.user_id && Array.isArray(data.tags) && data.tags.length > 0) {
+    enqueueAutomation({
+      event:        "crm.tag_added",
+      workspace_id: data.workspace_id,
+      user_id:      data.user_id,
+      payload:      { contact_id: data.id, tags: data.tags },
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ contact: data });
 }

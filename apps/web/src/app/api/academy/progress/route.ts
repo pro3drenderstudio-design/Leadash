@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { isLessonUnlocked } from "@/types/academy";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 const POINTS_PER_LESSON = 10;
 const POINTS_PER_COURSE = 200;
@@ -54,6 +55,13 @@ export async function POST(req: NextRequest) {
 
   if (!isComplete) return NextResponse.json({ progress: prog });
 
+  enqueueAutomation({
+    event:        "academy.lesson_completed",
+    workspace_id: workspaceId,
+    user_id:      userId,
+    payload:      { product_id, lesson_id, enrollment_id: enrollment.id },
+  }).catch(() => {});
+
   // Check overall course completion
   const [allLessonsRes, allProgressRes] = await Promise.all([
     db.from("academy_lessons").select("id").eq("product_id", product_id).eq("is_published", true),
@@ -75,6 +83,16 @@ export async function POST(req: NextRequest) {
     await db.from("academy_enrollments")
       .update({ status: "completed", completed_at: now })
       .eq("id", enrollment.id);
+
+    // Only fire once — skip if enrollment was already in completed state
+    if (enrollment.status !== "completed") {
+      enqueueAutomation({
+        event:        "academy.course_completed",
+        workspace_id: workspaceId,
+        user_id:      userId,
+        payload:      { product_id, enrollment_id: enrollment.id, pct_complete: Math.round(pctComplete) },
+      }).catch(() => {});
+    }
 
     if (product?.certificate_enabled) {
       const { count } = await db.from("academy_certificates").select("*", { count: "exact", head: true });

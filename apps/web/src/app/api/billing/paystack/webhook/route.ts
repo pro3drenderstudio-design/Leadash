@@ -611,6 +611,17 @@ export async function POST(req: NextRequest) {
                     send_whatsapp: offer.send_whatsapp,
                   },
                 }).catch(e => console.error("[paystack] offer automation enqueue failed:", e));
+                enqueueAutomation({
+                  event:        "offers.purchase_created",
+                  workspace_id: purchase.workspace_id,
+                  user_id:      purchase.user_id,
+                  payload: {
+                    offer_id:    offer.id,
+                    offer_name:  offer.name,
+                    total_ngn:   purchase.total_ngn,
+                    purchase_id: purchase.id,
+                  },
+                }).catch(e => console.error("[paystack] offers.purchase_created enqueue failed:", e));
               }
             }
           }
@@ -912,6 +923,17 @@ export async function POST(req: NextRequest) {
             .eq("id", bundleWs.id);
         }
         console.warn(`[billing] Bundle payment failed: workspace=${bundleWs.id} grace_ends_at=${graceEndsAt}`);
+
+        const bundleMemberId = (bundleWs as unknown as { workspace_members?: Array<{ user_id: string }> }).workspace_members?.[0]?.user_id;
+        if (bundleMemberId) {
+          enqueueAutomation({
+            event:        "billing.payment_failed",
+            workspace_id: bundleWs.id,
+            user_id:      bundleMemberId,
+            payload:      { reason: "bundle", grace_ends_at: graceEndsAt },
+          }).catch(() => {});
+        }
+
         return NextResponse.json({ received: true });
       }
     }
@@ -947,6 +969,16 @@ export async function POST(req: NextRequest) {
           await db.from("workspaces")
             .update({ billing_reminders_sent: { ...sentMap, [todayKey]: true } })
             .eq("id", ws.id);
+        }
+
+        const planMemberId = (ws as unknown as { workspace_members?: Array<{ user_id: string }> }).workspace_members?.[0]?.user_id;
+        if (planMemberId) {
+          enqueueAutomation({
+            event:        "billing.payment_failed",
+            workspace_id: ws.id,
+            user_id:      planMemberId,
+            payload:      { reason: "plan", grace_ends_at: graceEndsAt },
+          }).catch(() => {});
         }
       }
     }
