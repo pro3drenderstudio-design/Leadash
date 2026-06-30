@@ -7,16 +7,23 @@ import Link from "next/link";
 
 interface ChannelConfig {
   id:               string;
-  channel:          "instagram" | "facebook" | "sms";
+  channel:          "instagram" | "facebook" | "sms" | "whatsapp";
   status:           "connected" | "disconnected" | "error";
   config:           Record<string, string>;
   token_expires_at: string | null;
   updated_at:       string;
 }
 
-interface AdminSetting {
-  key:   string;
-  value: string;
+interface WhatsappTemplate {
+  id:               string;
+  meta_template_id: string | null;
+  name:             string;
+  language:         string;
+  category:         "MARKETING" | "UTILITY" | "AUTHENTICATION";
+  status:           "PENDING" | "APPROVED" | "REJECTED" | "PAUSED" | "DISABLED";
+  components:       unknown[];
+  rejected_reason:  string | null;
+  updated_at:       string;
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -47,6 +54,14 @@ function SmsIcon() {
   );
 }
 
+function WhatsappIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  );
+}
+
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
@@ -54,6 +69,11 @@ function StatusBadge({ status }: { status: string }) {
     connected:    "bg-emerald-500/20 text-emerald-300",
     disconnected: "bg-white/10 text-white/40",
     error:        "bg-red-500/20 text-red-400",
+    APPROVED:     "bg-emerald-500/20 text-emerald-300",
+    PENDING:      "bg-amber-500/20 text-amber-300",
+    REJECTED:     "bg-red-500/20 text-red-400",
+    PAUSED:       "bg-white/10 text-white/40",
+    DISABLED:     "bg-white/10 text-white/30",
   };
   return (
     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${colors[status] ?? colors.disconnected}`}>
@@ -101,11 +121,11 @@ function Field({
 // ─── Channel Card ─────────────────────────────────────────────────────────────
 
 interface ChannelCardProps {
-  channel:    "instagram" | "facebook" | "sms";
-  label:      string;
-  icon:       React.ReactNode;
-  config:     ChannelConfig | null;
-  onSave:     (creds: Record<string, string>, cfg: Record<string, string>) => Promise<void>;
+  channel:      "instagram" | "facebook" | "sms" | "whatsapp";
+  label:        string;
+  icon:         React.ReactNode;
+  config:       ChannelConfig | null;
+  onSave:       (creds: Record<string, string>, cfg: Record<string, string>) => Promise<void>;
   onDisconnect: () => Promise<void>;
 }
 
@@ -253,6 +273,54 @@ function SmsCard({ config, onSave, onDisconnect }: Pick<ChannelCardProps, "confi
   );
 }
 
+function WhatsappCard({ config, onSave, onDisconnect }: Pick<ChannelCardProps, "config" | "onSave" | "onDisconnect">) {
+  const [phoneNumberId, setPhoneNumberId] = useState(config?.config?.phone_number_id ?? "");
+  const [wabaId,        setWabaId]        = useState(config?.config?.waba_id ?? "");
+  const [accessToken,   setAccessToken]   = useState("");
+  const [saving,        setSaving]        = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const creds: Record<string, string> = {};
+    if (accessToken) creds.access_token = accessToken;
+    await onSave(creds, { phone_number_id: phoneNumberId, waba_id: wabaId });
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Phone Number ID" value={phoneNumberId} onChange={setPhoneNumberId}
+          placeholder="1234567890123456"
+          hint="Meta Business Suite → WhatsApp → Phone numbers" />
+        <Field label="WABA ID" value={wabaId} onChange={setWabaId}
+          placeholder="1234567890123456"
+          hint="WhatsApp Business Account ID" />
+      </div>
+      <Field label="System User Access Token" value={accessToken} onChange={setAccessToken} type="password"
+        hint="System user token from Meta. Leave blank to keep existing token." />
+      <div className="bg-white/5 rounded-lg p-3 text-[11px] text-white/40 space-y-1">
+        <p className="font-medium text-white/50">Webhook endpoint to register in Meta Dashboard:</p>
+        <code className="text-orange-400/80 font-mono">https://leadash.com/api/crm/inbound-whatsapp</code>
+        <p className="mt-1">Verify token: <code className="text-orange-400/80">leadash_webhook_token</code></p>
+        <p>Subscribe to: <code className="text-white/60">messages</code></p>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={saving || !phoneNumberId || !wabaId}
+          className="flex-1 bg-green-600/30 hover:bg-green-600/50 border border-green-500/30 text-green-200 text-sm py-2 rounded-lg transition disabled:opacity-40">
+          {saving ? "Saving…" : config?.status === "connected" ? "Update" : "Connect"}
+        </button>
+        {config?.status === "connected" && (
+          <button onClick={onDisconnect}
+            className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 text-red-400 text-sm rounded-lg transition">
+            Disconnect
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChannelCard({ channel, label, icon, config, onSave, onDisconnect }: ChannelCardProps) {
   const [expanded, setExpanded] = useState(config?.status === "connected" ? false : true);
 
@@ -281,6 +349,218 @@ function ChannelCard({ channel, label, icon, config, onSave, onDisconnect }: Cha
           {channel === "instagram" && <InstagramCard config={config} onSave={onSave} onDisconnect={onDisconnect} />}
           {channel === "facebook"  && <FacebookCard  config={config} onSave={onSave} onDisconnect={onDisconnect} />}
           {channel === "sms"       && <SmsCard       config={config} onSave={onSave} onDisconnect={onDisconnect} />}
+          {channel === "whatsapp"  && <WhatsappCard  config={config} onSave={onSave} onDisconnect={onDisconnect} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WhatsApp Templates ───────────────────────────────────────────────────────
+
+const CATEGORIES = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
+const LANGUAGES  = [
+  { code: "en",    label: "English" },
+  { code: "en_US", label: "English (US)" },
+  { code: "pcm",   label: "Pidgin (Nigeria)" },
+] as const;
+
+function WhatsappTemplatesSection({ connected }: { connected: boolean }) {
+  const [templates,  setTemplates]  = useState<WhatsappTemplate[]>([]);
+  const [syncing,    setSyncing]    = useState(false);
+  const [deleting,   setDeleting]   = useState<string | null>(null);
+  const [showForm,   setShowForm]   = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError,  setFormError]  = useState<string | null>(null);
+  const [toast,      setToast]      = useState<string | null>(null);
+
+  const [name,          setName]          = useState("");
+  const [category,      setCategory]      = useState<typeof CATEGORIES[number]>("MARKETING");
+  const [language,      setLanguage]      = useState("en");
+  const [bodyText,      setBodyText]      = useState("");
+  const [footerText,    setFooterText]    = useState("");
+  const [exampleParams, setExampleParams] = useState("");
+
+  const hasPlaceholders = /\{\{\d+\}\}/.test(bodyText);
+
+  const showToastMsg = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const sync = useCallback(async () => {
+    setSyncing(true);
+    const res = await fetch("/api/admin/crm-settings/whatsapp-templates");
+    if (res.ok) {
+      const { templates: t } = await res.json() as { templates: WhatsappTemplate[] };
+      setTemplates(t ?? []);
+    }
+    setSyncing(false);
+  }, []);
+
+  useEffect(() => {
+    if (connected) sync();
+  }, [connected, sync]);
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    await fetch(`/api/admin/crm-settings/whatsapp-templates/${id}`, { method: "DELETE" });
+    setTemplates(prev => prev.filter(t => t.id !== id));
+    setDeleting(null);
+    showToastMsg("Template deleted");
+  };
+
+  const handleSubmit = async () => {
+    setFormError(null);
+    if (!name || !bodyText) { setFormError("Name and body text are required"); return; }
+    if (!/^[a-z0-9_]+$/.test(name)) { setFormError("Name must be lowercase letters, digits, and underscores only"); return; }
+    if (hasPlaceholders && !exampleParams.trim()) {
+      setFormError("Example values are required when the body contains {{1}}-style placeholders");
+      return;
+    }
+
+    setSubmitting(true);
+    const res = await fetch("/api/admin/crm-settings/whatsapp-templates", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        category,
+        language,
+        body_text:      bodyText,
+        footer_text:    footerText || undefined,
+        example_params: hasPlaceholders ? exampleParams.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+      }),
+    });
+    const data = await res.json() as { template?: WhatsappTemplate; error?: string };
+    setSubmitting(false);
+
+    if (!res.ok) { setFormError(data.error ?? "Failed to create template"); return; }
+    setTemplates(prev => [...prev, data.template!]);
+    setShowForm(false);
+    setName(""); setBodyText(""); setFooterText(""); setExampleParams("");
+    showToastMsg("Template submitted to Meta — awaiting approval");
+  };
+
+  if (!connected) {
+    return (
+      <div className="text-center py-8 text-sm text-white/30">
+        Connect WhatsApp above first to manage templates.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-white/40">Templates synced from your Meta WABA. Create new templates here; they go to Meta for approval.</p>
+        <button onClick={sync} disabled={syncing}
+          className="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 rounded-lg transition disabled:opacity-40">
+          {syncing ? "Syncing…" : "Refresh from Meta"}
+        </button>
+      </div>
+
+      {/* Template list */}
+      {templates.length > 0 ? (
+        <div className="space-y-2">
+          {templates.map(t => (
+            <div key={t.id} className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <code className="text-sm text-white/80 font-mono truncate">{t.name}</code>
+                <span className="text-[10px] bg-white/10 text-white/40 px-1.5 py-0.5 rounded">{t.category}</span>
+                <span className="text-[10px] text-white/30">{t.language}</span>
+                <StatusBadge status={t.status} />
+                {t.rejected_reason && (
+                  <span className="text-[10px] text-red-400/70 truncate max-w-48" title={t.rejected_reason}>
+                    {t.rejected_reason}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => handleDelete(t.id)}
+                disabled={deleting === t.id}
+                className="ml-3 text-white/20 hover:text-red-400 transition disabled:opacity-40 flex-shrink-0"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-white/30 text-center py-6">No templates yet. Create one below or click Refresh from Meta.</p>
+      )}
+
+      {/* New template form */}
+      {showForm ? (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-medium text-white/60">New Template</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">Name</label>
+              <input value={name} onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                placeholder="leadash_welcome"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-orange-500/50" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">Category</label>
+              <select value={category} onChange={e => setCategory(e.target.value as typeof CATEGORIES[number])}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                {CATEGORIES.map(c => <option key={c} value={c} className="bg-zinc-900">{c}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">Language</label>
+              <select value={language} onChange={e => setLanguage(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                {LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-zinc-900">{l.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-white/50">Body text</label>
+            <textarea value={bodyText} onChange={e => setBodyText(e.target.value)} rows={3}
+              placeholder="Hello {{1}}, your challenge starts tomorrow!"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50 resize-none" />
+            <p className="text-[11px] text-white/30">Use {"{{1}}"}, {"{{2}}"}, etc. for dynamic values.</p>
+          </div>
+          {hasPlaceholders && (
+            <div className="space-y-1">
+              <label className="text-xs text-white/50">Example values (comma-separated, required for Meta review)</label>
+              <input value={exampleParams} onChange={e => setExampleParams(e.target.value)}
+                placeholder="Temi, 2024-01-15"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50" />
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="text-xs text-white/50">Footer text (optional)</label>
+            <input value={footerText} onChange={e => setFooterText(e.target.value)}
+              placeholder="Reply STOP to unsubscribe"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50" />
+          </div>
+          {formError && <p className="text-xs text-red-400">{formError}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSubmit} disabled={submitting}
+              className="bg-green-600/30 hover:bg-green-600/50 border border-green-500/30 text-green-200 text-sm px-4 py-2 rounded-lg transition disabled:opacity-40">
+              {submitting ? "Submitting…" : "Submit to Meta"}
+            </button>
+            <button onClick={() => { setShowForm(false); setFormError(null); }}
+              className="text-white/40 hover:text-white/60 text-sm px-4 py-2 rounded-lg transition">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowForm(true)}
+          className="w-full py-2.5 border border-dashed border-white/10 text-white/30 hover:text-white/50 hover:border-white/20 text-sm rounded-xl transition">
+          + New template
+        </button>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-800 border border-white/10 text-white text-sm px-4 py-2 rounded-lg shadow-xl z-50 pointer-events-none">
+          {toast}
         </div>
       )}
     </div>
@@ -525,6 +805,22 @@ function SlaEditor({ value, onChange }: { value: SlaConfig; onChange: (v: SlaCon
   );
 }
 
+// ─── Toggle ───────────────────────────────────────────────────────────────────
+
+function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => onChange(!value)}
+        className={`w-9 h-5 rounded-full transition flex-shrink-0 relative ${value ? "bg-orange-500" : "bg-white/20"}`}
+      >
+        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? "translate-x-4" : "translate-x-0.5"}`} />
+      </button>
+      <span className="text-xs text-white/50">{label}</span>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const DEFAULT_BUSINESS_HOURS: BusinessHours = {
@@ -542,14 +838,25 @@ const DEFAULT_SLA: SlaConfig = {
 };
 
 export default function CrmSettingsPage() {
-  const [configs,        setConfigs]        = useState<ChannelConfig[]>([]);
-  const [businessHours,  setBusinessHours]  = useState<BusinessHours>(DEFAULT_BUSINESS_HOURS);
-  const [cannedResponses,setCannedResponses]= useState<CannedResponse[]>([]);
-  const [customFields,   setCustomFields]   = useState<CustomFieldDef[]>([]);
-  const [sla,            setSla]            = useState<SlaConfig>(DEFAULT_SLA);
-  const [loading,        setLoading]        = useState(true);
-  const [saving,         setSaving]         = useState(false);
-  const [toast,          setToast]          = useState<string | null>(null);
+  const [configs,          setConfigs]          = useState<ChannelConfig[]>([]);
+  const [waConnected,      setWaConnected]       = useState(false);
+  const [businessHours,    setBusinessHours]     = useState<BusinessHours>(DEFAULT_BUSINESS_HOURS);
+  const [cannedResponses,  setCannedResponses]   = useState<CannedResponse[]>([]);
+  const [customFields,     setCustomFields]      = useState<CustomFieldDef[]>([]);
+  const [sla,              setSla]               = useState<SlaConfig>(DEFAULT_SLA);
+  // CRM Inbox settings
+  const [supportEmail,     setSupportEmail]      = useState("support@leadash.com");
+  const [marketingEmail,   setMarketingEmail]    = useState("temi@leadash.com");
+  const [autoReopen,       setAutoReopen]        = useState(true);
+  // Brand & tracking
+  const [pixelId,          setPixelId]           = useState("");
+  const [twitterUrl,       setTwitterUrl]        = useState("");
+  const [linkedinUrl,      setLinkedinUrl]       = useState("");
+  const [instagramUrl,     setInstagramUrl]      = useState("");
+
+  const [loading,          setLoading]           = useState(true);
+  const [saving,           setSaving]            = useState(false);
+  const [toast,            setToast]             = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -566,23 +873,29 @@ export default function CrmSettingsPage() {
         if (cfgRes.ok) {
           const { configs: cfgs } = await cfgRes.json() as { configs: ChannelConfig[] };
           setConfigs(cfgs ?? []);
+          const waCfg = (cfgs ?? []).find(c => c.channel === "whatsapp");
+          setWaConnected(waCfg?.status === "connected");
         }
         if (settingsRes.ok) {
-          // /api/admin/settings returns { settings: Record<string, unknown> }
           const { settings } = await settingsRes.json() as { settings: Record<string, string | undefined> };
           const get = (k: string) => settings[k];
 
           const bh = get("crm_business_hours");
           if (bh) setBusinessHours(JSON.parse(bh));
-
           const cr = get("crm_canned_responses");
           if (cr) setCannedResponses(JSON.parse(cr));
-
           const cf = get("crm_custom_fields");
           if (cf) setCustomFields(JSON.parse(cf));
-
           const slaRaw = get("crm_sla_config");
           if (slaRaw) setSla(JSON.parse(slaRaw));
+
+          if (get("crm_support_email"))     setSupportEmail(get("crm_support_email")!);
+          if (get("crm_marketing_email"))   setMarketingEmail(get("crm_marketing_email")!);
+          if (get("crm_auto_reopen_on_reply") !== undefined) setAutoReopen(get("crm_auto_reopen_on_reply") !== "false");
+          if (get("meta_pixel_id"))         setPixelId(get("meta_pixel_id")!);
+          if (get("social_twitter_url"))    setTwitterUrl(get("social_twitter_url")!);
+          if (get("social_linkedin_url"))   setLinkedinUrl(get("social_linkedin_url")!);
+          if (get("social_instagram_url"))  setInstagramUrl(get("social_instagram_url")!);
         }
       } catch (e) {
         console.error("[crm-settings] load error:", e);
@@ -592,11 +905,11 @@ export default function CrmSettingsPage() {
     })();
   }, []);
 
-  const getConfig = (ch: "instagram" | "facebook" | "sms") =>
+  const getConfig = (ch: "instagram" | "facebook" | "sms" | "whatsapp") =>
     configs.find(c => c.channel === ch) ?? null;
 
   const handleSaveChannel = async (
-    channel: "instagram" | "facebook" | "sms",
+    channel: "instagram" | "facebook" | "sms" | "whatsapp",
     credentials: Record<string, string>,
     config: Record<string, string>,
   ) => {
@@ -616,15 +929,17 @@ export default function CrmSettingsPage() {
         }
         return [...prev, updated];
       });
+      if (channel === "whatsapp") setWaConnected(true);
       showToast(`${channel} connected`);
     } else {
       showToast("Failed to save");
     }
   };
 
-  const handleDisconnect = async (channel: "instagram" | "facebook" | "sms") => {
+  const handleDisconnect = async (channel: "instagram" | "facebook" | "sms" | "whatsapp") => {
     await fetch(`/api/admin/crm-settings?channel=${channel}`, { method: "DELETE" });
     setConfigs(prev => prev.map(c => c.channel === channel ? { ...c, status: "disconnected" } : c));
+    if (channel === "whatsapp") setWaConnected(false);
     showToast(`${channel} disconnected`);
   };
 
@@ -635,10 +950,17 @@ export default function CrmSettingsPage() {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          crm_business_hours:   JSON.stringify(businessHours),
-          crm_canned_responses: JSON.stringify(cannedResponses),
-          crm_custom_fields:    JSON.stringify(customFields),
-          crm_sla_config:       JSON.stringify(sla),
+          crm_business_hours:      JSON.stringify(businessHours),
+          crm_canned_responses:    JSON.stringify(cannedResponses),
+          crm_custom_fields:       JSON.stringify(customFields),
+          crm_sla_config:          JSON.stringify(sla),
+          crm_support_email:       supportEmail,
+          crm_marketing_email:     marketingEmail,
+          crm_auto_reopen_on_reply: String(autoReopen),
+          meta_pixel_id:           pixelId,
+          social_twitter_url:      twitterUrl,
+          social_linkedin_url:     linkedinUrl,
+          social_instagram_url:    instagramUrl,
         }),
       });
       showToast("Settings saved");
@@ -647,7 +969,7 @@ export default function CrmSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [businessHours, cannedResponses, customFields, sla]);
+  }, [businessHours, cannedResponses, customFields, sla, supportEmail, marketingEmail, autoReopen, pixelId, twitterUrl, linkedinUrl, instagramUrl]);
 
   if (loading) {
     return (
@@ -682,7 +1004,7 @@ export default function CrmSettingsPage() {
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
-        {/* Channel connections */}
+        {/* ── Channel connections ── */}
         <div>
           <h2 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Channel Connections</h2>
           <div className="space-y-3">
@@ -704,32 +1026,82 @@ export default function CrmSettingsPage() {
               onSave={(cr, cfg) => handleSaveChannel("sms", cr, cfg)}
               onDisconnect={() => handleDisconnect("sms")}
             />
+            <ChannelCard
+              channel="whatsapp" label="WhatsApp" icon={<WhatsappIcon />}
+              config={getConfig("whatsapp")}
+              onSave={(cr, cfg) => handleSaveChannel("whatsapp", cr, cfg)}
+              onDisconnect={() => handleDisconnect("whatsapp")}
+            />
           </div>
         </div>
 
-        {/* SLA */}
+        {/* ── WhatsApp Templates ── */}
+        <Section title="WhatsApp Templates">
+          <WhatsappTemplatesSection connected={waConnected} />
+        </Section>
+
+        {/* ── CRM Inbox ── */}
+        <Section title="CRM Inbox">
+          <Field label="Support inbox email" value={supportEmail} onChange={setSupportEmail}
+            type="email" placeholder="support@leadash.com"
+            hint="Inbound emails to this address appear in the Support inbox." />
+          <Field label="Marketing inbox email" value={marketingEmail} onChange={setMarketingEmail}
+            type="email" placeholder="temi@leadash.com"
+            hint="Inbound emails to this address appear in the Marketing inbox." />
+          <div className="space-y-1.5">
+            <label className="text-xs text-white/50">Auto-reopen on reply</label>
+            <p className="text-[11px] text-white/30">Automatically reopen a resolved conversation when the customer replies.</p>
+            <div className="flex gap-1.5 mt-0.5">
+              {([true, false] as const).map(v => (
+                <button key={String(v)} onClick={() => setAutoReopen(v)}
+                  className={`px-4 py-1.5 text-xs font-semibold rounded-lg border transition ${
+                    autoReopen === v
+                      ? "bg-white/20 border-white/30 text-white"
+                      : "bg-white/5 border-white/10 text-white/40 hover:text-white/60"
+                  }`}>
+                  {v ? "Yes" : "No"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ── Brand & Tracking ── */}
+        <Section title="Brand & Tracking">
+          <Field label="Meta Pixel ID" value={pixelId} onChange={setPixelId}
+            placeholder="123456789012345"
+            hint="Used on funnel pages and public landing pages for conversion tracking." />
+          <Field label="X / Twitter URL" value={twitterUrl} onChange={setTwitterUrl}
+            placeholder="https://twitter.com/leadash" hint="Displayed in the website footer." />
+          <Field label="LinkedIn URL" value={linkedinUrl} onChange={setLinkedinUrl}
+            placeholder="https://linkedin.com/company/leadash" hint="Displayed in the website footer." />
+          <Field label="Instagram URL" value={instagramUrl} onChange={setInstagramUrl}
+            placeholder="https://instagram.com/leadash" hint="Displayed in the website footer." />
+        </Section>
+
+        {/* ── SLA ── */}
         <Section title="SLA Targets">
           <SlaEditor value={sla} onChange={setSla} />
         </Section>
 
-        {/* Business hours */}
+        {/* ── Business hours ── */}
         <Section title="Business Hours">
           <BusinessHoursEditor value={businessHours} onChange={setBusinessHours} />
         </Section>
 
-        {/* Canned responses */}
+        {/* ── Canned responses ── */}
         <Section title="Canned Responses">
           <p className="text-xs text-white/40 -mt-2">Type <code className="text-orange-400/70">/shortcut</code> in the reply box to insert quickly.</p>
           <CannedResponsesEditor responses={cannedResponses} onChange={setCannedResponses} />
         </Section>
 
-        {/* Custom fields */}
+        {/* ── Custom fields ── */}
         <Section title="Contact Custom Fields">
           <p className="text-xs text-white/40 -mt-2">These fields appear in the contact profile sidebar.</p>
           <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
         </Section>
 
-        {/* Webhook info */}
+        {/* ── Webhook info ── */}
         <div className="bg-white/3 border border-white/8 rounded-xl p-5 space-y-2">
           <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Environment Variables Required</p>
           <div className="font-mono text-[11px] space-y-1 text-white/50">

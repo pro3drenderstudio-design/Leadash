@@ -7,6 +7,8 @@ import { buildOuterStyle, buildOverlayStyle, buildInnerStyle, fluid } from "./wr
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { OptinFormBlock } from "./interactive/OptinFormBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
+import { YouTubePlayer } from "./interactive/YouTubePlayer";
+import { FunnelTracking } from "@/lib/tracking/pixels";
 import styles from "./blocks.module.css";
 
 export type RenderMode = "edit" | "live";
@@ -17,6 +19,7 @@ export interface BlockRenderContext {
   selectedId?: string | null;
   pageId?: string;
   sessionId?: string;
+  tracking?: FunnelTracking | null;
   onCommitProp?: (id: string, key: string, val: string) => void;
   onCommitItem?: (id: string, idx: number, field: string | null, val: string) => void;
   onSelect?: (id: string) => void;
@@ -54,15 +57,17 @@ function youtubeId(url: string): string | undefined {
 function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholderSize = 60): React.ReactNode {
   const ytId = url ? youtubeId(url) : undefined;
   if (ytId) {
-    return (
-      <iframe
-        src={`https://www.youtube.com/embed/${ytId}`}
-        title="video"
-        style={{ width: "100%", height: "100%", border: "none" }}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    );
+    return mode === "live"
+      ? <YouTubePlayer blockId={blockId} ytId={ytId} />
+      : (
+        <iframe
+          src={`https://www.youtube.com/embed/${ytId}`}
+          title="video"
+          style={{ width: "100%", height: "100%", border: "none" }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      );
   }
   if (url) {
     return (
@@ -410,7 +415,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "optin-form":
       return ctx.mode === "live" && ctx.pageId ? (
-        <OptinFormBlock block={block} pageId={ctx.pageId} sessionId={ctx.sessionId ?? ""} />
+        <OptinFormBlock block={block} pageId={ctx.pageId} sessionId={ctx.sessionId ?? ""} tracking={ctx.tracking} />
       ) : (
         <div style={{ background: (p.bg_color as string) || "#0e1017", padding: `${fluid(40, 50)} ${fluid(22, 32)}` }}>
           <div style={{ maxWidth: 430, margin: "0 auto", background: "#0c0c0f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.75)" }}>

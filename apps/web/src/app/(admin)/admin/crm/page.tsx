@@ -514,6 +514,10 @@ function CrmInboxContent() {
   const [winOpen,       setWinOpen]       = useState(false);
   const [error,         setError]         = useState("");
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [templateMode,     setTemplateMode]     = useState(false);
+  const [waTemplates,      setWaTemplates]      = useState<Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }>>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [templateParams,   setTemplateParams]   = useState<Record<string, string>>({});
   const threadRef = useRef<HTMLDivElement>(null);
 
   const loadConvos = useCallback(async () => {
@@ -529,6 +533,12 @@ function CrmInboxContent() {
   useEffect(() => { loadConvos(); }, [loadConvos]);
 
   useEffect(() => {
+    setTemplateMode(false);
+    setSelectedTemplate("");
+    setTemplateParams({});
+  }, [activeId]);
+
+  useEffect(() => {
     if (!activeId) { setActiveConvo(null); setMessages([]); return; }
     const c = conversations.find(c => c.id === activeId);
     if (c) {
@@ -540,6 +550,16 @@ function CrmInboxContent() {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ unread_count: 0 }),
         }).then(() => loadConvos());
+      }
+      if (c.channel === "whatsapp") {
+        fetch("/api/admin/crm-settings/whatsapp-templates")
+          .then(r => r.ok ? r.json() : { templates: [] })
+          .then((d: { templates?: Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }> }) => {
+            setWaTemplates((d.templates ?? []).filter(t => t.status === "APPROVED"));
+          })
+          .catch(() => {});
+      } else {
+        setWaTemplates([]);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -556,9 +576,38 @@ function CrmInboxContent() {
   }, [messages]);
 
   async function handleSend() {
-    if (!activeConvo || !composeText.trim()) return;
+    if (!activeConvo) return;
     setSending(true);
     setError("");
+
+    if (templateMode && selectedTemplate) {
+      const tmpl = waTemplates.find(t => t.name === selectedTemplate);
+      const bodyComp = tmpl?.components?.find(c => c.type === "BODY");
+      let preview = bodyComp?.text ?? selectedTemplate;
+      Object.entries(templateParams).forEach(([k, v]) => {
+        preview = preview.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v || `{{${k}}}`);
+      });
+      const res = await fetch("/api/crm/send", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: activeConvo.id,
+          body:            preview,
+          channel:         activeConvo.channel,
+          template_name:   selectedTemplate,
+          template_vars:   templateParams,
+        }),
+      });
+      const d = await res.json() as { error?: string };
+      setSending(false);
+      if (!res.ok) { setError(d.error ?? "Send failed"); return; }
+      setSelectedTemplate("");
+      setTemplateParams({});
+      await loadMessages(activeConvo.id);
+      await loadConvos();
+      return;
+    }
+
+    if (!composeText.trim()) { setSending(false); return; }
     const res = await fetch("/api/crm/send", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -571,7 +620,7 @@ function CrmInboxContent() {
     const d = await res.json() as { error?: string; requires_template?: boolean };
     setSending(false);
     if (!res.ok) {
-      setError(d.requires_template ? "24-hour window closed — use a WhatsApp template." : (d.error ?? "Send failed"));
+      setError(d.requires_template ? "24-hour window closed — switch to the Template tab." : (d.error ?? "Send failed"));
       return;
     }
     setComposeText("");
@@ -715,27 +764,75 @@ function CrmInboxContent() {
           <div className="bg-white dark:bg-[#1a1a1a] border-t border-slate-200 dark:border-white/10 p-4 flex-shrink-0">
             {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
             <div className="flex gap-2 mb-2">
-              {["Reply","Note"].map((t, i) => (
-                <button key={t} onClick={() => setIsNote(i === 1)}
-                  className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${(i === 1) === isNote ? (i === 1 ? "bg-yellow-400 text-yellow-900" : "bg-orange-500 text-white") : "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/30"}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3 items-end">
-              <textarea
-                value={composeText}
-                onChange={e => setComposeText(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
-                placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
-                rows={3}
-                className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              />
-              <button onClick={handleSend} disabled={sending || !composeText.trim()}
-                className="px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
-                {sending ? "…" : "Send"}
+              <button onClick={() => { setIsNote(false); setTemplateMode(false); }}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${!isNote && !templateMode ? "bg-orange-500 text-white" : "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/30"}`}>
+                Reply
               </button>
+              <button onClick={() => { setIsNote(true); setTemplateMode(false); }}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${isNote && !templateMode ? "bg-yellow-400 text-yellow-900" : "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/30"}`}>
+                Note
+              </button>
+              {activeConvo.channel === "whatsapp" && (
+                <button onClick={() => { setIsNote(false); setTemplateMode(true); }}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${templateMode ? "bg-green-600 text-white" : "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/30"}`}>
+                  Template
+                </button>
+              )}
             </div>
+            {templateMode ? (
+              <div className="space-y-2">
+                <select value={selectedTemplate} onChange={e => { setSelectedTemplate(e.target.value); setTemplateParams({}); }}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500/30">
+                  <option value="">Choose a template…</option>
+                  {waTemplates.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                </select>
+                {waTemplates.length === 0 && (
+                  <p className="text-xs text-slate-400 dark:text-white/30">No approved templates. Add them in Admin → CRM Settings.</p>
+                )}
+                {selectedTemplate && (() => {
+                  const tmpl = waTemplates.find(t => t.name === selectedTemplate);
+                  const bodyComp = tmpl?.components?.find(c => c.type === "BODY");
+                  const bodyText = bodyComp?.text ?? "";
+                  const unique = [...new Set([...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
+                  return (
+                    <>
+                      {bodyText && (
+                        <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-slate-500 dark:text-white/40 font-mono leading-relaxed">
+                          {bodyText}
+                        </div>
+                      )}
+                      {unique.map(n => (
+                        <input key={n}
+                          placeholder={`Value for {{${n}}}`}
+                          value={templateParams[n] ?? ""}
+                          onChange={e => setTemplateParams(p => ({ ...p, [n]: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                        />
+                      ))}
+                    </>
+                  );
+                })()}
+                <button onClick={handleSend} disabled={sending || !selectedTemplate}
+                  className="w-full px-4 py-2.5 text-sm font-semibold bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-xl transition-colors">
+                  {sending ? "…" : "Send Template"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3 items-end">
+                <textarea
+                  value={composeText}
+                  onChange={e => setComposeText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
+                  placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
+                  rows={3}
+                  className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+                <button onClick={handleSend} disabled={sending || !composeText.trim()}
+                  className="px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
+                  {sending ? "…" : "Send"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : (

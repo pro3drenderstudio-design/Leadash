@@ -41,13 +41,22 @@ function ChildSlot({ items, parentId, ctx }: { items: Block[]; parentId: string;
   return <BlockTree blocks={items} ctx={ctx} parentId={parentId} />;
 }
 
+function blockWrapperPadding(block: Block): React.CSSProperties {
+  const l = block.layout;
+  if (!l || ["row", "section", "column"].includes(block.type)) return {};
+  return {
+    paddingTop:    l.padding_top    ? `${l.padding_top.value}${l.padding_top.unit}`       : undefined,
+    paddingBottom: l.padding_bottom ? `${l.padding_bottom.value}${l.padding_bottom.unit}` : undefined,
+  };
+}
+
 function LiveBlockRow({ block, ctx }: { block: Block; ctx: BlockRenderContext }) {
   const colStyle = block.type === "column" ? buildColumnStyle(block.layout) : undefined;
   const node = <BlockRenderer block={block} ctx={ctx} />;
   const sourceId = block.layout?.reveal_source_block_id;
   const afterSeconds = block.layout?.reveal_after_seconds;
   return (
-    <div style={{ position: "relative", ...colStyle }}>
+    <div style={{ position: "relative", ...colStyle, ...blockWrapperPadding(block) }}>
       {sourceId && afterSeconds != null ? (
         <RevealGate sourceBlockId={sourceId} afterSeconds={afterSeconds}>{node}</RevealGate>
       ) : node}
@@ -77,7 +86,7 @@ function EditableBlockRow({ block, ctx, fullCtx }: { block: Block; ctx: BlockRen
       style={{
         position: "relative", cursor: "pointer", opacity: isDragging ? 0.35 : 1,
         boxShadow: sel ? `inset 0 0 0 2px ${AC}` : hover ? `inset 0 0 0 1px ${AC}66` : "none",
-        transition: "box-shadow .12s", ...colStyle,
+        transition: "box-shadow .12s", ...colStyle, ...blockWrapperPadding(block),
       }}
     >
       <BlockRenderer block={block} ctx={fullCtx} />

@@ -164,8 +164,19 @@ export async function POST(req: NextRequest) {
 
     let waPayload: Record<string, unknown>;
 
-    if (windowOpen) {
-      // Free-form text (within window)
+    if (body.template_name) {
+      // Template send — works any time (inside or outside the 24-hour window)
+      waPayload = {
+        phone_number:    waNumber,
+        message_type:    "template",
+        template_name:   body.template_name,
+        template_params: body.template_vars ?? {},
+        source:          "crm",
+        conversation_id,
+        sent_by:         user.id,
+      };
+    } else if (windowOpen) {
+      // Free-form text (within 24-hour window, no template specified)
       waPayload = {
         phone_number: waNumber,
         message_type: "text",
@@ -175,22 +186,11 @@ export async function POST(req: NextRequest) {
         sent_by:      user.id,
       };
     } else {
-      // Outside window — must use a template
-      if (!body.template_name) {
-        return NextResponse.json({
-          error: "24-hour window expired. A template_name is required to send outside the window.",
-          requires_template: true,
-        }, { status: 422 });
-      }
-      waPayload = {
-        phone_number:   waNumber,
-        message_type:   "template",
-        template_name:  body.template_name,
-        template_vars:  body.template_vars ?? {},
-        source:         "crm",
-        conversation_id,
-        sent_by:        user.id,
-      };
+      // Outside window, no template — block
+      return NextResponse.json({
+        error: "24-hour window expired. A template_name is required to send outside the window.",
+        requires_template: true,
+      }, { status: 422 });
     }
 
     // Insert whatsapp_messages record first (worker will update status)
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
       body:          msgBody,
       status:        "pending",
       source:        "crm",
-      template_name: windowOpen ? null : (body.template_name ?? null),
+      template_name: body.template_name ?? null,
     }).select("id").single();
 
     // Enqueue to BullMQ

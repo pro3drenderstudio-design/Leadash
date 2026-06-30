@@ -371,6 +371,11 @@ export default function BuilderPage() {
             style={{display:"inline-flex",alignItems:"center",gap:7,padding:"7px 12px",border:`1px solid ${ab?AC+"88":"rgba(255,255,255,0.08)"}`,background:ab?AC+"1f":"rgba(255,255,255,0.04)",color:ab?"#fcd9b6":"#aeb6c2",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:"inherit"}}>
             <Icon paths={["M4 4h7v16H4z","M13 4h7v16h-7z"]} size={15} sw={1.8} />A/B
           </button>
+          {/* Open live preview in a new tab */}
+          <button onClick={()=>window.open(`/funnel-preview/${funnelId}/${pageId}`, "_blank", "noopener,noreferrer")} title="Open preview in new tab"
+            style={{display:"inline-flex",alignItems:"center",gap:7,padding:"7px 12px",border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#aeb6c2",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:"inherit"}}>
+            <Icon paths={["M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6","M15 3h6v6","M10 14L21 3"]} size={15} sw={2} />
+          </button>
           {/* Preview toggle */}
           <button onClick={()=>{ setPreview(x=>!x); if(!preview) setSelectedId(null); }} title="Preview"
             style={{display:"inline-flex",alignItems:"center",gap:7,padding:"7px 12px",border:`1px solid ${preview?AC+"88":"rgba(255,255,255,0.08)"}`,background:preview?AC+"1f":"rgba(255,255,255,0.04)",color:preview?"#fcd9b6":"#aeb6c2",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:"inherit"}}>
@@ -691,6 +696,20 @@ function VideoUploadField({ value, onChange, funnelId }: { value?: string; onCha
   );
 }
 
+// ── Right Panel helpers (module-level so references are stable across renders) ─
+
+function RPField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 13 }}>
+      <label style={{ display: "block", fontSize: 11, color: "#7c8aa0", fontWeight: 500, marginBottom: 6 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+function RPSL({ text }: { text: string }) {
+  return <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", color: "#5b6678", margin: "4px 0 12px", paddingBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>{text}</div>;
+}
+
 // ── Right Panel ───────────────────────────────────────────────────────────────
 
 interface RPProps {
@@ -709,18 +728,10 @@ interface RPProps {
 
 function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks }: RPProps) {
   const IS: React.CSSProperties = { width:"100%",background:"#0a0e16",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:"8px 10px",color:"#e7ecf3",fontSize:13,fontFamily:"inherit" };
+  const [rpTab, setRpTab] = useState<"content"|"layout">("content");
 
-  function Field({ label, children }: { label:string; children:React.ReactNode }) {
-    return (
-      <div style={{marginBottom:13}}>
-        <label style={{display:"block",fontSize:11,color:"#7c8aa0",fontWeight:500,marginBottom:6}}>{label}</label>
-        {children}
-      </div>
-    );
-  }
-  function SL({ text }: { text:string }) {
-    return <div style={{fontSize:10,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase",color:"#5b6678",margin:"4px 0 12px",paddingBottom:8,borderBottom:"1px solid rgba(255,255,255,0.06)"}}>{text}</div>;
-  }
+  const Field = RPField;
+  const SL    = RPSL;
 
   function textCtl(key:string) {
     if(!b) return null;
@@ -736,9 +747,9 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const safe=v==="transparent"?"#0c0c0f":v;
     return (
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <div style={{position:"relative",width:34,height:34,borderRadius:8,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:safe}}>
+        <div style={{position:"relative",width:34,height:34,borderRadius:8,border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:safe}}>
           <input type="color" value={safe} onChange={e=>onSetProps(b.id,{[key]:e.target.value})}
-            style={{position:"absolute",inset:-4,width:42,height:42,border:"none",padding:0,cursor:"pointer",background:"transparent"}} />
+            style={{position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",border:"none",padding:0,cursor:"pointer"}} />
         </div>
         <input value={v} onChange={e=>onSetProps(b.id,{[key]:e.target.value})} style={{...IS,fontFamily:"monospace",fontSize:12}} />
       </div>
@@ -853,9 +864,9 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const v=(b.layout?.[key] as string)??fallback;
     return (
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <div style={{position:"relative",width:34,height:34,borderRadius:8,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:v}}>
+        <div style={{position:"relative",width:34,height:34,borderRadius:8,border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:v}}>
           <input type="color" value={v} onChange={e=>onSetLayout(b.id,{[key]:e.target.value})}
-            style={{position:"absolute",inset:-4,width:42,height:42,border:"none",padding:0,cursor:"pointer",background:"transparent"}} />
+            style={{position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",border:"none",padding:0,cursor:"pointer"}} />
         </div>
         <input value={v} onChange={e=>onSetLayout(b.id,{[key]:e.target.value})} style={{...IS,fontFamily:"monospace",fontSize:12}} />
       </div>
@@ -1017,7 +1028,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         {t==="optin-form"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Form fields">{fieldsCtl()}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Fine print">{textCtl("fine_print")}</Field><Field label="Redirect URL after submit (optional)">{textCtl("redirect_url")}</Field></>}
         {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("name")}</Field><Field label="Role">{textCtl("role")}</Field><Field label="Video review (optional)"><VideoUploadField value={b.props.video_url as string} onChange={url=>onSetProps(b.id,{video_url:url})} funnelId={funnelId} /></Field>{Boolean(b.props.video_url)&&<Field label="Video caption">{textCtl("video_caption")}</Field>}</>}
         {(t==="headline"||t==="body-text")&&<Field label="Text">{areaCtl("text")}</Field>}
-        {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field><Field label="Reveal after video reaches…">{revealCtl()}</Field></>}
+        {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field></>}
         {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
         {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
         {t==="faq-accordion"&&<Field label="Questions">{itemsCtl("faq")}</Field>}
@@ -1026,23 +1037,6 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field><Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:0})}</Field></>}
         {t==="custom-html"&&<Field label="HTML"><textarea value={(b.props.html as string)??""}  onChange={e=>onSetProps(b.id,{html:e.target.value})} rows={6} style={{...IS,resize:"vertical" as const,fontFamily:"monospace"}} /></Field>}
         {noContent&&<p style={{fontSize:12,color:"#7c8aa0",lineHeight:1.5,marginBottom:8}}>This block has no text content. Adjust its style below.</p>}
-        {(t==="section"||t==="row"||t==="column")&&(
-          <>
-            <div style={{height:18}} />
-            <SL text="Layout" />
-            {(t==="section"||t==="row")&&<Field label="Width">{layoutToggleCtl("boxed")}</Field>}
-            <Field label="Padding">{paddingCtl()}</Field>
-            {(t==="section"||t==="row")&&(
-              <>
-                <Field label="Background image"><ImageUploadField value={b.layout?.bg_image} onChange={url=>onSetLayout(b.id,{bg_image:url||undefined})} funnelId={funnelId} /></Field>
-                {Boolean(b.layout?.bg_image)&&bgOverlayCtl()}
-              </>
-            )}
-            <div style={{height:6}} />
-            <SL text="Border" />
-            {borderCtl()}
-          </>
-        )}
         {hasStyle&&(
           <>
             <div style={{height:18}} />
@@ -1054,6 +1048,40 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             {b.props.bg_color!==undefined&&<Field label="Background">{colorCtl("bg_color")}</Field>}
           </>
         )}
+      </div>
+    );
+  }
+
+  function LayoutSettings() {
+    if(!b) return null;
+    const t=b.type;
+    const isRow=t==="section"||t==="row";
+    const isContainer=isRow||t==="column";
+    return (
+      <div>
+        <SL text="Spacing" />
+        <Field label="Padding">{paddingCtl()}</Field>
+        {isRow&&(
+          <>
+            <div style={{height:18}} />
+            <SL text="Width" />
+            <Field label="Width">{layoutToggleCtl("boxed")}</Field>
+            <div style={{height:18}} />
+            <SL text="Background" />
+            <Field label="Background image"><ImageUploadField value={b.layout?.bg_image} onChange={url=>onSetLayout(b.id,{bg_image:url||undefined})} funnelId={funnelId} /></Field>
+            {Boolean(b.layout?.bg_image)&&bgOverlayCtl()}
+          </>
+        )}
+        {isContainer&&(
+          <>
+            <div style={{height:isRow?6:18}} />
+            <SL text="Border" />
+            {borderCtl()}
+          </>
+        )}
+        <div style={{height:18}} />
+        <SL text="Visibility" />
+        <Field label="Reveal after video reaches…">{revealCtl()}</Field>
       </div>
     );
   }
@@ -1097,9 +1125,9 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         <SL text="Style" />
         <Field label="Background color">
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <div style={{position:"relative",width:34,height:34,borderRadius:8,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:bgVal}}>
+            <div style={{position:"relative",width:34,height:34,borderRadius:8,border:"1px solid rgba(255,255,255,0.12)",flexShrink:0,background:bgVal}}>
               <input type="color" value={bgVal} onChange={e=>onSetPage({settings:{...s,bg_color:e.target.value}})}
-                style={{position:"absolute",inset:-4,width:42,height:42,border:"none",padding:0,cursor:"pointer",background:"transparent"}} />
+                style={{position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",border:"none",padding:0,cursor:"pointer"}} />
             </div>
             <input value={bgVal} onChange={e=>onSetPage({settings:{...s,bg_color:e.target.value}})} style={{...IS,fontFamily:"monospace",fontSize:12}} />
           </div>
@@ -1145,8 +1173,18 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
           </>
         )}
       </div>
+      {b && (
+        <div style={{display:"flex",padding:"0 8px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+          {(["content","layout"] as const).map(tab=>(
+            <button key={tab} onClick={()=>setRpTab(tab)}
+              style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"8px 0",background:"transparent",border:"none",borderBottom:`2px solid ${rpTab===tab?AC:"transparent"}`,color:rpTab===tab?"#eaeff6":"#6b7280",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"capitalize"}}>
+              {tab}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{flex:1,overflow:"auto",padding:"16px"}}>
-        {b ? <BlockSettings /> : <PageSettings />}
+        {b ? (rpTab==="content" ? BlockSettings() : LayoutSettings()) : PageSettings()}
       </div>
     </>
   );

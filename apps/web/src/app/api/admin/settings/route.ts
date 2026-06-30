@@ -34,6 +34,14 @@ const ALLOWED_KEYS = [
   "crm_canned_responses",
   "crm_custom_fields",
   "crm_sla_config",
+  "crm_support_email",
+  "crm_marketing_email",
+  "crm_auto_reopen_on_reply",
+  // Brand & tracking
+  "meta_pixel_id",
+  "social_twitter_url",
+  "social_linkedin_url",
+  "social_instagram_url",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];

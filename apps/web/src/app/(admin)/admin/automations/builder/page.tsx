@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node,
   type Edge,
   type Connection,
@@ -19,95 +21,174 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-// ── Node type definitions ──────────────────────────────────────────────────
+// ── Trigger catalogue ──────────────────────────────────────────────────────
 
-const NODE_META: Record<string, { label: string; color: string; icon: string; category: string }> = {
-  // Triggers
-  trigger:                       { label: "Trigger",             color: "#8b5cf6", icon: "⚡", category: "Triggers" },
-  trigger_funnel_optin:          { label: "Funnel Optin",        color: "#8b5cf6", icon: "⚡", category: "Triggers" },
-  trigger_funnel_purchase:       { label: "Purchase Completed",  color: "#8b5cf6", icon: "⚡", category: "Triggers" },
-  trigger_billing_payment_failed:{ label: "Payment Failed",      color: "#ef4444", icon: "⚡", category: "Triggers" },
-  trigger_billing_trial_ending:  { label: "Trial Ending",        color: "#f59e0b", icon: "⚡", category: "Triggers" },
-  trigger_academy_inactivity:    { label: "Academy Inactivity",  color: "#8b5cf6", icon: "⚡", category: "Triggers" },
-  trigger_crm_tag_added:         { label: "Tag Added",           color: "#8b5cf6", icon: "⚡", category: "Triggers" },
+const TRIGGER_GROUPS = [
+  {
+    label: "User Events",
+    icon: "👤",
+    color: "#8b5cf6",
+    items: [
+      { event: "user.opted_in",            label: "Opted in",           desc: "Contact submitted a form or opted in to marketing" },
+      { event: "user.bundle_purchased",    label: "Bundle purchased",   desc: "Paid for the main Leadash bundle" },
+      { event: "user.bundle_renewed",      label: "Bundle renewed",     desc: "Subscription renewed successfully" },
+      { event: "user.bundle_expired",      label: "Bundle expired",     desc: "Subscription lapsed or wasn't renewed" },
+      { event: "user.challenge_enrolled",  label: "Challenge enrolled", desc: "Enrolled in the 30-day challenge" },
+      { event: "user.video_milestone",     label: "Watched a video",    desc: "Reached a video watch milestone" },
+      { event: "user.day1_completed",      label: "Completed Day 1",    desc: "Finished all Day 1 challenge tasks" },
+    ],
+  },
+  {
+    label: "Academy",
+    icon: "🎓",
+    color: "#6366f1",
+    items: [
+      { event: "academy.enrollment_created",      label: "Course enrolled",     desc: "Signed up for a course" },
+      { event: "academy.lesson_completed",        label: "Lesson completed",    desc: "Finished watching a lesson" },
+      { event: "academy.course_completed",        label: "Course completed",    desc: "Completed all required lessons" },
+      { event: "academy.challenge_day_completed", label: "Challenge day done",  desc: "Finished tasks for a challenge day" },
+      { event: "academy.streak_broken",           label: "Streak broken",       desc: "Missed days and lost their streak" },
+      { event: "challenge.daily_reminder",        label: "Daily reminder time", desc: "Hourly check — reminder time reached" },
+      { event: "challenge.day_missed",            label: "Day not completed",   desc: "Evening check — today's tasks still undone" },
+    ],
+  },
+  {
+    label: "Offers & Billing",
+    icon: "💳",
+    color: "#f97316",
+    items: [
+      { event: "offers.purchase_created",     label: "Offer purchased",    desc: "Completed any offer at any price" },
+      { event: "offers.refund_issued",        label: "Refund issued",      desc: "Admin issued a refund" },
+      { event: "offers.custom_grant_pending", label: "Manual perk needed", desc: "A custom perk needs manual fulfillment" },
+      { event: "billing.payment_failed",      label: "Payment failed",     desc: "A subscription charge was declined" },
+    ],
+  },
+  {
+    label: "CRM",
+    icon: "🏷",
+    color: "#64748b",
+    items: [
+      { event: "crm.tag_added", label: "Tag added to contact", desc: "A tag was applied to a contact" },
+    ],
+  },
+] as const;
 
-  // Communication
-  sendEmail:                     { label: "Send Email",          color: "#f97316", icon: "✉",  category: "Communication" },
-  sendWhatsapp:                  { label: "Send WhatsApp",       color: "#22c55e", icon: "💬", category: "Communication" },
-  sendSms:                       { label: "Send SMS",            color: "#14b8a6", icon: "📱", category: "Communication" },
-  enrollCampaign:                { label: "Enroll in Campaign",  color: "#f97316", icon: "📧", category: "Communication" },
+type TriggerItem = (typeof TRIGGER_GROUPS)[number]["items"][number];
 
-  // CRM
-  addTag:                        { label: "Add Tag",             color: "#64748b", icon: "🏷",  category: "CRM" },
-  removeTag:                     { label: "Remove Tag",          color: "#64748b", icon: "🏷",  category: "CRM" },
-  changeLifecycle:               { label: "Change Lifecycle",    color: "#64748b", icon: "👤", category: "CRM" },
-  createTask:                    { label: "Create Task",         color: "#64748b", icon: "✓",  category: "CRM" },
-  updateField:                   { label: "Update Field",        color: "#64748b", icon: "✏",  category: "CRM" },
-  webhook:                       { label: "Webhook",             color: "#ec4899", icon: "🔗", category: "CRM" },
-  triggerWebhook:                { label: "Trigger Webhook",     color: "#ec4899", icon: "🔗", category: "CRM" },
+const TRIGGER_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  TRIGGER_GROUPS.flatMap(g => g.items.map(i => [i.event, i.label])),
+);
 
-  // Academy
-  grantAcademy:                  { label: "Grant Academy Access",color: "#6366f1", icon: "🎓", category: "Academy" },
+// ── Step node catalogue ────────────────────────────────────────────────────
 
-  // Logic
-  wait:                          { label: "Wait",                color: "#3b82f6", icon: "⏳", category: "Logic" },
-  condition:                     { label: "Condition",           color: "#eab308", icon: "?",  category: "Logic" },
-  splitAB:                       { label: "A/B Split",           color: "#7c3aed", icon: "🔀", category: "Logic" },
-  goToStep:                      { label: "Go to Step",          color: "#6b7280", icon: "↗",  category: "Logic" },
-  endFlow:                       { label: "End",                 color: "#6b7280", icon: "■",  category: "Logic" },
+type NodeMeta = {
+  label: string; color: string; icon: string; category: string;
+  description: string; comingSoon?: boolean;
 };
 
-const CATEGORIES = ["Triggers", "Communication", "CRM", "Academy", "Logic"] as const;
+const NODE_META: Record<string, NodeMeta> = {
+  trigger:         { label: "Trigger",         color: "#8b5cf6", icon: "⚡", category: "Triggers",      description: "" },
+  sendEmail:       { label: "Send Email",      color: "#f97316", icon: "✉",  category: "Communication", description: "Send a personalised email to this contact" },
+  sendWhatsapp:    { label: "Send WhatsApp",   color: "#22c55e", icon: "💬", category: "Communication", description: "Send a WhatsApp message" },
+  sendSms:         { label: "Send SMS",        color: "#14b8a6", icon: "📱", category: "Communication", description: "SMS sending — coming soon", comingSoon: true },
+  enrollCampaign:  { label: "Add to Campaign", color: "#f97316", icon: "📧", category: "Communication", description: "Outreach campaigns — coming soon", comingSoon: true },
+  addTag:          { label: "Add Tag",         color: "#64748b", icon: "🏷",  category: "CRM",           description: "Apply a label to this contact" },
+  removeTag:       { label: "Remove Tag",      color: "#64748b", icon: "🏷",  category: "CRM",           description: "Remove a label from this contact" },
+  changeLifecycle: { label: "Move Stage",      color: "#64748b", icon: "👤", category: "CRM",           description: "Update their stage in the pipeline" },
+  createTask:      { label: "Create Task",     color: "#64748b", icon: "✓",  category: "CRM",           description: "Assign a to-do to your team" },
+  updateField:     { label: "Update Data",     color: "#64748b", icon: "✏",  category: "Advanced",      description: "Set a custom data field on the contact" },
+  webhook:         { label: "Webhook",         color: "#ec4899", icon: "🔗", category: "Advanced",      description: "Send data to an external URL" },
+  grantAcademy:    { label: "Grant Course",    color: "#6366f1", icon: "🎓", category: "Academy",       description: "Give access to a course or challenge" },
+  wait:            { label: "Wait",            color: "#3b82f6", icon: "⏳", category: "Logic",         description: "Pause before continuing to the next step" },
+  condition:       { label: "If / Else",       color: "#eab308", icon: "↔",  category: "Logic",         description: "Branch the flow based on a condition" },
+  splitAB:         { label: "A/B Split",       color: "#7c3aed", icon: "🔀", category: "Logic",         description: "Randomly send contacts down two paths" },
+  goToStep:        { label: "Jump to Step",    color: "#6b7280", icon: "↗",  category: "Logic",         description: "Skip to a different step in this flow" },
+  endFlow:         { label: "End",             color: "#6b7280", icon: "■",  category: "Logic",         description: "Stop the automation for this contact" },
+};
 
-// ── Flow Node component ────────────────────────────────────────────────────
+const STEP_CATEGORIES = ["Communication", "CRM", "Academy", "Logic", "Advanced"] as const;
+
+// ── Duration helpers ───────────────────────────────────────────────────────
+
+function minutesToHuman(mins: number): string {
+  if (!mins || mins < 1) return "—";
+  if (mins < 60)  { const v = Math.round(mins);  return `${v} min${v  === 1 ? "" : "s"}`; }
+  const hrs  = Math.round(mins / 60);
+  if (hrs < 24)   return `${hrs} hour${hrs  === 1 ? "" : "s"}`;
+  const days = Math.round(hrs / 24);
+  if (days < 7)   return `${days} day${days === 1 ? "" : "s"}`;
+  const wks  = Math.round(days / 7);
+  return `${wks} week${wks === 1 ? "" : "s"}`;
+}
+
+function getWaitParts(minutes: number): { value: number; unit: "minutes" | "hours" | "days" | "weeks" } {
+  if (minutes >= 10080 && minutes % 10080 === 0) return { value: minutes / 10080, unit: "weeks" };
+  if (minutes >= 1440  && minutes % 1440  === 0) return { value: minutes / 1440,  unit: "days" };
+  if (minutes >= 60    && minutes % 60    === 0) return { value: minutes / 60,    unit: "hours" };
+  return { value: minutes || 60, unit: "minutes" };
+}
+
+const UNIT_MINS: Record<string, number> = { minutes: 1, hours: 60, days: 1440, weeks: 10080 };
+
+// ── Condition operator labels ──────────────────────────────────────────────
+
+const OPERATOR_LABELS: Record<string, string> = {
+  eq:           "equals",
+  neq:          "does not equal",
+  gt:           "is greater than",
+  lt:           "is less than",
+  gte:          "is at least",
+  lte:          "is at most",
+  contains:     "contains",
+  not_contains: "does not contain",
+  is_null:      "is empty",
+  is_not_null:  "is not empty",
+};
+
+// ── Canvas node renderer ───────────────────────────────────────────────────
 
 function FlowNode({ data, type }: { data: Record<string, unknown>; type: string }) {
-  const meta = NODE_META[type] ?? { label: type, color: "#6b7280", icon: "•" };
+  const meta = NODE_META[type] ?? { label: type, color: "#6b7280", icon: "•", description: "" };
   const isCondition = type === "condition";
   const isSplitAB   = type === "splitAB";
-  const isTrigger   = type.startsWith("trigger");
+  const isTrigger   = type === "trigger" || String(type).startsWith("trigger_");
 
   function previewText() {
-    if (type === "trigger")                        return String(data.event ?? "Event trigger");
-    if (type === "trigger_funnel_optin")           return "When a contact opts in";
-    if (type === "trigger_funnel_purchase")        return "When purchase is completed";
-    if (type === "trigger_billing_payment_failed") return `Attempt ${String(data.attempt ?? "any")}`;
-    if (type === "trigger_billing_trial_ending")   return `${String(data.days_before ?? 3)} days before`;
-    if (type === "trigger_academy_inactivity")     return `${String(data.inactivity_days ?? 7)} days inactive`;
-    if (type === "trigger_crm_tag_added")          return String(data.tag ?? "Any tag");
-    if (type === "sendEmail")                      return String(data.subject ?? "Email subject");
-    if (type === "sendWhatsapp")                   return String(data.template_name ?? data.body ?? "WhatsApp message");
-    if (type === "sendSms")                        return String(data.body ?? "SMS body");
-    if (type === "enrollCampaign")                 return "Enroll in campaign";
-    if (type === "addTag")                         return `Tag: ${String(data.tag ?? "?")}`;
-    if (type === "removeTag")                      return `Remove: ${String(data.tag ?? "?")}`;
-    if (type === "changeLifecycle")                return `→ ${String(data.lifecycle ?? "?")}`;
-    if (type === "createTask")                     return String(data.title ?? "Task title");
-    if (type === "updateField")                    return `Set ${String(data.table ?? "?")} · ${String(data.column ?? "?")}`;
-    if (type === "webhook" || type === "triggerWebhook") return String(data.url ?? "Webhook URL").slice(0, 28);
-    if (type === "grantAcademy")                   return `Access: ${String(data.access_type ?? "?")}`;
-    if (type === "wait")                           return `${String(data.duration_minutes ?? "?")} minutes`;
-    if (type === "condition")                      return `${String(data.field ?? "?")} ${String(data.operator ?? "eq")} ${String(data.value ?? "?")}`;
-    if (type === "splitAB")                        return `A: ${String(data.pct_a ?? 50)}% / B: ${String(100 - Number(data.pct_a ?? 50))}%`;
-    if (type === "goToStep")                       return `→ ${String(data.target_node ?? "step")}`;
-    if (type === "endFlow")                        return "End automation";
+    const event = String(data.event ?? "");
+    if (type === "trigger")         return TRIGGER_LABEL_MAP[event] ?? (event || "Choose a trigger");
+    if (type === "sendEmail")       return String(data.subject ?? "Email subject");
+    if (type === "sendWhatsapp")    return String(data.template_name ?? data.body ?? "WhatsApp message");
+    if (type === "sendSms")         return String(data.body ?? "SMS body");
+    if (type === "enrollCampaign")  return "Add to campaign";
+    if (type === "addTag")          return `+ ${String(data.tag ?? "tag name")}`;
+    if (type === "removeTag")       return `− ${String(data.tag ?? "tag name")}`;
+    if (type === "changeLifecycle") return `→ ${String(data.lifecycle ?? "choose stage")}`;
+    if (type === "createTask")      return String(data.title ?? "Task title");
+    if (type === "updateField")     return `${String(data.column ?? "field")} = ${String(data.value ?? "?")}`;
+    if (type === "webhook")         return String(data.url ?? "Webhook URL").slice(0, 28);
+    if (type === "grantAcademy")    return String(data.product_name ?? data.product_id ?? "Select a course");
+    if (type === "wait")            return minutesToHuman(Number(data.duration_minutes ?? 60));
+    if (type === "condition")       return `If ${String(data.field ?? "field")} ${OPERATOR_LABELS[String(data.operator ?? "eq")] ?? "equals"} ${String(data.value ?? "?")}`;
+    if (type === "splitAB")         return `A: ${data.pct_a ?? 50}% · B: ${100 - Number(data.pct_a ?? 50)}%`;
+    if (type === "goToStep")        return `→ ${String(data.target_label ?? data.target_node ?? "pick a step")}`;
+    if (type === "endFlow")         return "End automation";
     return "";
   }
 
   return (
     <div
-      className="min-w-[160px] rounded-xl border-2 shadow-lg overflow-hidden"
+      className="min-w-[180px] max-w-[220px] rounded-xl border-2 shadow-lg overflow-hidden"
       style={{ borderColor: meta.color, background: "#1a1a1a" }}
     >
       {!isTrigger && <Handle type="target" position={Position.Top} style={{ background: meta.color }} />}
 
-      <div className="px-3 py-1.5 flex items-center gap-2" style={{ background: `${meta.color}22` }}>
-        <span className="text-sm">{meta.icon}</span>
-        <span className="text-xs font-bold text-white">{meta.label}</span>
+      <div className="px-3 py-2 flex items-center gap-2" style={{ background: `${meta.color}22` }}>
+        <span className="text-sm flex-shrink-0">{meta.icon}</span>
+        <span className="text-xs font-bold text-white truncate">{meta.label}</span>
       </div>
 
-      <div className="px-3 py-2 text-[11px] text-white/60">
-        <span>{previewText()}</span>
+      <div className="px-3 py-2 text-[11px] text-white/70 leading-snug min-h-[28px]">
+        {previewText()}
       </div>
 
       {isCondition ? (
@@ -144,136 +225,202 @@ const nodeTypes: NodeTypes = Object.fromEntries(
 
 // ── Node config panel ──────────────────────────────────────────────────────
 
-function NodeConfig({ node, onChange, onClose }: {
+function NodeConfig({ node, onChange, onClose, allNodes }: {
   node: Node;
   onChange: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
+  allNodes: Node[];
 }) {
   const [local, setLocal] = useState(node.data as Record<string, unknown>);
+  const [academyProducts, setAcademyProducts] = useState<Array<{ id: string; name: string }>>([]);
+  const [waTemplates, setWaTemplates] = useState<Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }>>([]);
   const type = node.type as string;
 
   function u(key: string, value: unknown) { setLocal(p => ({ ...p, [key]: value })); }
   function apply() { onChange(node.id, local); onClose(); }
 
+  useEffect(() => {
+    if (type !== "grantAcademy") return;
+    fetch("/api/admin/academy")
+      .then(r => r.json())
+      .then((d: { products?: Array<{ id: string; name: string }> }) => setAcademyProducts(d.products ?? []))
+      .catch(() => {});
+  }, [type]);
+
+  useEffect(() => {
+    if (type !== "sendWhatsapp") return;
+    fetch("/api/admin/crm-settings/whatsapp-templates")
+      .then(r => r.ok ? r.json() : { templates: [] })
+      .then((d: { templates?: Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }> }) => {
+        setWaTemplates((d.templates ?? []).filter(t => t.status === "APPROVED"));
+      })
+      .catch(() => {});
+  }, [type]);
+
+  // Wait duration picker state
+  const initWait = getWaitParts(Number(node.data.duration_minutes ?? 60));
+  const [waitVal,  setWaitVal]  = useState(initWait.value);
+  const [waitUnit, setWaitUnit] = useState<"minutes" | "hours" | "days" | "weeks">(initWait.unit);
+  function updateWait(val: number, unit: typeof waitUnit) {
+    setWaitVal(val);
+    setWaitUnit(unit);
+    setLocal(p => ({ ...p, duration_minutes: val * UNIT_MINS[unit] }));
+  }
+
   const inp = "w-full px-2 py-1.5 text-xs bg-white/5 border border-white/10 rounded text-white placeholder-white/30 focus:outline-none focus:border-orange-500";
   const lbl = "text-xs text-white/50 block mb-1";
+  const hint = "text-[10px] text-white/25 leading-relaxed mt-1";
 
   const pctA = Number(local.pct_a ?? 50);
   const pctB = 100 - pctA;
 
+  // Steps available for goToStep (all nodes except triggers and self)
+  const steppableNodes = allNodes.filter(n => {
+    const t = String(n.type ?? "");
+    return n.id !== node.id && t !== "trigger" && !t.startsWith("trigger_");
+  });
+
+  const meta = NODE_META[type];
+
   return (
-    <div className="w-72 bg-[#1a1a1a] border-l border-white/10 flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <h3 className="text-sm font-bold text-white">{NODE_META[type]?.label ?? type}</h3>
-        <button onClick={onClose} className="text-white/30 hover:text-white text-lg leading-none">×</button>
+    <div className="w-80 bg-[#1a1a1a] border-l border-white/10 flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-lg flex-shrink-0">{meta?.icon ?? "⚙"}</span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white truncate">{meta?.label ?? type}</h3>
+            {meta?.description && (
+              <p className="text-[10px] text-white/30 truncate">{meta.description}</p>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose} className="text-white/30 hover:text-white text-xl leading-none flex-shrink-0 ml-2">×</button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
 
-        {/* ── Triggers ── */}
-        {type === "trigger" && (
-          <>
-            <label className={lbl}>Event name</label>
-            <input className={inp} value={String(local.event ?? "")} onChange={e => u("event", e.target.value)} placeholder="user.opted_in" />
-          </>
-        )}
+        {/* ── Trigger ── */}
+        {type === "trigger" && (() => {
+          const allTriggerItems: Array<TriggerItem & { groupLabel: string; groupColor: string }> =
+            TRIGGER_GROUPS.flatMap(g => g.items.map(i => ({ ...i, groupLabel: g.label, groupColor: g.color })));
+          const currentItem = allTriggerItems.find(i => i.event === String(local.event ?? ""));
+          return (
+            <>
+              <label className={lbl}>What starts this automation?</label>
+              <select
+                className={inp}
+                value={String(local.event ?? "")}
+                onChange={e => u("event", e.target.value)}
+              >
+                <option value="">Choose a trigger…</option>
+                {TRIGGER_GROUPS.map(group => (
+                  <optgroup key={group.label} label={`── ${group.label}`}>
+                    {group.items.map(item => (
+                      <option key={item.event} value={item.event}>{item.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {currentItem && (
+                <p className={hint}>{currentItem.desc}</p>
+              )}
+            </>
+          );
+        })()}
 
-        {type === "trigger_funnel_optin" && (
-          <p className="text-xs text-white/40">Fires when a contact submits a funnel opt-in form.</p>
-        )}
-
-        {type === "trigger_funnel_purchase" && (
-          <p className="text-xs text-white/40">Fires when a contact completes a purchase in the funnel.</p>
-        )}
-
-        {type === "trigger_billing_payment_failed" && (
-          <>
-            <p className="text-xs text-white/40 mb-2">Fires when a billing payment attempt fails.</p>
-            <label className={lbl}>Attempt number (1–3, blank = any)</label>
-            <input type="number" min={1} max={3} className={inp}
-              value={String(local.attempt ?? "")}
-              onChange={e => u("attempt", e.target.value ? parseInt(e.target.value) : "")}
-              placeholder="Any attempt"
-            />
-          </>
-        )}
-
-        {type === "trigger_billing_trial_ending" && (
-          <>
-            <p className="text-xs text-white/40 mb-2">Fires N days before a trial period ends.</p>
-            <label className={lbl}>Days before trial ends</label>
-            <input type="number" min={1} className={inp}
-              value={String(local.days_before ?? 3)}
-              onChange={e => u("days_before", parseInt(e.target.value) || 3)}
-            />
-          </>
-        )}
-
-        {type === "trigger_academy_inactivity" && (
-          <>
-            <p className="text-xs text-white/40 mb-2">Fires when a contact has not engaged with the Academy for N days.</p>
-            <label className={lbl}>Days of inactivity</label>
-            <input type="number" min={1} className={inp}
-              value={String(local.inactivity_days ?? 7)}
-              onChange={e => u("inactivity_days", parseInt(e.target.value) || 7)}
-            />
-          </>
-        )}
-
-        {type === "trigger_crm_tag_added" && (
-          <>
-            <p className="text-xs text-white/40 mb-2">Fires when a specific tag is added to a contact.</p>
-            <label className={lbl}>Tag name (blank = any tag)</label>
-            <input className={inp}
-              value={String(local.tag ?? "")}
-              onChange={e => u("tag", e.target.value)}
-              placeholder="e.g. hot-lead"
-            />
-          </>
-        )}
-
-        {/* ── Communication ── */}
+        {/* ── Send Email ── */}
         {type === "sendEmail" && (
           <>
-            <label className={lbl}>To (variable or email)</label>
-            <input className={inp} value={String(local.to ?? "")} onChange={e => u("to", e.target.value)} placeholder="{{email}}" />
-            <label className={lbl}>Subject</label>
-            <input className={inp} value={String(local.subject ?? "")} onChange={e => u("subject", e.target.value)} placeholder="Welcome to Leadash" />
+            <label className={lbl}>Subject line</label>
+            <input className={inp} value={String(local.subject ?? "")} onChange={e => u("subject", e.target.value)} placeholder="Welcome to Leadash!" />
             <label className={lbl}>From name (optional)</label>
             <input className={inp} value={String(local.from_name ?? "")} onChange={e => u("from_name", e.target.value)} placeholder="Leadash Team" />
-            <label className={lbl}>HTML body</label>
-            <textarea rows={6} className={inp} value={String(local.html ?? "")} onChange={e => u("html", e.target.value)} placeholder="<p>Hello {{full_name}}</p>" />
+            <label className={lbl}>Email body (HTML)</label>
+            <textarea rows={7} className={inp} value={String(local.html ?? "")} onChange={e => u("html", e.target.value)} placeholder={"<p>Hi {{full_name}},</p>\n<p>Your access is ready!</p>"} />
+            <p className={hint}>Use {"{{full_name}}"}, {"{{email}}"} etc. to personalise the message.</p>
           </>
         )}
 
+        {/* ── Send WhatsApp ── */}
         {type === "sendWhatsapp" && (
           <>
-            <label className={lbl}>Template name (leave blank for free-form)</label>
-            <input className={inp} value={String(local.template_name ?? "")} onChange={e => u("template_name", e.target.value)} placeholder="welcome_sequence" />
-            <label className={lbl}>Free-form body (only within 24hr window)</label>
-            <textarea rows={4} className={inp} value={String(local.body ?? "")} onChange={e => u("body", e.target.value)} placeholder="Hey {{full_name}}, your access is ready!" />
+            <label className={lbl}>Template</label>
+            <select
+              className={inp}
+              value={String(local.template_name ?? "")}
+              onChange={e => { u("template_name", e.target.value); u("template_params", {}); }}
+            >
+              <option value="">None — use free-form message below</option>
+              {waTemplates.map(t => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </select>
+            {waTemplates.length === 0 && (
+              <p className={hint}>No approved templates yet. Create them in Admin → CRM Settings.</p>
+            )}
+            {(() => {
+              const tmpl = waTemplates.find(t => t.name === String(local.template_name ?? ""));
+              if (!tmpl) return null;
+              const bodyComp = tmpl.components.find(c => c.type === "BODY");
+              const bodyText = bodyComp?.text ?? "";
+              const placeholders = [...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]);
+              const unique = [...new Set(placeholders)];
+              return (
+                <>
+                  {bodyText && (
+                    <div className="bg-white/5 border border-white/10 rounded px-2.5 py-2 text-[11px] text-white/50 font-mono leading-relaxed">
+                      {bodyText}
+                    </div>
+                  )}
+                  {unique.map(n => (
+                    <div key={n}>
+                      <label className={lbl}>Value for {`{{${n}}}`}</label>
+                      <input
+                        className={inp}
+                        placeholder={`e.g. John`}
+                        value={String((local.template_params as Record<string, string> | undefined)?.[n] ?? "")}
+                        onChange={e => u("template_params", { ...(local.template_params as Record<string, string> ?? {}), [n]: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                  <p className={hint}>Templates send any time. Values above are static — variable substitution coming soon.</p>
+                </>
+              );
+            })()}
+            <label className={lbl}>Free-form message (within 24-hour window only)</label>
+            <textarea rows={3} className={inp} value={String(local.body ?? "")} onChange={e => u("body", e.target.value)} placeholder={"Hey {{full_name}}! Your access is ready 🎉"} />
+            <p className={hint}>If a template is selected above, it takes priority. The free-form message is only sent when no template is set and the contact messaged within the last 24 hours.</p>
           </>
         )}
 
+        {/* ── Send SMS (coming soon) ── */}
         {type === "sendSms" && (
           <>
-            <p className="text-[10px] text-amber-400/70 mb-2">Requires SMS channel to be configured.</p>
-            <label className={lbl}>SMS body</label>
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p className="text-xs font-semibold text-amber-400">Coming soon</p>
+              <p className="text-[10px] text-amber-400/70 mt-0.5">SMS will be available once an SMS provider is connected to your account.</p>
+            </div>
+            <label className={lbl}>Message (max 160 characters)</label>
             <textarea rows={4} className={inp}
               value={String(local.body ?? "")}
               onChange={e => u("body", e.target.value.slice(0, 160))}
-              placeholder="Your access is ready. Click here: {{link}}"
+              placeholder="Your access is ready. Visit leadash.com"
               maxLength={160}
             />
-            <p className="text-[10px] text-white/30">{String(local.body ?? "").length}/160 characters</p>
+            <p className={hint}>{String(local.body ?? "").length} / 160 characters</p>
           </>
         )}
 
+        {/* ── Add to Campaign (coming soon) ── */}
         {type === "enrollCampaign" && (
-          <p className="text-xs text-white/40">Campaign enrollment coming soon. This node will enroll the contact into the selected campaign when the feature launches.</p>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-xs font-semibold text-amber-400">Coming soon</p>
+            <p className="text-[10px] text-amber-400/70 mt-1">This step will automatically add the contact to an outreach email campaign once the feature is ready.</p>
+          </div>
         )}
 
-        {/* ── CRM ── */}
+        {/* ── Add / Remove Tag ── */}
         {(type === "addTag" || type === "removeTag") && (
           <>
             <label className={lbl}>{type === "addTag" ? "Tag to add" : "Tag to remove"}</label>
@@ -282,249 +429,465 @@ function NodeConfig({ node, onChange, onClose }: {
               onChange={e => u("tag", e.target.value)}
               placeholder="e.g. hot-lead"
             />
+            <p className={hint}>Use lowercase with hyphens. Example: <em>hot-lead</em>, <em>paid-customer</em></p>
           </>
         )}
 
+        {/* ── Move Stage (changeLifecycle) ── */}
         {type === "changeLifecycle" && (
           <>
-            <label className={lbl}>New lifecycle stage</label>
+            <label className={lbl}>Move this contact to</label>
             <select className={inp} value={String(local.lifecycle ?? "lead")} onChange={e => u("lifecycle", e.target.value)}>
-              <option value="lead">Lead</option>
-              <option value="prospect">Prospect</option>
-              <option value="customer">Customer</option>
-              <option value="churned">Churned</option>
+              <option value="lead">Lead — just entered the funnel</option>
+              <option value="prospect">Prospect — showing interest</option>
+              <option value="customer">Customer — has purchased</option>
+              <option value="churned">Churned — cancelled or gone quiet</option>
+              <option value="blocked">Blocked — do not contact</option>
             </select>
           </>
         )}
 
+        {/* ── Create Task ── */}
         {type === "createTask" && (
           <>
             <label className={lbl}>Task title</label>
             <input className={inp}
               value={String(local.title ?? "")}
               onChange={e => u("title", e.target.value)}
-              placeholder="Follow up with contact"
+              placeholder="Follow up with this contact"
             />
-            <label className={lbl}>Due in (days)</label>
+            <label className={lbl}>Due in how many days?</label>
             <input type="number" min={0} className={inp}
               value={String(local.due_days ?? 1)}
               onChange={e => u("due_days", parseInt(e.target.value) || 1)}
             />
-            <p className="text-[10px] text-white/30">Leave assignee blank to create unassigned.</p>
+            <p className={hint}>The task will appear in the CRM for your team to action.</p>
           </>
         )}
 
+        {/* ── Update Field ── */}
         {type === "updateField" && (
           <>
             <label className={lbl}>Table</label>
             <select className={inp} value={String(local.table ?? "funnel_states")} onChange={e => u("table", e.target.value)}>
-              <option value="funnel_states">funnel_states</option>
-              <option value="workspaces">workspaces</option>
+              <option value="funnel_states">Funnel states</option>
+              <option value="workspaces">Workspace settings</option>
             </select>
-            <label className={lbl}>Column</label>
+            <label className={lbl}>Field name</label>
             <input className={inp} value={String(local.column ?? "")} onChange={e => u("column", e.target.value)} placeholder="current_offer" />
-            <label className={lbl}>Value (supports {"{{variables}}"})</label>
-            <input className={inp} value={String(local.value ?? "")} onChange={e => u("value", e.target.value)} placeholder="bundle" />
+            <label className={lbl}>New value</label>
+            <input className={inp} value={String(local.value ?? "")} onChange={e => u("value", e.target.value)} placeholder="bundle_v2" />
+            <p className={hint}>Supports {"{{variables}}"} from the trigger payload.</p>
           </>
         )}
 
-        {(type === "webhook" || type === "triggerWebhook") && (
+        {/* ── Webhook ── */}
+        {type === "webhook" && (
           <>
-            <label className={lbl}>URL</label>
-            <input className={inp} value={String(local.url ?? "")} onChange={e => u("url", e.target.value)} placeholder="https://your-webhook.com/hook" />
+            <label className={lbl}>URL to call</label>
+            <input className={inp} value={String(local.url ?? "")} onChange={e => u("url", e.target.value)} placeholder="https://yoursite.com/webhook" />
             <label className={lbl}>Method</label>
             <select className={inp} value={String(local.method ?? "POST")} onChange={e => u("method", e.target.value)}>
-              <option>POST</option><option>GET</option><option>PUT</option>
+              <option value="POST">POST — send data</option>
+              <option value="GET">GET — fetch data</option>
+              <option value="PUT">PUT — update data</option>
             </select>
           </>
         )}
 
-        {/* ── Academy ── */}
+        {/* ── Grant Course (grantAcademy) ── */}
         {type === "grantAcademy" && (
           <>
-            <label className={lbl}>Access type</label>
-            <select className={inp} value={String(local.access_type ?? "challenge")} onChange={e => u("access_type", e.target.value)}>
-              <option value="challenge">Challenge</option>
-              <option value="bundle">Bundle</option>
-            </select>
-          </>
-        )}
-
-        {/* ── Logic ── */}
-        {type === "wait" && (
-          <>
-            <label className={lbl}>Wait duration (minutes)</label>
-            <input type="number" className={inp} value={String(local.duration_minutes ?? 60)} onChange={e => u("duration_minutes", parseInt(e.target.value) || 60)} min={1} />
-            <p className="text-[10px] text-white/30">The execution pauses here and re-queues when the delay expires.</p>
-          </>
-        )}
-
-        {type === "condition" && (
-          <>
-            <label className={lbl}>Field (e.g. funnel_state.day1_completed_at)</label>
-            <input className={inp} value={String(local.field ?? "")} onChange={e => u("field", e.target.value)} placeholder="payload.pct" />
-            <label className={lbl}>Operator</label>
-            <select className={inp} value={String(local.operator ?? "eq")} onChange={e => u("operator", e.target.value)}>
-              {["eq","neq","gt","lt","gte","lte","contains","not_contains","is_null","is_not_null"].map(op => (
-                <option key={op} value={op}>{op}</option>
+            <label className={lbl}>Which course or challenge?</label>
+            <select className={inp} value={String(local.product_id ?? "")} onChange={e => {
+              const product = academyProducts.find(p => p.id === e.target.value);
+              setLocal(p => ({ ...p, product_id: e.target.value, product_name: product?.name ?? "" }));
+            }}>
+              <option value="">Select a course…</option>
+              {academyProducts.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <label className={lbl}>Value</label>
-            <input className={inp} value={String(local.value ?? "")} onChange={e => u("value", e.target.value)} placeholder="50" />
+            <p className={hint}>The contact will be enrolled automatically. Skipped if they don't have an account yet.</p>
           </>
         )}
 
+        {/* ── Wait ── */}
+        {type === "wait" && (
+          <>
+            <label className={lbl}>How long should the automation pause?</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={1}
+                className={`${inp} flex-1`}
+                value={waitVal}
+                onChange={e => updateWait(parseInt(e.target.value) || 1, waitUnit)}
+              />
+              <select
+                className={`${inp} flex-[1.4]`}
+                value={waitUnit}
+                onChange={e => updateWait(waitVal, e.target.value as typeof waitUnit)}
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+              </select>
+            </div>
+            <p className={hint}>The flow pauses here and automatically continues after the delay.</p>
+          </>
+        )}
+
+        {/* ── If / Else (condition) ── */}
+        {type === "condition" && (
+          <>
+            <label className={lbl}>What to check</label>
+            <input
+              className={inp}
+              list="condition-fields"
+              value={String(local.field ?? "")}
+              onChange={e => u("field", e.target.value)}
+              placeholder="payload.total_ngn"
+            />
+            <datalist id="condition-fields">
+              <option value="payload.access_type" />
+              <option value="payload.pct_complete" />
+              <option value="payload.streak_days" />
+              <option value="payload.day" />
+              <option value="payload.total_ngn" />
+              <option value="payload.product_id" />
+            </datalist>
+            <p className={hint}>Use <code className="bg-white/10 px-1 rounded">payload.fieldname</code> to check values from the trigger. e.g. payload.total_ngn for purchase amount.</p>
+
+            <label className={lbl}>Condition</label>
+            <select className={inp} value={String(local.operator ?? "eq")} onChange={e => u("operator", e.target.value)}>
+              {Object.entries(OPERATOR_LABELS).map(([op, label]) => (
+                <option key={op} value={op}>{label}</option>
+              ))}
+            </select>
+
+            {!["is_null", "is_not_null"].includes(String(local.operator ?? "eq")) && (
+              <>
+                <label className={lbl}>Compare to</label>
+                <input className={inp} value={String(local.value ?? "")} onChange={e => u("value", e.target.value)} placeholder="50" />
+              </>
+            )}
+            <p className={hint}>Contacts that match go down the YES path; all others take the NO path.</p>
+          </>
+        )}
+
+        {/* ── A/B Split ── */}
         {type === "splitAB" && (
           <>
-            <label className={lbl}>Split percentage</label>
+            <label className={lbl}>What % of contacts go to Path A?</label>
             <input type="range" min={1} max={99} value={pctA}
               onChange={e => u("pct_a", parseInt(e.target.value))}
               className="w-full accent-orange-500"
             />
-            <div className="flex justify-between text-xs font-semibold mt-1">
-              <span className="text-violet-400">A: {pctA}%</span>
-              <span className="text-violet-600">B: {pctB}%</span>
+            <div className="flex justify-between text-sm font-bold mt-2">
+              <span className="text-violet-400">Path A: {pctA}%</span>
+              <span className="text-violet-600">Path B: {pctB}%</span>
             </div>
+            <p className={hint}>Contacts are split randomly when they reach this step.</p>
           </>
         )}
 
+        {/* ── Jump to Step (goToStep) ── */}
         {type === "goToStep" && (
           <>
-            <label className={lbl}>Target node ID</label>
-            <input className={inp}
-              value={String(local.target_node ?? "")}
-              onChange={e => u("target_node", e.target.value)}
-              placeholder="node_5"
-            />
-            <p className="text-[10px] text-white/30">Enter the node ID from the canvas (visible in node tooltips).</p>
+            <label className={lbl}>Which step should the automation jump to?</label>
+            {steppableNodes.length === 0 ? (
+              <p className="text-xs text-white/30 italic">Add more steps to the canvas first, then come back and pick one here.</p>
+            ) : (
+              <select
+                className={inp}
+                value={String(local.target_node ?? "")}
+                onChange={e => {
+                  const targetNode = allNodes.find(n => n.id === e.target.value);
+                  const nodeMeta   = targetNode ? NODE_META[String(targetNode.type ?? "")] : null;
+                  const lbl2       = nodeMeta?.label ?? String(targetNode?.type ?? "Step");
+                  u("target_node", e.target.value);
+                  u("target_label", lbl2);
+                }}
+              >
+                <option value="">Select a step…</option>
+                {steppableNodes.map(n => {
+                  const nodeMeta = NODE_META[String(n.type ?? "")];
+                  const nodeLabel = nodeMeta?.label ?? String(n.type ?? "Step");
+                  const preview = String((n.data as Record<string, unknown>)?.subject
+                    ?? (n.data as Record<string, unknown>)?.title
+                    ?? (n.data as Record<string, unknown>)?.tag
+                    ?? "");
+                  return (
+                    <option key={n.id} value={n.id}>
+                      {nodeLabel}{preview ? ` — ${preview.slice(0, 24)}` : ""} ({n.id})
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+            <p className={hint}>Use this to loop back, skip ahead, or create branches.</p>
           </>
         )}
 
+        {/* ── End Flow ── */}
         {type === "endFlow" && (
-          <p className="text-xs text-white/40">This will end the automation for this contact. No further steps will be executed.</p>
+          <div className="p-4 rounded-xl bg-white/5 text-center space-y-2">
+            <div className="text-3xl">■</div>
+            <p className="text-xs text-white/50">
+              The automation stops here. No further steps will run for this contact.
+            </p>
+          </div>
         )}
 
       </div>
 
-      <div className="p-4 border-t border-white/10">
+      <div className="p-4 border-t border-white/10 flex-shrink-0">
         <button onClick={apply} className="w-full bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
-          Apply
+          Save changes
         </button>
       </div>
     </div>
   );
 }
 
-// ── Step Library Panel ─────────────────────────────────────────────────────
+// ── Step + Trigger Library ─────────────────────────────────────────────────
+
+const DND_KEY = "application/leadash-node";
+
+function LibraryItem({
+  icon, label, desc, color, comingSoon, nodeType, nodeData,
+}: {
+  icon: string; label: string; desc: string; color: string;
+  comingSoon?: boolean; nodeType: string; nodeData: Record<string, unknown>;
+  onAdd?: () => void;
+}) {
+  return (
+    <div
+      draggable={!comingSoon}
+      title={desc}
+      onDragStart={e => {
+        e.dataTransfer.setData(DND_KEY, JSON.stringify({ nodeType, nodeData }));
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      className={`group flex items-start gap-2 px-2 py-2 rounded-lg text-left transition-all cursor-grab active:cursor-grabbing
+        ${comingSoon
+          ? "opacity-40 cursor-not-allowed"
+          : "hover:bg-white/8 hover:shadow-sm"
+        }`}
+    >
+      <span
+        className="w-6 h-6 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5"
+        style={{ background: `${color}30` }}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-white/80 group-hover:text-white leading-tight">{label}</span>
+          {comingSoon && (
+            <span className="text-[8px] font-bold bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
+              Soon
+            </span>
+          )}
+        </div>
+        <p className="text-[9px] text-white/30 leading-tight mt-0.5 line-clamp-2">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ label, expanded, onToggle }: { label: string; expanded: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-2 py-1.5 text-[9px] font-bold text-white/20 uppercase tracking-widest hover:text-white/40 transition-colors"
+    >
+      {label}
+      <span>{expanded ? "▾" : "▸"}</span>
+    </button>
+  );
+}
 
 function StepLibrary({
   onAddNode,
   isOpen,
   onToggle,
 }: {
-  onAddNode: (type: string) => void;
+  onAddNode: (type: string, data?: Record<string, unknown>) => void;
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const [search, setSearch]   = useState("");
+  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    Triggers: true,
+    triggers:      true,
+    "User Events": true,
+    Academy:       false,
+    "Offers & Billing": false,
+    CRM:           false,
     Communication: true,
-    CRM: false,
-    Academy: false,
-    Logic: true,
+    "CRM steps":   true,
+    "Academy steps": false,
+    Logic:         true,
+    Advanced:      false,
   });
 
-  const filtered = search.trim()
-    ? Object.entries(NODE_META).filter(([, m]) =>
-        m.label.toLowerCase().includes(search.toLowerCase())
-      )
-    : null;
+  function toggle(key: string) { setExpanded(p => ({ ...p, [key]: !p[key] })); }
+
+  const q = search.toLowerCase().trim();
+
+  // Flat search across triggers + steps
+  if (q) {
+    const triggerHits = TRIGGER_GROUPS.flatMap(g =>
+      g.items
+        .filter(i => i.label.toLowerCase().includes(q) || i.desc.toLowerCase().includes(q))
+        .map(i => ({ kind: "trigger" as const, ...i, groupColor: g.color })),
+    );
+    const stepHits = Object.entries(NODE_META)
+      .filter(([t, m]) => t !== "trigger" && (m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q)))
+      .map(([t, m]) => ({ kind: "step" as const, type: t, ...m }));
+
+    return (
+      <div className="flex-shrink-0 border-r border-white/10 bg-[#111] flex flex-col overflow-hidden" style={{ width: 256 }}>
+        <div className="px-2 pt-2 pb-1">
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full px-2 py-1.5 text-[11px] bg-white/5 border border-white/10 rounded text-white placeholder-white/30 focus:outline-none focus:border-orange-500"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto px-1 pb-2">
+          {triggerHits.length === 0 && stepHits.length === 0 ? (
+            <p className="text-[10px] text-white/20 px-2 py-6 text-center">No results for "{search}"</p>
+          ) : (
+            <>
+              {triggerHits.length > 0 && (
+                <div className="mb-1">
+                  <p className="text-[8px] font-bold text-white/15 uppercase tracking-widest px-2 py-1">Triggers</p>
+                  {triggerHits.map(i => (
+                    <LibraryItem key={i.event} icon="⚡" label={i.label} desc={i.desc} color={i.groupColor}
+                      nodeType="trigger" nodeData={{ event: i.event }}
+                    />
+                  ))}
+                </div>
+              )}
+              {stepHits.length > 0 && (
+                <div>
+                  <p className="text-[8px] font-bold text-white/15 uppercase tracking-widest px-2 py-1">Steps</p>
+                  {stepHits.map(s => (
+                    <LibraryItem key={s.type} icon={s.icon} label={s.label} desc={s.description}
+                      color={s.color} comingSoon={s.comingSoon}
+                      nodeType={s.type} nodeData={{}}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       className="flex-shrink-0 border-r border-white/10 bg-[#111] flex flex-col transition-all duration-200 overflow-hidden"
-      style={{ width: isOpen ? 200 : 36 }}
+      style={{ width: isOpen ? 256 : 36 }}
     >
       {/* Toggle button */}
       <button
         onClick={onToggle}
-        className="flex items-center justify-center w-9 h-9 text-white/30 hover:text-white/70 flex-shrink-0 self-end mt-1 mr-0"
-        title={isOpen ? "Collapse panel" : "Expand step library"}
+        className="flex items-center justify-center w-9 h-9 text-white/30 hover:text-white/70 flex-shrink-0 self-end mt-1"
+        title={isOpen ? "Collapse panel" : "Expand library"}
       >
         {isOpen ? "‹" : "›"}
       </button>
 
       {isOpen && (
         <>
+          {/* Search */}
           <div className="px-2 pb-2">
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search…"
-              className="w-full px-2 py-1 text-[11px] bg-white/5 border border-white/10 rounded text-white placeholder-white/30 focus:outline-none focus:border-orange-500"
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search triggers & steps…"
+              className="w-full px-2 py-1.5 text-[11px] bg-white/5 border border-white/10 rounded text-white placeholder-white/30 focus:outline-none focus:border-orange-500"
             />
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {filtered ? (
-              // Search results flat list
-              <div className="px-1.5 space-y-0.5">
-                {filtered.map(([type, meta]) => (
-                  <button
-                    key={type}
-                    onClick={() => onAddNode(type)}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-left text-[11px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all"
-                  >
-                    <span
-                      className="w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0"
-                      style={{ background: `${meta.color}33` }}
-                    >
-                      {meta.icon}
-                    </span>
-                    {meta.label}
-                  </button>
-                ))}
-                {filtered.length === 0 && (
-                  <p className="text-[10px] text-white/20 px-2 py-4 text-center">No results</p>
-                )}
-              </div>
-            ) : (
-              // Categorised list
-              CATEGORIES.map(cat => {
-                const nodes = Object.entries(NODE_META).filter(([, m]) => m.category === cat);
+
+            {/* ── Triggers section ── */}
+            <div className="border-b border-white/5 pb-1 mb-1">
+              <SectionHeader label="Triggers" expanded={!!expanded.triggers} onToggle={() => toggle("triggers")} />
+              {expanded.triggers && (
+                <div className="px-1 space-y-0">
+                  {TRIGGER_GROUPS.map(group => (
+                    <div key={group.label}>
+                      {/* Sub-group header */}
+                      <button
+                        onClick={() => toggle(group.label)}
+                        className="w-full flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-white/30 hover:text-white/50 transition-colors"
+                      >
+                        <span>{group.icon}</span>
+                        <span>{group.label}</span>
+                        <span className="ml-auto text-[8px]">{expanded[group.label] ? "▾" : "▸"}</span>
+                      </button>
+                      {expanded[group.label] && (
+                        <div className="ml-1">
+                          {group.items.map(item => (
+                            <LibraryItem
+                              key={item.event}
+                              icon="⚡"
+                              label={item.label}
+                              desc={item.desc}
+                              color={group.color}
+                              nodeType="trigger"
+                              nodeData={{ event: item.event }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Steps section ── */}
+            <div className="px-1">
+              <p className="text-[8px] font-bold text-white/15 uppercase tracking-widest px-2 py-1.5">Steps</p>
+              {STEP_CATEGORIES.map(cat => {
+                const stepsInCat = Object.entries(NODE_META).filter(([, m]) => m.category === cat);
+                if (stepsInCat.length === 0) return null;
+                const catKey = cat === "CRM" ? "CRM steps" : cat === "Academy" ? "Academy steps" : cat;
                 return (
                   <div key={cat}>
-                    <button
-                      onClick={() => setExpanded(p => ({ ...p, [cat]: !p[cat] }))}
-                      className="w-full flex items-center justify-between px-3 py-1.5 text-[9px] font-bold text-white/20 uppercase tracking-widest hover:text-white/40 transition-colors"
-                    >
-                      {cat}
-                      <span>{expanded[cat] ? "▾" : "▸"}</span>
-                    </button>
-                    {expanded[cat] && (
-                      <div className="px-1.5 space-y-0.5 pb-1">
-                        {nodes.map(([type, meta]) => (
-                          <button
+                    <SectionHeader label={cat} expanded={!!expanded[catKey]} onToggle={() => toggle(catKey)} />
+                    {expanded[catKey] && (
+                      <div className="pb-1">
+                        {stepsInCat.map(([type, meta]) => (
+                          <LibraryItem
                             key={type}
-                            onClick={() => onAddNode(type)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-left text-[11px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all"
-                          >
-                            <span
-                              className="w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0"
-                              style={{ background: `${meta.color}33` }}
-                            >
-                              {meta.icon}
-                            </span>
-                            {meta.label}
-                          </button>
+                            icon={meta.icon}
+                            label={meta.label}
+                            desc={meta.description}
+                            color={meta.color}
+                            comingSoon={meta.comingSoon}
+                            nodeType={type}
+                            nodeData={{}}
+                          />
                         ))}
                       </div>
                     )}
                   </div>
                 );
-              })
-            )}
+              })}
+            </div>
+
+          </div>
+
+          {/* Footer hint */}
+          <div className="px-3 py-2 border-t border-white/5 flex-shrink-0">
+            <p className="text-[9px] text-white/15 text-center">Click or drag onto canvas</p>
           </div>
         </>
       )}
@@ -539,21 +902,9 @@ const DUP_POLICY_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  {
-    value: "deduplicate",
-    label: "Skip",
-    description: "Don't start a new run (recommended)",
-  },
-  {
-    value: "restart",
-    label: "Restart",
-    description: "Cancel current run, start fresh",
-  },
-  {
-    value: "parallel",
-    label: "Allow parallel",
-    description: "Run multiple instances simultaneously",
-  },
+  { value: "deduplicate", label: "Skip",           description: "Don't start a new run (recommended)" },
+  { value: "restart",     label: "Restart",         description: "Cancel current run, start fresh" },
+  { value: "parallel",    label: "Allow parallel",  description: "Run multiple instances at once" },
 ];
 
 function DupPolicySelector({
@@ -581,22 +932,16 @@ function DupPolicySelector({
       <button
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[11px] text-white/60 hover:text-white transition-all"
-        title="When a contact re-triggers this automation while already in it"
+        title="What to do if a contact re-triggers this automation while already in it"
       >
         <span className="font-semibold">{current.label}</span>
         <span className="text-white/20">▾</span>
-        <span
-          className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center text-[9px] text-white/30 hover:text-white/60 ml-0.5"
-          title="When a contact re-triggers this automation while already in it"
-        >
-          ?
-        </span>
       </button>
 
       {open && (
         <div className="absolute top-full mt-1 left-0 z-50 w-72 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-3">
           <p className="text-[10px] text-white/30 mb-2">
-            When a contact re-triggers this automation while already in it:
+            What happens if a contact triggers this automation while already in it?
           </p>
           <div className="space-y-1">
             {DUP_POLICY_OPTIONS.map(opt => (
@@ -625,19 +970,20 @@ function DupPolicySelector({
   );
 }
 
-// ── History snapshot helpers ───────────────────────────────────────────────
+// ── History helpers ────────────────────────────────────────────────────────
 
 const HISTORY_LIMIT = 30;
 
-// ── Main builder ───────────────────────────────────────────────────────────
-
 let _nodeId = 1;
 function nextId() { return `node_${_nodeId++}`; }
+
+// ── Main builder ───────────────────────────────────────────────────────────
 
 function AutomationBuilderInner() {
   const params  = useSearchParams();
   const router  = useRouter();
   const flowId  = params.get("id");
+  const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -651,12 +997,11 @@ function AutomationBuilderInner() {
   const [loading,       setLoading]     = useState(true);
   const [libraryOpen,   setLibraryOpen] = useState(true);
 
-  // Undo/redo history — use refs so callbacks always see fresh values
+  // Undo/redo history
   const historyRef  = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([]);
   const histIdxRef  = useRef(-1);
-  const [historyIndex, setHistoryIndex] = useState(-1); // drives button disabled state
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const [historyLen,   setHistoryLen]   = useState(0);
-  // Prevent recording history while we're replaying it
   const skipSnapshot = useRef(false);
 
   function snapshot(ns: Node[], es: Edge[]) {
@@ -693,7 +1038,6 @@ function AutomationBuilderInner() {
     requestAnimationFrame(() => { skipSnapshot.current = false; });
   }
 
-  // Keyboard shortcuts for undo/redo
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -720,7 +1064,6 @@ function AutomationBuilderInner() {
             const es = flow.flow_definition.edges ?? [];
             setNodes(ns);
             setEdges(es);
-            // Seed initial history
             historyRef.current = [{ nodes: ns, edges: es }];
             histIdxRef.current = 0;
             setHistoryIndex(0);
@@ -737,7 +1080,6 @@ function AutomationBuilderInner() {
     (params: Connection) => {
       setEdges(eds => {
         const next = addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed } }, eds);
-        // edges snapshot is deferred so nodes is still current
         setNodes(ns => { snapshot(ns, next); return ns; });
         return next;
       });
@@ -746,20 +1088,37 @@ function AutomationBuilderInner() {
     [setEdges, setNodes],
   );
 
-  function addNode(type: string) {
+  function addNodeAt(type: string, data: Record<string, unknown>, position: { x: number; y: number }) {
     const id = nextId();
-    const newNode: Node = {
-      id,
-      type,
-      position: { x: 200 + Math.random() * 80, y: 100 + nodes.length * 140 },
-      data: {},
-    };
+    const newNode: Node = { id, type, position, data };
     setNodes(nds => {
       const next = [...nds, newNode];
       snapshot(next, edges);
       return next;
     });
   }
+
+  function addNode(type: string, data: Record<string, unknown> = {}) {
+    addNodeAt(type, data, { x: 220 + Math.random() * 60, y: 100 + nodes.length * 150 });
+  }
+
+  // Drag-and-drop from library onto canvas
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData(DND_KEY);
+    if (!raw) return;
+    try {
+      const { nodeType, nodeData } = JSON.parse(raw) as { nodeType: string; nodeData: Record<string, unknown> };
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      addNodeAt(nodeType, nodeData, position);
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenToFlowPosition, nodes, edges]);
 
   function onNodeClick(_: React.MouseEvent, node: Node) {
     setSelectedNode(node);
@@ -771,6 +1130,8 @@ function AutomationBuilderInner() {
       snapshot(next, edges);
       return next;
     });
+    // Keep selectedNode in sync so the panel re-renders immediately
+    setSelectedNode(prev => prev?.id === id ? { ...prev, data } : prev);
   }
 
   async function save(andActivate?: boolean) {
@@ -825,32 +1186,18 @@ function AutomationBuilderInner() {
 
         {/* Undo / Redo */}
         <div className="flex items-center gap-0.5">
-          <button
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            className={`w-7 h-7 flex items-center justify-center rounded text-sm transition-all ${
-              canUndo ? "text-white/60 hover:text-white hover:bg-white/10" : "text-white/15 cursor-not-allowed"
-            }`}
-          >
+          <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"
+            className={`w-7 h-7 flex items-center justify-center rounded text-sm transition-all ${canUndo ? "text-white/60 hover:text-white hover:bg-white/10" : "text-white/15 cursor-not-allowed"}`}>
             ↩
           </button>
-          <button
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y)"
-            className={`w-7 h-7 flex items-center justify-center rounded text-sm transition-all ${
-              canRedo ? "text-white/60 hover:text-white hover:bg-white/10" : "text-white/15 cursor-not-allowed"
-            }`}
-          >
+          <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"
+            className={`w-7 h-7 flex items-center justify-center rounded text-sm transition-all ${canRedo ? "text-white/60 hover:text-white hover:bg-white/10" : "text-white/15 cursor-not-allowed"}`}>
             ↪
           </button>
         </div>
 
-        {/* Duplicate policy */}
         <DupPolicySelector value={dupPolicy} onChange={setDupPolicy} />
 
-        {/* Force migrate toggle */}
         <label className="flex items-center gap-1.5 text-[10px] text-white/30 cursor-pointer">
           <input type="checkbox" checked={forceMigrate} onChange={e => setForceMigrate(e.target.checked)} className="accent-orange-500" />
           Migrate running
@@ -880,7 +1227,7 @@ function AutomationBuilderInner() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Step Library */}
+        {/* Left: library */}
         <StepLibrary
           onAddNode={addNode}
           isOpen={libraryOpen}
@@ -896,6 +1243,8 @@ function AutomationBuilderInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             fitView
             defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#4b5563" } }}
@@ -904,14 +1253,26 @@ function AutomationBuilderInner() {
             <Controls />
             <MiniMap nodeColor={n => NODE_META[n.type as string]?.color ?? "#6b7280"} style={{ background: "#111" }} />
           </ReactFlow>
+
+          {/* Empty state hint */}
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center">
+                <p className="text-white/15 text-sm font-semibold">Drag a trigger from the left panel to start</p>
+                <p className="text-white/10 text-xs mt-1">or click any item in the library to add it</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right: node config panel */}
+        {/* Right: node config panel — key forces remount on node change */}
         {selectedNode && (
           <NodeConfig
+            key={selectedNode.id}
             node={selectedNode}
             onChange={updateNodeData}
             onClose={() => setSelectedNode(null)}
+            allNodes={nodes}
           />
         )}
       </div>
@@ -922,7 +1283,9 @@ function AutomationBuilderInner() {
 export default function AutomationBuilderPage() {
   return (
     <Suspense>
-      <AutomationBuilderInner />
+      <ReactFlowProvider>
+        <AutomationBuilderInner />
+      </ReactFlowProvider>
     </Suspense>
   );
 }
