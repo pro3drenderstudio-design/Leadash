@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
 
     // Enqueue to BullMQ
     const q = getQueue();
-    await q.add("send", { ...waPayload, record_id: waMsgRecord?.id }, { attempts: 6 });
+    await q.add("send", { ...waPayload, message_id: waMsgRecord?.id }, { attempts: 6 });
     await q.close();
 
     // Insert CRM message

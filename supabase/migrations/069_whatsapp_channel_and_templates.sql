@@ -22,4 +22,5 @@ CREATE TABLE IF NOT EXISTS whatsapp_templates (
 );
 
 ALTER TABLE whatsapp_templates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "whatsapp_templates_admin" ON whatsapp_templates FOR ALL USING (is_admin());
+CREATE POLICY "whatsapp_templates_admin" ON whatsapp_templates FOR ALL
+  USING (EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid()));
