@@ -26,6 +26,12 @@ import { createClient } from "@/lib/supabase/client";
 
 const AC = "#f97316";
 
+// ── Design system background tokens ───────────────────────────────────────────
+// #0c0c0f  main app background
+// #111     header / top bar
+// #1a1a1a  side panels
+// #0f0f0f  page canvas background
+
 type Device = "desktop" | "tablet" | "mobile";
 
 interface PageData {
@@ -256,14 +262,14 @@ export default function BuilderPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0e16] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center">
         <span className="text-white/20 text-sm">Loading builder…</span>
       </div>
     );
   }
   if (!page) {
     return (
-      <div className="min-h-screen bg-[#0a0e16] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0c0c0f] flex items-center justify-center">
         <span className="text-white/20 text-sm">Page not found</span>
       </div>
     );
@@ -295,10 +301,10 @@ export default function BuilderPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-    <div className="flex flex-col h-screen w-full bg-[#0a0e16] overflow-hidden" style={{ fontFamily: "'Geist','Segoe UI',system-ui,sans-serif", color: "#e2e8f0" }}>
+    <div className="flex flex-col h-screen w-full bg-[#0c0c0f] overflow-hidden" style={{ fontFamily: "'Geist','Segoe UI',system-ui,sans-serif", color: "#f0f0f0" }}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <header className="h-[53px] shrink-0 flex items-center gap-3 px-3 bg-[#0b1019] border-b border-white/[0.06] z-40 relative">
+      <header className="h-[53px] shrink-0 flex items-center gap-3 px-3 bg-[#111] border-b border-white/[0.06] z-40 relative">
 
         {/* Left cluster */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
@@ -324,7 +330,7 @@ export default function BuilderPage() {
         {/* Center cluster */}
         <div className="flex-1 flex items-center justify-center gap-2.5 min-w-0">
           {/* Device picker */}
-          <div className="flex bg-[#0a0e16] border border-white/[0.07] rounded-xl p-0.5 gap-0.5">
+          <div className="flex bg-[#0c0c0f] border border-white/[0.07] rounded-xl p-0.5 gap-0.5">
             {([["desktop",["M3 4h18v12H3z","M8 20h8","M12 16v4"]],["tablet",["M5 3h14v18H5z","M11 18h2"]],["mobile",["M7 3h10v18H7z","M11 18h2"]]] as const).map(([d, paths]) => (
               <button key={d} onClick={() => setDevice(d as Device)} title={d}
                 className={`flex items-center justify-center px-2.5 py-1.5 border-none rounded-lg cursor-pointer transition-colors ${
@@ -335,7 +341,7 @@ export default function BuilderPage() {
             ))}
           </div>
           {/* Zoom */}
-          <div className="flex items-center bg-[#0a0e16] border border-white/[0.07] rounded-xl p-0.5 gap-0.5">
+          <div className="flex items-center bg-[#0c0c0f] border border-white/[0.07] rounded-xl p-0.5 gap-0.5">
             <button onClick={() => setZoom(z => Math.max(.5, Math.round((z-.1)*10)/10))} title="Zoom out"
               className="w-[26px] h-[26px] flex items-center justify-center border-none bg-transparent text-white/40 rounded-lg cursor-pointer hover:text-white/80 transition-colors">
               <Icon paths={["M5 12h14"]} size={15} sw={2} />
@@ -402,7 +408,7 @@ export default function BuilderPage() {
 
       {/* ── A/B strip ──────────────────────────────────────────────────────── */}
       {ab && (
-        <div className="shrink-0 flex items-center gap-3.5 px-4 py-2.5 bg-[#0e1320] border-b border-white/[0.06]">
+        <div className="shrink-0 flex items-center gap-3.5 px-4 py-2.5 bg-[#111] border-b border-white/[0.06]">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300">
             <Icon paths={["M4 4h7v16H4z","M13 4h7v16h-7z"]} size={14} sw={1.8} /> A/B Test
           </span>
@@ -434,7 +440,7 @@ export default function BuilderPage() {
 
         {/* ── LEFT PANEL ─────────────────────────────────────────────────── */}
         {!preview && (
-          <aside className="w-[270px] shrink-0 bg-[#0b101a] border-r border-white/[0.06] flex flex-col min-h-0">
+          <aside className="w-[270px] shrink-0 bg-[#1a1a1a] border-r border-white/[0.06] flex flex-col min-h-0">
             {/* Tabs */}
             <div className="flex border-b border-white/[0.06] px-2">
               {(["blocks","layers"] as const).map(tab => (
@@ -510,7 +516,7 @@ export default function BuilderPage() {
         <div
           onClick={() => setSelectedId(null)}
           className="flex-1 min-w-0 overflow-auto relative"
-          style={{ background: "radial-gradient(120% 80% at 50% 0,#11192b 0%,#0a0e16 55%)" }}
+          style={{ background: "radial-gradient(120% 80% at 50% 0,#1a1a1a 0%,#0c0c0f 55%)" }}
         >
           <div className={`min-h-full flex justify-center items-start ${preview ? "" : "p-[34px_34px_140px]"}`}>
             <div style={{ width: preview ? "100%" : deviceW, transform: `scale(${zoom})`, transformOrigin: "top center", transition: "width .28s ease" }}>
@@ -531,7 +537,7 @@ export default function BuilderPage() {
 
           {preview && (
             <button onClick={() => setPreview(false)}
-              className="absolute top-3.5 right-3.5 z-50 inline-flex items-center gap-1.5 px-4 py-2 bg-[#161c28] border border-white/[0.14] text-white rounded-xl text-[13px] font-medium cursor-pointer shadow-2xl">
+              className="absolute top-3.5 right-3.5 z-50 inline-flex items-center gap-1.5 px-4 py-2 bg-[#1a1a1a] border border-white/[0.14] text-white rounded-xl text-[13px] font-medium cursor-pointer shadow-2xl">
               <Icon paths={["M6 6l12 12","M18 6L6 18"]} size={15} /> Exit preview
             </button>
           )}
@@ -539,7 +545,7 @@ export default function BuilderPage() {
 
         {/* ── RIGHT PANEL ────────────────────────────────────────────────── */}
         {!preview && (
-          <aside className="w-[304px] shrink-0 bg-[#0b101a] border-l border-white/[0.06] flex flex-col min-h-0">
+          <aside className="w-[304px] shrink-0 bg-[#1a1a1a] border-l border-white/[0.06] flex flex-col min-h-0">
             <RightPanel
               selectedBlock={selectedBlock}
               page={page}
@@ -561,7 +567,7 @@ export default function BuilderPage() {
 
       {/* ── Toast ──────────────────────────────────────────────────────────── */}
       {toast && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#1a2230] border border-white/10 text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-2xl z-[60] flex items-center gap-2 whitespace-nowrap">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border border-white/10 text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-2xl z-[60] flex items-center gap-2 whitespace-nowrap">
           <span style={{ color: AC }}><Icon paths={["M5 12l4 4 10-10"]} size={15} sw={2.4} /></span>
           {toast}
         </div>
@@ -569,7 +575,7 @@ export default function BuilderPage() {
     </div>
     <DragOverlay>
       {activeDrag && (
-        <div className="px-3.5 py-2 bg-[#161c28] border border-orange-500/50 rounded-lg text-white text-[12.5px] font-semibold shadow-2xl">
+        <div className="px-3.5 py-2 bg-[#1a1a1a] border border-orange-500/50 rounded-lg text-white text-[12.5px] font-semibold shadow-2xl">
           {activeDrag.label}
         </div>
       )}
@@ -950,7 +956,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const br = b.layout?.border_radius ?? 0;
     return (
       <div>
-        <Field label="Color">{layoutColorCtl("border_color", "#2a3142")}</Field>
+        <Field label="Color">{layoutColorCtl("border_color", "#2a2a2a")}</Field>
         {layoutRangeRow("Width",  bw, v => onSetLayout(b.id, { border_width:  v }), 0, 12)}
         {layoutRangeRow("Radius", br, v => onSetLayout(b.id, { border_radius: v }), 0, 40)}
       </div>
@@ -1161,7 +1167,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         </Field>
         <Field label="URL slug">
           <div className="flex items-center">
-            <span className="text-xs text-white/30 font-mono bg-[#080b12] border border-white/10 border-r-0 rounded-l-lg px-2 py-2">/</span>
+            <span className="text-xs text-white/30 font-mono bg-[#0f0f0f] border border-white/10 border-r-0 rounded-l-lg px-2 py-2">/</span>
             <input value={page.slug} onChange={e => onSetPage({ slug: e.target.value })}
               className="flex-1 bg-white/5 border border-white/10 rounded-r-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-orange-500/40 transition-colors" />
           </div>
