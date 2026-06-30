@@ -905,7 +905,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       if (bundleWs?.id) {
-        const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        const graceEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
         await db.from("workspaces")
           .update({ bundle_grace_ends_at: graceEndsAt, updated_at: new Date().toISOString() })
           .eq("id", bundleWs.id);
@@ -938,7 +938,7 @@ export async function POST(req: NextRequest) {
       }
     }
     if (subCode) {
-      const graceEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const graceEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
       const todayKey = `grace_warn_${new Date().toISOString().slice(0, 10)}`;
       const { data: ws } = await db
         .from("workspaces")

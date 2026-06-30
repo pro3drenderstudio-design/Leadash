@@ -11,10 +11,13 @@
  *
  * Subscription renewal (uses subscription_renews_at):
  *   - 3 days before → "renews in 3 days"
+ *   - 2 days before → "renews in 2 days"
  *   - 1 day  before → "renews tomorrow"
  *
- * Grace period warning (uses grace_ends_at):
- *   - When plan_status = "past_due" → one-time warning email
+ * Grace period countdown (uses grace_ends_at, plan_status = "past_due"):
+ *   - 3 days before expiry → warning email
+ *   - 2 days before expiry → warning email
+ *   - 1 day  before expiry → final warning email
  *
  * Downgrade confirmation (fires in billing-grace cron, imported here too via
  * the downgrade helper — only if the workspace has no downgrade_notified_at).
@@ -150,6 +153,7 @@ export async function GET(req: NextRequest) {
 
     const remindersToCheck = [
       { key: `renew_3d_${t}`, daysLeft: 3 },
+      { key: `renew_2d_${t}`, daysLeft: 2 },
       { key: `renew_1d_${t}`, daysLeft: 1 },
     ];
 
@@ -175,7 +179,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── 3. Grace period warning ────────────────────────────────────────────────
+  // ── 3. Grace period countdown (3 days, 2 days, 1 day before expiry) ────────
   const { data: graceWorkspaces } = await db
     .from("workspaces")
     .select("id, name, billing_email, grace_ends_at, billing_reminders_sent, workspace_members(user_id)")
@@ -188,21 +192,31 @@ export async function GET(req: NextRequest) {
     if (!emailTo) continue;
 
     const sent_map = (ws.billing_reminders_sent ?? {}) as Record<string, boolean>;
-    const key = `grace_warn_${t}`;
-    if (sent_map[key]) { skipped++; continue; }
+    const daysLeft = daysFromNow(ws.grace_ends_at);
 
-    try {
-      await sendGracePeriodWarning({
-        userEmail:     emailTo,
-        workspaceName: ws.name,
-        graceEndsAt:   ws.grace_ends_at,
-      });
-      await db.from("workspaces")
-        .update({ billing_reminders_sent: { ...sent_map, [key]: true } })
-        .eq("id", ws.id);
-      sent++;
-    } catch (err) {
-      console.error(`[billing-reminders] grace email failed ws=${ws.id}:`, err instanceof Error ? err.message : err);
+    const graceReminders = [
+      { key: `grace_3d_${t}`, daysLeft: 3 },
+      { key: `grace_2d_${t}`, daysLeft: 2 },
+      { key: `grace_1d_${t}`, daysLeft: 1 },
+    ];
+
+    for (const r of graceReminders) {
+      if (sent_map[r.key]) { skipped++; continue; }
+      if (daysLeft !== r.daysLeft) continue;
+
+      try {
+        await sendGracePeriodWarning({
+          userEmail:     emailTo,
+          workspaceName: ws.name,
+          graceEndsAt:   ws.grace_ends_at,
+        });
+        await db.from("workspaces")
+          .update({ billing_reminders_sent: { ...sent_map, [r.key]: true } })
+          .eq("id", ws.id);
+        sent++;
+      } catch (err) {
+        console.error(`[billing-reminders] grace email failed ws=${ws.id} key=${r.key}:`, err instanceof Error ? err.message : err);
+      }
     }
   }
 
