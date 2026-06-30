@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest) {
   const { db } = ctx;
 
   const body = await req.json() as {
-    channel:           "instagram" | "facebook" | "sms";
+    channel:           "instagram" | "facebook" | "sms" | "whatsapp";
     credentials?:      Record<string, string>;
     config?:           Record<string, string>;
     status?:           string;

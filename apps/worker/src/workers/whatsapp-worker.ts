@@ -21,19 +21,19 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
   const db: DB = createClient(SUPABASE_URL, SUPABASE_KEY);
   const { message_id, phone_number, template_name, template_params, body } = job.data;
 
-  // Pull Meta credentials from admin_settings at runtime so they can be
-  // rotated without redeployment.
-  const { data: settings } = await db
-    .from("admin_settings")
-    .select("key, value")
-    .in("key", ["whatsapp_phone_number_id", "whatsapp_access_token"]);
+  // Pull Meta credentials from crm_channel_configs (channel='whatsapp') at runtime
+  // so they can be rotated in the CRM Settings UI without redeployment.
+  const { data: channelCfg } = await db
+    .from("crm_channel_configs")
+    .select("config, credentials")
+    .eq("channel", "whatsapp")
+    .single();
 
-  const cfg = Object.fromEntries((settings ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value as string]));
-  const phoneNumberId = cfg["whatsapp_phone_number_id"];
-  const accessToken   = cfg["whatsapp_access_token"];
+  const phoneNumberId = channelCfg?.config?.phone_number_id as string | undefined;
+  const accessToken   = channelCfg?.credentials?.access_token as string | undefined;
 
   if (!phoneNumberId || !accessToken) {
-    throw new Error("WhatsApp credentials not configured in admin_settings");
+    throw new Error("WhatsApp not connected — configure it in Admin > CRM Settings");
   }
 
   // Build the Meta Cloud API payload
