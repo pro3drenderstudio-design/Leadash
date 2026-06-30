@@ -11,6 +11,8 @@ interface Funnel {
   custom_domain: string | null;
   status: "draft" | "active" | "archived";
   page_count: number;
+  preview_page_id: string | null;
+  entry_page_slug: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -128,6 +130,18 @@ export default function FunnelsPage() {
   const [loading,   setLoading]   = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [cloning,   setCloning]   = useState<string | null>(null);
+  const [copiedId,  setCopiedId]  = useState<string | null>(null);
+
+  function funnelUrl(f: Funnel) {
+    return `${window.location.origin}/f/${f.slug}/${f.entry_page_slug}`;
+  }
+
+  async function handleCopyUrl(f: Funnel) {
+    if (!f.entry_page_slug) return;
+    await navigator.clipboard.writeText(funnelUrl(f));
+    setCopiedId(f.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,7 +220,8 @@ export default function FunnelsPage() {
           {funnels.map(f => (
             <div
               key={f.id}
-              className="flex items-center gap-4 bg-[#111] hover:bg-[#161616] border border-white/5 rounded-xl px-5 py-4 transition-colors group"
+              onClick={() => router.push(`/admin/funnels/${f.id}`)}
+              className="flex items-center gap-4 bg-[#111] hover:bg-[#161616] border border-white/5 rounded-xl px-5 py-4 transition-colors group cursor-pointer"
             >
               {/* Icon */}
               <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
@@ -240,12 +255,31 @@ export default function FunnelsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div
+                onClick={e => e.stopPropagation()}
+                className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <button
+                  onClick={() => handleCopyUrl(f)}
+                  disabled={!f.entry_page_slug}
+                  title={f.entry_page_slug ? "Copy funnel URL" : "Add a page first"}
+                  className="px-3 py-1.5 text-xs font-semibold bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white/60 rounded-lg transition-colors"
+                >
+                  {copiedId === f.id ? "Copied!" : "Copy URL"}
+                </button>
+                <button
+                  onClick={() => window.open(funnelUrl(f), "_blank", "noopener,noreferrer")}
+                  disabled={!f.entry_page_slug}
+                  title={f.entry_page_slug ? "Open the live funnel in a new tab" : "Add a page first"}
+                  className="px-3 py-1.5 text-xs font-semibold bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white/60 rounded-lg transition-colors"
+                >
+                  Open Funnel
+                </button>
                 <button
                   onClick={() => router.push(`/admin/funnels/${f.id}`)}
                   className="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
                 >
-                  Edit Pages
+                  Edit
                 </button>
                 <button
                   onClick={() => handleClone(f.id)}

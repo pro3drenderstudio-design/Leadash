@@ -281,6 +281,13 @@ function PagesTab({
               {/* Actions */}
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
+                  onClick={() => window.open(`/funnel-preview/${funnel.id}/${p.id}`, "_blank", "noopener,noreferrer")}
+                  title="Preview in new tab"
+                  className="px-3 py-1.5 text-xs font-semibold bg-white/5 hover:bg-white/10 text-white/60 rounded-lg transition-colors"
+                >
+                  Preview
+                </button>
+                <button
                   onClick={() => router.push(`/admin/funnels/${funnel.id}/pages/${p.id}/builder`)}
                   className="px-3 py-1.5 text-xs font-semibold bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-colors"
                 >
@@ -333,9 +340,15 @@ function PagesTab({
 // ── Settings Tab ──────────────────────────────────────────────────────────────
 
 function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Partial<Funnel>) => void }) {
+  const tracking = (funnel.settings?.tracking as Record<string, string> | undefined) ?? {};
   const [slug,        setSlug]        = useState(funnel.slug);
   const [domain,      setDomain]      = useState(funnel.custom_domain ?? "");
   const [styles,      setStyles]      = useState(funnel.global_styles ? JSON.stringify(funnel.global_styles, null, 2) : "{}");
+  const [metaPixelId,    setMetaPixelId]    = useState(tracking.meta_pixel_id ?? "");
+  const [ga4Id,          setGa4Id]          = useState(tracking.ga4_measurement_id ?? "");
+  const [adsConvId,       setAdsConvId]      = useState(tracking.google_ads_conversion_id ?? "");
+  const [adsConvLabel,   setAdsConvLabel]   = useState(tracking.google_ads_conversion_label ?? "");
+  const [gtmId,           setGtmId]          = useState(tracking.gtm_container_id ?? "");
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
   const [error,       setError]       = useState("");
@@ -346,10 +359,21 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
     let parsedStyles: Record<string, unknown> = {};
     try { parsedStyles = JSON.parse(styles); } catch { setError("Invalid JSON in styles"); setSaving(false); return; }
 
+    const newSettings = {
+      ...(funnel.settings ?? {}),
+      tracking: {
+        meta_pixel_id:               metaPixelId.trim() || undefined,
+        ga4_measurement_id:          ga4Id.trim() || undefined,
+        google_ads_conversion_id:    adsConvId.trim() || undefined,
+        google_ads_conversion_label: adsConvLabel.trim() || undefined,
+        gtm_container_id:            gtmId.trim() || undefined,
+      },
+    };
+
     const res = await fetch(`/api/admin/funnels/${funnel.id}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ slug: slug.trim(), custom_domain: domain.trim() || null, global_styles: parsedStyles }),
+      body:    JSON.stringify({ slug: slug.trim(), custom_domain: domain.trim() || null, global_styles: parsedStyles, settings: newSettings }),
     });
     setSaving(false);
     if (res.ok) {
@@ -392,6 +416,61 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
         />
         <p className="text-[10px] text-white/30 mt-1">e.g. {`{"bg_color":"#0c0c0f","font":"Inter"}`} — used as the page-wide fallback when a page doesn&apos;t set its own background color or block colors don&apos;t override it.</p>
       </div>
+
+      <div className="pt-2 border-t border-white/10">
+        <h3 className="text-sm font-bold text-white mb-1">Tracking & Pixels</h3>
+        <p className="text-[10px] text-white/30 mb-4">Fires on every page in this funnel only. PageView fires on load, Lead fires on opt-in submit, Purchase fires on the linked offer&apos;s success page.</p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">Meta Pixel ID</label>
+            <input
+              value={metaPixelId}
+              onChange={e => setMetaPixelId(e.target.value)}
+              placeholder="123456789012345"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">GA4 Measurement ID</label>
+            <input
+              value={ga4Id}
+              onChange={e => setGa4Id(e.target.value)}
+              placeholder="G-XXXXXXXXXX"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">Google Ads Conversion ID</label>
+              <input
+                value={adsConvId}
+                onChange={e => setAdsConvId(e.target.value)}
+                placeholder="AW-XXXXXXXXX"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">Conversion Label</label>
+              <input
+                value={adsConvLabel}
+                onChange={e => setAdsConvLabel(e.target.value)}
+                placeholder="AbC-D_efG-h12"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">GTM Container ID (optional)</label>
+            <input
+              value={gtmId}
+              onChange={e => setGtmId(e.target.value)}
+              placeholder="GTM-XXXXXXX"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
         onClick={handleSave}
@@ -592,16 +671,26 @@ export default function FunnelDetailPage() {
           )}
           <p className="text-sm text-white/30 font-mono mt-1">/f/{funnel.slug}/…</p>
         </div>
-        <button
-          onClick={toggleStatus}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
-            funnel.status === "active"
-              ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-              : "bg-white/10 text-white/60 hover:bg-white/20"
-          }`}
-        >
-          {funnel.status === "active" ? "Active" : "Go Live"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.open(`/funnel-preview/${funnel.id}/${pages[0]?.id}`, "_blank", "noopener,noreferrer")}
+            disabled={pages.length === 0}
+            title={pages.length === 0 ? "Add a page first" : "Preview in new tab"}
+            className="px-4 py-2 text-sm font-semibold bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white/60 rounded-lg transition-colors"
+          >
+            Preview
+          </button>
+          <button
+            onClick={toggleStatus}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+              funnel.status === "active"
+                ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                : "bg-white/10 text-white/60 hover:bg-white/20"
+            }`}
+          >
+            {funnel.status === "active" ? "Active" : "Go Live"}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

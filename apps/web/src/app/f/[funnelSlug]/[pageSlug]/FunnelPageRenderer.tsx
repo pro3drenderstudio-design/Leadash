@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Block } from "@/lib/funnel-blocks/types";
 import { normalizeLegacyBlocks } from "@/lib/funnel-blocks/tree";
 import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
+import { TrackingPixels, FunnelTracking } from "@/lib/tracking/pixels";
 
 interface Props {
   funnelId:     string;
@@ -14,6 +15,8 @@ interface Props {
   settings:     Record<string, unknown>;
   connection:   Record<string, unknown>;
   globalStyles: Record<string, unknown>;
+  tracking?:    FunnelTracking | null;
+  preview?:     boolean;
 }
 
 function getSessionId(): string {
@@ -47,6 +50,8 @@ export default function FunnelPageRenderer({
   blocks,
   settings,
   globalStyles,
+  tracking = null,
+  preview = false,
 }: Props) {
   const trackedRef = useRef(false);
   const [sessionId, setSessionId] = useState("");
@@ -55,8 +60,13 @@ export default function FunnelPageRenderer({
     const sid = getSessionId();
     setSessionId(sid);
 
+    if (preview) return; // Admin preview — don't pollute session/view analytics or fire real pixel events.
     if (trackedRef.current) return;
     trackedRef.current = true;
+
+    // Last-touch funnel attribution, read back at offer checkout so a Purchase
+    // event can be attributed to the funnel that drove it.
+    sessionStorage.setItem("ld_last_funnel_id", funnelId);
 
     const utm = getUtmParams();
     fetch("/api/funnels/track", {
@@ -70,7 +80,7 @@ export default function FunnelPageRenderer({
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ type: "event", session_id: sid, page_id: pageId, event_type: "view" }),
     }).catch(() => {});
-  }, [funnelId, pageId]);
+  }, [funnelId, pageId, preview]);
 
   const bgColor = (settings.bg_color as string) ?? (globalStyles.bg_color as string) ?? "#0c0c0f";
   const layout = (settings.layout as { width_mode?: "boxed" | "full"; max_width?: number }) ?? {};
@@ -79,7 +89,8 @@ export default function FunnelPageRenderer({
 
   return (
     <div style={{ backgroundColor: bgColor, minHeight: "100vh", fontFamily: (globalStyles.font as string) ?? "Inter, sans-serif" }}>
-      <BlockTree blocks={tree} ctx={{ mode: "live", pageMaxWidth, pageId, sessionId }} />
+      <TrackingPixels tracking={tracking} enabled={!preview} />
+      <BlockTree blocks={tree} ctx={{ mode: "live", pageMaxWidth, pageId, sessionId, tracking: preview ? null : tracking }} />
     </div>
   );
 }

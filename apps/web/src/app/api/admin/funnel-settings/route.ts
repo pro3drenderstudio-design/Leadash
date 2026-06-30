@@ -15,37 +15,10 @@ const FUNNEL_KEYS = [
   "funnel_bundle_grace_period_days",
   "funnel_bundle_renewal_warning_days",
   "funnel_bundle_paystack_plan_code",
-  // Funnel content
+  // Funnel content & links
   "funnel_partner_name",
   "funnel_mizark_invite_link",
   "funnel_vsl_youtube_id",
-  // Analytics
-  "meta_pixel_id",
-  // Brand / social links
-  "social_twitter_url",
-  "social_linkedin_url",
-  "social_instagram_url",
-  // WhatsApp
-  "whatsapp_phone_number_id",
-  "whatsapp_access_token",
-  "whatsapp_waba_id",
-  "whatsapp_sender_name",
-  "whatsapp_max_retry_hours",
-  "whatsapp_24hr_warning_mins",
-  // CRM
-  "crm_support_email",
-  "crm_marketing_email",
-  "crm_default_assignee",
-  "crm_auto_reopen_on_reply",
-  // WhatsApp approved template names (set after Meta approval)
-  "wa_template_welcome",
-  "wa_template_training_reminder",
-  "wa_template_challenge_enrolled",
-  "wa_template_day1_complete",
-  "wa_template_bundle_offer",
-  "wa_template_bundle_purchased",
-  "wa_template_bundle_expiring",
-  "wa_template_bundle_renewed",
 ] as const;
 
 type FunnelKey = typeof FUNNEL_KEYS[number];

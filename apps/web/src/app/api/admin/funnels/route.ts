@@ -23,22 +23,33 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Get page counts
+  // Get page counts + an entry page (lowest step_order, preferring published) per funnel —
+  // used both for the admin-preview link and for building the funnel's real public URL.
   const ids = (funnels ?? []).map((f: { id: string }) => f.id);
-  let pageCounts: Record<string, number> = {};
+  const pageCounts: Record<string, number> = {};
+  const entryPages: Record<string, { id: string; slug: string }> = {};
+  const entryPageIsPublished: Record<string, boolean> = {};
   if (ids.length > 0) {
     const { data: pages } = await db
       .from("funnel_pages")
-      .select("funnel_id")
-      .in("funnel_id", ids);
+      .select("id, slug, funnel_id, status, step_order")
+      .in("funnel_id", ids)
+      .order("step_order", { ascending: true });
     for (const p of pages ?? []) {
       pageCounts[p.funnel_id] = (pageCounts[p.funnel_id] ?? 0) + 1;
+      const alreadyHasPublished = entryPageIsPublished[p.funnel_id] ?? false;
+      if (!entryPages[p.funnel_id] || (p.status === "published" && !alreadyHasPublished)) {
+        entryPages[p.funnel_id] = { id: p.id, slug: p.slug };
+        entryPageIsPublished[p.funnel_id] = p.status === "published";
+      }
     }
   }
 
   const result = (funnels ?? []).map((f: Record<string, unknown>) => ({
     ...f,
     page_count: pageCounts[f.id as string] ?? 0,
+    preview_page_id: entryPages[f.id as string]?.id ?? null,
+    entry_page_slug: entryPages[f.id as string]?.slug ?? null,
   }));
 
   return NextResponse.json({ funnels: result });

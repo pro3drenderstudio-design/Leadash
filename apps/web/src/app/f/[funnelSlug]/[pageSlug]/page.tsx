@@ -45,6 +45,7 @@ export default async function PublicFunnelPage({ params }: PublicPageProps) {
       settings={page.settings ?? {}}
       connection={page.connection ?? {}}
       globalStyles={(funnel.global_styles as Record<string, unknown>) ?? {}}
+      tracking={((funnel.settings as Record<string, unknown> | null)?.tracking as Record<string, unknown> | undefined) ?? null}
     />
   );
 }

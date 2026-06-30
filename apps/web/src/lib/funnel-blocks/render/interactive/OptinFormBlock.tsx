@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Block } from "../../types";
 import { fluid } from "../wrappers";
+import { FunnelTracking, trackLead } from "@/lib/tracking/pixels";
 
 interface OptinFormState {
   fields: Record<string, string>;
@@ -10,7 +11,7 @@ interface OptinFormState {
   error: string;
 }
 
-export function OptinFormBlock({ block, pageId, sessionId }: { block: Block; pageId: string; sessionId: string }) {
+export function OptinFormBlock({ block, pageId, sessionId, tracking }: { block: Block; pageId: string; sessionId: string; tracking?: FunnelTracking | null }) {
   const p = block.props;
   const formFields = (p.fields as Array<{ type: string; label: string; required: boolean }>) ?? [];
   const bg = (p.bg_color as string) || "#0e1017";
@@ -41,6 +42,7 @@ export function OptinFormBlock({ block, pageId, sessionId }: { block: Block; pag
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "event", session_id: sessionId, page_id: pageId, event_type: "conversion" }),
       }).catch(() => {});
+      trackLead(tracking);
       if (d.redirect_url) {
         window.location.href = d.redirect_url;
         return;
