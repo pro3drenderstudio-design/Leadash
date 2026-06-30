@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   // ── Flows list ─────────────────────────────────────────────────────────────
   const { data, error } = await ctx.db
     .from("automation_flows")
-    .select("id, name, description, trigger_event, duplicate_policy, is_active, version, last_published_at, run_count, last_run_at, created_at, updated_at")
+    .select("id, name, description, trigger_event, duplicate_policy, flow_definition, is_active, version, last_published_at, run_count, last_run_at, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

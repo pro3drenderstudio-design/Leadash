@@ -52,21 +52,25 @@ interface Execution {
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const TRIGGER_LABELS: Record<string, string> = {
-  "user.opted_in":               "User opts in",
-  "user.video_milestone":        "Video watch milestone",
-  "user.challenge_enrolled":     "Challenge purchased",
-  "user.day1_completed":         "Day 1 completed",
-  "user.bundle_purchased":       "Bundle purchased",
-  "user.bundle_renewed":         "Bundle renewed",
-  "user.bundle_expired":         "Bundle expired",
-  "challenge.daily_reminder":    "Daily challenge reminder",
-  "challenge.day_missed":        "Challenge day missed",
-  "trigger_funnel_optin":        "Funnel Optin",
-  "trigger_funnel_purchase":     "Purchase Completed",
-  "trigger_billing_payment_failed": "Payment Failed",
-  "trigger_billing_trial_ending":   "Trial Ending",
-  "trigger_academy_inactivity":     "Academy Inactivity",
-  "trigger_crm_tag_added":          "Tag Added",
+  "user.opted_in":                    "User opts in",
+  "user.video_milestone":             "Video watch milestone",
+  "user.challenge_enrolled":          "Challenge purchased",
+  "user.day1_completed":              "Day 1 completed",
+  "user.bundle_purchased":            "Bundle purchased",
+  "user.bundle_renewed":              "Bundle renewed",
+  "user.bundle_expired":              "Bundle expired",
+  "challenge.daily_reminder":         "Daily challenge reminder",
+  "challenge.day_missed":             "Challenge day missed",
+  "billing.payment_failed":           "Billing payment failed",
+  "academy.enrollment_created":       "Academy enrollment created",
+  "academy.lesson_completed":         "Academy lesson completed",
+  "academy.course_completed":         "Academy course completed",
+  "academy.challenge_day_completed":  "Challenge day completed",
+  "academy.streak_broken":            "Academy streak broken",
+  "offers.purchase_created":          "Offer purchased (any price)",
+  "offers.refund_issued":             "Offer refund issued",
+  "offers.custom_grant_pending":      "Custom grant needs fulfillment",
+  "crm.tag_added":                    "CRM tag added",
 };
 
 const DUP_LABELS: Record<string, string> = {
@@ -76,11 +80,13 @@ const DUP_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Welcome":   "bg-violet-500/20 text-violet-300",
-  "Billing":   "bg-red-500/20 text-red-300",
-  "Academy":   "bg-indigo-500/20 text-indigo-300",
-  "CRM":       "bg-slate-500/20 text-slate-300",
-  "Lead Nurture": "bg-orange-500/20 text-orange-300",
+  "Welcome":       "bg-violet-500/20 text-violet-300",
+  "Billing":       "bg-red-500/20 text-red-300",
+  "Academy":       "bg-indigo-500/20 text-indigo-300",
+  "CRM":           "bg-slate-500/20 text-slate-300",
+  "Lead Nurture":  "bg-orange-500/20 text-orange-300",
+  "Re-engagement": "bg-amber-500/20 text-amber-300",
+  "Conversion":    "bg-emerald-500/20 text-emerald-300",
 };
 
 const STATUS_COLORS: Record<string, string> = {
