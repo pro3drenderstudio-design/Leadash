@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import type { Offer } from "@/types/offers";
+import { DEFAULT_CHECKOUT_CONFIG, type Offer } from "@/types/offers";
 
 /** GET /api/offers/[slug] — public. Powers the standalone /o/[slug] checkout page. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -55,5 +55,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     event_type: "view",
   }).then(() => {}).catch((e: unknown) => console.error("[offers/get] view event insert failed:", e));
 
-  return NextResponse.json({ offer: typedOffer, closed, sold_out, spots_left, session_id });
+  // Merge checkout with defaults so missing keys (from older offers) never crash the client.
+  const normalizedOffer: Offer = {
+    ...typedOffer,
+    checkout: { ...DEFAULT_CHECKOUT_CONFIG, ...typedOffer.checkout },
+  };
+
+  return NextResponse.json({ offer: normalizedOffer, closed, sold_out, spots_left, session_id });
 }
