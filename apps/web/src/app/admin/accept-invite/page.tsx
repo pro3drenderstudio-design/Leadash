@@ -19,13 +19,20 @@ function AcceptInviteInner() {
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ token }),
     })
-      .then(r => r.json())
-      .then((d: { ok?: boolean; error?: string; role?: string }) => {
+      .then(async r => {
+        const d = await r.json() as { ok?: boolean; error?: string; role?: string };
+        // Not logged in yet — send them to sign in/sign up and bounce right back
+        // here with the token intact so accepting resumes automatically.
+        if (r.status === 401) {
+          const returnTo = `/admin/accept-invite?token=${encodeURIComponent(token)}`;
+          router.replace(`/login?redirect=${encodeURIComponent(returnTo)}`);
+          return;
+        }
         if (d.ok) { setRole(d.role ?? ""); setStatus("success"); }
         else      { setError(d.error ?? "Failed to accept invitation"); setStatus("error"); }
       })
       .catch(() => { setError("Network error. Please try again."); setStatus("error"); });
-  }, [token]);
+  }, [token, router]);
 
   if (status === "loading") {
     return (
