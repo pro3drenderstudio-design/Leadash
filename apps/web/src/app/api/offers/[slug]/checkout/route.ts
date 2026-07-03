@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       .maybeSingle();
     workspaceId = member?.workspace_id ?? null;
   } else {
-    const { data: existingUsers } = await db.auth.admin.listUsers();
+    const { data: existingUsers } = await db.auth.admin.listUsers({ perPage: 1000 });
     const existingUser = existingUsers?.users?.find((u: { email?: string }) => u.email === buyer.email!.toLowerCase());
 
     if (existingUser) {

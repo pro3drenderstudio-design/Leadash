@@ -559,9 +559,10 @@ export async function POST(req: NextRequest) {
               }
 
               await db.from("offer_purchases").update({
-                status:        "paid",
-                granted_at:    new Date().toISOString(),
-                granted_items: grantedItems,
+                status:             "paid",
+                granted_at:         new Date().toISOString(),
+                granted_items:      grantedItems,
+                paystack_reference: data.reference,
               }).eq("id", purchaseId);
 
               // Increment discount code redemption count (fetch-then-write — low concurrency path).
