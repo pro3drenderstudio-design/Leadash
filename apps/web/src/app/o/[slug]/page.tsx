@@ -21,8 +21,11 @@ import {
   type OfferBump,
 } from "@/types/offers";
 import { GRANT_ICONS } from "@/app/(admin)/admin/offers/grantIcons";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface AuthedUser { email: string; name: string }
 
 interface OfferGetResponse {
   offer: Offer;
@@ -134,6 +137,24 @@ export default function OfferCheckoutPage() {
   const [soldOut, setSoldOut] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string>("");
+  // undefined = auth check in flight; null = not logged in; object = logged in
+  const [authedUser, setAuthedUser] = useState<AuthedUser | null | undefined>(undefined);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        if (data.user?.email) {
+          setAuthedUser({
+            email: data.user.email,
+            name:  (data.user.user_metadata?.full_name as string | undefined) || data.user.email.split("@")[0],
+          });
+        } else {
+          setAuthedUser(null);
+        }
+      })
+      .catch(() => setAuthedUser(null));
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -202,6 +223,7 @@ export default function OfferCheckoutPage() {
           spotsLeft={spotsLeft}
           sessionId={sessionId}
           slug={slug}
+          authedUser={authedUser}
         />
       </div>
       <style>{spinKeyframes}</style>
@@ -248,15 +270,16 @@ interface LayoutProps {
   spotsLeft: number | null;
   sessionId: string;
   slug: string;
+  authedUser: AuthedUser | null | undefined;
 }
 
-function CheckoutLayout({ offer, closed, soldOut, spotsLeft, sessionId, slug }: LayoutProps) {
+function CheckoutLayout({ offer, closed, soldOut, spotsLeft, sessionId, slug, authedUser }: LayoutProps) {
   const layout = offer.checkout.layout;
 
   if (layout === "single") {
     return (
       <div style={{ maxWidth: 460, margin: "0 auto" }}>
-        <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} />
+        <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} authedUser={authedUser} />
       </div>
     );
   }
@@ -265,7 +288,7 @@ function CheckoutLayout({ offer, closed, soldOut, spotsLeft, sessionId, slug }: 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 32, maxWidth: 620, margin: "0 auto" }}>
         <ValueStack offer={offer} />
-        <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} />
+        <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} authedUser={authedUser} />
       </div>
     );
   }
@@ -274,7 +297,7 @@ function CheckoutLayout({ offer, closed, soldOut, spotsLeft, sessionId, slug }: 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 36, alignItems: "start" }} className="offer-two-col">
       <ValueStack offer={offer} />
-      <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} />
+      <PaymentCard offer={offer} closed={closed} soldOut={soldOut} spotsLeft={spotsLeft} sessionId={sessionId} slug={slug} authedUser={authedUser} />
       <style>{`
         @media (max-width: 860px) {
           .offer-two-col { grid-template-columns: 1fr !important; }
@@ -360,7 +383,7 @@ function ValueStack({ offer }: { offer: Offer }) {
 
 // ─── Right column: payment card ───────────────────────────────────────────────
 
-function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug }: LayoutProps) {
+function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug, authedUser }: LayoutProps) {
   const [buyer, setBuyer] = useState<Record<string, string>>({});
   const [bumpIds, setBumpIds] = useState<string[]>([]);
   const [discountCode, setDiscountCode] = useState("");
@@ -371,6 +394,23 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug }: Lay
 
   const startedFired = useRef(false);
   const paymentAddedFired = useRef(false);
+
+  // Pre-fill buyer state from auth once the check resolves.
+  useEffect(() => {
+    if (!authedUser) return;
+    setBuyer(prev => ({
+      ...prev,
+      email:     prev.email     || authedUser.email,
+      full_name: prev.full_name || authedUser.name,
+    }));
+  }, [authedUser]);
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // Parent still holds authedUser state — reload is the simplest reset.
+    window.location.reload();
+  }
 
   const countdown = useCountdown(offer.checkout.show_countdown && offer.expires_at && !closed ? offer.expires_at : null);
 
@@ -543,39 +583,91 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug }: Lay
 
           {isPurchasable && (
             <>
-              {/* Buyer fields */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {enabledFields.map(f => (
-                  <div key={f.key}>
-                    <label style={{ display: "flex", gap: 4, fontSize: 12, fontWeight: 600, color: "var(--app-text-muted)", marginBottom: 6 }}>
-                      {f.label}
-                      {f.required && <span style={{ color: "var(--app-danger)" }}>*</span>}
-                    </label>
-                    {f.type === "select" ? (
-                      <select
-                        style={{ ...inputStyle, borderColor: fieldErrors[f.key] ? "var(--app-danger)" : "var(--app-border-strong)" }}
-                        value={buyer[f.key] ?? ""}
-                        onFocus={handleFieldInteraction}
-                        onChange={e => updateBuyer(f.key, e.target.value)}
-                      >
-                        <option value="">Select…</option>
-                        {(f.options ?? []).map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
+              {/* Buyer identity — "Buying as" card when logged in, full form when not */}
+              {authedUser ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 14px", borderRadius: 10, background: "var(--app-surface)", border: "1px solid var(--app-border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{
+                      width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                      background: "var(--app-accent-soft)", border: "1px solid var(--app-accent-line)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14, fontWeight: 700, color: "var(--app-accent)",
+                    }}>
+                      {authedUser.name[0]?.toUpperCase() ?? "?"}
+                    </span>
+                    <div>
+                      <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.3 }}>{authedUser.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--app-text-muted)", lineHeight: 1.3 }}>{authedUser.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    style={{ background: "none", border: "none", fontSize: 12, color: "var(--app-text-quiet)", cursor: "pointer", fontFamily: "inherit", padding: 0, whiteSpace: "nowrap" }}
+                  >
+                    Not you?
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {enabledFields.filter(f => f.key === "full_name" || f.key === "email").map(f => (
+                    <div key={f.key}>
+                      <label style={{ display: "flex", gap: 4, fontSize: 12, fontWeight: 600, color: "var(--app-text-muted)", marginBottom: 6 }}>
+                        {f.label}
+                        {f.required && <span style={{ color: "var(--app-danger)" }}>*</span>}
+                      </label>
                       <input
-                        type={f.type === "email" ? "email" : f.type === "tel" ? "tel" : "text"}
+                        type={f.type === "email" ? "email" : "text"}
                         style={{ ...inputStyle, borderColor: fieldErrors[f.key] ? "var(--app-danger)" : "var(--app-border-strong)" }}
                         value={buyer[f.key] ?? ""}
                         onFocus={handleFieldInteraction}
                         onChange={e => updateBuyer(f.key, e.target.value)}
                         placeholder={f.label}
                       />
-                    )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Extra fields — phone and any custom fields, always shown */}
+              {(() => {
+                const extraFields = enabledFields.filter(f => f.key !== "full_name" && f.key !== "email");
+                if (!extraFields.length) return null;
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {extraFields.map(f => (
+                      <div key={f.key}>
+                        <label style={{ display: "flex", gap: 4, fontSize: 12, fontWeight: 600, color: "var(--app-text-muted)", marginBottom: 6 }}>
+                          {f.label}
+                          {f.required && <span style={{ color: "var(--app-danger)" }}>*</span>}
+                        </label>
+                        {f.type === "select" ? (
+                          <select
+                            style={{ ...inputStyle, borderColor: fieldErrors[f.key] ? "var(--app-danger)" : "var(--app-border-strong)" }}
+                            value={buyer[f.key] ?? ""}
+                            onFocus={handleFieldInteraction}
+                            onChange={e => updateBuyer(f.key, e.target.value)}
+                          >
+                            <option value="">Select…</option>
+                            {(f.options ?? []).map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type === "tel" ? "tel" : "text"}
+                            style={{ ...inputStyle, borderColor: fieldErrors[f.key] ? "var(--app-danger)" : "var(--app-border-strong)" }}
+                            value={buyer[f.key] ?? ""}
+                            onFocus={handleFieldInteraction}
+                            onChange={e => updateBuyer(f.key, e.target.value)}
+                            placeholder={f.label}
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
               {/* Order bumps */}
               {activeBumps.length > 0 && (
