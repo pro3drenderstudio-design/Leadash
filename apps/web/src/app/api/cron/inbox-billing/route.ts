@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const { data: domains, error } = await db
     .from("outreach_domains")
-    .select("id, domain, workspace_id, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, charge_failure_count")
+    .select("id, domain, workspace_id, inbox_provider, paystack_auth_code, paystack_billing_email, paystack_inbox_monthly_kobo, charge_failure_count, mailbox_count")
     .eq("status", "active")
     .eq("payment_provider", "paystack")
     .not("paystack_auth_code",          "is", null)
@@ -62,24 +62,38 @@ export async function POST(req: NextRequest) {
   }
 
   for (const domain of domains ?? []) {
-    // Offer subscribers: inbox hosting is included — skip charging, just advance date
-    const coveredSlots = coveredByWs.get(domain.workspace_id as string) ?? 0;
-    if (coveredSlots > 0) {
+    // Offer entitlement: consume covered slots first, charge only the uncovered portion.
+    // remainingCoverage is decremented as we process each domain so partial coverage
+    // across multiple domains works correctly (e.g. 10 credits, 3 domains × 5 inboxes
+    // each → first 2 domains fully covered, third domain partially charged).
+    const remainingCoverage = coveredByWs.get(domain.workspace_id as string) ?? 0;
+    const domainInboxCount  = (domain as Record<string, unknown>).mailbox_count as number ?? 1;
+
+    if (remainingCoverage >= domainInboxCount) {
+      // Fully covered — advance date, skip charge
+      coveredByWs.set(domain.workspace_id as string, remainingCoverage - domainInboxCount);
       const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       await db.from("outreach_domains")
         .update({ inbox_next_billing_date: nextBillingDate, charge_failure_count: 0 })
         .eq("id", domain.id);
-
       results.push({ domain: domain.domain, status: "covered_by_offer" });
-      console.log(`[inbox-billing] Offer entitlement covers ${domain.domain} (ws=${domain.workspace_id}, slots=${coveredSlots})`);
+      console.log(`[inbox-billing] Offer entitlement fully covers ${domain.domain} (ws=${domain.workspace_id})`);
       continue;
+    }
+
+    // Partially covered — charge only for the uncovered inboxes
+    let chargeKobo = domain.paystack_inbox_monthly_kobo as number;
+    if (remainingCoverage > 0) {
+      coveredByWs.set(domain.workspace_id as string, 0);
+      const uncovered = domainInboxCount - remainingCoverage;
+      chargeKobo = Math.round((uncovered / domainInboxCount) * chargeKobo);
     }
 
     try {
       const { reference, status } = await chargePaystackAuthorization({
         authorizationCode: domain.paystack_auth_code as string,
         email:             domain.paystack_billing_email as string,
-        amountKobo:        domain.paystack_inbox_monthly_kobo as number,
+        amountKobo:        chargeKobo,
         metadata:          { domain_id: domain.id, workspace_id: domain.workspace_id, type: "inbox_renewal" },
       });
 
@@ -98,13 +112,13 @@ export async function POST(req: NextRequest) {
         workspace_id:       domain.workspace_id,
         type:               "inbox_billing",
         description:        `Inbox domain — ${domain.domain}`,
-        amount_kobo:        domain.paystack_inbox_monthly_kobo as number,
+        amount_kobo:        chargeKobo,
         paystack_reference: reference,
         status:             "paid",
       }, { onConflict: "paystack_reference", ignoreDuplicates: true });
 
       // Notify user of successful charge
-      const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
+      const amountNgn = Math.round(chargeKobo / 100);
       sendInboxPaymentSuccess({
         userEmail: domain.paystack_billing_email as string,
         domain: domain.domain,
@@ -117,7 +131,7 @@ export async function POST(req: NextRequest) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[inbox-billing] charge failed for ${domain.domain}:`, msg);
 
-      const amountNgn = Math.round((domain.paystack_inbox_monthly_kobo as number) / 100);
+      const amountNgn = Math.round(chargeKobo / 100);
 
       // Increment failure count and pick the right notification
       const newFailureCount = ((domain.charge_failure_count as number | null) ?? 0) + 1;

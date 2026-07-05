@@ -179,10 +179,11 @@ export async function POST(req: NextRequest) {
     .eq("entitlement_type", "inbox_credit")
     .eq("is_active", true)
     .gt("expires_at", new Date().toISOString());
-  const coveredSlots          = (inboxEntitlements ?? []).reduce((s: number, e: { quantity: number | null }) => s + (e.quantity ?? 0), 0);
-  const requestedInboxes      = mailboxCount * domains.length;
-  const inboxCoveredByOffer   = coveredSlots >= requestedInboxes;
-  const chargedInboxMonthlyNgn = inboxCoveredByOffer ? 0 : inboxMonthlyNgn;
+  const coveredSlots           = (inboxEntitlements ?? []).reduce((s: number, e: { quantity: number | null }) => s + (e.quantity ?? 0), 0);
+  const requestedInboxes       = mailboxCount * domains.length;
+  const uncoveredInboxes       = Math.max(0, requestedInboxes - coveredSlots);
+  // Only charge for the inboxes not covered by the entitlement (e.g. 10 credits, 15 inboxes → charge 5)
+  const chargedInboxMonthlyNgn = pricePerInboxNgn * uncoveredInboxes;
 
   // ── Stripe ───────────────────────────────────────────────────────────────────
   if (payment_provider === "stripe") {
