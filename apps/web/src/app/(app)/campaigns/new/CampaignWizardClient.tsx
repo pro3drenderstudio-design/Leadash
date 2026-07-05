@@ -260,8 +260,8 @@ export default function CampaignWizardClient() {
     Promise.all([
       getInboxes(), getLists(), getTemplates(),
       getSettings(),
-      wsFetch("/api/playbook/icps").then(r => r.json()).catch(() => ({ icps: [] })),
-      wsFetch("/api/playbook/offer-templates").then(r => r.json()).catch(() => ({ offer_templates: [] })),
+      wsFetch("/api/playbook/icps").then((r: Response) => r.json() as Promise<{ icps?: typeof aiIcps }>).catch(() => ({ icps: [] as typeof aiIcps })),
+      wsFetch("/api/playbook/offer-templates").then((r: Response) => r.json() as Promise<{ offer_templates?: typeof aiOffers }>).catch(() => ({ offer_templates: [] as typeof aiOffers })),
     ]).then(([i, l, t, ws, icpData, offerData]) => {
       setInboxes(i); setLists(l); setTemplates(t);
       setAiIcps(icpData.icps ?? []);

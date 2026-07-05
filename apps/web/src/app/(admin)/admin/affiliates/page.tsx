@@ -81,7 +81,7 @@ export default function AdminAffiliatesPage() {
     setLoading(true);
     try {
       if (tab === "affiliates") {
-        const q   = search ? `?search=${encodeURIComponent(search)}` : "";
+        const q   = search ? `?q=${encodeURIComponent(search)}` : "";
         const res = await fetch(`/api/admin/affiliates${q}`);
         const d   = await res.json() as { affiliates?: Affiliate[] };
         setAffiliates(d.affiliates ?? []);

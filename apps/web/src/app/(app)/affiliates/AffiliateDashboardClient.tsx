@@ -109,13 +109,22 @@ export default function AffiliateDashboardClient() {
     setPayoutSuccess("");
     const res  = await wsFetch("/api/affiliates/payout", { method: "POST", body: JSON.stringify({ method: payoutMethod }) });
     const data = await res.json() as { error?: string; amount_ngn?: number };
-    if (data.error) setPayoutError(data.error);
-    else setPayoutSuccess(`Payout of ${fmt(data.amount_ngn ?? 0)} queued for review.`);
+    if (data.error) {
+      setPayoutError(data.error);
+    } else {
+      setPayoutSuccess(`Payout of ${fmt(data.amount_ngn ?? 0)} queued for review.`);
+      // Clear available balance — commissions are now queued
+      setEarnings(prev => prev ? { ...prev, available: 0 } : prev);
+    }
     setPayoutLoading(false);
   }
 
   if (loading) return <div style={{ padding: 40, color: "var(--app-text-muted)", fontSize: 13 }}>Loading…</div>;
-  if (!affiliate || !earnings) return null;
+  if (!affiliate || !earnings) return (
+    <div style={{ padding: 40, color: "var(--app-text-muted)", fontSize: 13 }}>
+      Unable to load your affiliate account. Please refresh the page.
+    </div>
+  );
 
   const tier      = affiliate.tier;
   const tierColor = TIER_COLOR[tier];
