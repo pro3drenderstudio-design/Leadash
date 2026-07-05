@@ -42,6 +42,18 @@ const ALLOWED_KEYS = [
   "social_twitter_url",
   "social_linkedin_url",
   "social_instagram_url",
+  // Affiliate program
+  "affiliate_bounty_ngn",
+  "affiliate_recurring_months",
+  "affiliate_cookie_days",
+  "affiliate_min_payout_ngn",
+  "affiliate_hold_days",
+  "affiliate_credit_multiplier",
+  "affiliate_silver_threshold",
+  "affiliate_gold_threshold",
+  "affiliate_bronze_rate",
+  "affiliate_silver_rate",
+  "affiliate_gold_rate",
 ] as const;
 
 type SettingKey = typeof ALLOWED_KEYS[number];

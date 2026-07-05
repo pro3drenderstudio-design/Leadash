@@ -1,28 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAffiliateConfig } from "@/lib/billing/affiliateConfig";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
-  // Use admin client for reads that need to bypass RLS on affiliates (auto-create)
   const admin = createAdminClient();
 
-  // Get affiliate record (auto-create if not exists)
-  let { data: affiliate } = await admin
-    .from("affiliates")
-    .select("*")
-    .eq("workspace_id", auth.workspaceId)
-    .maybeSingle();
+  // Load config + affiliate record in parallel
+  const [cfg, affiliateResult] = await Promise.all([
+    getAffiliateConfig(admin),
+    admin.from("affiliates").select("*").eq("workspace_id", auth.workspaceId).maybeSingle(),
+  ]);
+
+  let affiliate = affiliateResult.data;
 
   if (!affiliate) {
-    // Auto-enroll: derive handle from workspace name
     const { data: ws } = await admin.from("workspaces").select("name").eq("id", auth.workspaceId).single();
-    const rawHandle = (ws?.name ?? "user")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 12);
+    const rawHandle = (ws?.name ?? "user").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
     const handle = `${rawHandle}${Math.random().toString(36).slice(2, 6)}`;
 
     const { data: created } = await admin
@@ -35,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   if (!affiliate) return NextResponse.json({ error: "Failed to load affiliate record" }, { status: 500 });
 
-  // Commission summary — use user client so RLS restricts to own affiliate
+  // Commission summary — user client so RLS scopes to own affiliate
   const supabase = await createClient();
   const { data: commissions } = await supabase
     .from("commission_events")
@@ -54,21 +51,20 @@ export async function GET(req: NextRequest) {
     .reduce((s, c) => s + Number(c.amount_ngn), 0);
 
   return NextResponse.json({
-    affiliate: {
-      ...affiliate,
-      referral_url: `https://leadash.com/r/${affiliate.handle}`,
-    },
+    affiliate: { ...affiliate, referral_url: `https://leadash.com/r/${affiliate.handle}` },
     earnings: { available, pending, paid, total: available + pending + paid },
+    program: cfg,
   });
 }
 
-// Update bank details
 export async function PATCH(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
   const supabase = await createClient();
-  const { bank_name, bank_account_number, bank_account_name } = await req.json();
+  const { bank_name, bank_account_number, bank_account_name } = await req.json() as {
+    bank_name?: string; bank_account_number?: string; bank_account_name?: string;
+  };
 
   const { error } = await supabase
     .from("affiliates")

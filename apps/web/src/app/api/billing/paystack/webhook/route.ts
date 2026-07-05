@@ -7,6 +7,7 @@ import { enqueueProvision } from "@/lib/queue";
 import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/pool-quota";
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
 import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
+import { getAffiliateConfig } from "@/lib/billing/affiliateConfig";
 import {
   sendSubscriptionRenewalSuccessEmail,
   sendGracePeriodWarning,
@@ -677,8 +678,9 @@ export async function POST(req: NextRequest) {
             .maybeSingle();
           if (!referral) return;
 
-          const TIER_RATES: Record<string, number> = { bronze: 0.20, silver: 0.25, gold: 0.30 };
-          const rate = TIER_RATES[affiliate.tier] ?? 0.20;
+          const cfg = await getAffiliateConfig(db);
+          const tierRates: Record<string, number> = { bronze: cfg.bronze_rate, silver: cfg.silver_rate, gold: cfg.gold_rate };
+          const rate = tierRates[affiliate.tier] ?? cfg.bronze_rate;
           const amountKobo = (event.data as Record<string, unknown>).amount as number | undefined;
           const amountNgn = Math.round((amountKobo ?? 0) / 100);
           if (amountNgn <= 0) return;
@@ -687,15 +689,14 @@ export async function POST(req: NextRequest) {
           const isFirstPayment = referral.status === "lead";
           const kind = isFirstPayment ? "bounty" : "recurring";
 
-          // 45-day hold
-          const holdsUntil = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+          const holdsUntil = new Date(Date.now() + cfg.hold_days * 24 * 60 * 60 * 1000).toISOString();
 
           // Idempotent insert (unique on source_payment_ref + kind)
           await db.from("commission_events").insert({
             affiliate_id:       affiliateId,
             referral_id:        referral.id,
             kind,
-            amount_ngn:         kind === "bounty" ? 5000 : commissionNgn,
+            amount_ngn:         kind === "bounty" ? cfg.bounty_ngn : commissionNgn,
             source_payment_ref: data.reference,
             holds_until:        holdsUntil,
             status:             "pending",
@@ -707,8 +708,8 @@ export async function POST(req: NextRequest) {
 
             const newPaidCount = (affiliate.paid_referrals ?? 0) + 1;
             let newTier = affiliate.tier;
-            if (newPaidCount >= 25) newTier = "gold";
-            else if (newPaidCount >= 10) newTier = "silver";
+            if (newPaidCount >= cfg.gold_threshold) newTier = "gold";
+            else if (newPaidCount >= cfg.silver_threshold) newTier = "silver";
 
             await db.from("affiliates").update({ paid_referrals: newPaidCount, tier: newTier }).eq("id", affiliateId);
           }

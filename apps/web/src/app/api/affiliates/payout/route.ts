@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createClient } from "@/lib/supabase/server";
-
-const MIN_PAYOUT_NGN = 20000;
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAffiliateConfig } from "@/lib/billing/affiliateConfig";
 
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
-  const supabase = await createClient();
-  const { method } = await req.json(); // "bank" | "credit"
+  const admin = createAdminClient();
+  const [supabase, cfg] = await Promise.all([createClient(), getAffiliateConfig(admin)]);
+  const { method } = await req.json() as { method: "bank" | "credit" };
 
   const { data: affiliate } = await supabase
     .from("affiliates")
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
   );
   const availableNgn = readyCommissions.reduce((s, c) => s + Number(c.amount_ngn), 0);
 
-  if (availableNgn < MIN_PAYOUT_NGN) {
-    return NextResponse.json({ error: `Minimum payout is ₦${MIN_PAYOUT_NGN.toLocaleString()}. You have ₦${Math.floor(availableNgn).toLocaleString()} available.` }, { status: 400 });
+  if (availableNgn < cfg.min_payout_ngn) {
+    return NextResponse.json({ error: `Minimum payout is ₦${cfg.min_payout_ngn.toLocaleString()}. You have ₦${Math.floor(availableNgn).toLocaleString()} available.` }, { status: 400 });
   }
 
   if (method === "bank" && (!affiliate.bank_name || !affiliate.bank_account_number)) {
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create payout request
-  const creditMultiplier = method === "credit" ? 1.25 : null;
+  const creditMultiplier = method === "credit" ? cfg.credit_multiplier : null;
   const destination = method === "bank"
     ? { bank_name: affiliate.bank_name, account_number: affiliate.bank_account_number, account_name: affiliate.bank_account_name }
     : { workspace_id: auth.workspaceId };

@@ -60,6 +60,34 @@ function TierChip({ tier }: { tier: string }) {
   );
 }
 
+interface ProgramSettings {
+  affiliate_bounty_ngn: string;
+  affiliate_recurring_months: string;
+  affiliate_cookie_days: string;
+  affiliate_min_payout_ngn: string;
+  affiliate_hold_days: string;
+  affiliate_credit_multiplier: string;
+  affiliate_silver_threshold: string;
+  affiliate_gold_threshold: string;
+  affiliate_bronze_rate: string;
+  affiliate_silver_rate: string;
+  affiliate_gold_rate: string;
+}
+
+const DEFAULT_SETTINGS: ProgramSettings = {
+  affiliate_bounty_ngn: "5000",
+  affiliate_recurring_months: "12",
+  affiliate_cookie_days: "30",
+  affiliate_min_payout_ngn: "20000",
+  affiliate_hold_days: "45",
+  affiliate_credit_multiplier: "1.25",
+  affiliate_silver_threshold: "10",
+  affiliate_gold_threshold: "25",
+  affiliate_bronze_rate: "0.20",
+  affiliate_silver_rate: "0.25",
+  affiliate_gold_rate: "0.30",
+};
+
 type Tab = "affiliates" | "payouts" | "settings";
 
 export default function AdminAffiliatesPage() {
@@ -71,6 +99,10 @@ export default function AdminAffiliatesPage() {
   const [acting,       setActing]      = useState<string | null>(null);
   const [toast,        setToast]       = useState("");
   const [search,       setSearch]      = useState("");
+  // Program settings state
+  const [settings,     setSettings]    = useState<ProgramSettings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsSaving,  setSettingsSaving]  = useState(false);
 
   // Aggregate stats derived from loaded data
   const heldCount   = payouts.filter(p => p.fraud_flag).length;
@@ -96,6 +128,46 @@ export default function AdminAffiliatesPage() {
   }
 
   useEffect(() => { load(); }, [tab, payoutStatus, search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tab === "settings" && !settingsLoaded) {
+      fetch("/api/admin/settings")
+        .then(r => r.json() as Promise<{ settings?: Record<string, unknown> }>)
+        .then(d => {
+          if (!d.settings) return;
+          const s = d.settings;
+          setSettings(prev => ({
+            ...prev,
+            ...(s.affiliate_bounty_ngn          !== undefined ? { affiliate_bounty_ngn:          String(s.affiliate_bounty_ngn) }          : {}),
+            ...(s.affiliate_recurring_months    !== undefined ? { affiliate_recurring_months:    String(s.affiliate_recurring_months) }    : {}),
+            ...(s.affiliate_cookie_days         !== undefined ? { affiliate_cookie_days:         String(s.affiliate_cookie_days) }         : {}),
+            ...(s.affiliate_min_payout_ngn      !== undefined ? { affiliate_min_payout_ngn:      String(s.affiliate_min_payout_ngn) }      : {}),
+            ...(s.affiliate_hold_days           !== undefined ? { affiliate_hold_days:           String(s.affiliate_hold_days) }           : {}),
+            ...(s.affiliate_credit_multiplier   !== undefined ? { affiliate_credit_multiplier:   String(s.affiliate_credit_multiplier) }   : {}),
+            ...(s.affiliate_silver_threshold    !== undefined ? { affiliate_silver_threshold:    String(s.affiliate_silver_threshold) }    : {}),
+            ...(s.affiliate_gold_threshold      !== undefined ? { affiliate_gold_threshold:      String(s.affiliate_gold_threshold) }      : {}),
+            ...(s.affiliate_bronze_rate         !== undefined ? { affiliate_bronze_rate:         String(s.affiliate_bronze_rate) }         : {}),
+            ...(s.affiliate_silver_rate         !== undefined ? { affiliate_silver_rate:         String(s.affiliate_silver_rate) }         : {}),
+            ...(s.affiliate_gold_rate           !== undefined ? { affiliate_gold_rate:           String(s.affiliate_gold_rate) }           : {}),
+          }));
+          setSettingsLoaded(true);
+        });
+    }
+  }, [tab, settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveSettings() {
+    setSettingsSaving(true);
+    const body: Record<string, number> = {};
+    for (const [k, v] of Object.entries(settings)) body[k] = Number(v);
+    const res = await fetch("/api/admin/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json() as { ok?: boolean; error?: string };
+    setSettingsSaving(false);
+    showToast(d.ok ? "Settings saved" : (d.error ?? "Error saving settings"));
+  }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
 
@@ -321,14 +393,23 @@ export default function AdminAffiliatesPage() {
               <p className="text-xs text-white/40">Rates and attribution window applied to new referrals.</p>
             </div>
             <div className="divide-y divide-white/6">
-              {[
-                { label: "Bounty (first payment)",      value: "₦5,000" },
-                { label: "Recurring window",            value: "12 months" },
-                { label: "Cookie lifetime",             value: "30 days" },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between px-5 py-3">
-                  <span className="text-sm text-white/70">{row.label}</span>
-                  <span className="text-sm font-bold text-white">{row.value}</span>
+              {([
+                { key: "affiliate_bounty_ngn",       label: "Bounty (₦, first payment)",  unit: "₦" },
+                { key: "affiliate_recurring_months",  label: "Recurring window (months)",  unit: "mo" },
+                { key: "affiliate_cookie_days",       label: "Cookie lifetime (days)",     unit: "days" },
+              ] as const).map(row => (
+                <div key={row.key} className="flex items-center justify-between px-5 py-3 gap-4">
+                  <label className="text-sm text-white/70 flex-1">{row.label}</label>
+                  <div className="flex items-center gap-1.5">
+                    {row.unit === "₦" && <span className="text-xs text-white/40">₦</span>}
+                    <input
+                      type="number"
+                      value={settings[row.key]}
+                      onChange={e => setSettings(prev => ({ ...prev, [row.key]: e.target.value }))}
+                      className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"
+                    />
+                    {row.unit !== "₦" && <span className="text-xs text-white/40">{row.unit}</span>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -338,20 +419,25 @@ export default function AdminAffiliatesPage() {
           <div className={`${card} overflow-hidden`}>
             <div className="px-5 py-4 border-b border-white/8">
               <p className="text-sm font-bold text-white">Commission tiers</p>
+              <p className="text-xs text-white/40">Rates as decimals (e.g. 0.20 = 20%). Thresholds are paid-referral counts.</p>
             </div>
             <div className="divide-y divide-white/6">
               {([
-                ["bronze", "Bronze", "0+ paid referrals", "20%"],
-                ["silver", "Silver", "10+ paid referrals", "25%"],
-                ["gold",   "Gold",   "25+ paid referrals", "30% + priority payouts"],
-              ] as const).map(([key, name, req, rate]) => (
-                <div key={key} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: TIER_CLR[key] }} />
-                    <span className="text-sm font-semibold" style={{ color: TIER_CLR[key] }}>{name}</span>
-                    <span className="text-xs text-white/40">{req}</span>
-                  </div>
-                  <span className="text-sm font-bold text-white">{rate}</span>
+                { key: "affiliate_bronze_rate",      label: "Bronze rate",           color: TIER_CLR.bronze },
+                { key: "affiliate_silver_threshold", label: "Silver threshold (paid referrals)", color: TIER_CLR.silver },
+                { key: "affiliate_silver_rate",      label: "Silver rate",           color: TIER_CLR.silver },
+                { key: "affiliate_gold_threshold",   label: "Gold threshold (paid referrals)", color: TIER_CLR.gold },
+                { key: "affiliate_gold_rate",        label: "Gold rate",             color: TIER_CLR.gold },
+              ] as const).map(row => (
+                <div key={row.key} className="flex items-center justify-between px-5 py-3 gap-4">
+                  <label className="text-sm flex-1" style={{ color: row.color }}>{row.label}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={settings[row.key]}
+                    onChange={e => setSettings(prev => ({ ...prev, [row.key]: e.target.value }))}
+                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"
+                  />
                 </div>
               ))}
             </div>
@@ -363,21 +449,42 @@ export default function AdminAffiliatesPage() {
               <p className="text-sm font-bold text-white">Payouts & safety</p>
             </div>
             <div className="divide-y divide-white/6">
-              {[
-                { label: "Minimum payout",         value: "₦20,000" },
-                { label: "Refund hold period",     value: "45 days" },
-                { label: "Credit payout multiplier",value: "1.25×" },
-                { label: "Self-referral detection", value: "Enabled — block + flag" },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between px-5 py-3">
-                  <span className="text-sm text-white/70">{row.label}</span>
-                  <span className="text-sm font-bold text-white">{row.value}</span>
+              {([
+                { key: "affiliate_min_payout_ngn",      label: "Minimum payout (₦)",         unit: "₦" },
+                { key: "affiliate_hold_days",            label: "Refund hold period (days)",  unit: "days" },
+                { key: "affiliate_credit_multiplier",    label: "Credit payout multiplier",   unit: "×" },
+              ] as const).map(row => (
+                <div key={row.key} className="flex items-center justify-between px-5 py-3 gap-4">
+                  <label className="text-sm text-white/70 flex-1">{row.label}</label>
+                  <div className="flex items-center gap-1.5">
+                    {row.unit === "₦" && <span className="text-xs text-white/40">₦</span>}
+                    <input
+                      type="number"
+                      step={row.unit === "×" ? "0.01" : "1"}
+                      value={settings[row.key]}
+                      onChange={e => setSettings(prev => ({ ...prev, [row.key]: e.target.value }))}
+                      className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"
+                    />
+                    {row.unit !== "₦" && <span className="text-xs text-white/40">{row.unit}</span>}
+                  </div>
                 </div>
               ))}
+              <div className="flex items-center justify-between px-5 py-3">
+                <span className="text-sm text-white/70">Self-referral detection</span>
+                <span className="text-sm font-bold text-green-400">Enabled — block + flag</span>
+              </div>
             </div>
           </div>
 
-          <p className="text-xs text-white/25">These settings are hardcoded in the current release. Admin-editable config coming in a future update.</p>
+          <div className="flex justify-end">
+            <button
+              onClick={saveSettings}
+              disabled={settingsSaving}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold bg-orange-500 text-white hover:bg-orange-500/90 transition-colors disabled:opacity-40"
+            >
+              {settingsSaving ? "Saving…" : "Save settings"}
+            </button>
+          </div>
         </div>
       )}
     </div>

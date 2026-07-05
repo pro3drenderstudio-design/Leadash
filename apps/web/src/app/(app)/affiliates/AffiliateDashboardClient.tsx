@@ -32,14 +32,28 @@ interface Payout {
   paid_at: string | null;
 }
 
-const TIER_COLOR:  Record<string, string> = { bronze: "#CD7F32", silver: "#C0C0C0", gold: "#FFD700" };
-const TIER_RATE:   Record<string, number> = { bronze: 20, silver: 25, gold: 30 };
-const TIER_THRESH: Record<string, number> = { bronze: 0, silver: 10, gold: 25 };
-const TIER_NEXT:   Record<string, { label: string; target: number } | null> = {
-  bronze: { label: "Silver", target: 10 },
-  silver: { label: "Gold",   target: 25 },
-  gold:   null,
+interface ProgramConfig {
+  bounty_ngn: number;
+  recurring_months: number;
+  cookie_days: number;
+  min_payout_ngn: number;
+  hold_days: number;
+  credit_multiplier: number;
+  silver_threshold: number;
+  gold_threshold: number;
+  bronze_rate: number;
+  silver_rate: number;
+  gold_rate: number;
+}
+
+const DEFAULT_PROGRAM: ProgramConfig = {
+  bounty_ngn: 5000, recurring_months: 12, cookie_days: 30,
+  min_payout_ngn: 20000, hold_days: 45, credit_multiplier: 1.25,
+  silver_threshold: 10, gold_threshold: 25,
+  bronze_rate: 0.20, silver_rate: 0.25, gold_rate: 0.30,
 };
+
+const TIER_COLOR: Record<string, string> = { bronze: "#CD7F32", silver: "#C0C0C0", gold: "#FFD700" };
 
 function fmt(n: number) { return `₦${Math.floor(n).toLocaleString()}`; }
 
@@ -56,6 +70,7 @@ export default function AffiliateDashboardClient() {
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
   const [earnings,  setEarnings]  = useState<Earnings | null>(null);
   const [payouts,   setPayouts]   = useState<Payout[]>([]);
+  const [program,   setProgram]   = useState<ProgramConfig>(DEFAULT_PROGRAM);
   const [loading,   setLoading]   = useState(true);
   const [copied,    setCopied]    = useState(false);
 
@@ -74,11 +89,12 @@ export default function AffiliateDashboardClient() {
 
   useEffect(() => {
     Promise.all([
-      wsFetch("/api/affiliates/me").then((r: Response) => r.json() as Promise<{ affiliate?: AffiliateData; earnings?: Earnings }>),
+      wsFetch("/api/affiliates/me").then((r: Response) => r.json() as Promise<{ affiliate?: AffiliateData; earnings?: Earnings; program?: ProgramConfig }>),
       wsFetch("/api/affiliates/payout").then((r: Response) => r.json() as Promise<{ payouts?: Payout[] }>),
     ]).then(([d, p]) => {
       setAffiliate(d.affiliate ?? null);
       setEarnings(d.earnings ?? null);
+      if (d.program) setProgram(d.program);
       setPayouts(p.payouts ?? []);
       if (d.affiliate) {
         setBankName(d.affiliate.bank_name ?? "");
@@ -128,13 +144,19 @@ export default function AffiliateDashboardClient() {
 
   const tier      = affiliate.tier;
   const tierColor = TIER_COLOR[tier];
-  const tierRate  = TIER_RATE[tier];
-  const nextTier  = TIER_NEXT[tier];
+  const tierRate  = Math.round((tier === "bronze" ? program.bronze_rate : tier === "silver" ? program.silver_rate : program.gold_rate) * 100);
+  const tierThresh = { bronze: 0, silver: program.silver_threshold, gold: program.gold_threshold };
+  const tierNext: Record<string, { label: string; target: number } | null> = {
+    bronze: { label: "Silver", target: program.silver_threshold },
+    silver: { label: "Gold",   target: program.gold_threshold },
+    gold:   null,
+  };
+  const nextTier  = tierNext[tier];
   const progress  = nextTier
-    ? Math.min(1, (affiliate.paid_referrals - TIER_THRESH[tier]) / (nextTier.target - TIER_THRESH[tier]))
+    ? Math.min(1, (affiliate.paid_referrals - tierThresh[tier]) / (nextTier.target - tierThresh[tier]))
     : 1;
 
-  const creditValue = earnings.available * 1.25;
+  const creditValue = earnings.available * program.credit_multiplier;
 
   return (
     <div className="v2-app" style={{ color: "var(--app-text)", padding: "0 0 80px" }}>
@@ -163,7 +185,7 @@ export default function AffiliateDashboardClient() {
                 {copied ? "Copied!" : "Copy link"}
               </button>
             </div>
-            <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginTop: 6 }}>30-day cookie · anyone who signs up within 30 days is attributed to you</p>
+            <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginTop: 6 }}>{program.cookie_days}-day cookie · anyone who signs up within {program.cookie_days} days is attributed to you</p>
           </div>
 
           {/* Tier progress */}
@@ -175,7 +197,7 @@ export default function AffiliateDashboardClient() {
               </div>
               <p style={{ fontSize: 12, color: "var(--app-text-muted)" }}>
                 <strong style={{ color: "var(--app-text)" }}>{affiliate.paid_referrals}</strong> of <strong style={{ color: "var(--app-text)" }}>{nextTier.target}</strong> paid referrals
-                {" · "}<span style={{ color: TIER_COLOR[nextTier.label.toLowerCase()] }}>{nextTier.label} at {nextTier.target} → {TIER_RATE[nextTier.label.toLowerCase()]}%</span>
+                {" · "}<span style={{ color: TIER_COLOR[nextTier.label.toLowerCase()] }}>{nextTier.label} at {nextTier.target} → {Math.round((nextTier.label === "Silver" ? program.silver_rate : program.gold_rate) * 100)}%</span>
               </p>
             </div>
           )}
@@ -274,7 +296,7 @@ export default function AffiliateDashboardClient() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
               {([
                 { val: "bank",   head: "Cash to bank",           sub: "via Leadash Pay · 1–2 days" },
-                { val: "credit", head: "Subscription credit",    sub: `₦${Math.floor(earnings.available).toLocaleString()} → ₦${Math.floor(creditValue).toLocaleString()} at 1.25×` },
+                { val: "credit", head: "Subscription credit",    sub: `₦${Math.floor(earnings.available).toLocaleString()} → ₦${Math.floor(creditValue).toLocaleString()} at ${program.credit_multiplier}×` },
               ] as const).map(opt => (
                 <button
                   key={opt.val}
@@ -333,21 +355,21 @@ export default function AffiliateDashboardClient() {
 
             <button
               onClick={requestPayout}
-              disabled={payoutLoading || earnings.available < 20000}
-              style={{ width: "100%", background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: (payoutLoading || earnings.available < 20000) ? 0.45 : 1 }}
+              disabled={payoutLoading || earnings.available < program.min_payout_ngn}
+              style={{ width: "100%", background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: (payoutLoading || earnings.available < program.min_payout_ngn) ? 0.45 : 1 }}
             >
               {payoutLoading ? "Requesting…"
                 : payoutMethod === "credit"
                   ? `Convert to ${fmt(creditValue)} credit`
                   : `Withdraw ${fmt(earnings.available)}`}
             </button>
-            {earnings.available < 20000 && (
+            {earnings.available < program.min_payout_ngn && (
               <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginTop: 8, textAlign: "center" }}>
-                Minimum payout is ₦20,000. You have {fmt(earnings.available)} available.
+                Minimum payout is {fmt(program.min_payout_ngn)}. You have {fmt(earnings.available)} available.
               </p>
             )}
             <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginTop: 8, textAlign: "center" }}>
-              Earnings are held 45 days before becoming available.
+              Earnings are held {program.hold_days} days before becoming available.
             </p>
           </div>
 
@@ -356,10 +378,10 @@ export default function AffiliateDashboardClient() {
             <p style={{ ...label, marginBottom: 14 }}>How you earn</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
-                { n: 1, color: "#60A5FA", title: "Share your link", body: "Anyone who clicks gets a 30-day cookie. Share anywhere." },
-                { n: 2, color: "#A78BFA", title: "They sign up",    body: "Their account is attributed to you for 12 months." },
-                { n: 3, color: "#FBBF24", title: "₦5,000 bounty",  body: "You earn ₦5,000 when they make their first payment." },
-                { n: 4, color: "#34D399", title: `${tierRate}% recurring`, body: "Plus a cut of every payment they make for 12 months." },
+                { n: 1, color: "#60A5FA", title: "Share your link", body: `Anyone who clicks gets a ${program.cookie_days}-day cookie. Share anywhere.` },
+                { n: 2, color: "#A78BFA", title: "They sign up",    body: `Their account is attributed to you for ${program.recurring_months} months.` },
+                { n: 3, color: "#FBBF24", title: `${fmt(program.bounty_ngn)} bounty`, body: `You earn ${fmt(program.bounty_ngn)} when they make their first payment.` },
+                { n: 4, color: "#34D399", title: `${tierRate}% recurring`, body: `Plus a cut of every payment they make for ${program.recurring_months} months.` },
               ].map(step => (
                 <div key={step.n} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                   <div style={{ width: 26, height: 26, borderRadius: 999, background: `${step.color}18`, border: `1px solid ${step.color}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -376,7 +398,11 @@ export default function AffiliateDashboardClient() {
             {/* Tier table */}
             <div style={{ marginTop: 16, borderTop: "1px solid var(--app-border)", paddingTop: 14 }}>
               <p style={{ ...label, marginBottom: 10 }}>Commission tiers</p>
-              {([["bronze","Bronze","0+","20%"],["silver","Silver","10+","25%"],["gold","Gold","25+","30%"]] as const).map(([key, name, req, rate]) => (
+              {([
+                ["bronze", "Bronze", `0+`,                                        `${Math.round(program.bronze_rate * 100)}%`],
+                ["silver", "Silver", `${program.silver_threshold}+`,              `${Math.round(program.silver_rate * 100)}%`],
+                ["gold",   "Gold",   `${program.gold_threshold}+`,                `${Math.round(program.gold_rate   * 100)}%`],
+              ] as const).map(([key, name, req, rate]) => (
                 <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--app-border)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 999, background: TIER_COLOR[key], flexShrink: 0, display: "inline-block" }} />

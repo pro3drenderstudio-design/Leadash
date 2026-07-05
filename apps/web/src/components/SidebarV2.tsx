@@ -31,7 +31,6 @@ import {
   Dashboard01Icon,
   Mail01Icon,
   UserSearch01Icon,
-  Wallet01Icon,
   GraduationScrollIcon,
   Settings02Icon,
   HelpCircleIcon,
@@ -48,15 +47,15 @@ const SECTION_ICONS: Record<string, IconSvgElement> = {
   dashboard: Dashboard01Icon,
   outreach:  Mail01Icon,
   leadgen:   UserSearch01Icon,
-  leadpay:   Wallet01Icon,
   academy:   GraduationScrollIcon,
 };
 
 // Workspace tabs are keyed by href.
 const WORKSPACE_TAB_ICONS: Record<string, IconSvgElement> = {
-  "/settings": Settings02Icon,
-  "/support":  HeadsetIcon,
-  "/help":     HelpCircleIcon,
+  "/settings":   Settings02Icon,
+  "/affiliates": Coins01Icon,
+  "/support":    HeadsetIcon,
+  "/help":       HelpCircleIcon,
 };
 
 interface Props {
