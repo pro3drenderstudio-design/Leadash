@@ -168,6 +168,22 @@ export async function POST(req: NextRequest) {
   const inboxMonthlyNgn  = pricePerInboxNgn * mailboxCount * domains.length;
   const domainIdsParam    = insertedIds.join(",");
 
+  // Check if workspace has active inbox entitlements that cover these inboxes.
+  // If covered, inbox hosting is included in their offer — charge domain cost only.
+  // We still store the full monthly price on the domain so billing resumes correctly if
+  // their entitlement ever expires (e.g. subscription cancelled).
+  const { data: inboxEntitlements } = await db
+    .from("workspace_entitlements")
+    .select("quantity")
+    .eq("workspace_id", workspaceId)
+    .eq("entitlement_type", "inbox_credit")
+    .eq("is_active", true)
+    .gt("expires_at", new Date().toISOString());
+  const coveredSlots          = (inboxEntitlements ?? []).reduce((s: number, e: { quantity: number | null }) => s + (e.quantity ?? 0), 0);
+  const requestedInboxes      = mailboxCount * domains.length;
+  const inboxCoveredByOffer   = coveredSlots >= requestedInboxes;
+  const chargedInboxMonthlyNgn = inboxCoveredByOffer ? 0 : inboxMonthlyNgn;
+
   // ── Stripe ───────────────────────────────────────────────────────────────────
   if (payment_provider === "stripe") {
     try {
@@ -245,8 +261,9 @@ export async function POST(req: NextRequest) {
 
   // ── Paystack ─────────────────────────────────────────────────────────────────
   try {
-    // Domain cost in NGN (converted from USD) + inbox monthly cost (already in NGN from plan)
-    const totalNgn = Math.round(totalOneTimeUsd * ngnPerUsd * 100) + Math.round(inboxMonthlyNgn * 100);
+    // chargedInboxMonthlyNgn is 0 when the workspace's offer entitlement covers inbox hosting.
+    // totalOneTimeUsd covers domain registration — always charged regardless of entitlements.
+    const totalNgn = Math.round(totalOneTimeUsd * ngnPerUsd * 100) + Math.round(chargedInboxMonthlyNgn * 100);
 
     // Paystack rejects 0-amount transactions
     if (totalNgn <= 0) {
@@ -262,7 +279,8 @@ export async function POST(req: NextRequest) {
       .eq("id", workspaceId)
       .single();
 
-    // inboxMonthlyNgn is the recurring amount per billing cycle (domain cost excluded)
+    // Always store the FULL inbox monthly price on the domain so the billing cron
+    // can charge the correct amount if entitlements ever expire.
     const inboxMonthlyKoboPerDomain = Math.round((inboxMonthlyNgn / domains.length) * 100);
 
     const { authorizationUrl, reference } = await createPaystackCheckout({
