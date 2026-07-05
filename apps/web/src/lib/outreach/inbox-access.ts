@@ -46,18 +46,30 @@ export async function checkInboxAccess(
   // ── 2. Inbox count limit (count only active + paused; errored inboxes don't
   //        occupy a real sending slot so shouldn't block adding a working one) ──
   if (ws.max_inboxes !== -1) {
-    const { count } = await db
-      .from("outreach_inboxes")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .in("status", ["active", "paused", "warming"]);
+    const [{ count }, { data: entitlements }] = await Promise.all([
+      db
+        .from("outreach_inboxes")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .in("status", ["active", "paused", "warming"]),
+      db
+        .from("workspace_entitlements")
+        .select("quantity")
+        .eq("workspace_id", workspaceId)
+        .eq("entitlement_type", "inbox_credit")
+        .eq("is_active", true)
+        .gt("expires_at", new Date().toISOString()),
+    ]);
 
+    const bonusInboxes = (entitlements ?? []).reduce((sum, e) => sum + (e.quantity ?? 0), 0);
+    const effectiveLimit = ws.max_inboxes + bonusInboxes;
     const currentCount = count ?? 0;
-    if (currentCount >= ws.max_inboxes) {
+
+    if (currentCount >= effectiveLimit) {
       return {
         ok: false,
         code: "inbox_limit",
-        message: `You have reached the inbox limit (${ws.max_inboxes}) for your plan. Upgrade to add more.`,
+        message: `You have reached the inbox limit (${effectiveLimit}) for your plan. Upgrade to add more.`,
       };
     }
   }
