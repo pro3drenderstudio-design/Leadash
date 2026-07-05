@@ -1,31 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
-  const supabase = await createClient();
+  // Use admin client for reads that need to bypass RLS on affiliates (auto-create)
+  const admin = createAdminClient();
 
   // Get affiliate record (auto-create if not exists)
-  let { data: affiliate } = await supabase
+  let { data: affiliate } = await admin
     .from("affiliates")
     .select("*")
     .eq("workspace_id", auth.workspaceId)
     .maybeSingle();
 
   if (!affiliate) {
-    // Auto-enroll: derive handle from workspace name or user id
-    const { data: ws } = await supabase.from("workspaces").select("name").eq("id", auth.workspaceId).single();
+    // Auto-enroll: derive handle from workspace name
+    const { data: ws } = await admin.from("workspaces").select("name").eq("id", auth.workspaceId).single();
     const rawHandle = (ws?.name ?? "user")
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 12);
-    // Make handle unique by appending random suffix
     const handle = `${rawHandle}${Math.random().toString(36).slice(2, 6)}`;
 
-    const { data: created } = await supabase
+    const { data: created } = await admin
       .from("affiliates")
       .insert({ user_id: auth.userId, workspace_id: auth.workspaceId, handle })
       .select("*")
@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
 
   if (!affiliate) return NextResponse.json({ error: "Failed to load affiliate record" }, { status: 500 });
 
-  // Commission summary
+  // Commission summary — use user client so RLS restricts to own affiliate
+  const supabase = await createClient();
   const { data: commissions } = await supabase
     .from("commission_events")
     .select("amount_ngn, status, holds_until")
