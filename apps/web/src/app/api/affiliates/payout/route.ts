@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
   const [supabase, cfg] = await Promise.all([createClient(), getAffiliateConfig(admin)]);
-  const { method } = await req.json() as { method: "bank" | "credit" };
+  const { method } = await req.json() as { method: "bank" };
 
   const { data: affiliate } = await supabase
     .from("affiliates")
@@ -40,19 +40,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Add your bank details first" }, { status: 400 });
   }
 
-  // Create payout request
-  const creditMultiplier = method === "credit" ? cfg.credit_multiplier : null;
-  const destination = method === "bank"
-    ? { bank_name: affiliate.bank_name, account_number: affiliate.bank_account_number, account_name: affiliate.bank_account_name }
-    : { workspace_id: auth.workspaceId };
+  // Create payout request — only bank transfer is supported
+  const destination = { bank_name: affiliate.bank_name, account_number: affiliate.bank_account_number, account_name: affiliate.bank_account_name };
 
   const { data: payout, error: payoutErr } = await supabase
     .from("affiliate_payouts")
     .insert({
       affiliate_id:      affiliate.id,
       amount_ngn:        availableNgn,
-      method,
-      credit_multiplier: creditMultiplier,
+      method:            "bank",
       destination,
       status:            "queued",
     })

@@ -33,12 +33,12 @@ interface Payout {
 }
 
 interface ProgramConfig {
-  bounty_ngn: number;
+  commission_type: "fixed" | "percent";
+  commission_fixed_ngn: number;
   recurring_months: number;
   cookie_days: number;
   min_payout_ngn: number;
   hold_days: number;
-  credit_multiplier: number;
   silver_threshold: number;
   gold_threshold: number;
   bronze_rate: number;
@@ -47,8 +47,9 @@ interface ProgramConfig {
 }
 
 const DEFAULT_PROGRAM: ProgramConfig = {
-  bounty_ngn: 5000, recurring_months: 12, cookie_days: 30,
-  min_payout_ngn: 20000, hold_days: 45, credit_multiplier: 1.25,
+  commission_type: "percent", commission_fixed_ngn: 2000,
+  recurring_months: 0, cookie_days: 30,
+  min_payout_ngn: 20000, hold_days: 45,
   silver_threshold: 10, gold_threshold: 25,
   bronze_rate: 0.20, silver_rate: 0.25, gold_rate: 0.30,
 };
@@ -82,7 +83,6 @@ export default function AffiliateDashboardClient() {
   const [bankSaving,  setBankSaving]  = useState(false);
 
   // Payout request
-  const [payoutMethod,  setPayoutMethod]  = useState<"bank" | "credit">("bank");
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutError,   setPayoutError]   = useState("");
   const [payoutSuccess, setPayoutSuccess] = useState("");
@@ -123,7 +123,7 @@ export default function AffiliateDashboardClient() {
     setPayoutLoading(true);
     setPayoutError("");
     setPayoutSuccess("");
-    const res  = await wsFetch("/api/affiliates/payout", { method: "POST", body: JSON.stringify({ method: payoutMethod }) });
+    const res  = await wsFetch("/api/affiliates/payout", { method: "POST", body: JSON.stringify({ method: "bank" }) });
     const data = await res.json() as { error?: string; amount_ngn?: number };
     if (data.error) {
       setPayoutError(data.error);
@@ -156,7 +156,6 @@ export default function AffiliateDashboardClient() {
     ? Math.min(1, (affiliate.paid_referrals - tierThresh[tier]) / (nextTier.target - tierThresh[tier]))
     : 1;
 
-  const creditValue = earnings.available * program.credit_multiplier;
 
   return (
     <div className="v2-app" style={{ color: "var(--app-text)", padding: "0 0 80px" }}>
@@ -208,8 +207,8 @@ export default function AffiliateDashboardClient() {
       <div style={{ padding: "20px 24px 0" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { label: "Available",       value: fmt(earnings.available), color: "#34D399", sub: "after 45-day hold" },
-            { label: "Pending",         value: fmt(earnings.pending),   color: "#FBBF24", sub: "still in hold period" },
+            { label: "Available",       value: fmt(earnings.available), color: "#34D399", sub: `after ${program.hold_days}-day hold` },
+            { label: "Pending",         value: fmt(earnings.pending),   color: "#FBBF24", sub: `${program.hold_days}-day hold period` },
             { label: "Lifetime earned", value: fmt(earnings.total),     color: "var(--app-text)", sub: "all commissions" },
             { label: "Active referrals", value: String(affiliate.paid_referrals), color: "#60A5FA", sub: "converted to paid" },
           ].map(tile => (
@@ -292,63 +291,40 @@ export default function AffiliateDashboardClient() {
           <div style={{ ...card, padding: 20 }}>
             <p style={{ ...label, marginBottom: 14 }}>Get paid</p>
 
-            {/* Method picker */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-              {([
-                { val: "bank",   head: "Cash to bank",           sub: "via Leadash Pay · 1–2 days" },
-                { val: "credit", head: "Subscription credit",    sub: `₦${Math.floor(earnings.available).toLocaleString()} → ₦${Math.floor(creditValue).toLocaleString()} at ${program.credit_multiplier}×` },
-              ] as const).map(opt => (
-                <button
-                  key={opt.val}
-                  onClick={() => setPayoutMethod(opt.val)}
-                  style={{
-                    padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-                    border: `1.5px solid ${payoutMethod === opt.val ? "var(--app-accent)" : "var(--app-border)"}`,
-                    background: payoutMethod === opt.val ? "rgba(249,115,22,0.07)" : "var(--app-surface)",
-                  }}
-                >
-                  <p style={{ fontSize: 13, fontWeight: 700, color: payoutMethod === opt.val ? "var(--app-accent)" : "var(--app-text)", marginBottom: 2 }}>{opt.head}</p>
-                  <p style={{ fontSize: 11, color: "var(--app-text-muted)" }}>{opt.sub}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Bank details (show when cash selected) */}
-            {payoutMethod === "bank" && (
-              <div style={{ background: "var(--app-surface-strong)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                {!editingBank && affiliate.bank_name ? (
-                  <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-                    <span style={{ color: "var(--app-text)" }}>{affiliate.bank_name} · {affiliate.bank_account_number}</span>
-                    <span style={{ color: "var(--app-text-muted)" }}>{affiliate.bank_account_name}</span>
-                    <button onClick={() => setEditingBank(true)} style={{ alignSelf: "flex-start", marginTop: 4, background: "none", border: "none", color: "var(--app-accent)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Edit bank details</button>
-                  </div>
-                ) : editingBank ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      { lbl: "Bank name",     val: bankName,    set: setBankName,    ph: "e.g. Access Bank" },
-                      { lbl: "Account number",val: bankAccNum,  set: setBankAccNum,  ph: "10-digit number" },
-                      { lbl: "Account name",  val: bankAccName, set: setBankAccName, ph: "As on the account" },
-                    ].map(f => (
-                      <div key={f.lbl}>
-                        <label style={{ fontSize: 10, color: "var(--app-text-muted)", display: "block", marginBottom: 3 }}>{f.lbl}</label>
-                        <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph} style={{ ...inputSt, fontSize: 12 }} />
-                      </div>
-                    ))}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={saveBank} disabled={bankSaving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                        {bankSaving ? "Saving…" : "Save"}
-                      </button>
-                      <button onClick={() => setEditingBank(false)} style={{ background: "none", border: "1px solid var(--app-border)", borderRadius: 7, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: "var(--app-text-muted)", fontFamily: "inherit" }}>Cancel</button>
+            {/* Bank details */}
+            <div style={{ background: "var(--app-surface-strong)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+              {!editingBank && affiliate.bank_name ? (
+                <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span style={{ color: "var(--app-text)" }}>{affiliate.bank_name} · {affiliate.bank_account_number}</span>
+                  <span style={{ color: "var(--app-text-muted)" }}>{affiliate.bank_account_name}</span>
+                  <button onClick={() => setEditingBank(true)} style={{ alignSelf: "flex-start", marginTop: 4, background: "none", border: "none", color: "var(--app-accent)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Edit bank details</button>
+                </div>
+              ) : editingBank ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { lbl: "Bank name",     val: bankName,    set: setBankName,    ph: "e.g. Access Bank" },
+                    { lbl: "Account number",val: bankAccNum,  set: setBankAccNum,  ph: "10-digit number" },
+                    { lbl: "Account name",  val: bankAccName, set: setBankAccName, ph: "As on the account" },
+                  ].map(f => (
+                    <div key={f.lbl}>
+                      <label style={{ fontSize: 10, color: "var(--app-text-muted)", display: "block", marginBottom: 3 }}>{f.lbl}</label>
+                      <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph} style={{ ...inputSt, fontSize: 12 }} />
                     </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={saveBank} disabled={bankSaving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      {bankSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button onClick={() => setEditingBank(false)} style={{ background: "none", border: "1px solid var(--app-border)", borderRadius: 7, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: "var(--app-text-muted)", fontFamily: "inherit" }}>Cancel</button>
                   </div>
-                ) : (
-                  <div style={{ fontSize: 12 }}>
-                    <p style={{ color: "var(--app-text-muted)", marginBottom: 6 }}>No bank details yet.</p>
-                    <button onClick={() => setEditingBank(true)} style={{ background: "none", border: "none", color: "var(--app-accent)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>+ Add bank details</button>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12 }}>
+                  <p style={{ color: "var(--app-text-muted)", marginBottom: 6 }}>No bank details yet.</p>
+                  <button onClick={() => setEditingBank(true)} style={{ background: "none", border: "none", color: "var(--app-accent)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>+ Add bank details</button>
+                </div>
+              )}
+            </div>
 
             {payoutError   && <p style={{ fontSize: 12, color: "#F87171", marginBottom: 10 }}>{payoutError}</p>}
             {payoutSuccess && <p style={{ fontSize: 12, color: "#34D399", marginBottom: 10 }}>{payoutSuccess}</p>}
@@ -358,10 +334,7 @@ export default function AffiliateDashboardClient() {
               disabled={payoutLoading || earnings.available < program.min_payout_ngn}
               style={{ width: "100%", background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: (payoutLoading || earnings.available < program.min_payout_ngn) ? 0.45 : 1 }}
             >
-              {payoutLoading ? "Requesting…"
-                : payoutMethod === "credit"
-                  ? `Convert to ${fmt(creditValue)} credit`
-                  : `Withdraw ${fmt(earnings.available)}`}
+              {payoutLoading ? "Requesting…" : `Withdraw ${fmt(earnings.available)}`}
             </button>
             {earnings.available < program.min_payout_ngn && (
               <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginTop: 8, textAlign: "center" }}>
@@ -379,9 +352,15 @@ export default function AffiliateDashboardClient() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 { n: 1, color: "#60A5FA", title: "Share your link", body: `Anyone who clicks gets a ${program.cookie_days}-day cookie. Share anywhere.` },
-                { n: 2, color: "#A78BFA", title: "They sign up",    body: `Their account is attributed to you for ${program.recurring_months} months.` },
-                { n: 3, color: "#FBBF24", title: `${fmt(program.bounty_ngn)} bounty`, body: `You earn ${fmt(program.bounty_ngn)} when they make their first payment.` },
-                { n: 4, color: "#34D399", title: `${tierRate}% recurring`, body: `Plus a cut of every payment they make for ${program.recurring_months} months.` },
+                { n: 2, color: "#A78BFA", title: "They sign up",    body: "Their account is attributed to you once they create a workspace." },
+                { n: 3, color: "#34D399",
+                  title: program.commission_type === "fixed"
+                    ? `${fmt(program.commission_fixed_ngn)} per payment`
+                    : `${tierRate}% per payment`,
+                  body: program.commission_type === "fixed"
+                    ? `You earn a flat ${fmt(program.commission_fixed_ngn)} every time they pay — offers and subscriptions.`
+                    : `You earn ${tierRate}% of every payment they make. ${program.recurring_months > 0 ? `Commission window: ${program.recurring_months} months.` : "No time limit — lifetime commission."}`,
+                },
               ].map(step => (
                 <div key={step.n} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                   <div style={{ width: 26, height: 26, borderRadius: 999, background: `${step.color}18`, border: `1px solid ${step.color}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

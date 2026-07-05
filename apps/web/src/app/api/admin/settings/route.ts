@@ -43,12 +43,12 @@ const ALLOWED_KEYS = [
   "social_linkedin_url",
   "social_instagram_url",
   // Affiliate program
-  "affiliate_bounty_ngn",
+  "affiliate_commission_type",
+  "affiliate_commission_fixed_ngn",
   "affiliate_recurring_months",
   "affiliate_cookie_days",
   "affiliate_min_payout_ngn",
   "affiliate_hold_days",
-  "affiliate_credit_multiplier",
   "affiliate_silver_threshold",
   "affiliate_gold_threshold",
   "affiliate_bronze_rate",
@@ -110,6 +110,11 @@ export async function PATCH(req: NextRequest) {
     if (key === "domain_registrar") {
       if (value !== "namecheap" && value !== "porkbun") {
         return NextResponse.json({ error: "domain_registrar must be 'namecheap' or 'porkbun'" }, { status: 400 });
+      }
+    }
+    if (key === "affiliate_commission_type") {
+      if (value !== "fixed" && value !== "percent") {
+        return NextResponse.json({ error: "affiliate_commission_type must be 'fixed' or 'percent'" }, { status: 400 });
       }
     }
   }

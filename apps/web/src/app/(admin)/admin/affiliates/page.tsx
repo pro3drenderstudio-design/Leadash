@@ -61,12 +61,12 @@ function TierChip({ tier }: { tier: string }) {
 }
 
 interface ProgramSettings {
-  affiliate_bounty_ngn: string;
+  affiliate_commission_type: string;
+  affiliate_commission_fixed_ngn: string;
   affiliate_recurring_months: string;
   affiliate_cookie_days: string;
   affiliate_min_payout_ngn: string;
   affiliate_hold_days: string;
-  affiliate_credit_multiplier: string;
   affiliate_silver_threshold: string;
   affiliate_gold_threshold: string;
   affiliate_bronze_rate: string;
@@ -75,12 +75,12 @@ interface ProgramSettings {
 }
 
 const DEFAULT_SETTINGS: ProgramSettings = {
-  affiliate_bounty_ngn: "5000",
-  affiliate_recurring_months: "12",
+  affiliate_commission_type: "percent",
+  affiliate_commission_fixed_ngn: "2000",
+  affiliate_recurring_months: "0",
   affiliate_cookie_days: "30",
   affiliate_min_payout_ngn: "20000",
   affiliate_hold_days: "45",
-  affiliate_credit_multiplier: "1.25",
   affiliate_silver_threshold: "10",
   affiliate_gold_threshold: "25",
   affiliate_bronze_rate: "0.20",
@@ -138,17 +138,17 @@ export default function AdminAffiliatesPage() {
           const s = d.settings;
           setSettings(prev => ({
             ...prev,
-            ...(s.affiliate_bounty_ngn          !== undefined ? { affiliate_bounty_ngn:          String(s.affiliate_bounty_ngn) }          : {}),
-            ...(s.affiliate_recurring_months    !== undefined ? { affiliate_recurring_months:    String(s.affiliate_recurring_months) }    : {}),
-            ...(s.affiliate_cookie_days         !== undefined ? { affiliate_cookie_days:         String(s.affiliate_cookie_days) }         : {}),
-            ...(s.affiliate_min_payout_ngn      !== undefined ? { affiliate_min_payout_ngn:      String(s.affiliate_min_payout_ngn) }      : {}),
-            ...(s.affiliate_hold_days           !== undefined ? { affiliate_hold_days:           String(s.affiliate_hold_days) }           : {}),
-            ...(s.affiliate_credit_multiplier   !== undefined ? { affiliate_credit_multiplier:   String(s.affiliate_credit_multiplier) }   : {}),
-            ...(s.affiliate_silver_threshold    !== undefined ? { affiliate_silver_threshold:    String(s.affiliate_silver_threshold) }    : {}),
-            ...(s.affiliate_gold_threshold      !== undefined ? { affiliate_gold_threshold:      String(s.affiliate_gold_threshold) }      : {}),
-            ...(s.affiliate_bronze_rate         !== undefined ? { affiliate_bronze_rate:         String(s.affiliate_bronze_rate) }         : {}),
-            ...(s.affiliate_silver_rate         !== undefined ? { affiliate_silver_rate:         String(s.affiliate_silver_rate) }         : {}),
-            ...(s.affiliate_gold_rate           !== undefined ? { affiliate_gold_rate:           String(s.affiliate_gold_rate) }           : {}),
+            ...(s.affiliate_commission_type      !== undefined ? { affiliate_commission_type:      String(s.affiliate_commission_type) }      : {}),
+            ...(s.affiliate_commission_fixed_ngn !== undefined ? { affiliate_commission_fixed_ngn: String(s.affiliate_commission_fixed_ngn) } : {}),
+            ...(s.affiliate_recurring_months     !== undefined ? { affiliate_recurring_months:     String(s.affiliate_recurring_months) }     : {}),
+            ...(s.affiliate_cookie_days          !== undefined ? { affiliate_cookie_days:          String(s.affiliate_cookie_days) }          : {}),
+            ...(s.affiliate_min_payout_ngn       !== undefined ? { affiliate_min_payout_ngn:       String(s.affiliate_min_payout_ngn) }       : {}),
+            ...(s.affiliate_hold_days            !== undefined ? { affiliate_hold_days:            String(s.affiliate_hold_days) }            : {}),
+            ...(s.affiliate_silver_threshold     !== undefined ? { affiliate_silver_threshold:     String(s.affiliate_silver_threshold) }     : {}),
+            ...(s.affiliate_gold_threshold       !== undefined ? { affiliate_gold_threshold:       String(s.affiliate_gold_threshold) }       : {}),
+            ...(s.affiliate_bronze_rate          !== undefined ? { affiliate_bronze_rate:          String(s.affiliate_bronze_rate) }          : {}),
+            ...(s.affiliate_silver_rate          !== undefined ? { affiliate_silver_rate:          String(s.affiliate_silver_rate) }          : {}),
+            ...(s.affiliate_gold_rate            !== undefined ? { affiliate_gold_rate:            String(s.affiliate_gold_rate) }            : {}),
           }));
           setSettingsLoaded(true);
         });
@@ -157,8 +157,10 @@ export default function AdminAffiliatesPage() {
 
   async function saveSettings() {
     setSettingsSaving(true);
-    const body: Record<string, number> = {};
-    for (const [k, v] of Object.entries(settings)) body[k] = Number(v);
+    const body: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(settings)) {
+      body[k] = k === "affiliate_commission_type" ? v : Number(v);
+    }
     const res = await fetch("/api/admin/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -390,25 +392,51 @@ export default function AdminAffiliatesPage() {
           <div className={`${card} overflow-hidden`}>
             <div className="px-5 py-4 border-b border-white/8">
               <p className="text-sm font-bold text-white">Commission</p>
-              <p className="text-xs text-white/40">Rates and attribution window applied to new referrals.</p>
+              <p className="text-xs text-white/40">Affiliates earn on every offer and subscription payment. Set how much.</p>
             </div>
             <div className="divide-y divide-white/6">
+              {/* Commission type */}
+              <div className="flex items-center justify-between px-5 py-3 gap-4">
+                <label className="text-sm text-white/70 flex-1">Commission type</label>
+                <select
+                  value={settings.affiliate_commission_type}
+                  onChange={e => setSettings(prev => ({ ...prev, affiliate_commission_type: e.target.value }))}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-orange-500/50"
+                >
+                  <option value="percent">Percentage of payment</option>
+                  <option value="fixed">Fixed amount per payment</option>
+                </select>
+              </div>
+              {/* Fixed amount — only shown when type=fixed */}
+              {settings.affiliate_commission_type === "fixed" && (
+                <div className="flex items-center justify-between px-5 py-3 gap-4">
+                  <label className="text-sm text-white/70 flex-1">Fixed commission (₦)</label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-white/40">₦</span>
+                    <input
+                      type="number"
+                      value={settings.affiliate_commission_fixed_ngn}
+                      onChange={e => setSettings(prev => ({ ...prev, affiliate_commission_fixed_ngn: e.target.value }))}
+                      className="w-28 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Numeric settings */}
               {([
-                { key: "affiliate_bounty_ngn",       label: "Bounty (₦, first payment)",  unit: "₦" },
-                { key: "affiliate_recurring_months",  label: "Recurring window (months)",  unit: "mo" },
-                { key: "affiliate_cookie_days",       label: "Cookie lifetime (days)",     unit: "days" },
+                { key: "affiliate_recurring_months", label: "Commission window (months, 0 = lifetime)", unit: "mo" },
+                { key: "affiliate_cookie_days",      label: "Cookie lifetime (days)",                  unit: "days" },
               ] as const).map(row => (
                 <div key={row.key} className="flex items-center justify-between px-5 py-3 gap-4">
                   <label className="text-sm text-white/70 flex-1">{row.label}</label>
                   <div className="flex items-center gap-1.5">
-                    {row.unit === "₦" && <span className="text-xs text-white/40">₦</span>}
                     <input
                       type="number"
                       value={settings[row.key]}
                       onChange={e => setSettings(prev => ({ ...prev, [row.key]: e.target.value }))}
                       className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"
                     />
-                    {row.unit !== "₦" && <span className="text-xs text-white/40">{row.unit}</span>}
+                    <span className="text-xs text-white/40">{row.unit}</span>
                   </div>
                 </div>
               ))}
@@ -450,9 +478,8 @@ export default function AdminAffiliatesPage() {
             </div>
             <div className="divide-y divide-white/6">
               {([
-                { key: "affiliate_min_payout_ngn",      label: "Minimum payout (₦)",         unit: "₦" },
-                { key: "affiliate_hold_days",            label: "Refund hold period (days)",  unit: "days" },
-                { key: "affiliate_credit_multiplier",    label: "Credit payout multiplier",   unit: "×" },
+                { key: "affiliate_min_payout_ngn", label: "Minimum payout (₦)",        unit: "₦" },
+                { key: "affiliate_hold_days",       label: "Refund hold period (days)", unit: "days" },
               ] as const).map(row => (
                 <div key={row.key} className="flex items-center justify-between px-5 py-3 gap-4">
                   <label className="text-sm text-white/70 flex-1">{row.label}</label>
@@ -460,7 +487,6 @@ export default function AdminAffiliatesPage() {
                     {row.unit === "₦" && <span className="text-xs text-white/40">₦</span>}
                     <input
                       type="number"
-                      step={row.unit === "×" ? "0.01" : "1"}
                       value={settings[row.key]}
                       onChange={e => setSettings(prev => ({ ...prev, [row.key]: e.target.value }))}
                       className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white text-right outline-none focus:border-orange-500/50"

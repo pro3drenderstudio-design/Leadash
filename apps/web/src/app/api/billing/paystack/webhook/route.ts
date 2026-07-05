@@ -649,10 +649,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // ── Affiliate commission (runs after offer_purchase and plan_subscription blocks above) ──
+    // ── Affiliate commission ─────────────────────────────────────────────────
+    // Runs on every offer_purchase and plan_subscription payment.
+    // Offer purchases only generate commission if the offer's
+    // allows_referral_commission flag is true (subscription plans always do).
     if ((type === "offer_purchase" || type === "plan_subscription") && workspaceId) {
       void (async () => {
         try {
+          // For offer purchases, check if this offer allows referral commission
+          if (type === "offer_purchase") {
+            const purchaseId = meta.purchase_id as string | undefined;
+            if (purchaseId) {
+              const { data: purchase } = await db
+                .from("offer_purchases")
+                .select("offer_id")
+                .eq("id", purchaseId)
+                .maybeSingle();
+              if (purchase?.offer_id) {
+                const { data: offer } = await db
+                  .from("offers")
+                  .select("allows_referral_commission")
+                  .eq("id", purchase.offer_id)
+                  .maybeSingle();
+                // null/undefined means column doesn't exist yet — allow by default
+                if (offer && offer.allows_referral_commission === false) return;
+              }
+            }
+          }
+
           const { data: ws } = await db
             .from("workspaces")
             .select("referred_by_affiliate_id")
@@ -662,56 +686,59 @@ export async function POST(req: NextRequest) {
           if (!ws?.referred_by_affiliate_id) return;
 
           const affiliateId = ws.referred_by_affiliate_id;
-          const { data: affiliate } = await db
-            .from("affiliates")
-            .select("id, tier, paid_referrals")
-            .eq("id", affiliateId)
-            .single();
-          if (!affiliate) return;
+          const [{ data: affiliate }, { data: referral }, cfg] = await Promise.all([
+            db.from("affiliates").select("id, tier, paid_referrals").eq("id", affiliateId).single(),
+            db.from("referrals").select("id, status, created_at").eq("affiliate_id", affiliateId).eq("referred_workspace_id", workspaceId).maybeSingle(),
+            getAffiliateConfig(db),
+          ]);
+          if (!affiliate || !referral) return;
 
-          // Look up referral record
-          const { data: referral } = await db
-            .from("referrals")
-            .select("id, status")
-            .eq("affiliate_id", affiliateId)
-            .eq("referred_workspace_id", workspaceId)
-            .maybeSingle();
-          if (!referral) return;
+          // Check recurring window (0 = unlimited)
+          if (cfg.recurring_months > 0) {
+            const ageMonths = (Date.now() - new Date(referral.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+            if (ageMonths > cfg.recurring_months) return;
+          }
 
-          const cfg = await getAffiliateConfig(db);
-          const tierRates: Record<string, number> = { bronze: cfg.bronze_rate, silver: cfg.silver_rate, gold: cfg.gold_rate };
-          const rate = tierRates[affiliate.tier] ?? cfg.bronze_rate;
           const amountKobo = (event.data as Record<string, unknown>).amount as number | undefined;
           const amountNgn = Math.round((amountKobo ?? 0) / 100);
           if (amountNgn <= 0) return;
 
-          const commissionNgn = Math.round(amountNgn * rate * 100) / 100;
-          const isFirstPayment = referral.status === "lead";
-          const kind = isFirstPayment ? "bounty" : "recurring";
+          // Commission amount: fixed flat rate or percentage of payment
+          let commissionNgn: number;
+          if (cfg.commission_type === "fixed") {
+            commissionNgn = cfg.commission_fixed_ngn;
+          } else {
+            const tierRates: Record<string, number> = { bronze: cfg.bronze_rate, silver: cfg.silver_rate, gold: cfg.gold_rate };
+            const rate = tierRates[affiliate.tier] ?? cfg.bronze_rate;
+            commissionNgn = Math.round(amountNgn * rate * 100) / 100;
+          }
+          if (commissionNgn <= 0) return;
 
           const holdsUntil = new Date(Date.now() + cfg.hold_days * 24 * 60 * 60 * 1000).toISOString();
 
-          // Idempotent insert (unique on source_payment_ref + kind)
           await db.from("commission_events").insert({
             affiliate_id:       affiliateId,
             referral_id:        referral.id,
-            kind,
-            amount_ngn:         kind === "bounty" ? cfg.bounty_ngn : commissionNgn,
+            kind:               "recurring",
+            amount_ngn:         commissionNgn,
             source_payment_ref: data.reference,
             holds_until:        holdsUntil,
             status:             "pending",
           });
 
-          // Update referral status and affiliate paid_referrals count
-          if (isFirstPayment) {
+          // Track first conversion: update referral status and affiliate tier
+          if (referral.status === "lead") {
             await db.from("referrals").update({ status: "paid", first_paid_at: new Date().toISOString() }).eq("id", referral.id);
 
             const newPaidCount = (affiliate.paid_referrals ?? 0) + 1;
             let newTier = affiliate.tier;
             if (newPaidCount >= cfg.gold_threshold) newTier = "gold";
             else if (newPaidCount >= cfg.silver_threshold) newTier = "silver";
-
-            await db.from("affiliates").update({ paid_referrals: newPaidCount, tier: newTier }).eq("id", affiliateId);
+            if (newTier !== affiliate.tier) {
+              await db.from("affiliates").update({ paid_referrals: newPaidCount, tier: newTier }).eq("id", affiliateId);
+            } else {
+              await db.from("affiliates").update({ paid_referrals: newPaidCount }).eq("id", affiliateId);
+            }
           }
         } catch (e) {
           console.error("[affiliates] commission error:", e);
