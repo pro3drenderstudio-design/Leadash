@@ -50,6 +50,27 @@ export async function fulfillGrant(
           })
           .eq("id", ctx.workspaceId);
         if (error) throw error;
+
+        // Grant the plan's included credits, mirroring what the billing webhook does.
+        if (plan.included_credits > 0) {
+          const { data: ws } = await db
+            .from("workspaces")
+            .select("lead_credits_balance")
+            .eq("id", ctx.workspaceId)
+            .single();
+          await db.from("workspaces").update({
+            lead_credits_balance:         (ws?.lead_credits_balance ?? 0) + plan.included_credits,
+            subscription_credits_balance: plan.included_credits,
+          }).eq("id", ctx.workspaceId);
+          await db.from("lead_credit_transactions").insert({
+            workspace_id:       ctx.workspaceId,
+            type:               "grant",
+            amount:             plan.included_credits,
+            description:        `Offer purchase — ${ctx.offerName} (${plan.plan_id} plan credits)`,
+            paystack_reference: `offer:${ctx.reference}:${grant.id}:plan_credits`,
+          }).catch(() => {}); // best-effort — ignore dup on idempotent retry
+        }
+
         return { grant_id: grant.id, type: grant.type, status: "granted" };
       }
 
