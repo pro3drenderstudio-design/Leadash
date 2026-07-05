@@ -18,12 +18,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ hand
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Increment click count (fire and forget)
-  db.from("affiliates")
-    .update({ clicks: affiliate.clicks + 1 })
-    .eq("id", affiliate.id)
-    .then(() => {})
-    .catch(() => {});
+  // Increment click count atomically before returning — must be awaited
+  // because serverless functions terminate immediately after the response
+  // is sent, abandoning any pending promises.
+  await db.rpc("increment_affiliate_clicks", { aff_id: affiliate.id }).catch(() => {
+    // Fallback: non-atomic but better than nothing
+    db.from("affiliates")
+      .update({ clicks: (affiliate.clicks ?? 0) + 1 })
+      .eq("id", affiliate.id)
+      .then(() => {}).catch(() => {});
+  });
 
   // Set 30-day referral cookie and redirect to home
   const res = NextResponse.redirect(redirectUrl);

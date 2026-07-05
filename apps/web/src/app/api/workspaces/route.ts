@@ -86,10 +86,12 @@ export async function POST(req: NextRequest) {
         status:                "lead",
       });
 
-      // Increment signup count
-      await db.from("affiliates")
-        .update({ signups: (affiliate.signups ?? 0) + 1 })
-        .eq("id", affiliate.id);
+      // Increment signup count atomically
+      await db.rpc("increment_affiliate_signups", { aff_id: affiliate.id }).catch(() =>
+        db.from("affiliates")
+          .update({ signups: (affiliate.signups ?? 0) + 1 })
+          .eq("id", affiliate.id)
+      );
     }
   }
 
