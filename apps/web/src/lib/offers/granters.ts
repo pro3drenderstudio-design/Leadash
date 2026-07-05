@@ -55,7 +55,10 @@ export async function fulfillGrant(
 
       // ── Inbox grant ─────────────────────────────────────────────────────────
       case "inbox": {
-        const expiresAt = new Date(Date.now() + grant.freeMonths * 30 * DAY_MS).toISOString();
+        // freeMonths=0 means no trial period — use 1 year as a safe default rather
+        // than now+0 which would expire the credit instantly.
+        const monthsToAdd = grant.freeMonths > 0 ? grant.freeMonths : 12;
+        const expiresAt = new Date(Date.now() + monthsToAdd * 30 * DAY_MS).toISOString();
         const { error } = await db.from("workspace_entitlements").insert({
           workspace_id:     ctx.workspaceId,
           entitlement_type: "inbox_credit",
