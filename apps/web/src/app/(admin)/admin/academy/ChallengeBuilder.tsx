@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import LessonContentEditor from "./LessonContentEditor";
 import {
@@ -77,6 +77,10 @@ interface QuizConfig {
   questions: Array<{ q: string; a: string }>;
 }
 
+interface SelfCheckConfig {
+  prompt: string;
+}
+
 interface ChallengeTask {
   id: string;
   product_id: string;
@@ -91,12 +95,14 @@ interface ChallengeTask {
   metric_config?: MetricConfig | null;
   live_session_id?: string | null;
   quiz_config?: QuizConfig | null;
+  self_check_config?: SelfCheckConfig | null;
 }
 
 interface AcademyLessonOption {
   id: string;
   title: string;
   lesson_type: string;
+  mux_playback_id: string | null;
 }
 
 interface LiveSessionOption {
@@ -112,6 +118,7 @@ interface LiveSessionOption {
 const DEFAULT_PROOF_CONFIG: ProofConfig = { accepts: ["image", "link"], prompt: "" };
 const DEFAULT_METRIC_CONFIG: MetricConfig = { source: "leadash_outbox", metric: "messages_sent", target: 20 };
 const DEFAULT_QUIZ_CONFIG: QuizConfig = { questions: [{ q: "", a: "" }] };
+const DEFAULT_SELF_CHECK_CONFIG: SelfCheckConfig = { prompt: "" };
 
 interface ChallengeBuilderProps {
   product: {
@@ -382,6 +389,12 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   const [dayMetricConfig, setDayMetricConfig] = useState<MetricConfig>(DEFAULT_METRIC_CONFIG);
   const [dayLiveSessionId, setDayLiveSessionId] = useState<string>("");
   const [dayQuizConfig, setDayQuizConfig] = useState<QuizConfig>(DEFAULT_QUIZ_CONFIG);
+  const [daySelfCheckConfig, setDaySelfCheckConfig] = useState<SelfCheckConfig>(DEFAULT_SELF_CHECK_CONFIG);
+
+  // Video upload state for the lesson task panel
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const videoFileRef = useRef<HTMLInputElement | null>(null);
 
   // Lessons + live sessions available to link from this product (for the lesson/live pickers)
   const [lessons, setLessons] = useState<AcademyLessonOption[]>([]);
@@ -405,7 +418,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   const reloadLessons = useCallback(() => {
     fetch(`/api/admin/academy/lessons?product_id=${product.id}`)
       .then(r => r.json())
-      .then(d => setLessons((d.lessons ?? []).map((l: { id: string; title: string; lesson_type: string }) => ({ id: l.id, title: l.title, lesson_type: l.lesson_type }))))
+      .then(d => setLessons((d.lessons ?? []).map((l: { id: string; title: string; lesson_type: string; mux_playback_id?: string | null }) => ({ id: l.id, title: l.title, lesson_type: l.lesson_type, mux_playback_id: l.mux_playback_id ?? null }))))
       .catch(() => {});
   }, [product.id]);
   const reloadLiveSessions = useCallback(() => {
@@ -440,6 +453,9 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
 
       const quizTask = dayTasks.find(t => t.task_type === "quiz");
       setDayQuizConfig(quizTask?.quiz_config ?? DEFAULT_QUIZ_CONFIG);
+
+      const selfCheckTask = dayTasks.find(t => t.task_type === "self_check");
+      setDaySelfCheckConfig(selfCheckTask?.self_check_config ?? DEFAULT_SELF_CHECK_CONFIG);
     } else {
       // Use seed data
       const seed = SEED_DAYS[selectedDay - 1];
@@ -447,6 +463,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
       setDayMetricConfig(DEFAULT_METRIC_CONFIG);
       setDayLiveSessionId("");
       setDayQuizConfig(DEFAULT_QUIZ_CONFIG);
+      setDaySelfCheckConfig(DEFAULT_SELF_CHECK_CONFIG);
       setDayLessonId("");
       if (seed) {
         setDayTitle(seed.title);
@@ -496,6 +513,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     if (type === "metric") return { metric_config: dayMetricConfig };
     if (type === "live") return { live_session_id: dayLiveSessionId || null };
     if (type === "quiz") return { quiz_config: dayQuizConfig };
+    if (type === "self_check") return { self_check_config: daySelfCheckConfig };
     return {};
   }
 
@@ -650,6 +668,56 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
       }
     } finally {
       setCreatingLiveSession(false);
+    }
+  }
+
+  async function uploadVideoForLesson(lessonId: string, file: File) {
+    setVideoUploading(true);
+    setVideoProgress(0);
+    try {
+      const { upload_id, url } = await fetch(`/api/admin/academy/lessons/${lessonId}/upload-url`, {
+        method: "POST",
+      }).then(r => r.json());
+      if (!url) throw new Error("Could not get upload URL");
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = e => {
+          if (e.lengthComputable) setVideoProgress(Math.round((e.loaded / e.total) * 88));
+        };
+        xhr.onload = () => (xhr.status < 400 ? resolve() : reject(new Error(`Upload HTTP ${xhr.status}`)));
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.open("PUT", url);
+        xhr.send(file);
+      });
+
+      setVideoProgress(92);
+
+      // Poll until Mux processes the video and writes back mux_playback_id
+      let attempts = 0;
+      let playbackId: string | null = null;
+      while (attempts < 60 && !playbackId) {
+        await new Promise(r => setTimeout(r, 5000));
+        const res = await fetch(`/api/admin/academy/lessons/${lessonId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mux_upload_id: upload_id }),
+        }).then(r => r.json());
+        playbackId = res.lesson?.mux_playback_id ?? null;
+        attempts++;
+      }
+
+      if (playbackId) {
+        setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, mux_playback_id: playbackId } : l));
+        setVideoProgress(100);
+        onToast("Video ready!");
+      } else {
+        onToast("Upload sent — video is still processing, check back soon");
+      }
+    } catch (err) {
+      onToast("Upload failed: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setVideoUploading(false);
     }
   }
 
@@ -1081,11 +1149,70 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                         {creatingLesson ? "Creating…" : "New"}
                       </button>
                     </div>
+                    {dayLessonId && (() => {
+                      const sel = lessons.find(l => l.id === dayLessonId);
+                      return (
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ ...labelStyle, marginBottom: 6 }}>Video</label>
+                          {sel?.mux_playback_id ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{ fontSize: 12, color: "#34D399", display: "flex", alignItems: "center", gap: 5 }}>
+                                <HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={2} color="#34D399" />
+                                Video ready
+                              </span>
+                              <button style={btnDefault} onClick={() => videoFileRef.current?.click()} disabled={videoUploading}>
+                                Replace video
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>No video uploaded yet</span>
+                              <button style={btnDefault} onClick={() => videoFileRef.current?.click()} disabled={videoUploading}>
+                                <HugeiconsIcon icon={Video01Icon} size={13} strokeWidth={1.8} />
+                                {videoUploading ? `Uploading ${videoProgress}%` : "Upload video"}
+                              </button>
+                            </div>
+                          )}
+                          {videoUploading && (
+                            <div style={{ marginTop: 8, height: 4, background: "var(--app-border)", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${videoProgress}%`, background: "var(--app-accent)", borderRadius: 2, transition: "width 0.3s ease" }} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <input
+                      ref={videoFileRef}
+                      type="file"
+                      accept="video/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file && dayLessonId) uploadVideoForLesson(dayLessonId, file);
+                        e.target.value = "";
+                      }}
+                    />
                     {dayLessonId && (
                       <div style={{ marginTop: 14, borderTop: "1px solid var(--app-border)", paddingTop: 14 }}>
                         <LessonContentEditor lessonId={dayLessonId} />
                       </div>
                     )}
+                  </div>
+                )}
+
+                {dayTaskTypes.includes("self_check") && (
+                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                    <label style={labelStyle}>Self-check</label>
+                    <label style={{ ...labelStyle, marginBottom: 4 }}>Prompt shown to learner</label>
+                    <textarea
+                      style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+                      value={daySelfCheckConfig.prompt}
+                      onChange={e => setDaySelfCheckConfig({ prompt: e.target.value })}
+                      placeholder="e.g. Did you complete your practice session today? Reflect on what went well and what you'll do differently."
+                    />
+                    <p style={{ fontSize: 11, color: "var(--app-text-quiet)", marginTop: 6, lineHeight: 1.5 }}>
+                      The learner marks this complete themselves — no external validation required.
+                    </p>
                   </div>
                 )}
 

@@ -7,6 +7,7 @@ export interface FunnelTracking {
   google_ads_conversion_id?: string;
   google_ads_conversion_label?: string;
   gtm_container_id?: string;
+  tiktok_pixel_id?: string;
 }
 
 type PlainFn = (...args: unknown[]) => void;
@@ -18,11 +19,23 @@ type FbqQueueFn = PlainFn & {
   version?: string;
 };
 
+type TtqInstance = {
+  load?: (pixelId: string, opts?: Record<string, unknown>) => void;
+  page?: () => void;
+  track?: (event: string, data?: Record<string, unknown>) => void;
+  _i?: Record<string, unknown>;
+  _t?: Record<string, number>;
+  _o?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 declare global {
   interface Window {
     fbq?: PlainFn;
     gtag?: PlainFn;
     dataLayer?: unknown[];
+    TiktokAnalyticsObject?: string;
+    ttq?: TtqInstance;
   }
 }
 
@@ -72,6 +85,33 @@ function loadGtm(containerId: string) {
   document.head.appendChild(script);
 }
 
+function loadTtq(pixelId: string) {
+  if (window.ttq) return;
+
+  const queue: unknown[] = [];
+  const methods = ["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];
+  const ttq: TtqInstance = { _i: {}, _t: {}, _o: {} };
+  for (const m of methods) {
+    ttq[m] = (...args: unknown[]) => queue.push([m, ...args]);
+  }
+  ttq.load = (id: string) => {
+    const inst: unknown[] = [];
+    (inst as { _u?: string })._u = "https://analytics.tiktok.com/i18n/pixel/events.js";
+    ttq._i![id] = inst;
+    ttq._t![id] = +new Date();
+    ttq._o![id] = {};
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=${encodeURIComponent(id)}&lib=ttq`;
+    const first = document.getElementsByTagName("script")[0];
+    first?.parentNode?.insertBefore(script, first);
+  };
+  window.TiktokAnalyticsObject = "ttq";
+  window.ttq = ttq;
+  ttq.load!(pixelId);
+  ttq.page!();
+}
+
 /** Mounts whichever pixel scripts are configured and fires the page-view event once. No-op when `tracking` is empty or `enabled` is false (e.g. admin preview). */
 export function TrackingPixels({ tracking, enabled = true }: { tracking: FunnelTracking | null | undefined; enabled?: boolean }) {
   const firedRef = useRef(false);
@@ -93,6 +133,7 @@ export function TrackingPixels({ tracking, enabled = true }: { tracking: FunnelT
     }
 
     if (tracking.gtm_container_id) loadGtm(tracking.gtm_container_id);
+    if (tracking.tiktok_pixel_id) loadTtq(tracking.tiktok_pixel_id);
   }, [tracking, enabled]);
 
   return null;
@@ -103,6 +144,7 @@ export function trackLead(tracking: FunnelTracking | null | undefined) {
   if (tracking.meta_pixel_id) window.fbq?.("track", "Lead");
   if (tracking.ga4_measurement_id) window.gtag?.("event", "generate_lead");
   if (tracking.gtm_container_id) { window.dataLayer = window.dataLayer ?? []; window.dataLayer.push({ event: "lead" }); }
+  if (tracking.tiktok_pixel_id) window.ttq?.track?.("SubmitForm");
 }
 
 export function trackPurchase(tracking: FunnelTracking | null | undefined, opts: { value: number; currency: string; orderId: string }) {
@@ -123,5 +165,8 @@ export function trackPurchase(tracking: FunnelTracking | null | undefined, opts:
   if (tracking.gtm_container_id) {
     window.dataLayer = window.dataLayer ?? [];
     window.dataLayer.push({ event: "purchase", value: opts.value, currency: opts.currency, transaction_id: opts.orderId });
+  }
+  if (tracking.tiktok_pixel_id) {
+    window.ttq?.track?.("CompletePayment", { value: opts.value, currency: opts.currency });
   }
 }

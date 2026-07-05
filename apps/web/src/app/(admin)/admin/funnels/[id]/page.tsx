@@ -349,6 +349,7 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
   const [adsConvId,       setAdsConvId]      = useState(tracking.google_ads_conversion_id ?? "");
   const [adsConvLabel,   setAdsConvLabel]   = useState(tracking.google_ads_conversion_label ?? "");
   const [gtmId,           setGtmId]          = useState(tracking.gtm_container_id ?? "");
+  const [tiktokPixelId,  setTiktokPixelId]  = useState(tracking.tiktok_pixel_id ?? "");
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
   const [error,       setError]       = useState("");
@@ -367,6 +368,7 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
         google_ads_conversion_id:    adsConvId.trim() || undefined,
         google_ads_conversion_label: adsConvLabel.trim() || undefined,
         gtm_container_id:            gtmId.trim() || undefined,
+        tiktok_pixel_id:             tiktokPixelId.trim() || undefined,
       },
     };
 
@@ -465,6 +467,15 @@ function SettingsTab({ funnel, onUpdate }: { funnel: Funnel; onUpdate: (f: Parti
               value={gtmId}
               onChange={e => setGtmId(e.target.value)}
               placeholder="GTM-XXXXXXX"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-white/40 uppercase tracking-widest mb-1.5">TikTok Pixel ID</label>
+            <input
+              value={tiktokPixelId}
+              onChange={e => setTiktokPixelId(e.target.value)}
+              placeholder="C4XXXXXXXXXXXXXXXXXX"
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/40 font-mono"
             />
           </div>

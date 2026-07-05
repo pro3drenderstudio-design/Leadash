@@ -62,5 +62,36 @@ export async function POST(req: NextRequest) {
       .is("user_id", null);
   }
 
+  // Affiliate attribution — read the ld_ref cookie set by /r/[handle]
+  const refCookie = req.cookies.get("ld_ref")?.value;
+  if (refCookie) {
+    const { data: affiliate } = await db
+      .from("affiliates")
+      .select("id, signups")
+      .eq("id", refCookie)
+      .maybeSingle();
+
+    if (affiliate) {
+      // Link workspace to affiliate
+      await db.from("workspaces")
+        .update({ referred_by_affiliate_id: affiliate.id })
+        .eq("id", workspace.id);
+
+      // Create referral record
+      await db.from("referrals").insert({
+        affiliate_id:          affiliate.id,
+        referred_user_id:      user.id,
+        referred_workspace_id: workspace.id,
+        source:                "cookie",
+        status:                "lead",
+      });
+
+      // Increment signup count
+      await db.from("affiliates")
+        .update({ signups: (affiliate.signups ?? 0) + 1 })
+        .eq("id", affiliate.id);
+    }
+  }
+
   return NextResponse.json(workspace, { status: 201 });
 }

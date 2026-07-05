@@ -236,7 +236,8 @@ export const checkInboxDns = (inboxId: string) =>
   }>(`${base}/inboxes/${inboxId}/dns-check`);
 
 export const generateSequence = (opts: {
-  product_name: string; target_audience: string; value_prop: string;
+  icp_id?: string; offer_template_id?: string;
+  product_name?: string; target_audience?: string; value_prop?: string;
   tone?: string; num_emails?: number; wait_days_between?: number; message_length?: string;
 }) => post<{ steps?: { type: string; subject?: string; body?: string; wait_days?: number }[]; error?: string }>(`${base}/sequences/generate`, opts);
 

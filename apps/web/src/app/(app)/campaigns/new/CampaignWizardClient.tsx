@@ -115,6 +115,12 @@ export default function CampaignWizardClient() {
   const [aiMessageLength, setAiMessageLength] = useState("standard");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError]           = useState<string | null>(null);
+  // ICP / Offer picker state
+  const [aiIcpId, setAiIcpId]           = useState("");
+  const [aiOfferId, setAiOfferId]       = useState("");
+  const [aiIcps, setAiIcps]             = useState<Array<{ id: string; name: string; industry: string | null; pains: string[]; geography: string | null; roles: string | null; goals: string[]; triggers: string[]; objections: string[]; tone: string | null; company_size: string | null }>>([]);
+  const [aiOffers, setAiOffers]         = useState<Array<{ id: string; name: string; price_label: string | null; what: string | null; value_prop: string | null; proof: string | null; guarantee: string | null; case_snippets: string[]; cta_kind: string; cta_label: string | null }>>([]);
+  const [aiShowContext, setAiShowContext] = useState(false);
 
   // Test email modal
   const [testStepIdx, setTestStepIdx]         = useState<number | null>(null);
@@ -254,8 +260,12 @@ export default function CampaignWizardClient() {
     Promise.all([
       getInboxes(), getLists(), getTemplates(),
       getSettings(),
-    ]).then(([i, l, t, ws]) => {
+      wsFetch("/api/playbook/icps").then(r => r.json()).catch(() => ({ icps: [] })),
+      wsFetch("/api/playbook/offer-templates").then(r => r.json()).catch(() => ({ offer_templates: [] })),
+    ]).then(([i, l, t, ws, icpData, offerData]) => {
       setInboxes(i); setLists(l); setTemplates(t);
+      setAiIcps(icpData.icps ?? []);
+      setAiOffers(offerData.offer_templates ?? []);
       // Only apply workspace defaults to brand-new campaigns — drafts carry their own values
       if (draftIdParam) return;
       if (ws.default_timezone)  setTimezone(ws.default_timezone as string);
@@ -535,17 +545,19 @@ export default function CampaignWizardClient() {
   }
 
   async function handleAiGenerate() {
-    if (!aiProduct || !aiAudience || !aiValueProp) {
-      setAiError("Product, audience, and value prop are required");
+    if (!aiIcpId && !aiOfferId && (!aiProduct || !aiAudience)) {
+      setAiError("Select an ICP or Offer from your Playbook, or fill in the Product and Audience fields");
       return;
     }
     setAiGenerating(true);
     setAiError(null);
     try {
       const result = await generateSequence({
-        product_name: aiProduct,
-        target_audience: aiAudience,
-        value_prop: aiValueProp,
+        ...(aiIcpId     ? { icp_id: aiIcpId }               : {}),
+        ...(aiOfferId   ? { offer_template_id: aiOfferId }   : {}),
+        ...(aiProduct   ? { product_name: aiProduct }        : {}),
+        ...(aiAudience  ? { target_audience: aiAudience }    : {}),
+        ...(aiValueProp ? { value_prop: aiValueProp }        : {}),
         tone: aiTone,
         num_emails: aiNumEmails,
         wait_days_between: aiWaitDays,
@@ -1463,79 +1475,174 @@ export default function CampaignWizardClient() {
       )}
 
       {/* AI Sequence Generator modal */}
-      {showAiGen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                </svg>
-                <h2 className="text-white font-semibold text-sm">AI Sequence Generator</h2>
-              </div>
-              <button onClick={() => setShowAiGen(false)} className="text-white/40 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              {aiError && <div className="px-3 py-2 bg-red-500/15 border border-red-500/30 rounded-lg text-red-400 text-xs">{aiError}</div>}
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Product / Service</label>
-                <input value={aiProduct} onChange={(e) => setAiProduct(e.target.value)} placeholder="Acme Corp — B2B sales automation software" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
-              </div>
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Target Audience</label>
-                <input value={aiAudience} onChange={(e) => setAiAudience(e.target.value)} placeholder="Real estate project managers at mid-size firms" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
-              </div>
-              <div>
-                <label className="block text-xs text-white/40 mb-1">Value Proposition</label>
-                <input value={aiValueProp} onChange={(e) => setAiValueProp(e.target.value)} placeholder="Cuts project planning time by 60% using AI" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-white/40 mb-1">Tone</label>
-                  <select value={aiTone} onChange={(e) => setAiTone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
-                    <option value="professional">Professional</option>
-                    <option value="friendly">Friendly</option>
-                    <option value="direct">Direct</option>
-                    <option value="casual">Casual</option>
-                  </select>
+      {showAiGen && (() => {
+        const selIcp   = aiIcps.find(x => x.id === aiIcpId);
+        const selOffer = aiOffers.find(x => x.id === aiOfferId);
+        const contextLines: string[] = [];
+        if (selIcp) {
+          if (selIcp.industry)   contextLines.push(`Industry: ${selIcp.industry}`);
+          if (selIcp.company_size) contextLines.push(`Company size: ${selIcp.company_size}`);
+          if (selIcp.geography)  contextLines.push(`Geography: ${selIcp.geography}`);
+          if (selIcp.roles)      contextLines.push(`Roles: ${selIcp.roles}`);
+          if (selIcp.pains?.length)  contextLines.push(`Pains: ${selIcp.pains.join("; ")}`);
+          if (selIcp.goals?.length)  contextLines.push(`Goals: ${selIcp.goals.join("; ")}`);
+          if (selIcp.triggers?.length) contextLines.push(`Triggers: ${selIcp.triggers.join("; ")}`);
+          if (selIcp.objections?.length) contextLines.push(`Objections: ${selIcp.objections.join("; ")}`);
+          if (selIcp.tone)       contextLines.push(`Tone guidance: ${selIcp.tone}`);
+        }
+        if (selOffer) {
+          if (selOffer.what)       contextLines.push(`Offer: ${selOffer.what}`);
+          if (selOffer.price_label) contextLines.push(`Price: ${selOffer.price_label}`);
+          if (selOffer.value_prop) contextLines.push(`Value prop: ${selOffer.value_prop}`);
+          if (selOffer.proof)      contextLines.push(`Proof: ${selOffer.proof}`);
+          if (selOffer.guarantee)  contextLines.push(`Guarantee: ${selOffer.guarantee}`);
+          if (selOffer.case_snippets?.length) contextLines.push(`Cases: ${selOffer.case_snippets.join(" | ")}`);
+          if (selOffer.cta_label)  contextLines.push(`CTA: ${selOffer.cta_label}`);
+        }
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <h2 className="text-white font-semibold text-sm">AI Sequence Generator</h2>
                 </div>
-                <div>
-                  <label className="block text-xs text-white/40 mb-1">Message Length</label>
-                  <select value={aiMessageLength} onChange={(e) => setAiMessageLength(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
-                    <option value="concise">Concise</option>
-                    <option value="standard">Standard</option>
-                    <option value="detailed">Detailed</option>
-                    <option value="comprehensive">Comprehensive</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-white/40 mb-1">Emails</label>
-                  <input type="number" value={aiNumEmails} onChange={(e) => setAiNumEmails(parseInt(e.target.value) || 3)} min={1} max={7} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40" />
-                </div>
-                <div>
-                  <label className="block text-xs text-white/40 mb-1">Wait Days</label>
-                  <input type="number" value={aiWaitDays} onChange={(e) => setAiWaitDays(parseInt(e.target.value) || 3)} min={1} max={14} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40" />
-                </div>
+                <button onClick={() => setShowAiGen(false)} className="text-white/40 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              <button
-                onClick={handleAiGenerate}
-                disabled={aiGenerating}
-                className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {aiGenerating ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    Generating sequence…
-                  </>
-                ) : "Generate Sequence"}
-              </button>
-              <p className="text-white/25 text-xs text-center">The AI will replace your current sequence steps.</p>
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {aiError && <div className="px-3 py-2 bg-red-500/15 border border-red-500/30 rounded-lg text-red-400 text-xs">{aiError}</div>}
+
+                {/* ICP + Offer pickers */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">
+                      ICP{" "}
+                      {aiIcps.length === 0 && (
+                        <a href="/playbook" target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300">+ Create one</a>
+                      )}
+                    </label>
+                    <select
+                      value={aiIcpId}
+                      onChange={e => setAiIcpId(e.target.value)}
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40"
+                    >
+                      <option value="">— Manual —</option>
+                      {aiIcps.map(icp => <option key={icp.id} value={icp.id}>{icp.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">
+                      Offer{" "}
+                      {aiOffers.length === 0 && (
+                        <a href="/playbook" target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300">+ Create one</a>
+                      )}
+                    </label>
+                    <select
+                      value={aiOfferId}
+                      onChange={e => setAiOfferId(e.target.value)}
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40"
+                    >
+                      <option value="">— Manual —</option>
+                      {aiOffers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* What the AI sees */}
+                {(selIcp || selOffer) && (
+                  <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 overflow-hidden">
+                    <button
+                      onClick={() => setAiShowContext(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+                    >
+                      <span className="text-violet-300 text-xs font-semibold">What the AI sees</span>
+                      <svg className={`w-3.5 h-3.5 text-violet-400 transition-transform ${aiShowContext ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {aiShowContext && (
+                      <div className="px-4 pb-4 space-y-1 border-t border-violet-500/15">
+                        {contextLines.map((line, i) => (
+                          <p key={i} className="text-violet-200/60 text-xs font-mono">{line}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual overrides — shown when no ICP/offer selected, or as extra context */}
+                {(!aiIcpId || !aiOfferId) && (
+                  <div className="space-y-3">
+                    <p className="text-white/30 text-[10px] uppercase tracking-wider font-semibold">{aiIcpId || aiOfferId ? "Additional context (optional)" : "Target details"}</p>
+                    {!aiIcpId && (
+                      <>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-1">Product / Service</label>
+                          <input value={aiProduct} onChange={(e) => setAiProduct(e.target.value)} placeholder="Acme Corp — B2B sales automation software" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-1">Target Audience</label>
+                          <input value={aiAudience} onChange={(e) => setAiAudience(e.target.value)} placeholder="Real estate project managers at mid-size firms" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
+                        </div>
+                      </>
+                    )}
+                    {!aiOfferId && (
+                      <div>
+                        <label className="block text-xs text-white/40 mb-1">Value Proposition</label>
+                        <input value={aiValueProp} onChange={(e) => setAiValueProp(e.target.value)} placeholder="Cuts project planning time by 60% using AI" className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/40" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">Tone</label>
+                    <select value={aiTone} onChange={(e) => setAiTone(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
+                      <option value="professional">Professional</option>
+                      <option value="friendly">Friendly</option>
+                      <option value="direct">Direct</option>
+                      <option value="casual">Casual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">Message Length</label>
+                    <select value={aiMessageLength} onChange={(e) => setAiMessageLength(e.target.value)} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40">
+                      <option value="concise">Concise</option>
+                      <option value="standard">Standard</option>
+                      <option value="detailed">Detailed</option>
+                      <option value="comprehensive">Comprehensive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">Emails</label>
+                    <input type="number" value={aiNumEmails} onChange={(e) => setAiNumEmails(parseInt(e.target.value) || 3)} min={1} max={7} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1">Wait Days</label>
+                    <input type="number" value={aiWaitDays} onChange={(e) => setAiWaitDays(parseInt(e.target.value) || 3)} min={1} max={14} className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/40" />
+                  </div>
+                </div>
+                <button
+                  onClick={handleAiGenerate}
+                  disabled={aiGenerating}
+                  className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {aiGenerating ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      Generating sequence…
+                    </>
+                  ) : "Generate Sequence"}
+                </button>
+                <p className="text-white/25 text-xs text-center">The AI will replace your current sequence steps.</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Send Test Email modal */}
       {testStepIdx !== null && (() => {

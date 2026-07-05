@@ -58,6 +58,7 @@ export const SECTIONS: NavSection[] = [
       { href: "/inboxes",    label: "Inboxes" },
       { href: "/leads",      label: "Leads Pool" },
       { href: "/crm",        label: "CRM" },
+      { href: "/playbook",   label: "ICPs & Offers", badge: "New" },
     ],
   },
   {
@@ -99,9 +100,10 @@ export const SECTIONS: NavSection[] = [
 
 // Icons for the Workspace sub-items — rendered as flat sidebar links at the bottom
 // so users can find Settings / Support / Help directly without a click-to-expand.
-const ICON_SETTINGS = "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z";
-const ICON_SUPPORT  = "M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z";
-const ICON_HELP     = "M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z";
+const ICON_SETTINGS   = "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z";
+const ICON_SUPPORT    = "M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z";
+const ICON_HELP       = "M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z";
+const ICON_AFFILIATES = "M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z";
 
 /** Workspace section is pinned to the bottom of the sidebar, separate from SECTIONS. */
 export const WORKSPACE_SECTION: NavSection = {
@@ -110,9 +112,10 @@ export const WORKSPACE_SECTION: NavSection = {
   icon: ICON_WORKSPACE,
   href: "/settings",
   tabs: [
-    { href: "/settings", label: "Settings", icon: ICON_SETTINGS },
-    { href: "/support",  label: "Support",  icon: ICON_SUPPORT  },
-    { href: "/help",     label: "Help",     icon: ICON_HELP     },
+    { href: "/settings",   label: "Settings",   icon: ICON_SETTINGS   },
+    { href: "/affiliates", label: "Affiliates", icon: ICON_AFFILIATES, badge: "New" },
+    { href: "/support",    label: "Support",    icon: ICON_SUPPORT    },
+    { href: "/help",       label: "Help",       icon: ICON_HELP       },
   ],
 };
 

@@ -648,6 +648,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // ── Affiliate commission (runs after offer_purchase and plan_subscription blocks above) ──
+    if ((type === "offer_purchase" || type === "plan_subscription") && workspaceId) {
+      void (async () => {
+        try {
+          const { data: ws } = await db
+            .from("workspaces")
+            .select("referred_by_affiliate_id")
+            .eq("id", workspaceId)
+            .single();
+
+          if (!ws?.referred_by_affiliate_id) return;
+
+          const affiliateId = ws.referred_by_affiliate_id;
+          const { data: affiliate } = await db
+            .from("affiliates")
+            .select("id, tier, paid_referrals")
+            .eq("id", affiliateId)
+            .single();
+          if (!affiliate) return;
+
+          // Look up referral record
+          const { data: referral } = await db
+            .from("referrals")
+            .select("id, status")
+            .eq("affiliate_id", affiliateId)
+            .eq("referred_workspace_id", workspaceId)
+            .maybeSingle();
+          if (!referral) return;
+
+          const TIER_RATES: Record<string, number> = { bronze: 0.20, silver: 0.25, gold: 0.30 };
+          const rate = TIER_RATES[affiliate.tier] ?? 0.20;
+          const amountKobo = (event.data as Record<string, unknown>).amount as number | undefined;
+          const amountNgn = Math.round((amountKobo ?? 0) / 100);
+          if (amountNgn <= 0) return;
+
+          const commissionNgn = Math.round(amountNgn * rate * 100) / 100;
+          const isFirstPayment = referral.status === "lead";
+          const kind = isFirstPayment ? "bounty" : "recurring";
+
+          // 45-day hold
+          const holdsUntil = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+
+          // Idempotent insert (unique on source_payment_ref + kind)
+          await db.from("commission_events").insert({
+            affiliate_id:       affiliateId,
+            referral_id:        referral.id,
+            kind,
+            amount_ngn:         kind === "bounty" ? 5000 : commissionNgn,
+            source_payment_ref: data.reference,
+            holds_until:        holdsUntil,
+            status:             "pending",
+          });
+
+          // Update referral status and affiliate paid_referrals count
+          if (isFirstPayment) {
+            await db.from("referrals").update({ status: "paid", first_paid_at: new Date().toISOString() }).eq("id", referral.id);
+
+            const newPaidCount = (affiliate.paid_referrals ?? 0) + 1;
+            let newTier = affiliate.tier;
+            if (newPaidCount >= 25) newTier = "gold";
+            else if (newPaidCount >= 10) newTier = "silver";
+
+            await db.from("affiliates").update({ paid_referrals: newPaidCount, tier: newTier }).eq("id", affiliateId);
+          }
+        } catch (e) {
+          console.error("[affiliates] commission error:", e);
+        }
+      })();
+    }
+
     // Domain purchase payment
     const domainRecordId = meta.domain_record_id as string | undefined;
     if (!domainRecordId || !workspaceId) {
