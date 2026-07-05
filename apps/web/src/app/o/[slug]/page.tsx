@@ -391,6 +391,9 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug, authe
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+  const isPwyw = offer.pricing_model === "pwyw";
+  const pwywMin = offer.pwyw_min_ngn ?? 0;
+  const [pwywPrice, setPwywPrice] = useState<number>(pwywMin || offer.price_ngn);
 
   const startedFired = useRef(false);
   const paymentAddedFired = useRef(false);
@@ -427,7 +430,8 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug, authe
   const bumpTotal = activeBumps
     .filter(b => bumpIds.includes(b.id))
     .reduce((sum, b) => sum + b.price_ngn, 0);
-  const total = offer.price_ngn + bumpTotal;
+  const basePrice = isPwyw ? pwywPrice : offer.price_ngn;
+  const total = basePrice + bumpTotal;
 
   function fireEvent(event: "started" | "payment_added") {
     fetch(`/api/offers/${slug}/checkout`, {
@@ -483,10 +487,19 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug, authe
     setFieldErrors({});
     setSubmitting(true);
 
+    if (isPwyw) {
+      if (pwywPrice < pwywMin) {
+        setErrorMsg(`Minimum price is ${formatOfferPrice(pwywMin)}.`);
+        setSubmitting(false);
+        return;
+      }
+    }
+
     const payload: Record<string, unknown> = {
       session_id: sessionId,
       buyer,
       bump_ids: bumpIds,
+      ...(isPwyw ? { pwyw_price_ngn: pwywPrice } : {}),
     };
     if (discountCode.trim()) payload.discount_code = discountCode.trim();
     // Last-touch funnel attribution, set by FunnelPageRenderer when the buyer
@@ -544,26 +557,57 @@ function PaymentCard({ offer, closed, soldOut, spotsLeft, sessionId, slug, authe
         <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Price block */}
           <div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ ...monoStyle, fontSize: 34, fontWeight: 800, color: "var(--app-text)" }}>
-                {formatOfferPrice(offer.price_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
-              </span>
-              {offer.compare_at_ngn && offer.compare_at_ngn > offer.price_ngn && !(closed && offer.on_expire === "full_price") && (
-                <>
-                  <span style={{ ...monoStyle, fontSize: 16, color: "var(--app-text-quiet)", textDecoration: "line-through" }}>
-                    {formatOfferPrice(offer.compare_at_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
+            {isPwyw ? (
+              <div>
+                <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)", marginBottom: 8 }}>
+                  Name your price{pwywMin > 0 ? ` (min ${formatOfferPrice(pwywMin)})` : ""}
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                  <span style={{ ...monoStyle, fontSize: 22, fontWeight: 700, color: "var(--app-text-muted)", paddingRight: 6 }}>₦</span>
+                  <input
+                    type="number"
+                    min={pwywMin || 0}
+                    step={500}
+                    value={pwywPrice}
+                    onChange={e => setPwywPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 30, fontWeight: 800, color: "var(--app-text)",
+                      background: "transparent", border: "none", outline: "none",
+                      width: "100%", padding: 0,
+                    }}
+                  />
+                </div>
+                {pwywMin > 0 && pwywPrice < pwywMin && (
+                  <p style={{ fontSize: 11.5, color: "var(--app-danger)", marginTop: 4 }}>
+                    Minimum is {formatOfferPrice(pwywMin)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ ...monoStyle, fontSize: 34, fontWeight: 800, color: "var(--app-text)" }}>
+                    {formatOfferPrice(offer.price_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
                   </span>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--app-success)", background: "var(--app-success-soft)", padding: "3px 9px", borderRadius: 999 }}>
-                    Save {formatOfferPrice(offer.compare_at_ngn - offer.price_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
-                  </span>
-                </>
-              )}
-            </div>
-            <p style={{ fontSize: 13, color: "var(--app-text-muted)", marginTop: 6 }}>{pricingSubtext(offer)}</p>
-            {!soldOut && spotsLeft !== null && spotsLeft <= 20 && spotsLeft > 0 && (
-              <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--app-warning)", marginTop: 6 }}>
-                Only {spotsLeft} left
-              </p>
+                  {offer.compare_at_ngn && offer.compare_at_ngn > offer.price_ngn && !(closed && offer.on_expire === "full_price") && (
+                    <>
+                      <span style={{ ...monoStyle, fontSize: 16, color: "var(--app-text-quiet)", textDecoration: "line-through" }}>
+                        {formatOfferPrice(offer.compare_at_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
+                      </span>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--app-success)", background: "var(--app-success-soft)", padding: "3px 9px", borderRadius: 999 }}>
+                        Save {formatOfferPrice(offer.compare_at_ngn - offer.price_ngn, offer.currency_mode === "usd_only" ? "USD" : "NGN")}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <p style={{ fontSize: 13, color: "var(--app-text-muted)", marginTop: 6 }}>{pricingSubtext(offer)}</p>
+                {!soldOut && spotsLeft !== null && spotsLeft <= 20 && spotsLeft > 0 && (
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--app-warning)", marginTop: 6 }}>
+                    Only {spotsLeft} left
+                  </p>
+                )}
+              </>
             )}
           </div>
 

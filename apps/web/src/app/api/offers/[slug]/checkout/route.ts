@@ -25,6 +25,7 @@ interface CheckoutBody {
   discount_code?: string;
   event?: "started" | "payment_added";
   funnel_id?: string;
+  pwyw_price_ngn?: number;
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -99,7 +100,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   // ── Pricing ──────────────────────────────────────────────────────────────────
   const bumpIds = Array.isArray(body.bump_ids) ? body.bump_ids : [];
   const activeBumps = offer.bumps.filter(b => b.is_active && bumpIds.includes(b.id));
-  const subtotal_ngn = offer.price_ngn + activeBumps.reduce((sum, b) => sum + b.price_ngn, 0);
+  const baseNgn = offer.pricing_model === "pwyw" && typeof body.pwyw_price_ngn === "number"
+    ? Math.max(body.pwyw_price_ngn, offer.pwyw_min_ngn ?? 0)
+    : offer.price_ngn;
+  const subtotal_ngn = baseNgn + activeBumps.reduce((sum, b) => sum + b.price_ngn, 0);
 
   let discount_ngn = 0;
   let discountCodeId: string | null = null;
@@ -129,7 +133,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   const total_ngn = Math.max(0, subtotal_ngn - discount_ngn);
 
   const line_items: OfferLineItem[] = [
-    { kind: "base", label: offer.name, amount_ngn: offer.price_ngn },
+    { kind: "base", label: offer.name, amount_ngn: baseNgn },
     ...activeBumps.map(b => ({ kind: "bump" as const, label: b.label, amount_ngn: b.price_ngn })),
   ];
 

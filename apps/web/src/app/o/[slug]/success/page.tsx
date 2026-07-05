@@ -264,6 +264,20 @@ function PaidConfirmation({ slug, purchase, offer }: { slug: string; purchase: O
     }).catch(() => setIsAuthed(false));
   }, []);
 
+  // Honor after_purchase redirect once the upsell/downsell flow is settled.
+  useEffect(() => {
+    if (stage !== "resolved") return;
+    const ap = offer.after_purchase;
+    if (ap === "dashboard") {
+      const t = setTimeout(() => { window.location.href = "/dashboard"; }, 2500);
+      return () => clearTimeout(t);
+    }
+    if (ap === "custom_url" && offer.custom_url) {
+      const t = setTimeout(() => { window.location.href = offer.custom_url!; }, 2500);
+      return () => clearTimeout(t);
+    }
+  }, [stage, offer.after_purchase, offer.custom_url]);
+
   // Fire the funnel's Purchase pixel event once the deal is final (after any
   // upsell/downsell has been resolved, so the value reflects the full total).
   // Deduped via sessionStorage so refreshing this page doesn't double-count.

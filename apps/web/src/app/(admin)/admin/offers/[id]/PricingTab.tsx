@@ -10,12 +10,12 @@ interface Props {
   onUpdate: (patch: Partial<Offer>) => void;
 }
 
-const MODEL_CARDS: { value: PricingModel; label: string; desc: string }[] = [
+const MODEL_CARDS: { value: PricingModel; label: string; desc: string; comingSoon?: boolean }[] = [
   { value: "one_time", label: "One-time", desc: "Single payment, lifetime access" },
   { value: "recurring", label: "Subscription", desc: "Recurring billing every interval" },
-  { value: "trial", label: "Trial → paid", desc: "Free or discounted trial, then bills" },
+  { value: "trial", label: "Trial → paid", desc: "Free or discounted trial, then bills", comingSoon: true },
   { value: "free", label: "Free", desc: "No payment required at checkout" },
-  { value: "payment_plan", label: "Payment plan", desc: "Split into fixed installments" },
+  { value: "payment_plan", label: "Payment plan", desc: "Split into fixed installments", comingSoon: true },
   { value: "pwyw", label: "Pay what you want", desc: "Buyer chooses the price, with a floor" },
 ];
 
@@ -38,21 +38,28 @@ export default function PricingTab({ offer, onUpdate }: Props) {
           return (
             <button
               key={m.value}
-              onClick={() => onUpdate({ pricing_model: m.value })}
+              onClick={() => !m.comingSoon && onUpdate({ pricing_model: m.value })}
+              disabled={m.comingSoon}
               style={{
                 padding: 16,
                 borderRadius: 10,
                 border: `1.5px solid ${active ? "var(--app-accent-line)" : "var(--app-border)"}`,
                 background: active ? "var(--app-accent-soft)" : "var(--app-surface)",
-                cursor: "pointer",
+                cursor: m.comingSoon ? "default" : "pointer",
                 textAlign: "left",
                 fontFamily: "inherit",
                 transition: "all 0.12s ease",
+                opacity: m.comingSoon ? 0.65 : 1,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 600, color: active ? "var(--app-accent)" : "var(--app-text)" }}>{m.label}</span>
-                {active && <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={1.8} color="var(--app-accent)" />}
+                {active && !m.comingSoon && <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={1.8} color="var(--app-accent)" />}
+                {m.comingSoon && (
+                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--app-text-quiet)", background: "var(--app-border)", padding: "2px 7px", borderRadius: 999 }}>
+                    Soon
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)" }}>{m.desc}</p>
             </button>

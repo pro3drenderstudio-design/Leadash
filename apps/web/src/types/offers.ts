@@ -207,6 +207,9 @@ export interface OfferPurchase {
   total_ngn: number;
   currency: "NGN" | "USD";
   paystack_reference: string | null;
+  authorization_code: string | null;
+  paystack_customer_code: string | null;
+  next_renewal_at: string | null;
   status: PurchaseStatus;
   granted_items: GrantedItem[];
   manual_approval_status: "pending" | "approved" | "rejected" | null;

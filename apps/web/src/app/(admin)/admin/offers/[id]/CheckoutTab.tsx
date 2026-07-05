@@ -98,12 +98,15 @@ export default function CheckoutTab({ offer, onUpdate }: Props) {
             {([
               { key: "show_value_stack", label: "Show value stack" },
               { key: "show_countdown", label: "Show countdown" },
-              { key: "show_testimonials", label: "Show testimonials" },
+              { key: "show_testimonials", label: "Show testimonials", comingSoon: true },
               { key: "show_guarantee", label: "Show guarantee badge" },
-            ] as { key: keyof Offer["checkout"]; label: string }[]).map(row => (
+            ] as { key: keyof Offer["checkout"]; label: string; comingSoon?: boolean }[]).map(row => (
               <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, color: "var(--app-text)" }}>{row.label}</span>
-                <Toggle on={Boolean(checkout[row.key])} onChange={v => updateCheckout({ [row.key]: v } as Partial<Offer["checkout"]>)} />
+                <span style={{ fontSize: 13, color: "var(--app-text)", opacity: row.comingSoon ? 0.55 : 1 }}>{row.label}</span>
+                {row.comingSoon
+                  ? <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--app-text-quiet)", background: "var(--app-border)", padding: "2px 7px", borderRadius: 999 }}>Soon</span>
+                  : <Toggle on={Boolean(checkout[row.key])} onChange={v => updateCheckout({ [row.key]: v } as Partial<Offer["checkout"]>)} />
+                }
               </div>
             ))}
           </div>

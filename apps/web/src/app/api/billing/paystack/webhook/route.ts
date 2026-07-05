@@ -515,18 +515,32 @@ export async function POST(req: NextRequest) {
       if (purchaseId) {
         const { data: purchase } = await db.from("offer_purchases").select("*").eq("id", purchaseId).maybeSingle();
         if (purchase && purchase.status === "pending") {
-          const { paid } = await verifyPaystackPayment(data.reference);
+          const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
           if (paid) {
             const { data: offer } = await db.from("offers").select("*").eq("id", purchase.offer_id).maybeSingle();
             if (offer) {
               const { fulfillAllGrants, fulfillGrant } = await import("@/lib/offers/granters");
               const { sendOfferSaleAdminNotification, sendOfferPurchaseReceiptEmail } = await import("@/lib/email/notifications");
 
+              // Compute next_renewal_at for recurring offers.
+              const INTERVAL_DAYS: Record<string, number> = { monthly: 30, quarterly: 91, annual: 365 };
+              const isRecurring = offer.pricing_model === "recurring";
+              const renewalDays = isRecurring ? (INTERVAL_DAYS[offer.billing_interval ?? "monthly"] ?? 30) : null;
+              const nextRenewalAt = renewalDays ? new Date(Date.now() + renewalDays * 24 * 60 * 60 * 1000).toISOString() : null;
+
               type OfferGrantLite = { id: string; type: string };
               const baseGrants = (offer.grants ?? []) as OfferGrantLite[];
 
+              // Respect manual_approval and auto_grant flags.
+              const needsManualApproval = offer.manual_approval || !offer.auto_grant;
+
               let grantedItems: Array<{ grant_id: string; type: string; status: string; detail?: string }>;
-              if (purchase.workspace_id && purchase.user_id) {
+              if (needsManualApproval) {
+                grantedItems = baseGrants.map((g) => ({
+                  grant_id: g.id, type: g.type, status: "pending_manual" as const,
+                  detail: "Awaiting admin approval",
+                }));
+              } else if (purchase.workspace_id && purchase.user_id) {
                 grantedItems = await fulfillAllGrants(db, offer.grants, {
                   workspaceId: purchase.workspace_id,
                   userId:      purchase.user_id,
@@ -534,8 +548,7 @@ export async function POST(req: NextRequest) {
                   reference:   data.reference,
                 });
 
-                // Fulfill any order bumps the buyer added — line_items has no
-                // stable bump id, so match by label (admin-authored, unique per offer).
+                // Fulfill any order bumps the buyer added.
                 const lineItems = (purchase.line_items ?? []) as { kind: string; label: string; amount_ngn: number }[];
                 type OfferBumpLite = { id: string; label: string; is_active: boolean; grant: OfferGrantLite };
                 const bumps = (offer.bumps ?? []) as OfferBumpLite[];
@@ -559,13 +572,17 @@ export async function POST(req: NextRequest) {
               }
 
               await db.from("offer_purchases").update({
-                status:             "paid",
-                granted_at:         new Date().toISOString(),
-                granted_items:      grantedItems,
-                paystack_reference: data.reference,
+                status:                 "paid",
+                granted_at:             new Date().toISOString(),
+                granted_items:          grantedItems,
+                paystack_reference:     data.reference,
+                authorization_code:     authorizationCode ?? null,
+                paystack_customer_code: customerCode ?? null,
+                next_renewal_at:        nextRenewalAt,
+                manual_approval_status: needsManualApproval ? "pending" : null,
               }).eq("id", purchaseId);
 
-              // Increment discount code redemption count (fetch-then-write — low concurrency path).
+              // Increment discount code redemption count.
               if (purchase.discount_code_id) {
                 const { data: dc } = await db
                   .from("offer_discount_codes")
@@ -605,10 +622,10 @@ export async function POST(req: NextRequest) {
                   workspace_id: purchase.workspace_id,
                   user_id:      purchase.user_id,
                   payload: {
-                    offer_id:     offer.id,
-                    offer_name:   offer.name,
-                    line_items:   purchase.line_items,
-                    total_ngn:    purchase.total_ngn,
+                    offer_id:      offer.id,
+                    offer_name:    offer.name,
+                    line_items:    purchase.line_items,
+                    total_ngn:     purchase.total_ngn,
                     send_whatsapp: offer.send_whatsapp,
                   },
                 }).catch(e => console.error("[paystack] offer automation enqueue failed:", e));

@@ -20,6 +20,7 @@
     { "path": "/api/cron/billing-grace",     "schedule": "0 3 * * *"    },
     { "path": "/api/cron/inbox-billing",     "schedule": "0 2 * * *"    },
     { "path": "/api/cron/domains",           "schedule": "0 5 * * *"    },
-    { "path": "/api/cron/cleanup",           "schedule": "0 0 * * 0"    }
+    { "path": "/api/cron/cleanup",           "schedule": "0 0 * * 0"    },
+    { "path": "/api/cron/offer-renewals",   "schedule": "0 6 * * *"    }
   ]
 }

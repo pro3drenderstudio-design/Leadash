@@ -183,13 +183,16 @@ export default function PromotionTab({ offerId, offer, onUpdate, showToast }: Pr
       </div>
 
       {/* Abandoned checkout recovery */}
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 20, opacity: 0.65 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Abandoned checkout recovery</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Abandoned checkout recovery</p>
+              <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--app-text-quiet)", background: "var(--app-border)", padding: "2px 7px", borderRadius: 999 }}>Soon</span>
+            </div>
             <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)", marginTop: 2 }}>Follow up with buyers who started but didn&apos;t complete checkout.</p>
           </div>
-          <Toggle on={offer.recover_abandoned} onChange={v => onUpdate({ recover_abandoned: v })} />
+          <Toggle on={false} onChange={() => {}} />
         </div>
       </div>
     </div>
