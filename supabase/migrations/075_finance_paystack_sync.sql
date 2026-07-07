@@ -53,7 +53,10 @@ BEGIN
   -- Only mirror completed payments.
   IF NEW.status = 'paid' THEN
     mapped_type := finance_map_billing_type(NEW.type);
-    paid_date   := COALESCE(NEW.paid_at::date, NEW.created_at::date, CURRENT_DATE);
+    -- Some environments don't have billing_invoices.paid_at (schema drifted vs
+    -- migration 032). created_at is always present and set at insert time on
+    -- paid rows, so it's a safe fallback for the mirrored ledger date.
+    paid_date   := COALESCE(NEW.created_at::date, CURRENT_DATE);
 
     -- Prefer the workspace's name; fall back to the description; then the type.
     SELECT name INTO ws_name FROM workspaces WHERE id = NEW.workspace_id;
@@ -90,7 +93,7 @@ $$;
 
 DROP TRIGGER IF EXISTS billing_invoices_finance_sync ON billing_invoices;
 CREATE TRIGGER billing_invoices_finance_sync
-  AFTER INSERT OR UPDATE OF status, amount_kobo, paid_at, description, workspace_id, type
+  AFTER INSERT OR UPDATE OF status, amount_kobo, description, workspace_id, type
   ON billing_invoices
   FOR EACH ROW EXECUTE FUNCTION finance_sync_billing_row();
 
@@ -150,7 +153,7 @@ SELECT
   COALESCE(w.name, NULLIF(bi.description, ''), 'Paystack ' || bi.type),
   finance_map_billing_type(bi.type),
   GREATEST(0, ROUND(COALESCE(bi.amount_kobo, 0) / 100.0)),
-  COALESCE(bi.paid_at::date, bi.created_at::date, CURRENT_DATE),
+  COALESCE(bi.created_at::date, CURRENT_DATE),
   false, false, 'billing_invoices', bi.id::text
 FROM billing_invoices bi
 LEFT JOIN workspaces w ON w.id = bi.workspace_id
