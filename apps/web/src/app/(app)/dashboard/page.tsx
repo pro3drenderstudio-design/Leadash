@@ -209,10 +209,10 @@ export default async function DashboardPage() {
   ];
 
   const QUICK_ACTIONS = [
-    { label: "New sequence",   href: "/campaigns/new",  icon: PlusSignIcon,          primary: true  },
-    { label: "Add inbox",      href: "/inboxes/new",    icon: Inbox01Icon,           primary: false },
-    { label: "Lead campaign",  href: "/lead-campaigns", icon: UserSearch01Icon,      primary: false },
-    { label: "CRM inbox",      href: "/crm",            icon: CustomerService01Icon, primary: false },
+    { label: "New sequence", href: "/campaigns/new", icon: PlusSignIcon,          primary: true  },
+    { label: "Add inbox",    href: "/inboxes/new",   icon: Inbox01Icon,           primary: false },
+    { label: "Find leads",   href: "/discover",      icon: UserSearch01Icon,      primary: false },
+    { label: "CRM inbox",    href: "/crm",           icon: CustomerService01Icon, primary: false },
   ];
 
   return (
@@ -410,14 +410,12 @@ export default async function DashboardPage() {
       </div>
 
       <style>{`
-        @media (max-width: 1100px) {
-          .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-          .dash-split { grid-template-columns: minmax(0, 1fr); }
-        }
-        @media (max-width: 720px) {
+        @media (max-width: 1024px) {
           .dash-shell { padding: 20px 16px; gap: 20px; }
           .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .dash-stats > *:last-child { grid-column: span 2; }
           .dash-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+          .dash-split { grid-template-columns: minmax(0, 1fr); }
         }
         @media (max-width: 420px) {
           .dash-stats > *:last-child { grid-column: auto; }
