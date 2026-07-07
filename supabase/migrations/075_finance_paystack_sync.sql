@@ -17,10 +17,17 @@ ALTER TABLE finance_income
   ADD COLUMN IF NOT EXISTS source_type text,
   ADD COLUMN IF NOT EXISTS source_id   text;
 
--- Partial unique index — only when both are set (manual rows have both NULL).
-CREATE UNIQUE INDEX IF NOT EXISTS finance_income_source_uniq
-  ON finance_income (source_type, source_id)
-  WHERE source_type IS NOT NULL AND source_id IS NOT NULL;
+-- Straight UNIQUE constraint on (source_type, source_id). Manual rows have
+-- both NULL and multiple (NULL, NULL) rows are allowed by Postgres (NULLs
+-- are distinct in unique constraints), so this doesn't block manual entries.
+-- A full constraint (not a partial index) is required because Postgres
+-- inference for `ON CONFLICT (source_type, source_id)` in the backfill and
+-- triggers can't match a WHERE-qualified index.
+DROP INDEX IF EXISTS finance_income_source_uniq;
+ALTER TABLE finance_income
+  DROP CONSTRAINT IF EXISTS finance_income_source_uniq;
+ALTER TABLE finance_income
+  ADD CONSTRAINT finance_income_source_uniq UNIQUE (source_type, source_id);
 
 CREATE INDEX IF NOT EXISTS finance_income_source_type_idx
   ON finance_income (source_type)
