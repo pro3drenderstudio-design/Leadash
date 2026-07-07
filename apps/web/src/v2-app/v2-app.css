@@ -51,6 +51,18 @@
   --app-info:           #60A5FA;
   --app-info-soft:      rgba(96, 165, 250, 0.10);
 
+  /* Finance manager (money-in green / money-out red). Explicit tokens so
+     charts + KPI cards can theme independently of success/danger which are
+     tied to badges. */
+  --app-in:             #34D399;
+  --app-in-soft:        rgba(52, 211, 153, 0.14);
+  --app-out:            #F87171;
+  --app-out-soft:       rgba(248, 113, 113, 0.14);
+  --app-violet:         #A78BFA;
+  --app-violet-soft:    rgba(167, 139, 250, 0.14);
+  --app-cyan:           #22D3EE;
+  --app-cyan-soft:      rgba(34, 211, 238, 0.14);
+
   /* ── Type scale (px) ────────────────────────────────────────────────────
      App needs smaller, denser type than the landing. No display-XL. */
   --app-h1:        28px;     /* page titles */
