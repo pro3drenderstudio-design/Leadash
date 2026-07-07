@@ -16,7 +16,7 @@
  */
 
 import { getWorkspaceContext } from "@/lib/workspace/context";
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import DashboardChart, { type DailyPoint } from "./DashboardChart";
@@ -184,21 +184,8 @@ export default async function DashboardPage() {
   const ctx = await getWorkspaceContext();
   if (!ctx) redirect("/login");
 
-  const [stats, sb] = await Promise.all([getStats(ctx.workspaceId), createClient()]);
-  const { data: { user } } = await sb.auth.getUser();
+  const stats     = await getStats(ctx.workspaceId);
   const workspace = ctx.workspace as { name: string; sends_this_month: number; max_monthly_sends: number; plan_id: string };
-
-  const meta       = (user?.user_metadata ?? {}) as { first_name?: string; name?: string; full_name?: string };
-  const firstName  = meta.first_name
-    ?? (meta.name  ?? meta.full_name ?? "")?.split(" ")[0]
-    ?? user?.email?.split("@")[0]
-    ?? "there";
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
-  })();
 
   const STAT_CARDS = [
     { label: "Active sequences", value: stats.activeCampaigns.toString(),         icon: Mail01Icon,        href: "/campaigns" },
@@ -209,7 +196,7 @@ export default async function DashboardPage() {
   ];
 
   const QUICK_ACTIONS = [
-    { label: "New sequence", href: "/campaigns/new", icon: PlusSignIcon,          primary: true  },
+    { label: "New sequence", href: "/campaigns/new", icon: PlusSignIcon,          primary: false },
     { label: "Add inbox",    href: "/inboxes/new",   icon: Inbox01Icon,           primary: false },
     { label: "Find leads",   href: "/discover",      icon: UserSearch01Icon,      primary: false },
     { label: "CRM inbox",    href: "/crm",           icon: CustomerService01Icon, primary: false },
@@ -219,57 +206,46 @@ export default async function DashboardPage() {
     <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
       <div className="dash-shell" style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
 
-        {/* Greeting */}
-        <header>
-          <h1 className="app-h1" style={{ letterSpacing: "-0.02em" }}>
-            {greeting}, {firstName}
-          </h1>
-          <p style={{ color: "var(--app-text-muted)", fontSize: 14, marginTop: 6 }}>
-            Here&rsquo;s how <span style={{ color: "var(--app-text)", fontWeight: 500 }}>{workspace.name}</span> is performing today.
-          </p>
+        {/* Greeting + quick actions */}
+        <header className="dash-header">
+          <div>
+            <h1 className="app-h1">Dashboard</h1>
+            <p style={{ color: "var(--app-text-muted)", fontSize: 13, marginTop: 4 }}>
+              Welcome back to <span style={{ color: "var(--app-text)" }}>{workspace.name}</span>
+            </p>
+          </div>
+          <div className="dash-quick">
+            {QUICK_ACTIONS.map(a => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className={`app-btn ${a.primary ? "app-btn-primary" : "app-btn-secondary"} app-btn-sm dash-quick-btn`}
+              >
+                <HugeiconsIcon icon={a.icon} size={13} strokeWidth={1.5} />
+                <span>{a.label}</span>
+              </Link>
+            ))}
+          </div>
         </header>
 
-        {/* Quick actions */}
-        <div className="dash-quick" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
-          {QUICK_ACTIONS.map(a => (
-            <Link
-              key={a.href}
-              href={a.href}
-              className={`app-btn ${a.primary ? "app-btn-primary" : "app-btn-secondary"}`}
-              style={{ justifyContent: "center", padding: "12px 14px", fontSize: 14 }}
-            >
-              <HugeiconsIcon icon={a.icon} size={15} strokeWidth={1.8} />
-              <span>{a.label}</span>
-            </Link>
-          ))}
-        </div>
-
         {/* Stat strip */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-            gap: 12,
-          }}
-          className="dash-stats"
-        >
+        <div className="dash-stats">
           {STAT_CARDS.map(c => (
             <Link
               key={c.label}
               href={c.href}
-              className="app-card app-card-interactive"
+              className="app-card app-card-tight app-card-interactive dash-stat"
               style={{
                 textDecoration: "none",
                 display: "flex",
                 flexDirection: "column",
-                gap: 18,
-                padding: 20,
-                minHeight: 132,
+                gap: 10,
+                minHeight: 96,
               }}
             >
               <div
                 style={{
-                  width: 34, height: 34, borderRadius: 8,
+                  width: 28, height: 28, borderRadius: 6,
                   background: "var(--app-surface)",
                   border: "1px solid var(--app-border)",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -277,13 +253,13 @@ export default async function DashboardPage() {
                   flexShrink: 0,
                 }}
               >
-                <HugeiconsIcon icon={c.icon} size={16} strokeWidth={1.5} />
+                <HugeiconsIcon icon={c.icon} size={15} strokeWidth={1.5} />
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                <p style={{ fontSize: 11, color: "var(--app-text-quiet)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>
+                <p className="dash-stat-label" style={{ fontSize: 11, color: "var(--app-text-quiet)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
                   {c.label}
                 </p>
-                <p style={{ fontSize: 32, color: "var(--app-text)", fontWeight: 500, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                <p style={{ fontSize: 24, color: "var(--app-text)", fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
                   {c.value}
                 </p>
               </div>
@@ -292,7 +268,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Chart + recent replies */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)", gap: 16 }} className="dash-split">
+        <div className="dash-split">
 
           {/* Chart */}
           <div className="app-card" style={{ padding: 20 }}>
@@ -410,14 +386,46 @@ export default async function DashboardPage() {
       </div>
 
       <style>{`
+        /* Desktop defaults */
+        .dash-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .dash-quick {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .dash-stats {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .dash-split {
+          display: grid;
+          grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+          gap: 16px;
+        }
+
+        /* Tablet + phone */
         @media (max-width: 1024px) {
-          .dash-shell { padding: 20px 16px; gap: 20px; }
+          .dash-shell { padding: 20px 16px !important; gap: 18px !important; }
+          .dash-header { flex-direction: column; align-items: stretch; gap: 14px; }
+          .dash-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .dash-quick-btn { justify-content: center; }
           .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .dash-stats > *:last-child { grid-column: span 2; }
-          .dash-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+          .dash-stat { min-height: 108px; }
+          .dash-stat-label { white-space: normal; word-break: normal; }
           .dash-split { grid-template-columns: minmax(0, 1fr); }
         }
+
+        /* Small phones */
         @media (max-width: 420px) {
+          .dash-stats { grid-template-columns: minmax(0, 1fr); }
           .dash-stats > *:last-child { grid-column: auto; }
         }
         .dash-reply-row:hover { background: var(--app-surface); }
