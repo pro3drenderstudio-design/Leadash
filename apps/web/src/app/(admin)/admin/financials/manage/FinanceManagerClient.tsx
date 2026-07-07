@@ -1081,7 +1081,7 @@ function IncomeTab({ income, showTest, onToggleShowTest, onToggleTest, onEdit, o
       <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>Payments &amp; income</h2>
-          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", margin: "3px 0 0" }}>Manual entries. Sync from Paystack ships later.</p>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", margin: "3px 0 0" }}>Auto-synced from Paystack (plans, credits, academy, offers) plus manual rows for anything outside the platform.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--app-text-muted)" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
@@ -1113,9 +1113,25 @@ function IncomeTab({ income, showTest, onToggleShowTest, onToggleTest, onEdit, o
           {income.map(i => (
             <tr key={i.id} style={{ borderTop: "1px solid var(--app-border)", opacity: i.is_test ? 0.55 : 1 }}>
               <td style={FIN_TD}>
-                <button onClick={() => onEdit(i)} style={{ background: "transparent", border: "none", color: "var(--app-text)", cursor: "pointer", padding: 0, fontSize: 13 }}>
-                  {i.source_label}
-                </button>
+                {i.is_manual ? (
+                  <button onClick={() => onEdit(i)} style={{ background: "transparent", border: "none", color: "var(--app-text)", cursor: "pointer", padding: 0, fontSize: 13 }}>
+                    {i.source_label}
+                  </button>
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "var(--app-text)", fontSize: 13 }}>{i.source_label}</span>
+                    <span title="Synced from Paystack — editable via the source, not here" style={{
+                      ...FIN_CHIP,
+                      background: "var(--app-info-soft)", color: "var(--app-info)",
+                      padding: "1px 6px", fontSize: 9,
+                    }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 3 }}>
+                        <path d="M23 4v6h-6" /><path d="M20.49 15A9 9 0 1 1 5.64 5.64L23 10" />
+                      </svg>
+                      Synced
+                    </span>
+                  </span>
+                )}
               </td>
               <td style={FIN_TD}>
                 <span style={{ ...FIN_CHIP, background: INCOME_TYPES[i.type].bg, color: INCOME_TYPES[i.type].fg }}>

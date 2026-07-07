@@ -38,12 +38,22 @@ export async function POST(req: NextRequest) {
 }
 
 // PATCH /api/admin/finance/income
+// Synced rows (is_manual=false) are read-only except for the is_test toggle
+// which has its own endpoint. Editing amount / source / type on a synced row
+// would drift from Paystack truth on the next sync anyway.
 export async function PATCH(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return forbidden();
   const body = await req.json();
   const id = String(body.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const { data: existing, error: fetchErr } = await ctx.db.from("finance_income")
+    .select("is_manual").eq("id", id).single();
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 404 });
+  if (!existing.is_manual) {
+    return NextResponse.json({ error: "Synced from Paystack — flag as test to exclude." }, { status: 400 });
+  }
 
   const patch: Record<string, string | number | boolean> = {};
   if (body.source_label !== undefined) patch.source_label = String(body.source_label).trim();
@@ -65,11 +75,20 @@ export async function PATCH(req: NextRequest) {
 }
 
 // DELETE /api/admin/finance/income?id=…
+// Synced rows can't be deleted — they'd be re-synced from the source table
+// on the next Paystack event anyway. Users must flag as test instead.
 export async function DELETE(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const { data: existing, error: fetchErr } = await ctx.db.from("finance_income")
+    .select("is_manual").eq("id", id).single();
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 404 });
+  if (!existing.is_manual) {
+    return NextResponse.json({ error: "Synced from Paystack — flag as test to exclude instead of deleting." }, { status: 400 });
+  }
 
   const { error } = await ctx.db.from("finance_income").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
