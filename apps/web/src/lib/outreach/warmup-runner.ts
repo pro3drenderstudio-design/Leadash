@@ -148,6 +148,9 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
         const msg = String(err);
         if (AUTH_ERROR_PATTERN.test(msg)) {
           await db.from("outreach_inboxes").update({ status: "error", last_error: msg.slice(0, 500) }).eq("id", sender.id);
+        } else {
+          // Log transient/config errors without disabling the inbox so they surface in the UI
+          await db.from("outreach_inboxes").update({ last_error: `warmup: ${msg.slice(0, 480)}` }).eq("id", sender.id);
         }
       }
     }

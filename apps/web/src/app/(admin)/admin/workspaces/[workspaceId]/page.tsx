@@ -37,6 +37,23 @@ interface Domain {
   inboxes: DomainInbox[];
 }
 
+interface OutreachInbox {
+  id: string; email_address: string; label: string | null; provider: string | null;
+  status: string; last_error: string | null; smtp_host: string | null;
+  warmup_enabled: boolean | null; warmup_current_daily: number | null; warmup_target_daily: number | null;
+  daily_send_limit: number | null; created_at: string;
+}
+interface OutreachCampaign {
+  id: string; name: string; status: string; daily_cap: number | null; created_at: string;
+  total: number; active: number; completed: number; failed: number;
+}
+interface OutreachData {
+  inboxes: OutreachInbox[];
+  campaigns: OutreachCampaign[];
+  warmup_summary: { sends_7d: number; replies_7d: number; rescued_7d: number };
+  enrollment_summary: { total: number; active: number; completed: number; failed: number };
+}
+
 const PLANS = ["free", "starter", "growth", "scale"] as const;
 const PLAN_STATUSES = ["active", "trialing", "past_due", "canceled", "paused"] as const;
 
@@ -115,6 +132,10 @@ export default function WorkspaceDetailPage() {
   const [domainSettingsSaving, setDomainSettingsSaving] = useState(false);
   const [domainSettingsMsg, setDomainSettingsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Outreach summary
+  const [outreach, setOutreach]             = useState<OutreachData | null>(null);
+  const [outreachLoading, setOutreachLoading] = useState(true);
+
   // Per-inbox editing
   const [editingInboxId, setEditingInboxId]   = useState<string | null>(null);
   const [editingDomainId, setEditingDomainId] = useState<string | null>(null);
@@ -149,7 +170,15 @@ export default function WorkspaceDetailPage() {
       .then(d => setDomains(d.domains ?? []));
   }, [workspaceId]);
 
-  useEffect(() => { fetchWorkspace(); fetchDomains(); }, [fetchWorkspace, fetchDomains]);
+  const fetchOutreach = useCallback(() => {
+    setOutreachLoading(true);
+    fetch(`/api/admin/workspaces/${workspaceId}/outreach`)
+      .then(r => r.json())
+      .then(d => { setOutreach(d); setOutreachLoading(false); })
+      .catch(() => setOutreachLoading(false));
+  }, [workspaceId]);
+
+  useEffect(() => { fetchWorkspace(); fetchDomains(); fetchOutreach(); }, [fetchWorkspace, fetchDomains, fetchOutreach]);
 
   async function savePlan(e: React.FormEvent) {
     e.preventDefault();
@@ -1060,6 +1089,142 @@ export default function WorkspaceDetailPage() {
           )}
         </div>
 
+      </div>
+
+      {/* ── Outreach summary ─────────────────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-white/70">Outreach</h2>
+          <p className="text-xs text-slate-400 dark:text-white/30 mt-0.5">User inboxes, sequences, warmup and enrollment stats for this workspace.</p>
+        </div>
+
+        {outreachLoading ? (
+          <div className="p-5 space-y-3 animate-pulse">
+            <div className="grid grid-cols-4 gap-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-slate-100 dark:bg-white/5 rounded-lg" />)}</div>
+            <div className="h-40 bg-slate-100 dark:bg-white/5 rounded-lg" />
+          </div>
+        ) : (
+          <div className="p-5 space-y-5">
+            {/* Summary tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Inboxes",           value: (outreach?.inboxes ?? []).length },
+                { label: "Error Inboxes",     value: (outreach?.inboxes ?? []).filter(i => i.last_error).length, alert: true },
+                { label: "Campaigns",         value: (outreach?.campaigns ?? []).length },
+                { label: "Active Enrollments",value: outreach?.enrollment_summary.active ?? 0, positive: true },
+              ].map(({ label, value, alert, positive }) => (
+                <div key={label} className="bg-slate-50 dark:bg-white/5 rounded-lg px-4 py-3">
+                  <p className="text-[10px] text-slate-400 dark:text-white/30 uppercase tracking-wide font-semibold">{label}</p>
+                  <p className={`text-lg font-bold mt-0.5 tabular-nums ${alert && value > 0 ? "text-red-500" : positive && value > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-white/80"}`}>
+                    {value.toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Warmup + Enrollment stats row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-50 dark:bg-white/5 rounded-lg px-4 py-3">
+                <p className="text-xs font-semibold text-slate-500 dark:text-white/40 mb-2">Warmup (7 days)</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-slate-700 dark:text-white/70 tabular-nums"><span className="font-bold">{outreach?.warmup_summary.sends_7d ?? 0}</span> <span className="text-xs text-slate-400 dark:text-white/30">sends</span></span>
+                  <span className="text-slate-700 dark:text-white/70 tabular-nums"><span className="font-bold">{outreach?.warmup_summary.replies_7d ?? 0}</span> <span className="text-xs text-slate-400 dark:text-white/30">replies</span></span>
+                  <span className="text-slate-700 dark:text-white/70 tabular-nums"><span className="font-bold">{outreach?.warmup_summary.rescued_7d ?? 0}</span> <span className="text-xs text-slate-400 dark:text-white/30">rescued</span></span>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-white/5 rounded-lg px-4 py-3">
+                <p className="text-xs font-semibold text-slate-500 dark:text-white/40 mb-2">Enrollments</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-slate-700 dark:text-white/70 tabular-nums"><span className="font-bold">{outreach?.enrollment_summary.total ?? 0}</span> <span className="text-xs text-slate-400 dark:text-white/30">total</span></span>
+                  <span className="text-emerald-600 dark:text-emerald-400 tabular-nums"><span className="font-bold">{outreach?.enrollment_summary.active ?? 0}</span> <span className="text-xs opacity-70">active</span></span>
+                  <span className="text-slate-500 dark:text-white/40 tabular-nums"><span className="font-bold">{outreach?.enrollment_summary.completed ?? 0}</span> <span className="text-xs opacity-70">done</span></span>
+                  {(outreach?.enrollment_summary.failed ?? 0) > 0 && (
+                    <span className="text-red-500 tabular-nums"><span className="font-bold">{outreach?.enrollment_summary.failed}</span> <span className="text-xs opacity-70">failed</span></span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Inboxes table */}
+            {(outreach?.inboxes ?? []).length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2">Inboxes</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-white/10">
+                        {["Email", "Provider", "Status", "Warmup", "Error"].map(h => (
+                          <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-slate-400 dark:text-white/25 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {(outreach?.inboxes ?? []).map(inbox => (
+                        <tr key={inbox.id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-colors">
+                          <td className="px-3 py-2.5 font-mono text-xs text-slate-700 dark:text-white/70 max-w-[180px] truncate">{inbox.email_address}</td>
+                          <td className="px-3 py-2.5 text-xs text-slate-400 dark:text-white/30">{inbox.provider ?? "—"}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${inbox.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40"}`}>
+                              {inbox.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-xs">
+                            {inbox.warmup_enabled
+                              ? <span className="text-blue-600 dark:text-blue-400">{inbox.warmup_current_daily ?? 0}/{inbox.warmup_target_daily ?? "—"}</span>
+                              : <span className="text-slate-300 dark:text-white/20">Off</span>}
+                          </td>
+                          <td className="px-3 py-2.5 max-w-[200px]">
+                            {inbox.last_error
+                              ? <p className="text-[10px] text-red-500 truncate">{inbox.last_error}</p>
+                              : <span className="text-slate-300 dark:text-white/20 text-[10px]">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Campaigns table */}
+            {(outreach?.campaigns ?? []).length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2">Sequences</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-white/10">
+                        {["Name", "Status", "Enrollments", "Active", "Completed", "Cap"].map(h => (
+                          <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-slate-400 dark:text-white/25 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {(outreach?.campaigns ?? []).map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-colors">
+                          <td className="px-3 py-2.5 font-medium text-slate-800 dark:text-white/80 max-w-[160px] truncate">{c.name}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${c.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : c.status === "paused" ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/40"}`}>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 tabular-nums text-slate-700 dark:text-white/70 font-semibold">{c.total.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 tabular-nums text-emerald-600 dark:text-emerald-400">{c.active.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-white/30">{c.completed.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-white/30">{c.daily_cap ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {(outreach?.inboxes ?? []).length === 0 && (outreach?.campaigns ?? []).length === 0 && (
+              <p className="text-sm text-center text-slate-400 dark:text-white/25 py-4">No outreach inboxes or campaigns in this workspace.</p>
+            )}
+          </div>
+        )}
       </div>
 
     </div>

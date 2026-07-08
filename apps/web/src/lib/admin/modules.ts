@@ -20,6 +20,7 @@ export type AdminModuleKey =
   | "funnel"
   | "offers"
   | "support"
+  | "outreach"
   | "infrastructure"
   | "team_config";
 
@@ -84,6 +85,12 @@ export const ADMIN_MODULES: AdminModule[] = [
     sidebarGroups: ["Support"],
   },
   {
+    key:           "outreach",
+    label:         "Outreach",
+    description:   "Cross-workspace view of user inboxes, campaigns, warmup pool, and failed sends.",
+    sidebarGroups: ["Outreach"],
+  },
+  {
     key:           "infrastructure",
     label:         "Infrastructure",
     description:   "Sending domains, dedicated IPs, SMTP nodes, system health.",
@@ -118,14 +125,14 @@ export const BUILTIN_ROLE_MODULES: Record<Exclude<AdminRole, "custom">, AdminMod
   super_admin: [...ALL_MODULE_KEYS],
   // Support staff: deals with tickets, can look up users + workspaces, but no
   // billing/financials access and no infrastructure.
-  support:     ["overview", "users_billing", "support"],
+  support:     ["overview", "users_billing", "support", "outreach"],
   // Billing/finance: financial side of the platform but no support tickets, no
   // infrastructure, no admin team management.
   billing:     ["overview", "users_billing", "leadpay"],
   // Read-only: visibility into everything except the team panel. (View-only at
   // the action level is still a future enhancement — for now this controls which
   // modules they can navigate into.)
-  readonly:    ["overview", "users_billing", "leadgen", "leadpay", "academy", "funnel", "offers", "support", "infrastructure"],
+  readonly:    ["overview", "users_billing", "leadgen", "leadpay", "academy", "funnel", "offers", "support", "outreach", "infrastructure"],
 };
 
 export const ROLE_LABELS: Record<AdminRole, string> = {

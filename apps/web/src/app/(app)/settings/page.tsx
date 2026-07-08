@@ -436,13 +436,17 @@ const INVOICE_TYPE_LABELS: Record<string, string> = {
   credit_purchase:   "Lead Credits",
   domain_purchase:   "Domain Purchase",
   inbox_renewal:     "Inbox Renewal",
+  inbox_billing:     "Inbox Billing",
 };
 const INVOICE_TYPE_ICONS: Record<string, string> = {
   plan_subscription: "⭐",
   credit_purchase:   "💳",
   domain_purchase:   "🌐",
   inbox_renewal:     "📬",
+  inbox_billing:     "📬",
 };
+
+type SuspendedDomain = { id: string; domain: string; payment_provider: string | null };
 
 function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurchaseSuccess }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string; creditPurchaseSuccess?: boolean }) {
   const [planId, setPlanId]         = useState("free");
@@ -461,6 +465,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
   const [creditActivated, setCreditActivated] = useState(false);
   const [grantedCredits, setGrantedCredits]   = useState(0);
   const [invoices, setInvoices]               = useState<Invoice[]>([]);
+  const [suspendedDomains, setSuspendedDomains] = useState<SuspendedDomain[]>([]);
+  const [newPaymentWorking, setNewPaymentWorking] = useState<string | null>(null);
   // formatPrice converts NGN → local currency (display only — Paystack still charges NGN).
   const { formatPrice } = useCurrency();
 
@@ -470,7 +476,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
       wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits"),
       fetch("/api/billing/plans").then(r => r.json()) as Promise<{ plans: PlanConfig[] }>,
       wsGet<Invoice[]>("/api/billing/invoices").catch(() => [] as Invoice[]),
-    ]).then(([profile, credits, plansData, invData]) => {
+      wsGet<Array<{ id: string; domain: string; status: string; payment_provider: string | null }>>("/api/outreach/domains").catch(() => []),
+    ]).then(([profile, credits, plansData, invData, domainsData]) => {
       setPlanId(profile.plan_id ?? "free");
       setPlanStatus(((profile as Record<string,string>).plan_status ?? "active") as "active" | "past_due" | "canceled" | "trialing");
       setGraceEndsAt((profile as Record<string,string|null>).grace_ends_at ?? null);
@@ -478,6 +485,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
       setTx(credits.transactions ?? []);
       setPlans(plansData.plans ?? []);
       setInvoices(invData ?? []);
+      setSuspendedDomains((domainsData ?? []).filter(d => d.status === "payment_failed"));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -563,6 +571,20 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     } catch (e) {
       alert(e instanceof Error ? e.message : "Upgrade failed");
       setUpgrading(null);
+    }
+  }
+
+  async function handleNewPayment(domainId: string) {
+    setNewPaymentWorking(domainId);
+    try {
+      const res  = await wsFetch(`/api/outreach/domains/${domainId}/new-payment`, { method: "POST" });
+      const data = await res.json() as { checkout_url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Could not start payment flow");
+      if (data.checkout_url) window.location.href = data.checkout_url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Payment failed");
+    } finally {
+      setNewPaymentWorking(null);
     }
   }
 
@@ -822,9 +844,32 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
 
       {/* Payment History */}
       <Section title="Payment History" description="Plans, credits, domains & renewals.">
-        {invoices.length === 0 ? (
+        {/* Outstanding suspended inbox domains */}
+        {suspendedDomains.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Outstanding</p>
+            <div className="space-y-2">
+              {suspendedDomains.map(d => (
+                <div key={d.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-white text-sm font-medium">{d.domain}</p>
+                    <p className="text-red-400 text-xs mt-0.5">Payment failed — inbox suspended</p>
+                  </div>
+                  <button
+                    onClick={() => void handleNewPayment(d.id)}
+                    disabled={newPaymentWorking === d.id}
+                    className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-wait"
+                  >
+                    {newPaymentWorking === d.id ? "Opening…" : "Pay Now"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {invoices.length === 0 && suspendedDomains.length === 0 ? (
           <p className="text-white/25 text-sm text-center py-4">No payments yet.</p>
-        ) : (<>
+        ) : invoices.length > 0 ? (<>
           <div className="divide-y divide-white/6">
             {invSlice.map(inv => {
               const amountNgn = inv.amount_kobo / 100;
@@ -875,7 +920,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
               </div>
             </div>
           )}
-        </>)}
+        </>) : null}
       </Section>
 
       {/* Credit History */}

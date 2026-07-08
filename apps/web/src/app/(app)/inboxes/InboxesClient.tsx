@@ -52,6 +52,17 @@ interface OutreachDomain {
   payment_provider: string | null;
 }
 
+// ─── Billing invoice ─────────────────────────────────────────────────────────
+interface BillingInvoice {
+  id: string;
+  type: string;
+  description: string;
+  amount_kobo: number;
+  paystack_reference: string;
+  status: string;
+  created_at: string;
+}
+
 // ─── CSV column mapping ────────────────────────────────────────────────────────
 
 const INBOX_FIELDS: { key: string; label: string; required: boolean }[] = [
@@ -359,6 +370,11 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
   const [retryingPaymentId, setRetryingPaymentId]   = useState<string | null>(null);
   const [newPaymentWorking, setNewPaymentWorking]   = useState<string | null>(null);
 
+  // ── Invoices modal ────────────────────────────────────────────────────────
+  const [showInvoices, setShowInvoices]       = useState(false);
+  const [invoices, setInvoices]               = useState<BillingInvoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+
   // ── Inbox drawer ──────────────────────────────────────────────────────────
   const [drawerInbox, setDrawerInbox]   = useState<OutreachInboxSafe | null>(null);
   const [drawerEdits, setDrawerEdits]   = useState<Partial<OutreachInboxSafe>>({});
@@ -625,6 +641,19 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
     }
   }
 
+  async function loadInvoices() {
+    setInvoicesLoading(true);
+    try {
+      const res = await wsFetch("/api/billing/invoices");
+      const data = await res.json();
+      setInvoices(Array.isArray(data) ? data : []);
+    } catch {
+      setInvoices([]);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }
+
   async function handleNewPayment(domainId: string) {
     setNewPaymentWorking(domainId);
     try {
@@ -860,6 +889,7 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
   }
 
   function openDrawer(inbox: OutreachInboxSafe) {
+    if (inbox.status === "error" && inbox.last_error?.includes("billing failed")) return;
     setDrawerInbox(inbox);
     setDrawerEdits({});
     setDelivResult(null);
@@ -962,6 +992,12 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
         </div>
         <div className="flex items-center gap-2">
           {activeTab === "inboxes" && (<>
+            <button
+              onClick={() => { setShowInvoices(true); void loadInvoices(); if (domains.length === 0) loadDomains(); }}
+              className="app-btn app-btn-secondary"
+            >
+              Invoices
+            </button>
             <button
               onClick={() => { setShowImport(true); setImportResult(null); setShowMapping(false); setCsvHeaders([]); setImportFile(null); }}
               className="app-btn app-btn-secondary"
@@ -1319,8 +1355,9 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
             const warmupPct = inbox.warmup_target_daily > 0
               ? Math.min(100, Math.round(((inbox.warmup_current_daily ?? 0) / inbox.warmup_target_daily) * 100))
               : 0;
+            const isBillingSuspended = inbox.status === "error" && !!inbox.last_error?.includes("billing failed");
             return (
-              <div key={inbox.id} className={`bg-white/4 border rounded-xl px-4 py-3 flex items-center gap-3 transition-colors ${isSelected ? "border-orange-500/50 bg-orange-500/8" : "border-white/8 hover:border-white/12"}`}>
+              <div key={inbox.id} className={`border rounded-xl px-4 py-3 flex items-center gap-3 transition-colors ${isBillingSuspended ? "bg-red-500/5 border-red-500/20 opacity-70" : isSelected ? "bg-white/4 border-orange-500/50 bg-orange-500/8" : "bg-white/4 border-white/8 hover:border-white/12"}`}>
                 {/* Checkbox */}
                 <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(inbox.id)}
                   className="w-4 h-4 rounded accent-orange-500 cursor-pointer flex-shrink-0" />
@@ -1333,7 +1370,7 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
                 />
 
                 {/* Info */}
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openDrawer(inbox)}>
+                <div className={`flex-1 min-w-0 ${isBillingSuspended ? "" : "cursor-pointer"}`} onClick={isBillingSuspended ? undefined : () => openDrawer(inbox)}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-white font-medium text-sm truncate max-w-xs">{inbox.email_address}</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${inbox.status === "active" ? "bg-green-500/15 text-green-400" : inbox.status === "error" ? "bg-red-500/15 text-red-400" : "bg-white/10 text-white/40"}`}>
@@ -1361,6 +1398,15 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
                 </div>
 
                 {/* Icon actions */}
+                {isBillingSuspended ? (
+                  <button
+                    onClick={() => inbox.domain_id && handleNewPayment(inbox.domain_id)}
+                    disabled={!!inbox.domain_id && newPaymentWorking === inbox.domain_id}
+                    className="px-3 py-1.5 flex-shrink-0 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-wait"
+                  >
+                    {inbox.domain_id && newPaymentWorking === inbox.domain_id ? "Opening…" : "Pay Invoice"}
+                  </button>
+                ) : (
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {/* Settings */}
                   <button onClick={() => openDrawer(inbox)} title="Settings" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/8 transition-colors">
@@ -1384,6 +1430,7 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
                     </svg>
                   </button>
                 </div>
+                )}
               </div>
             );
           })}
@@ -1418,6 +1465,74 @@ export default function InboxesClient({ planId = "free", maxInboxes = 5 }: Inbox
         </>
       )}
       </>)}
+
+      {/* Invoices modal */}
+      {showInvoices && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowInvoices(false)}>
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 flex-shrink-0">
+              <h2 className="text-white font-semibold">Billing Invoices</h2>
+              <button onClick={() => setShowInvoices(false)} className="text-white/40 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Outstanding payment domains */}
+            {domains.filter(d => d.status === "payment_failed").length > 0 && (
+              <div className="px-6 pt-4 flex-shrink-0">
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Outstanding</p>
+                <div className="space-y-2">
+                  {domains.filter(d => d.status === "payment_failed").map(d => (
+                    <div key={d.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                      <div>
+                        <p className="text-white text-sm font-medium">{d.domain}</p>
+                        <p className="text-red-400 text-xs mt-0.5">Payment failed — inbox suspended</p>
+                      </div>
+                      <button
+                        onClick={() => handleNewPayment(d.id)}
+                        disabled={newPaymentWorking === d.id}
+                        className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+                      >
+                        {newPaymentWorking === d.id ? "Opening…" : "Pay Now"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              {invoicesLoading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <div key={i} className="h-14 bg-white/4 rounded-xl animate-pulse" />)}
+                </div>
+              ) : invoices.length === 0 ? (
+                <p className="text-white/30 text-sm text-center py-8">No payment history yet.</p>
+              ) : (
+                <div>
+                  <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Payment history</p>
+                  <div className="space-y-2">
+                    {invoices.map(inv => (
+                      <div key={inv.id} className="flex items-center justify-between bg-white/4 border border-white/8 rounded-xl px-4 py-3">
+                        <div className="min-w-0 flex-1 mr-3">
+                          <p className="text-white/80 text-sm truncate">{inv.description}</p>
+                          <p className="text-white/30 text-xs mt-0.5">{new Date(inv.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${inv.status === "paid" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
+                            {inv.status}
+                          </span>
+                          <span className="text-white/60 text-sm font-medium">₦{Math.round(inv.amount_kobo / 100).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import CSV modal */}
       {showImport && (

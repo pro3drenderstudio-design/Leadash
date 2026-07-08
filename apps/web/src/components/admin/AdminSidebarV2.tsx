@@ -119,6 +119,15 @@ const NAV: NavGroupDef[] = [
     ],
   },
   {
+    label: "Outreach",
+    items: [
+      { href: "/admin/outreach/inboxes",   label: "Inboxes",      icon: Mail01Icon },
+      { href: "/admin/outreach/campaigns", label: "Campaigns",    icon: WorkflowSquare01Icon },
+      { href: "/admin/outreach/warmup",    label: "Warmup Pool",  icon: Activity01Icon },
+      { href: "/admin/outreach/queue",     label: "Failed Sends", icon: ChartBarLineIcon },
+    ],
+  },
+  {
     label: "Infrastructure",
     items: [
       { href: "/admin/domains",        label: "Domains",        icon: Plug01Icon },

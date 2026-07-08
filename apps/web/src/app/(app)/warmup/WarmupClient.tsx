@@ -61,7 +61,7 @@ export default function WarmupClient() {
   async function handleTestDeliverability(inbox: OutreachInboxSafe) {
     setTesting(inbox.id);
     try {
-      const r = await fetch(`/api/outreach/inboxes/${inbox.id}/test-deliverability`, { method: "POST" });
+      const r = await wsFetch(`/api/outreach/inboxes/${inbox.id}/test-deliverability`, { method: "POST" });
       const data = await r.json();
       setTestResult(prev => ({ ...prev, [inbox.id]: data.message ?? (data.error ? `Error: ${data.error}` : "Sent") }));
     } catch {
