@@ -77,6 +77,18 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // ── Admin invite accept flow — always public ────────────────────────────────
+  // The page + POST /api/admin/team/accept do their own auth (email of the
+  // signed-in user must match the invite's email). If we ran the /admin guard
+  // below, the invitee — who is not yet in the `admins` table by definition —
+  // would be redirected to /dashboard, dragging their invite token along on
+  // the URL (that was the reported symptom: /dashboard?token=…). Skip the
+  // whole middleware stack for this route so the token survives and the page
+  // can handle unauth via its own /login?redirect=<returnTo> bounce.
+  if (pathname.startsWith("/admin/accept-invite")) {
+    return supabaseResponse;
+  }
+
   // ── Auth code on root — redirect to proper callback ──────────────────────────
   if (pathname === "/" && request.nextUrl.searchParams.has("code")) {
     const url = request.nextUrl.clone();
