@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { enqueueAutomation } from "@/lib/queue";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -73,7 +73,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         try {
           await enqueueAutomation({
             event:        "academy.enrollment_created",
-            workspaceId,
+            workspace_id: workspaceId,
+            user_id:      signup.user_id ?? null,
             payload: {
               product_slug:  "challenge-7day",
               product_name:  "7-Day Job & Client Acquisition Challenge",

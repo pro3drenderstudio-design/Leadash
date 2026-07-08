@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     if (signUpError.message?.includes("already registered")) {
       // User exists — look them up
       const { data: users } = await db.auth.admin.listUsers();
-      const found = users?.users?.find(u => u.email === email.toLowerCase().trim());
+      const found = users?.users?.find((u: { id: string; email?: string }) => u.email === email.toLowerCase().trim());
       if (!found) return NextResponse.json({ error: "Account already exists. Please log in instead." }, { status: 409 });
       userId = found.id;
     } else {

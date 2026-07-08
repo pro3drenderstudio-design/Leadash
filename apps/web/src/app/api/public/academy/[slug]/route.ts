@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     .eq("product_id", product.id)
     .order("order_index", { ascending: true });
 
-  const sectionIds = (sections ?? []).map(s => s.id as string);
+  const sectionIds = (sections ?? []).map((s: { id: string }) => s.id);
   let lessons: Array<{ id: string; section_id: string; title: string; order_index: number; duration_seconds: number | null; is_free_preview: boolean }> = [];
 
   if (sectionIds.length > 0) {
@@ -35,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     lessons = (ls ?? []) as typeof lessons;
   }
 
-  const enrichedSections = (sections ?? []).map(s => ({
+  const enrichedSections = (sections ?? []).map((s: { id: string; title: string; order_index: number }) => ({
     ...s,
     lessons: lessons.filter(l => l.section_id === s.id).map(l => ({
       id:              l.id,

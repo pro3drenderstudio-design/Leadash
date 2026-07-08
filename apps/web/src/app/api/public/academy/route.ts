@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
+type SectionRow = { id: string; product_id: string };
+type LessonRow  = { section_id: string };
+
 // GET /api/public/academy — returns published, active products for the public catalog (no auth required)
 export async function GET() {
   const db = createAdminClient();
@@ -14,33 +17,35 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Count lessons per product
-  const productIds = (products ?? []).map(p => p.id);
+  const productIds = (products ?? []).map((p: { id: string }) => p.id);
   const { data: sections } = await db
     .from("academy_sections")
-    .select("product_id")
+    .select("id, product_id")
     .in("product_id", productIds);
 
   const lessonCounts: Record<string, number> = {};
-  if (sections) {
-    const sectionIds = sections.map(s => s.id as string).filter(Boolean);
+  const typedSections = (sections ?? []) as SectionRow[];
+
+  if (typedSections.length > 0) {
+    const sectionIds = typedSections.map(s => s.id).filter(Boolean);
     if (sectionIds.length > 0) {
       const { data: lessons } = await db
         .from("academy_lessons")
         .select("section_id")
         .in("section_id", sectionIds);
-      if (lessons) {
-        for (const l of lessons) {
-          const sec = sections.find(s => s.id === (l as Record<string, string>).section_id);
-          if (sec?.product_id) lessonCounts[sec.product_id as string] = (lessonCounts[sec.product_id as string] ?? 0) + 1;
+
+      for (const l of (lessons ?? []) as LessonRow[]) {
+        const sec = typedSections.find(s => s.id === l.section_id);
+        if (sec?.product_id) {
+          lessonCounts[sec.product_id] = (lessonCounts[sec.product_id] ?? 0) + 1;
         }
       }
     }
   }
 
-  const result = (products ?? []).map(p => ({
+  const result = (products ?? []).map((p: { id: string }) => ({
     ...p,
-    total_lessons: lessonCounts[p.id] ?? 0,
+    total_lessons: lessonCounts[(p as { id: string }).id] ?? 0,
   }));
 
   return NextResponse.json({ products: result });

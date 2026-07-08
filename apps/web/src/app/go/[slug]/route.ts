@@ -64,7 +64,7 @@ export async function GET(
           .select("id", { count: "exact", head: true })
           .eq("link_id", link.id)
           .eq("visitor_id", visitorId)
-          .then(r => (r.count ?? 0) > 0));
+          .then((r: { count: number | null }) => (r.count ?? 0) > 0));
 
     await db.from("tracked_link_clicks").insert({
       link_id:     link.id,
