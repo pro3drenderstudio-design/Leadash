@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 
 export async function POST(
   req: NextRequest,
@@ -11,12 +12,19 @@ export async function POST(
   const { workspaceId, db } = auth;
   const { id } = await params;
 
-  const { data: domain } = await db
-    .from("outreach_domains")
-    .select("id, domain, status, payment_provider, paystack_billing_email, paystack_inbox_monthly_kobo, inbox_next_billing_date")
-    .eq("id", id)
-    .eq("workspace_id", workspaceId)
-    .single();
+  const [{ data: domain }, { data: workspace }] = await Promise.all([
+    db
+      .from("outreach_domains")
+      .select("id, domain, status, payment_provider, paystack_billing_email, mailbox_count, inbox_next_billing_date")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .single(),
+    db
+      .from("workspaces")
+      .select("billing_email, plan_id")
+      .eq("id", workspaceId)
+      .single(),
+  ]);
 
   if (!domain) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -32,15 +40,20 @@ export async function POST(
     return NextResponse.json({ error: "Domain does not have a failed or overdue payment" }, { status: 400 });
   }
 
-  if (!domain.paystack_inbox_monthly_kobo) {
-    return NextResponse.json({ error: "Billing amount not configured for this domain" }, { status: 400 });
+  const mailboxCount = (domain.mailbox_count as number | null) ?? 1;
+  if (mailboxCount < 1) {
+    return NextResponse.json({ error: "Domain has no inboxes configured" }, { status: 400 });
   }
 
-  const { data: workspace } = await db
-    .from("workspaces")
-    .select("billing_email")
-    .eq("id", workspaceId)
-    .single();
+  // Always recalculate from current mailbox_count × plan rate so stale stored values can't cause undercharges
+  const plan = await getPlanById(workspace?.plan_id ?? "free");
+  const correctAmountKobo = mailboxCount * plan.inbox_monthly_price_ngn * 100;
+
+  // Sync the stored value so the cron job stays correct too
+  await db
+    .from("outreach_domains")
+    .update({ paystack_inbox_monthly_kobo: correctAmountKobo, updated_at: new Date().toISOString() })
+    .eq("id", id);
 
   const billingEmail = (domain.paystack_billing_email as string | null)
     ?? workspace?.billing_email
@@ -52,7 +65,7 @@ export async function POST(
   try {
     const { authorizationUrl, reference } = await createPaystackCheckout({
       email:       billingEmail,
-      amountKobo:  domain.paystack_inbox_monthly_kobo as number,
+      amountKobo:  correctAmountKobo,
       callbackUrl,
       metadata:    { domain_id: id, workspace_id: workspaceId, type: "inbox_update_payment" },
     });

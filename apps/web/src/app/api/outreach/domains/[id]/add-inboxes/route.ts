@@ -259,14 +259,25 @@ export async function POST(
       created.push(email);
     }
 
-    // Update domain mailbox_count and mailbox_prefixes
+    // Update domain mailbox_count, mailbox_prefixes, and recalculate billing amount
     const allPrefixes = [
       ...(Array.isArray(domainRecord.mailbox_prefixes) ? domainRecord.mailbox_prefixes as string[] : []),
       ...new_prefixes,
     ];
+
+    // Recalculate paystack_inbox_monthly_kobo so cron billing uses the correct total
+    const { data: wsRow } = await db.from("workspaces").select("plan_id").eq("id", workspaceId).single();
+    const planForBilling = await getPlanById(wsRow?.plan_id ?? "free");
+    const newKobo = allPrefixes.length * planForBilling.inbox_monthly_price_ngn * 100;
+
     await db
       .from("outreach_domains")
-      .update({ mailbox_count: allPrefixes.length, mailbox_prefixes: allPrefixes, updated_at: new Date().toISOString() })
+      .update({
+        mailbox_count: allPrefixes.length,
+        mailbox_prefixes: allPrefixes,
+        paystack_inbox_monthly_kobo: newKobo,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", domainId);
 
     return NextResponse.json({ ok: true, created, count: created.length });
