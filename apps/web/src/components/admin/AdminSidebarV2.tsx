@@ -47,6 +47,7 @@ import {
   Login03Icon,
   Logout03Icon,
   Sale01Icon,
+  Link01Icon,
 } from "@/v2-app/icons";
 import "@/v2-app/v2-app.css";
 
@@ -125,6 +126,13 @@ const NAV: NavGroupDef[] = [
       { href: "/admin/outreach/campaigns", label: "Campaigns",    icon: WorkflowSquare01Icon },
       { href: "/admin/outreach/warmup",    label: "Warmup Pool",  icon: Activity01Icon },
       { href: "/admin/outreach/queue",     label: "Failed Sends", icon: ChartBarLineIcon },
+    ],
+  },
+  {
+    label: "Growth",
+    items: [
+      { href: "/admin/links",             label: "Link Tracker",      icon: Link01Icon },
+      { href: "/admin/challenge-signups", label: "Challenge Signups", icon: UserGroupIcon },
     ],
   },
   {
