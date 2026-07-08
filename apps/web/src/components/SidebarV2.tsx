@@ -72,6 +72,45 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
   function SectionLink({ section }: { section: NavSection }) {
     const active = activeSection?.id === section.id;
     const icon = SECTION_ICONS[section.id] ?? Dashboard01Icon;
+    const badge = section.badge && (
+      <span
+        style={{
+          marginLeft: "auto",
+          fontSize: 9,
+          padding: "1px 5px",
+          borderRadius: 4,
+          background: "var(--app-accent-soft)",
+          border: "1px solid var(--app-accent-line)",
+          color: "var(--app-accent)",
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        {section.badge}
+      </span>
+    );
+    const inner = (
+      <>
+        <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} className="app-sidebar-link-icon" />
+        <span>{section.label}</span>
+        {badge}
+      </>
+    );
+    if (section.external) {
+      return (
+        <a
+          href={section.href}
+          target="_blank"
+          rel="noreferrer"
+          className="app-sidebar-link"
+          data-active="false"
+          onClick={close}
+        >
+          {inner}
+        </a>
+      );
+    }
     return (
       <Link
         href={section.href}
@@ -79,26 +118,7 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
         className="app-sidebar-link"
         data-active={active ? "true" : "false"}
       >
-        <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} className="app-sidebar-link-icon" />
-        <span>{section.label}</span>
-        {section.badge && (
-          <span
-            style={{
-              marginLeft: "auto",
-              fontSize: 9,
-              padding: "1px 5px",
-              borderRadius: 4,
-              background: "var(--app-accent-soft)",
-              border: "1px solid var(--app-accent-line)",
-              color: "var(--app-accent)",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {section.badge}
-          </span>
-        )}
+        {inner}
       </Link>
     );
   }

@@ -28,6 +28,8 @@ export type NavSection = {
   href: string;
   tabs: NavTab[];
   badge?: NavBadge;
+  /** When true, the sidebar renders an <a target="_blank"> instead of a Next.js Link. */
+  external?: boolean;
 };
 
 // Icons reuse the strokes from the previous flat sidebar — same shapes the team is used to.
@@ -77,8 +79,9 @@ export const SECTIONS: NavSection[] = [
     id: "academy",
     label: "Academy",
     icon: ICON_ACADEMY,
-    href: "/academy",
+    href: "/courses",
     badge: "New",
+    external: true,
     tabs: [],
   },
 ];
