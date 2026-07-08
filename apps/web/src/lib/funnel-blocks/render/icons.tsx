@@ -17,7 +17,7 @@ export const LABELS: Record<BlockType, string> = {
   "image":"Image","video":"Video / VSL",
   "hero":"Hero","countdown-timer":"Countdown","testimonial":"Testimonial",
   "pricing-card":"Pricing","faq-accordion":"FAQ","stats-bar":"Stats Bar",
-  "cta-button":"CTA Button","optin-form":"Opt-in Form","custom-html":"Custom HTML",
+  "cta-button":"CTA Button","optin-form":"Signup Form","custom-html":"Custom HTML",
 };
 
 export const ICONS: Partial<Record<BlockType, string[]>> = {

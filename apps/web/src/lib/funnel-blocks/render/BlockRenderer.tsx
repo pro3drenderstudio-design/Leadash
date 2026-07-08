@@ -5,7 +5,7 @@ import { Editable } from "./Editable";
 import { Icon } from "./icons";
 import { buildOuterStyle, buildOverlayStyle, buildInnerStyle, fluid } from "./wrappers";
 import { CountdownBlock } from "./interactive/CountdownBlock";
-import { OptinFormBlock } from "./interactive/OptinFormBlock";
+import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
 import { YouTubePlayer } from "./interactive/YouTubePlayer";
 import { FunnelTracking } from "@/lib/tracking/pixels";
@@ -104,7 +104,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
       return (
-        <div style={{ ...outer, background: bg, position: "relative" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
           {overlay && <div style={overlay} />}
           <div style={{ ...inner }}>
             <div className={styles.row} style={{ gap: 16, position: "relative" }}>
@@ -119,7 +119,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const outer = buildOuterStyle(block.layout, "16px");
       const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
       return (
-        <div style={{ ...outer, background: bg, minHeight: 0, height: "100%" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, minHeight: 0, height: "100%" }}>
           {ctx.renderChildren?.(block.children ?? [], block.id)}
         </div>
       );
@@ -131,7 +131,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
       return (
-        <div style={{ ...outer, background: bg, position: "relative" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
           {overlay && <div style={overlay} />}
           <div style={inner}>{ctx.renderChildren?.(block.children ?? [], block.id)}</div>
         </div>
@@ -245,34 +245,30 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "hero": {
+      const heroAc = (p.accent_color as string) || AC;
+      const heroColor = (p.color as string) || "#fff";
+      const btn1Style: React.CSSProperties = { display: "inline-flex", background: heroAc, color: (p.button_color as string) || "#fff", fontWeight: 700, fontSize: 16, padding: "15px 36px", borderRadius: 11, boxShadow: `0 14px 30px -10px ${heroAc}99`, textDecoration: "none" };
+      const btn2Style: React.CSSProperties = { display: "inline-flex", background: (p.button2_bg as string) || "#f3f4f6", color: (p.button2_color as string) || "#374151", fontWeight: 600, fontSize: 16, padding: "15px 36px", borderRadius: 11, textDecoration: "none" };
       return (
-        <div style={{ padding: `${fluid(48, 96)} ${fluid(20, 28)}`, textAlign: (p.align as React.CSSProperties["textAlign"]) || "center", background: (p.bg_color as string) || "transparent" }}>
-          <Editable
-            tag="h1"
-            value={(p.headline as string) || "Your big promise headline"}
-            editable={editable}
-            onCommit={commit("headline")}
-            onFocus={focus}
-            style={{ fontSize: fluid(32, 56), fontWeight: 800, color: (p.color as string) || "#fff", lineHeight: 1.1, margin: "0 auto", maxWidth: 780 }}
-          />
-          <Editable
-            tag="p"
-            value={(p.subtext as string) || "Supporting subtext that explains the offer."}
-            editable={editable}
-            onCommit={commit("subtext")}
-            onFocus={focus}
-            style={{ fontSize: fluid(15, 19), color: (p.subtext_color as string) || "#aeb6c2", marginTop: 18, maxWidth: 620, margin: "18px auto 0" }}
-          />
-          {Boolean(p.button_text) && (
-            <div style={{ marginTop: 30, display: "flex", justifyContent: "center" }}>
-              {(() => {
-                const btnStyle: React.CSSProperties = { display: "inline-flex", background: (p.accent_color as string) || AC, color: "#fff", fontWeight: 700, fontSize: 16, padding: "15px 36px", borderRadius: 11, boxShadow: `0 14px 30px -10px ${(p.accent_color as string) || AC}99`, textDecoration: "none" };
-                return editable ? (
-                  <span style={btnStyle}>{p.button_text as string}</span>
-                ) : (
-                  <a href={(p.button_url as string) || "#"} style={btnStyle}>{p.button_text as string}</a>
-                );
-              })()}
+        <div id={(p.anchor_id as string) || undefined} style={{ padding: `${fluid(48, 96)} ${fluid(20, 28)}`, textAlign: (p.align as React.CSSProperties["textAlign"]) || "center", background: (p.bg_color as string) || "transparent" }}>
+          {Boolean(p.eyebrow) && (
+            <Editable tag="div" value={p.eyebrow as string} editable={editable} onCommit={commit("eyebrow")} onFocus={focus}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${heroAc}18`, border: `1px solid ${heroAc}44`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: heroAc, marginBottom: 24 }} />
+          )}
+          <Editable tag="h1" value={(p.headline as string) || "Your big promise headline"} editable={editable} onCommit={commit("headline")} onFocus={focus}
+            style={{ fontSize: fluid(32, 56), fontWeight: 800, color: heroColor, lineHeight: 1.1, margin: "0 auto", maxWidth: 780 }} />
+          <Editable tag="p" value={(p.subtext as string) || "Supporting subtext that explains the offer."} editable={editable} onCommit={commit("subtext")} onFocus={focus}
+            style={{ fontSize: fluid(15, 19), color: (p.subtext_color as string) || "#aeb6c2", marginTop: 18, maxWidth: 620, margin: "18px auto 0" }} />
+          {(Boolean(p.button_text) || Boolean(p.button2_text)) && (
+            <div style={{ marginTop: 30, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+              {Boolean(p.button_text) && (editable
+                ? <span style={btn1Style}>{p.button_text as string}</span>
+                : <a href={(p.button_url as string) || "#"} style={btn1Style}>{p.button_text as string}</a>
+              )}
+              {Boolean(p.button2_text) && (editable
+                ? <span style={btn2Style}>{p.button2_text as string}</span>
+                : <a href={(p.button2_url as string) || "#"} style={btn2Style}>{p.button2_text as string}</a>
+              )}
             </div>
           )}
         </div>
@@ -296,33 +292,45 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
         </div>
       );
 
-    case "testimonial":
+    case "testimonial": {
+      const cardBg     = (p.card_bg     as string) || "rgba(255,255,255,0.03)";
+      const cardBorder = (p.card_border as string) || "rgba(255,255,255,0.07)";
+      const quoteColor = (p.quote_color as string) || "#e7ecf3";
+      const nameColor  = (p.name_color  as string) || "#fff";
+      const roleColor  = (p.role_color  as string) || "#7e8794";
+      const resultColor = (p.result_color as string) || AC;
+      const initials   = (p.initials    as string) || "";
+      const result     = (p.result      as string) || "";
+      const avatarBg   = (p.avatar_bg   as string) || `linear-gradient(135deg,${AC},#dc2626)`;
       return (
         <div style={{ padding: "24px 28px", maxWidth: 620, margin: "0 auto" }}>
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "26px 24px" }}>
+          <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 16, padding: "26px 24px" }}>
             {Boolean(p.video_url) && (
               <div style={{ aspectRatio: "16/9", borderRadius: 12, overflow: "hidden", background: "#000", marginBottom: 18, position: "relative" }}>
                 {renderEmbed(block.id, p.video_url as string, ctx.mode, 46)}
               </div>
             )}
-            <Editable
-              tag="p"
-              value={(p.quote as string) || "This changed everything for me."}
-              editable={editable}
-              onCommit={commit("quote")}
-              onFocus={focus}
-              style={{ fontSize: fluid(15, 17), color: "#e7ecf3", lineHeight: 1.6, fontStyle: "italic", margin: 0 }}
-            />
+            <Editable tag="p" value={(p.quote as string) || "This changed everything for me."} editable={editable} onCommit={commit("quote")} onFocus={focus}
+              style={{ fontSize: fluid(15, 17), color: quoteColor, lineHeight: 1.6, fontStyle: "italic", margin: 0 }} />
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
-              {Boolean(p.avatar) && <img src={p.avatar as string} alt="" style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover" }} />}
+              {p.avatar
+                ? <img src={p.avatar as string} alt="" style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                : initials
+                  ? <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{initials}</div>
+                  : null
+              }
               <div>
-                <Editable tag="div" value={(p.name as string) || "Jane Doe"} editable={editable} onCommit={commit("name")} onFocus={focus} style={{ fontWeight: 700, fontSize: 13.5, color: "#fff" }} />
-                <Editable tag="div" value={(p.role as string) || ""} editable={editable} onCommit={commit("role")} onFocus={focus} style={{ fontSize: 12, color: "#7e8794" }} />
+                <Editable tag="div" value={(p.name as string) || "Jane Doe"} editable={editable} onCommit={commit("name")} onFocus={focus} style={{ fontWeight: 700, fontSize: 13.5, color: nameColor }} />
+                {result
+                  ? <div style={{ fontSize: 12, color: resultColor, fontWeight: 600 }}>{result}</div>
+                  : <Editable tag="div" value={(p.role as string) || ""} editable={editable} onCommit={commit("role")} onFocus={focus} style={{ fontSize: 12, color: roleColor }} />
+                }
               </div>
             </div>
           </div>
         </div>
       );
+    }
 
     case "pricing-card": {
       const feats = items("features");
@@ -359,19 +367,38 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "faq-accordion": {
-      const qs = items("items");
+      const qs        = items("items");
+      const itemBg    = (p.item_bg     as string) || "rgba(255,255,255,0.03)";
+      const itemBord  = (p.item_border as string) || "rgba(255,255,255,0.07)";
+      const qColor    = (p.q_color     as string) || "#fff";
+      const aColor    = (p.a_color     as string) || "#9aa3b0";
+      const showNum   = Boolean(p.show_number);
+      const numBg     = (p.accent_color as string) || AC;
       return (
         <div style={{ padding: "16px 28px", display: "flex", flexDirection: "column", gap: 10, maxWidth: 700, margin: "0 auto" }}>
           {qs.map((q, i) =>
             editable ? (
-              <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px" }}>
-                <Editable tag="div" value={q.q || ""} editable onCommit={commitItem(i, "q")} onFocus={focus} style={{ fontWeight: 700, fontSize: 14.5, color: "#fff" }} />
-                <Editable tag="div" value={q.a || ""} editable onCommit={commitItem(i, "a")} onFocus={focus} style={{ fontSize: 13.5, color: "#9aa3b0", marginTop: 6, lineHeight: 1.55 }} />
+              <div key={i} style={{ background: itemBg, border: `1px solid ${itemBord}`, borderRadius: 12, padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {showNum && (
+                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, background: numBg, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{i + 1}</span>
+                  )}
+                  <Editable tag="div" value={q.q || ""} editable onCommit={commitItem(i, "q")} onFocus={focus} style={{ fontWeight: 700, fontSize: 14.5, color: qColor, flex: 1 }} />
+                </div>
+                <div style={{ paddingLeft: showNum ? 44 : 0, marginTop: 6 }}>
+                  <Editable tag="div" value={q.a || ""} editable onCommit={commitItem(i, "a")} onFocus={focus} style={{ fontSize: 13.5, color: aColor, lineHeight: 1.55 }} />
+                </div>
               </div>
             ) : (
-              <details key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px" }}>
-                <summary style={{ fontWeight: 700, fontSize: 14.5, color: "#fff", cursor: "pointer", listStyle: "none" }}>{q.q}</summary>
-                <p style={{ fontSize: 13.5, color: "#9aa3b0", marginTop: 8, lineHeight: 1.55 }}>{q.a}</p>
+              <details key={i} style={{ background: itemBg, border: `1px solid ${itemBord}`, borderRadius: 12, overflow: "hidden" }}>
+                <summary style={{ display: "flex", alignItems: "center", gap: 12, fontWeight: 700, fontSize: 14.5, color: qColor, cursor: "pointer", listStyle: "none", padding: "14px 16px" }}>
+                  {showNum && (
+                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, background: numBg, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{i + 1}</span>
+                  )}
+                  <span style={{ flex: 1 }}>{q.q}</span>
+                  <span style={{ fontSize: 18, color: aColor, flexShrink: 0 }}>+</span>
+                </summary>
+                <p style={{ fontSize: 13.5, color: aColor, margin: 0, padding: showNum ? "0 16px 14px 60px" : "0 16px 14px", lineHeight: 1.6 }}>{q.a}</p>
               </details>
             )
           )}
@@ -381,12 +408,14 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "stats-bar": {
       const stats = items("items");
+      const valColor = (p.value_color as string) || "#fff";
+      const lblColor = (p.label_color as string) || "#7e8794";
       return (
         <div style={{ padding: "26px 28px", display: "flex", justifyContent: "center", gap: fluid(22, 64), flexWrap: "wrap" }}>
           {stats.map((s, i) => (
             <div key={i} style={{ textAlign: "center" }}>
-              <Editable tag="div" value={s.value || ""} editable={editable} onCommit={commitItem(i, "value")} onFocus={focus} style={{ fontSize: fluid(24, 34), fontWeight: 800, color: "#fff" }} />
-              <Editable tag="div" value={s.label || ""} editable={editable} onCommit={commitItem(i, "label")} onFocus={focus} style={{ fontSize: 12, color: "#7e8794", marginTop: 4 }} />
+              <Editable tag="div" value={s.value || ""} editable={editable} onCommit={commitItem(i, "value")} onFocus={focus} style={{ fontSize: fluid(24, 34), fontWeight: 800, color: valColor }} />
+              <Editable tag="div" value={s.label || ""} editable={editable} onCommit={commitItem(i, "label")} onFocus={focus} style={{ fontSize: 12, color: lblColor, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.06em" }} />
             </div>
           ))}
         </div>
@@ -414,23 +443,25 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "optin-form":
-      return ctx.mode === "live" && ctx.pageId ? (
-        <OptinFormBlock block={block} pageId={ctx.pageId} sessionId={ctx.sessionId ?? ""} tracking={ctx.tracking} />
+      return ctx.mode === "live" ? (
+        <ChallengeSignupFormBlock block={block} />
       ) : (
-        <div style={{ background: (p.bg_color as string) || "#0e1017", padding: `${fluid(40, 50)} ${fluid(22, 32)}` }}>
-          <div style={{ maxWidth: 430, margin: "0 auto", background: "#0c0c0f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.75)" }}>
-            {Boolean(p.title) && (
-              <Editable tag="h3" value={p.title as string} editable onCommit={commit("title")} onFocus={focus} style={{ fontSize: 22, fontWeight: 700, color: "#fff", textAlign: "center", marginBottom: 18 }} />
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {(((p.fields as Array<{ type: string; label: string }>) ?? [])).map(f => (
-                <div key={f.type} style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 13px", color: "#5b6678", fontSize: 14, background: "#08090d" }}>
-                  {f.label}
-                </div>
-              ))}
-              <div style={{ background: "linear-gradient(180deg,#fb923c,#f97316)", color: "#fff", fontWeight: 700, fontSize: 15, padding: 13, borderRadius: 10, textAlign: "center" }}>
-                {(p.button_text as string) || "Submit"}
-              </div>
+        // Editor preview — static mockup of the challenge form
+        <div style={{ background: (p.bg_color as string) || "#f9fafb", padding: `${fluid(40, 50)} ${fluid(22, 32)}` }}>
+          <div style={{ maxWidth: 480, margin: "0 auto", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: "32px 28px", boxShadow: "0 12px 40px -12px rgba(0,0,0,.1)" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>{(p.heading as string) || "Join the 7-Day Challenge"}</div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{(p.subtext as string) || "₦10,000 one-time"}</div>
+            </div>
+            {["Full Name","Email Address","WhatsApp Number","Password"].map(f => (
+              <div key={f} style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: "10px 12px", color: "#9ca3af", fontSize: 13, background: "#f9fafb", marginBottom: 8 }}>{f}</div>
+            ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "12px 0" }}>
+              <div style={{ border: `2px solid ${(p.accent_color as string) || AC}`, borderRadius: 8, padding: 9, fontSize: 12, color: "#c2410c", background: "#fff7ed", textAlign: "center" }}>🏦 Bank Transfer</div>
+              <div style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 9, fontSize: 12, color: "#6b7280", background: "#f9fafb", textAlign: "center" }}>💳 Pay Online</div>
+            </div>
+            <div style={{ background: (p.accent_color as string) || AC, color: "#fff", fontWeight: 700, fontSize: 14, padding: 12, borderRadius: 10, textAlign: "center" }}>
+              I&apos;ve Paid — Register Me →
             </div>
           </div>
         </div>

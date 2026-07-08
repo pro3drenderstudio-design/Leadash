@@ -1073,7 +1073,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   function BlockSettings() {
     if (!b) return null;
     const t = b.type;
-    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || b.props.bg_color !== undefined;
+    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || t === "hero" || t === "stats-bar" || t === "faq-accordion" || t === "testimonial" || t === "optin-form" || b.props.bg_color !== undefined;
     const evergreen = Boolean(b.props.evergreen);
     const noContent = ["section","row","column","divider"].includes(t);
     return (
@@ -1086,16 +1086,33 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
           </>
         )}
         <SL text="Content" />
-        {t==="hero"&&<><Field label="Eyebrow">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field></>}
+        {t==="hero"&&<><Field label="Eyebrow tag">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Primary button">{textCtl("button_text")}</Field><Field label="Primary button URL">{textCtl("button_url")}</Field><Field label="Secondary button (optional)">{textCtl("button2_text")}</Field><Field label="Secondary button URL">{textCtl("button2_url")}</Field><Field label="Anchor ID (for #link targets)">{textCtl("anchor_id")}</Field></>}
         {t==="countdown-timer"&&<><Field label="Label">{textCtl("label")}</Field><Field label="Evergreen (per-visitor timer)">{toggleCtl("evergreen")}</Field>{evergreen?<Field label="Duration (minutes)">{numCtl("duration_minutes")}</Field>:<Field label="Target date & time"><input type="datetime-local" value={(b.props.target_date as string)??""} onChange={e=>onSetProps(b.id,{target_date:e.target.value})} className={IS} /></Field>}</>}
         {t==="video"&&<><Field label="Video"><VideoUploadField value={b.props.url as string} onChange={url=>onSetProps(b.id,{url})} funnelId={funnelId} /></Field><Field label="Or paste a video / YouTube URL">{textCtl("url")}</Field><Field label="Caption">{textCtl("caption")}</Field></>}
-        {t==="optin-form"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Form fields">{fieldsCtl()}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Fine print">{textCtl("fine_print")}</Field><Field label="Redirect URL after submit (optional)">{textCtl("redirect_url")}</Field></>}
-        {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("name")}</Field><Field label="Role">{textCtl("role")}</Field><Field label="Video review (optional)"><VideoUploadField value={b.props.video_url as string} onChange={url=>onSetProps(b.id,{video_url:url})} funnelId={funnelId} /></Field>{Boolean(b.props.video_url)&&<Field label="Video caption">{textCtl("video_caption")}</Field>}</>}
+        {t==="optin-form"&&<>
+          <SL text="Section header" />
+          <Field label="Section label (eyebrow)">{textCtl("section_label")}</Field>
+          <Field label="Section heading">{textCtl("section_heading")}</Field>
+          <Field label="Section subtext">{textCtl("section_subtext")}</Field>
+          <SL text="Form card" />
+          <Field label="Form heading">{textCtl("heading")}</Field>
+          <Field label="Form subtext">{textCtl("subtext")}</Field>
+          <Field label="Confirmation note">{textCtl("confirmation_note")}</Field>
+          <SL text="Bank transfer" />
+          <Field label="OPay account number">{textCtl("opay_account")}</Field>
+          <Field label="Account name">{textCtl("opay_name")}</Field>
+          <Field label="Amount (₦)">{textCtl("amount_ngn")}</Field>
+          <SL text="WhatsApp" />
+          <Field label="WhatsApp number (intl format, no +)">{textCtl("wa_number")}</Field>
+          <SL text="Options" />
+          <Field label="Show Paystack option">{toggleCtl("show_paystack")}</Field>
+        </>}
+        {t==="testimonial"&&<><Field label="Quote">{areaCtl("quote")}</Field><Field label="Author">{textCtl("name")}</Field><Field label="Role (shown when no result set)">{textCtl("role")}</Field><Field label="Result badge (e.g. '₦580k in first week')">{textCtl("result")}</Field><Field label="Initials (shown when no avatar)">{textCtl("initials")}</Field><Field label="Video review (optional)"><VideoUploadField value={b.props.video_url as string} onChange={url=>onSetProps(b.id,{video_url:url})} funnelId={funnelId} /></Field></>}
         {(t==="headline"||t==="body-text")&&<Field label="Text">{areaCtl("text")}</Field>}
         {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field></>}
         {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
         {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
-        {t==="faq-accordion"&&<Field label="Questions">{itemsCtl("faq")}</Field>}
+        {t==="faq-accordion"&&<><Field label="Questions">{itemsCtl("faq")}</Field><Field label="Show numbered badges">{toggleCtl("show_number")}</Field></>}
         {t==="list"&&<Field label="Items">{itemsCtl("list")}</Field>}
         {t==="spacer"&&<Field label="Height">{numCtl("height")}</Field>}
         {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field><Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:0})}</Field></>}
@@ -1108,7 +1125,11 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             {t==="headline"&&<Field label="Size">{headlineSizeCtl()}</Field>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
             {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{toggleCtl("full_width")}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
-            {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="list")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
+            {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="list"||t==="hero"||t==="faq-accordion"||t==="optin-form")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
+            {t==="hero"&&<><Field label="Headline color">{colorCtl("color")}</Field><Field label="Subtext color">{colorCtl("subtext_color")}</Field></>}
+            {t==="stats-bar"&&<><Field label="Value color">{colorCtl("value_color")}</Field><Field label="Label color">{colorCtl("label_color")}</Field></>}
+            {t==="faq-accordion"&&<><Field label="Item background">{colorCtl("item_bg")}</Field><Field label="Item border">{colorCtl("item_border")}</Field><Field label="Question color">{colorCtl("q_color")}</Field><Field label="Answer color">{colorCtl("a_color")}</Field></>}
+            {t==="testimonial"&&<><Field label="Card background">{colorCtl("card_bg")}</Field><Field label="Card border">{colorCtl("card_border")}</Field><Field label="Quote color">{colorCtl("quote_color")}</Field><Field label="Name color">{colorCtl("name_color")}</Field><Field label="Result/role color">{colorCtl("role_color")}</Field></>}
             {b.props.bg_color !== undefined && <Field label="Background">{colorCtl("bg_color")}</Field>}
           </>
         )}
