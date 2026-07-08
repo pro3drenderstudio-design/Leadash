@@ -368,7 +368,7 @@ export default function ChallengePage() {
               style={{ width: "100%", height: "100%", display: "block" }}
               poster=""
             >
-              <source src="" type="video/mp4" />
+              <source src="https://bpftbaoziloqxdsyhcyt.supabase.co/storage/v1/object/public/funnel-media/Leadash%20Training%20VSL.mp4" type="video/mp4" />
               Your browser does not support video.
             </video>
             {/* Placeholder play button shown when src is empty */}
