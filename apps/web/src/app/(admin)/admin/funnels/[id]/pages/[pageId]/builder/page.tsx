@@ -79,8 +79,9 @@ export default function BuilderPage() {
   const pageId    = params.pageId as string;
 
   const [page,       setPage]       = useState<PageData|null>(null);
-  const [funnelName, setFunnelName] = useState("");
-  const [funnelSlug, setFunnelSlug] = useState("");
+  const [funnelName,     setFunnelName]     = useState("");
+  const [funnelSlug,     setFunnelSlug]     = useState("");
+  const [funnelTracking, setFunnelTracking] = useState<Record<string, string>>({});
   const [loading,    setLoading]    = useState(true);
 
   const [hist, dispatch] = useReducer(histReducer, { blocks:[], past:[], future:[] });
@@ -114,9 +115,10 @@ export default function BuilderPage() {
         dispatch({ type:"commit", next: normalizeLegacyBlocks((pd.page.blocks??[]) as unknown[]) });
       }
       if (fr.ok) {
-        const fd = await fr.json() as { funnel?: { slug:string; name:string } };
-        setFunnelSlug(fd.funnel?.slug??"");
-        setFunnelName(fd.funnel?.name??"");
+        const fd = await fr.json() as { funnel?: { slug: string; name: string; settings?: Record<string, unknown> } };
+        setFunnelSlug(fd.funnel?.slug ?? "");
+        setFunnelName(fd.funnel?.name ?? "");
+        setFunnelTracking((fd.funnel?.settings?.tracking as Record<string, string>) ?? {});
       }
       setLoading(false);
     }
@@ -218,6 +220,19 @@ export default function BuilderPage() {
     await fetch(`/api/admin/funnels/${funnelId}/pages/${pageId}/publish`, { method:"POST" });
     setPage(prev => prev ? {...prev, status:"published"} : prev);
     showToast("Page published — live now");
+  }
+
+  async function saveFunnelTracking(patch: Record<string, string>) {
+    const updated = { ...funnelTracking, ...patch };
+    // Remove empty strings so the saved object stays clean
+    for (const k of Object.keys(updated)) { if (!updated[k]) delete updated[k]; }
+    setFunnelTracking(updated);
+    await fetch(`/api/admin/funnels/${funnelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { tracking: updated } }),
+    });
+    showToast("Tracking settings saved");
   }
 
   // ── DnD handlers ──────────────────────────────────────────────────────────
@@ -560,6 +575,8 @@ export default function BuilderPage() {
               onSave={() => save()}
               funnelId={funnelId}
               videoBlocks={videoBlocks}
+              funnelTracking={funnelTracking}
+              onSaveFunnelTracking={saveFunnelTracking}
             />
           </aside>
         )}
@@ -766,9 +783,11 @@ interface RPProps {
   onColumnPreset: (rowId:string, widths:number[])=>void;
   onSave: ()=>void;
   videoBlocks: { id:string; label:string }[];
+  funnelTracking: Record<string, string>;
+  onSaveFunnelTracking: (tracking: Record<string, string>) => void;
 }
 
-function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks }: RPProps) {
+function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks, funnelTracking, onSaveFunnelTracking }: RPProps) {
   const [rpTab, setRpTab] = useState<"content"|"layout">("content");
 
   const Field = RPField;
@@ -1225,16 +1244,34 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
           </div>
         </Field>
         <div className="h-4" />
-        <SL text="Tracking" />
-        <Field label="Analytics / pixel ID">
-          <input value={(s.tracking_id as string)??""}
-            onChange={e => onSetPage({ settings: {...s, tracking_id: e.target.value} })}
-            className={IS} />
-        </Field>
-        <div className="h-4" />
         <button onClick={onSave}
           className="w-full py-2.5 bg-orange-500/[0.1] border border-orange-500/30 rounded-lg text-orange-400 text-[13px] font-semibold cursor-pointer hover:bg-orange-500/[0.16] transition-colors">
           Save page settings
+        </button>
+        <div className="h-6" />
+        <SL text="Funnel Tracking" />
+        <p className="text-[11px] text-white/30 mb-3 leading-relaxed">Pixel scripts fire on every page in this funnel. Saved per-funnel, not per-page.</p>
+        {([
+          { key: "meta_pixel_id",              label: "Meta Pixel ID",                ph: "e.g. 1234567890" },
+          { key: "ga4_measurement_id",         label: "GA4 Measurement ID",           ph: "e.g. G-XXXXXXXXXX" },
+          { key: "google_ads_conversion_id",   label: "Google Ads Conversion ID",     ph: "e.g. AW-XXXXXXXXXX" },
+          { key: "google_ads_conversion_label",label: "Google Ads Conv. Label",       ph: "e.g. abc123XYZ" },
+          { key: "gtm_container_id",           label: "GTM Container ID",             ph: "e.g. GTM-XXXXXXX" },
+          { key: "tiktok_pixel_id",            label: "TikTok Pixel ID",             ph: "e.g. C3XXXXXXXXXX" },
+        ] as Array<{ key: string; label: string; ph: string }>).map(({ key, label, ph }) => (
+          <Field key={key} label={label}>
+            <input
+              value={(funnelTracking[key] as string) ?? ""}
+              placeholder={ph}
+              onChange={e => onSaveFunnelTracking({ ...funnelTracking, [key]: e.target.value })}
+              className={IS}
+            />
+          </Field>
+        ))}
+        <div className="h-3" />
+        <button onClick={() => onSaveFunnelTracking(funnelTracking)}
+          className="w-full py-2.5 bg-white/[0.05] border border-white/10 rounded-lg text-white/60 text-[13px] font-semibold cursor-pointer hover:bg-white/[0.08] transition-colors">
+          Save tracking settings
         </button>
       </div>
     );

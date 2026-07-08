@@ -79,7 +79,7 @@ export const SECTIONS: NavSection[] = [
     id: "academy",
     label: "Academy",
     icon: ICON_ACADEMY,
-    href: "/courses",
+    href: "/academy",
     badge: "New",
     external: true,
     tabs: [],
