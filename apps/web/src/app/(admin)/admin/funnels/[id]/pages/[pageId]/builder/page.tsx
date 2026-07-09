@@ -978,14 +978,21 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
       </div>
     );
   }
-  function layoutRangeRow(label: string, val: number, onChange: (v: number) => void, min=0, max=100, fmt=(v: number) => `${v}px`) {
+  function layoutRangeRow(label: string, val: number, onChange: (v: number) => void, min=0, max=100, _fmt?: (v: number) => string) {
+    const isPercent = max <= 1;
+    const step = isPercent ? 0.01 : 1;
+    const displayNum = isPercent ? Math.round(val * 100) : Math.round(val);
+    const unit = isPercent ? "%" : "px";
     return (
       <div className="mb-2.5">
-        <div className="flex justify-between mb-1">
-          <span className="text-[10.5px] text-white/40">{label}</span>
-          <span className="text-[11px] text-white/50 font-mono">{fmt(val)}</span>
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[10.5px] text-white/40 flex-1">{label}</span>
+          <input type="number" value={displayNum} step={1}
+            onChange={e => { const n = Number(e.target.value); onChange(isPercent ? n / 100 : n); }}
+            className="w-10 bg-transparent text-[10.5px] text-white/60 font-mono text-right outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+          <span className="text-[9.5px] text-white/25 font-mono w-4 shrink-0">{unit}</span>
         </div>
-        <input type="range" min={min} max={max} value={val} onChange={e => onChange(+e.target.value)} className="w-full accent-orange-500" />
+        <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(val, min), max)} onChange={e => onChange(+e.target.value)} className="w-full accent-orange-500" />
       </div>
     );
   }
@@ -997,10 +1004,10 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const pl = b.layout?.padding_left?.value   ?? 0;
     return (
       <div>
-        {layoutRangeRow("Top",    pt, v => onSetLayout(b.id, { padding_top:    { value: v, unit: "px" } }), 0, 200)}
-        {layoutRangeRow("Right",  pr, v => onSetLayout(b.id, { padding_right:  { value: v, unit: "px" } }), 0, 200)}
-        {layoutRangeRow("Bottom", pb, v => onSetLayout(b.id, { padding_bottom: { value: v, unit: "px" } }), 0, 200)}
-        {layoutRangeRow("Left",   pl, v => onSetLayout(b.id, { padding_left:   { value: v, unit: "px" } }), 0, 200)}
+        {layoutRangeRow("Top",    pt, v => onSetLayout(b.id, { padding_top:    { value: v, unit: "px" } }), 0, 300)}
+        {layoutRangeRow("Right",  pr, v => onSetLayout(b.id, { padding_right:  { value: v, unit: "px" } }), 0, 300)}
+        {layoutRangeRow("Bottom", pb, v => onSetLayout(b.id, { padding_bottom: { value: v, unit: "px" } }), 0, 300)}
+        {layoutRangeRow("Left",   pl, v => onSetLayout(b.id, { padding_left:   { value: v, unit: "px" } }), 0, 300)}
       </div>
     );
   }
@@ -1013,10 +1020,10 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const ml = b.layout?.margin_left?.value   ?? 0;
     return (
       <div>
-        {layoutRangeRow("Top",    mt, v => onSetLayout(b.id, { margin_top:    { value: v, unit: "px" } }), 0, 120)}
-        {layoutRangeRow("Right",  mr, v => onSetLayout(b.id, { margin_right:  { value: v, unit: "px" } }), 0, 120)}
-        {layoutRangeRow("Bottom", mb, v => onSetLayout(b.id, { margin_bottom: { value: v, unit: "px" } }), 0, 120)}
-        {layoutRangeRow("Left",   ml, v => onSetLayout(b.id, { margin_left:   { value: v, unit: "px" } }), 0, 120)}
+        {layoutRangeRow("Top",    mt, v => onSetLayout(b.id, { margin_top:    { value: v, unit: "px" } }), -200, 200)}
+        {layoutRangeRow("Right",  mr, v => onSetLayout(b.id, { margin_right:  { value: v, unit: "px" } }), -200, 200)}
+        {layoutRangeRow("Bottom", mb, v => onSetLayout(b.id, { margin_bottom: { value: v, unit: "px" } }), -200, 200)}
+        {layoutRangeRow("Left",   ml, v => onSetLayout(b.id, { margin_left:   { value: v, unit: "px" } }), -200, 200)}
       </div>
     );
   }
@@ -1038,7 +1045,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     return (
       <div>
         <Field label="Overlay color">{layoutColorCtl("bg_overlay_color", "#000000")}</Field>
-        {layoutRangeRow("Overlay opacity", op, v => onSetLayout(b.id, { bg_overlay_opacity: v }), 0, 1, v => `${Math.round(v*100)}%`)}
+        {layoutRangeRow("Overlay opacity", op, v => onSetLayout(b.id, { bg_overlay_opacity: v }), 0, 1)}
       </div>
     );
   }
@@ -1132,7 +1139,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
                   className={IS + " font-mono text-xs"} />
               </div>
             </Field>
-            {layoutRangeRow("Pattern opacity", opacity, v => onSetLayout(b.id, { bg_pattern_opacity: v }), 0, 1, v => `${Math.round(v * 100)}%`)}
+            {layoutRangeRow("Pattern opacity", opacity, v => onSetLayout(b.id, { bg_pattern_opacity: v }), 0, 1)}
           </>
         )}
       </div>
