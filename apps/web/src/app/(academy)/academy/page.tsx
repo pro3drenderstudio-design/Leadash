@@ -60,9 +60,7 @@ function CourseCard({ product, index }: { product: Product; index: number }) {
 
   return (
     <Link href={`/academy/courses/${product.slug}`} style={{ textDecoration: "none", display: "block" }}>
-      <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", overflow: "hidden", transition: "box-shadow .2s, transform .2s" }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px -8px rgba(0,0,0,.12)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "none"; (e.currentTarget as HTMLElement).style.transform = "none"; }}>
+      <div className="course-card" style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", overflow: "hidden", transition: "box-shadow .2s, transform .2s" }}>
         {/* Thumbnail */}
         <div style={{ height: 180, background: product.thumbnail_url ? undefined : gradient, backgroundImage: product.thumbnail_url ? `url(${product.thumbnail_url})` : undefined, backgroundSize: "cover", backgroundPosition: "center", display: "flex", alignItems: "flex-end", padding: 16 }}>
           <span style={{ background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 99, backdropFilter: "blur(4px)" }}>
@@ -103,6 +101,7 @@ export default async function AcademyCoursesPage() {
 
   return (
     <main>
+      <style>{`.course-card:hover{box-shadow:0 8px 30px -8px rgba(0,0,0,.12);transform:translateY(-2px)}`}</style>
       {/* Hero */}
       <section style={{ background: "linear-gradient(135deg,#fff7ed 0%,#fff 60%)", padding: "72px 20px 64px", textAlign: "center" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>

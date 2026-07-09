@@ -1131,7 +1131,7 @@ function AutomationBuilderInner() {
       return next;
     });
     // Keep selectedNode in sync so the panel re-renders immediately
-    setSelectedNode(prev => prev?.id === id ? { ...prev, data } : prev);
+    setSelectedNode((prev: Node | null) => prev?.id === id ? { ...prev, data } : prev);
   }
 
   async function save(andActivate?: boolean) {
