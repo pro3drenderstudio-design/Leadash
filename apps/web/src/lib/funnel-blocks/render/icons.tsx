@@ -13,8 +13,9 @@ export function Icon({ paths, size = 16, sw = 1.8 }: { paths: string[]; size?: n
 export const LABELS: Record<BlockType, string> = {
   "row":"Row","column":"Column",
   "section":"Section","spacer":"Spacer","divider":"Divider",
-  "headline":"Headline","body-text":"Paragraph","list":"Bullet List",
+  "headline":"Headline","body-text":"Paragraph","list":"Bullet List","icon-list":"Icon List",
   "image":"Image","video":"Video / VSL",
+  "icon":"Icon","icon-box":"Icon Box",
   "hero":"Hero","countdown-timer":"Countdown","testimonial":"Testimonial",
   "pricing-card":"Pricing","faq-accordion":"FAQ","stats-bar":"Stats Bar",
   "cta-button":"CTA Button","optin-form":"Signup Form","custom-html":"Custom HTML",
@@ -32,6 +33,9 @@ export const ICONS: Partial<Record<BlockType, string[]>> = {
   "headline":       ["M5 6h14","M12 6v12"],
   "body-text":      ["M5 6h14","M5 10h14","M5 14h9"],
   "list":           ["M9 6h11","M9 12h11","M9 18h11","M4.5 6h.01","M4.5 12h.01","M4.5 18h.01"],
+  "icon-list":      ["M9 6h11","M9 12h11","M9 18h11","M5 6l-1.5 1.5L5 9","M5 12l-1.5 1.5L5 15","M5 18l-1.5 1.5L5 21"],
+  "icon":           ["M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"],
+  "icon-box":       ["M3 5h18v14H3z","M8 9h3v6H8z","M14 9h3","M14 13h2"],
   "image":          ["M3 5h18v14H3z","M3 16l5-5 4 4 3-3 6 6"],
   "cta-button":     ["M3 9h18v6H3z"],
   "pricing-card":   ["M6 3h9l3 3v15H6z","M9 9h6","M9 13h6","M9 17h4"],
@@ -46,10 +50,10 @@ export const ICONS: Partial<Record<BlockType, string[]>> = {
 
 export const LIB_GROUPS: { group: string; types: BlockType[] }[] = [
   { group:"Layout",     types:["section","row","spacer","divider"] },
-  { group:"Text",       types:["headline","body-text","list"] },
-  { group:"Media",      types:["image","video"] },
+  { group:"Text",       types:["headline","body-text","list","icon-list"] },
+  { group:"Media",      types:["image","video","icon"] },
   { group:"Conversion", types:["hero","optin-form","cta-button","countdown-timer","pricing-card","testimonial","stats-bar","faq-accordion"] },
-  { group:"Cards",      types:["info-card"] },
+  { group:"Cards",      types:["info-card","icon-box"] },
   { group:"Other",      types:["custom-html"] },
 ];
 

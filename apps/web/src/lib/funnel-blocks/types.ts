@@ -1,8 +1,9 @@
 export type BlockType =
   | "row" | "column"
   | "section" | "spacer" | "divider"
-  | "headline" | "body-text" | "list"
+  | "headline" | "body-text" | "list" | "icon-list"
   | "image" | "video"
+  | "icon" | "icon-box"
   | "hero" | "countdown-timer" | "testimonial" | "pricing-card" | "faq-accordion" | "stats-bar"
   | "cta-button" | "optin-form" | "custom-html"
   | "info-card";
@@ -32,6 +33,7 @@ export interface BlockLayout {
   bg_image?: string;
   bg_overlay_color?: string;
   bg_overlay_opacity?: number;
+  bg_gradient?: string;
   border_color?: string;
   border_width?: number;
   border_radius?: number;

@@ -105,9 +105,7 @@ export default async function AcademyCoursesPage() {
       {/* Hero */}
       <section style={{ background: "linear-gradient(135deg,#fff7ed 0%,#fff 60%)", padding: "72px 20px 64px", textAlign: "center" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <span style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.12em", background: "#fff7ed", padding: "4px 14px", borderRadius: 99, border: "1px solid #fed7aa", marginBottom: 20 }}>
-            Leadash Academy
-          </span>
+          <img src="/Leadash_academy_logo_black.png" alt="Leadash Academy" style={{ height: 40, width: "auto", marginBottom: 28, display: "inline-block" }} />
           <h1 style={{ fontSize: "clamp(2rem,5vw,3rem)", fontWeight: 900, color: "#111827", lineHeight: 1.15, marginBottom: 16, letterSpacing: "-0.03em" }}>
             Practical training for the<br />African professional
           </h1>
@@ -139,6 +137,7 @@ export default async function AcademyCoursesPage() {
       {/* Challenge CTA */}
       <section style={{ background: "#111827", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ maxWidth: 540, margin: "0 auto" }}>
+          <img src="/Leadash_academy_logo_white.png" alt="Leadash Academy" style={{ height: 32, width: "auto", marginBottom: 28, display: "inline-block", opacity: 0.9 }} />
           <h2 style={{ fontSize: "clamp(1.5rem,4vw,2.25rem)", fontWeight: 800, color: "#fff", marginBottom: 12, letterSpacing: "-0.02em" }}>
             Ready to land your first client?
           </h2>

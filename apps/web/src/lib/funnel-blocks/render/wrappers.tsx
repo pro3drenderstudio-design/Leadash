@@ -26,6 +26,8 @@ export function buildOuterStyle(layout: BlockLayout | undefined, fallbackPadding
     style.backgroundImage = `url(${layout.bg_image})`;
     style.backgroundSize = "cover";
     style.backgroundPosition = "center";
+  } else if (layout.bg_gradient) {
+    style.background = layout.bg_gradient;
   }
   const pt = layout.padding_top ? sizeToCss(layout.padding_top) : undefined;
   const pb = layout.padding_bottom ? sizeToCss(layout.padding_bottom) : undefined;
@@ -51,7 +53,7 @@ export function buildOuterStyle(layout: BlockLayout | undefined, fallbackPadding
 }
 
 export function buildOverlayStyle(layout: BlockLayout | undefined): React.CSSProperties | null {
-  if (!layout?.bg_image || !layout.bg_overlay_color) return null;
+  if ((!layout?.bg_image && !layout?.bg_gradient) || !layout.bg_overlay_color) return null;
   return {
     position: "absolute",
     inset: 0,

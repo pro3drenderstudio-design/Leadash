@@ -22,9 +22,25 @@ import {
 import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/icons";
 import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
 import type { BlockRenderContext } from "@/lib/funnel-blocks/render/BlockRenderer";
+import { ICON_TYPE_LIST } from "@/lib/funnel-blocks/render/BlockRenderer";
 import { createClient } from "@/lib/supabase/client";
 
 const AC = "#f97316";
+
+const GOOGLE_FONTS_SANS    = ["Inter","Poppins","Montserrat","Lato","Open Sans","Raleway","Nunito","DM Sans","Plus Jakarta Sans","Outfit","Sora","Manrope","Figtree","Mulish"];
+const GOOGLE_FONTS_SERIF   = ["Playfair Display","Merriweather","Lora","EB Garamond","Libre Baskerville"];
+const GOOGLE_FONTS_DISPLAY = ["Space Grotesk","Oswald","Anton","Bebas Neue","Bricolage Grotesque"];
+
+const GRADIENT_PRESETS = [
+  "linear-gradient(135deg,#f97316,#dc2626)",
+  "linear-gradient(135deg,#7c3aed,#4f46e5)",
+  "linear-gradient(135deg,#059669,#0891b2)",
+  "linear-gradient(135deg,#db2777,#f97316)",
+  "linear-gradient(180deg,#111827,#0c0c0f)",
+  "linear-gradient(135deg,#1e2433,#0c0c0f)",
+  "linear-gradient(135deg,#134e4a,#1e3a5f)",
+  "radial-gradient(ellipse at top,#1e2433,#0c0c0f)",
+];
 
 // ── Design system background tokens ───────────────────────────────────────────
 // #0c0c0f  main app background
@@ -870,19 +886,29 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   }
   function headlineSizeCtl() {
     if (!b) return null;
-    const remOpts: [number, string][] = [[1.5,"S"],[1.875,"M"],[2.25,"L"],[3,"XL"]];
-    const cur = b.props.size as { value:number; unit:string } | undefined;
+    const cur = b.props.size as { value: number; unit: string } | undefined;
     const curVal = cur?.value ?? 2.25;
+    const curUnit = cur?.unit ?? "rem";
+    const displayPx = curUnit === "rem" ? Math.round(curVal * 16) : Math.round(curVal);
     return (
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
-        {remOpts.map(([v, l]) => (
-          <button key={l} onClick={() => onSetProps(b.id, { size: { value: v, unit: "rem" } })}
-            className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${
-              curVal === v ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
-            }`}>
-            {l}
-          </button>
-        ))}
+      <div>
+        <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5 mb-2">
+          {([[1.5,"S"],[1.875,"M"],[2.25,"L"],[3,"XL"]] as [number,string][]).map(([v, l]) => (
+            <button key={l} onClick={() => onSetProps(b.id, { size: { value: v, unit: "rem" } })}
+              className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${
+                curUnit === "rem" && Math.abs(curVal - v) < 0.01 ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
+              }`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10.5px] text-white/35 whitespace-nowrap">custom:</span>
+          <input type="number" min={8} max={200} value={displayPx}
+            onChange={e => onSetProps(b.id, { size: { value: +e.target.value, unit: "px" } })}
+            className="w-16 bg-white/5 border border-white/10 rounded-md px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-orange-500/40" />
+          <span className="text-[10.5px] text-white/35">px</span>
+        </div>
       </div>
     );
   }
@@ -1013,6 +1039,89 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         <Field label="Overlay color">{layoutColorCtl("bg_overlay_color", "#000000")}</Field>
         {layoutRangeRow("Overlay opacity", op, v => onSetLayout(b.id, { bg_overlay_opacity: v }), 0, 1, v => `${Math.round(v*100)}%`)}
       </div>
+    );
+  }
+  function fontCtl(keyFamily = "font_family", keySize: string | null = "font_size") {
+    if (!b) return null;
+    const famVal = (b.props[keyFamily] as string) ?? "";
+    const sizeVal = keySize ? ((b.props[keySize] as number) ?? 16) : 16;
+    return (
+      <>
+        <Field label="Font family">
+          <select value={famVal} onChange={e => onSetProps(b.id, { [keyFamily]: e.target.value || undefined })} className={IS}>
+            <option value="">Default</option>
+            <optgroup label="Sans-serif">{GOOGLE_FONTS_SANS.map(f => <option key={f} value={f}>{f}</option>)}</optgroup>
+            <optgroup label="Serif">{GOOGLE_FONTS_SERIF.map(f => <option key={f} value={f}>{f}</option>)}</optgroup>
+            <optgroup label="Display">{GOOGLE_FONTS_DISPLAY.map(f => <option key={f} value={f}>{f}</option>)}</optgroup>
+          </select>
+        </Field>
+        {keySize && (
+          <Field label="Font size">
+            <div className="flex items-center gap-2">
+              <input type="range" min={10} max={80} value={sizeVal} onChange={e => onSetProps(b.id, { [keySize]: +e.target.value })} className="flex-1 accent-orange-500" />
+              <span className="text-xs text-white/50 font-mono min-w-[46px] text-right">{sizeVal}px</span>
+            </div>
+          </Field>
+        )}
+      </>
+    );
+  }
+  function iconTypeCtl(key = "icon_type") {
+    if (!b) return null;
+    return (
+      <select value={(b.props[key] as string) ?? "check"} onChange={e => onSetProps(b.id, { [key]: e.target.value })} className={IS}>
+        {ICON_TYPE_LIST.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+      </select>
+    );
+  }
+  function gradientCtl() {
+    if (!b) return null;
+    const val = (b.layout?.bg_gradient as string) ?? "";
+    return (
+      <div>
+        <input value={val} onChange={e => onSetLayout(b.id, { bg_gradient: e.target.value || undefined })}
+          placeholder="e.g. linear-gradient(135deg, #f97316, #dc2626)" className={IS + " font-mono text-xs mb-2"} />
+        <div className="flex gap-1.5 flex-wrap">
+          {GRADIENT_PRESETS.map(g => (
+            <button key={g} onMouseDown={e => { e.preventDefault(); onSetLayout(b.id, { bg_gradient: g }); }}
+              style={{ background: g, width: 28, height: 28, borderRadius: 6, cursor: "pointer", border: val === g ? "2px solid #f97316" : "2px solid transparent" }} />
+          ))}
+          {val && <button onMouseDown={e => { e.preventDefault(); onSetLayout(b.id, { bg_gradient: undefined }); }}
+            className="px-2 h-7 rounded-md text-[10.5px] text-white/40 border border-white/10 bg-white/5 cursor-pointer hover:text-white/60">Clear</button>}
+        </div>
+      </div>
+    );
+  }
+  function imageSizeCtl() {
+    if (!b) return null;
+    const alignOpts: [string, string][] = [["left","Left"],["center","Center"],["right","Right"]];
+    const curAlign = (b.props.align as string) ?? "center";
+    const curWidth = (b.props.width as string) ?? "100%";
+    return (
+      <>
+        <Field label="Alignment">
+          <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+            {alignOpts.map(([v, l]) => (
+              <button key={v} onClick={() => onSetProps(b.id, { align: v })}
+                className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${curAlign === v ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Width">
+          <div className="flex gap-2">
+            {["100%","75%","50%","auto"].map(w => (
+              <button key={w} onClick={() => onSetProps(b.id, { width: w })}
+                className={`flex-1 py-1.5 border rounded-md cursor-pointer text-[11px] font-mono font-semibold transition-colors ${curWidth === w ? "border-orange-500 bg-orange-500/[0.12] text-orange-300" : "border-white/10 bg-white/5 text-white/40 hover:text-white/60"}`}>
+                {w}
+              </button>
+            ))}
+          </div>
+          <input value={curWidth} onChange={e => onSetProps(b.id, { width: e.target.value })}
+            placeholder="e.g. 320px or 60%" className={IS + " mt-1.5 font-mono text-xs"} />
+        </Field>
+      </>
     );
   }
   function fieldsCtl() {
@@ -1167,7 +1276,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   function BlockSettings() {
     if (!b) return null;
     const t = b.type;
-    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || t === "hero" || t === "stats-bar" || t === "faq-accordion" || t === "testimonial" || t === "optin-form" || t === "info-card" || b.props.bg_color !== undefined;
+    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || t === "hero" || t === "stats-bar" || t === "faq-accordion" || t === "testimonial" || t === "optin-form" || t === "info-card" || t === "list" || t === "icon-list" || t === "icon" || t === "icon-box" || b.props.bg_color !== undefined;
     const evergreen = Boolean(b.props.evergreen);
     const noContent = ["section","row","column","divider"].includes(t);
     return (
@@ -1225,8 +1334,15 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
         {t==="faq-accordion"&&<><Field label="Questions">{itemsCtl("faq")}</Field><Field label="Show numbered badges">{toggleCtl("show_number")}</Field></>}
         {t==="list"&&<Field label="Items">{itemsCtl("list")}</Field>}
+        {t==="icon-list"&&<Field label="Items">{itemsCtl("list")}</Field>}
         {t==="spacer"&&<Field label="Height">{numCtl("height")}</Field>}
-        {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field><Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:0})}</Field></>}
+        {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field>{imageSizeCtl()}<Field label="Corner radius">{numCtl("radius",{min:0,max:80,default:0})}</Field></>}
+        {t==="icon-box"&&<>
+          <Field label="Title">{textCtl("title")}</Field>
+          <Field label="Body">{areaCtl("body")}</Field>
+          <Field label="Link text (optional)">{textCtl("link_text")}</Field>
+          <Field label="Link URL">{textCtl("link_url")}</Field>
+        </>}
         {t==="custom-html"&&<Field label="HTML"><textarea value={(b.props.html as string)??""} onChange={e=>onSetProps(b.id,{html:e.target.value})} rows={6} className={IS} style={{resize:"vertical",fontFamily:"monospace"}} /></Field>}
         {t==="info-card"&&<>
           <Field label="Title">{textCtl("title")}</Field>
@@ -1239,22 +1355,23 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
           <>
             <div className="h-4" />
             <SL text="Style" />
-            {t==="headline"&&<Field label="Size">{headlineSizeCtl()}</Field>}
+            {t==="headline"&&<><Field label="Size">{headlineSizeCtl()}</Field>{fontCtl("font_family", null)}</>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
+            {t==="body-text"&&fontCtl()}
+            {(t==="list"||t==="icon-list")&&<>
+              <Field label="Icon">{iconTypeCtl("icon_type")}</Field>
+              <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Text color">{colorCtl("text_color")}</Field>
+              {fontCtl("font_family","text_size")}
+            </>}
             {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{toggleCtl("full_width")}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
-            {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="list"||t==="hero"||t==="faq-accordion"||t==="optin-form")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
+            {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="hero"||t==="faq-accordion"||t==="optin-form")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
             {t==="hero"&&<><Field label="Headline color">{colorCtl("color")}</Field><Field label="Subtext color">{colorCtl("subtext_color")}</Field></>}
             {t==="stats-bar"&&<><Field label="Value color">{colorCtl("value_color")}</Field><Field label="Label color">{colorCtl("label_color")}</Field></>}
             {t==="faq-accordion"&&<><Field label="Item background">{colorCtl("item_bg")}</Field><Field label="Item border">{colorCtl("item_border")}</Field><Field label="Question color">{colorCtl("q_color")}</Field><Field label="Answer color">{colorCtl("a_color")}</Field></>}
             {t==="testimonial"&&<><Field label="Card background">{colorCtl("card_bg")}</Field><Field label="Card border">{colorCtl("card_border")}</Field><Field label="Quote color">{colorCtl("quote_color")}</Field><Field label="Name color">{colorCtl("name_color")}</Field><Field label="Result/role color">{colorCtl("role_color")}</Field></>}
             {t==="info-card"&&<>
-              <Field label="Icon">
-                <select value={(b.props.icon_type as string)||"check"} onChange={e=>onSetProps(b.id,{icon_type:e.target.value})} className={IS}>
-                  {["check","star","bolt","shield","chart","globe","users","diamond","zap","clock","heart","target"].map(i=>(
-                    <option key={i} value={i}>{i.charAt(0).toUpperCase()+i.slice(1)}</option>
-                  ))}
-                </select>
-              </Field>
+              <Field label="Icon">{iconTypeCtl()}</Field>
               <Field label="Show icon">{toggleCtl("show_icon")}</Field>
               <Field label="Alignment">{alignCtl()}</Field>
               <Field label="Icon color">{colorCtl("icon_color")}</Field>
@@ -1263,6 +1380,42 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
               <Field label="Card background">{colorCtl("card_bg")}</Field>
               <Field label="Card border">{colorCtl("card_border")}</Field>
               <Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:12})}</Field>
+            </>}
+            {t==="icon"&&<>
+              <Field label="Icon">{iconTypeCtl()}</Field>
+              <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Icon size">{numCtl("icon_size",{min:16,max:120,default:48})}</Field>
+              <Field label="Background color">{colorCtl("icon_bg")}</Field>
+              <Field label="Background shape">
+                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+                  {(["circle","square","none"] as const).map(s => (
+                    <button key={s} onClick={() => onSetProps(b.id, { icon_bg_shape: s })}
+                      className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11px] font-semibold capitalize transition-colors ${((b.props.icon_bg_shape as string)||"circle")===s?"bg-orange-500 text-white":"bg-transparent text-white/35 hover:text-white/60"}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Alignment">{alignCtl()}</Field>
+            </>}
+            {t==="icon-box"&&<>
+              <Field label="Icon">{iconTypeCtl()}</Field>
+              <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Icon size">{numCtl("icon_size",{min:16,max:80,default:32})}</Field>
+              <Field label="Icon position">
+                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+                  {(["top","left","right"] as const).map(pos => (
+                    <button key={pos} onClick={() => onSetProps(b.id, { icon_position: pos })}
+                      className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11px] font-semibold capitalize transition-colors ${((b.props.icon_position as string)||"top")===pos?"bg-orange-500 text-white":"bg-transparent text-white/35 hover:text-white/60"}`}>
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Title color">{colorCtl("title_color")}</Field>
+              <Field label="Title size">{numCtl("title_size",{min:12,max:56,default:18})}</Field>
+              <Field label="Body color">{colorCtl("body_color")}</Field>
+              <Field label="Body size">{numCtl("body_size",{min:10,max:32,default:15})}</Field>
             </>}
             {b.props.bg_color !== undefined && <Field label="Background">{colorCtl("bg_color")}</Field>}
           </>
@@ -1321,18 +1474,30 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             <div className="h-4" />
             <SL text="Width" />
             <Field label="Width">{layoutToggleCtl("boxed")}</Field>
+          </>
+        )}
+        {isContainer && (
+          <>
             <div className="h-4" />
             <SL text="Background" />
             <Field label="Background image">
               <ImageUploadField value={b.layout?.bg_image} onChange={url => onSetLayout(b.id, { bg_image: url || undefined })} funnelId={funnelId} />
             </Field>
             {Boolean(b.layout?.bg_image) && bgOverlayCtl()}
+            {!b.layout?.bg_image && (
+              <Field label="Background gradient">
+                {gradientCtl()}
+              </Field>
+            )}
+            <div className="h-1.5" />
+            <SL text="Border" />
+            {borderCtl()}
           </>
         )}
-        {isContainer && (
+        {!isContainer && (
           <>
-            <div className={isRow ? "h-1.5" : "h-4"} />
-            <SL text="Border" />
+            <div className="h-4" />
+            <SL text="Border & Radius" />
             {borderCtl()}
           </>
         )}

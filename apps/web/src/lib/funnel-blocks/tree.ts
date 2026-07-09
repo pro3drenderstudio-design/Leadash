@@ -22,8 +22,11 @@ export function defaultProps(type: BlockType): Record<string, unknown> {
   switch (type) {
     case "headline":       return { text:"A short, punchy headline", align:"center", color:"#ffffff", bg_color:"transparent", size:{ value:2.25, unit:"rem" }, weight:"bold" };
     case "body-text":      return { text:"Add supporting copy here. Click to edit this paragraph directly on the canvas.", align:"left", color:"#9aa4b2", bg_color:"transparent" };
-    case "list":           return { items:[{text:"First key benefit"},{text:"Second key benefit"},{text:"Third key benefit"}], bg_color:"transparent" };
-    case "image":          return { src:"", alt:"", bg_color:"transparent" };
+    case "list":           return { items:[{text:"First key benefit"},{text:"Second key benefit"},{text:"Third key benefit"}], icon_type:"check", icon_color:"#f97316", text_color:"#d7dbe2", text_size:16, bg_color:"transparent" };
+    case "icon-list":      return { items:[{text:"First item",icon_type:"check"},{text:"Second item",icon_type:"check"},{text:"Third item",icon_type:"check"}], icon_color:"#f97316", text_color:"#d7dbe2", text_size:16, bg_color:"transparent" };
+    case "icon":           return { icon_type:"star", icon_color:"#f97316", icon_size:48, icon_bg:"rgba(249,115,22,0.12)", icon_bg_shape:"circle", align:"center", bg_color:"transparent" };
+    case "icon-box":       return { icon_type:"bolt", icon_color:"#f97316", icon_size:32, icon_position:"top", title:"Feature title", body:"A short description of this feature or benefit.", title_color:"#ffffff", body_color:"#9aa4b2", title_size:18, body_size:15, link_text:"", link_url:"", bg_color:"transparent" };
+    case "image":          return { src:"", alt:"", align:"center", width:"100%", bg_color:"transparent" };
     case "video":          return { url:"", caption:"Watch the 2-minute overview", bg_color:"#0c0c0f" };
     case "hero":           return { eyebrow:"7-Day Job & Client Acquisition Challenge", headline:"Land a Job or High-Paying Client in 7 Days", subtext:"A structured, hands-on challenge that takes you from zero to your first client or job offer — in just one week.", button_text:"Join the Challenge — ₦10,000 →", button_url:"#join-form", button2_text:"See What You'll Learn", button2_url:"#curriculum", accent_color:"#f97316", color:"#111827", subtext_color:"#4b5563", bg_color:"#ffffff" };
     case "countdown-timer":return { label:"Enrollment closes in · Only 50 spots per cohort", accent_color:"#f97316", bg_color:"#111827", evergreen:true, duration_minutes:2880, target_date:"" };

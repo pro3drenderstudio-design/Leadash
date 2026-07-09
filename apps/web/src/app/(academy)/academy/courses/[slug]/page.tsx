@@ -82,8 +82,10 @@ export default async function CourseDetailPage({ params }: Props) {
       <section style={{ background: "linear-gradient(135deg,#111827 0%,#1f2937 100%)", padding: "56px 20px 64px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr auto", gap: 48, alignItems: "start" }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <Link href="/academy" style={{ fontSize: 13, color: "#9ca3af", textDecoration: "none" }}>Academy</Link>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+              <Link href="/academy" style={{ display: "flex", alignItems: "center" }}>
+                <img src="/Leadash_academy_logo_white.png" alt="Leadash Academy" style={{ height: 24, width: "auto", opacity: 0.85 }} />
+              </Link>
               <span style={{ color: "#4b5563" }}>›</span>
               <span style={{ fontSize: 13, color: "#6b7280" }}>{isChallenge ? "Challenge" : "Course"}</span>
             </div>

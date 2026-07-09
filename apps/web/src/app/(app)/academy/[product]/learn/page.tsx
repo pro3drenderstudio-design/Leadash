@@ -445,8 +445,8 @@ export default function CourseDashboard() {
     <div className="v2-app max-w-3xl mx-auto px-6 py-10" style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
       {/* Header */}
       <div className="mb-8">
-        <Link href="/academy" className="text-sm text-white/40 hover:text-white/70 mb-4 inline-flex items-center gap-1">
-          ← Academy
+        <Link href="/academy" className="mb-4 inline-flex items-center gap-1">
+          <img src="/Leadash_academy_logo_white.png" alt="Leadash Academy" style={{ height: 22, width: "auto", opacity: 0.6 }} />
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div>

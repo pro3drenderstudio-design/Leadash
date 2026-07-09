@@ -33,6 +33,42 @@ export interface BlockRenderContext {
 
 const AC = "#f97316";
 
+export const ICON_PATHS: Record<string, string[]> = {
+  check:     ["M20 6L9 17l-5-5"],
+  star:      ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
+  bolt:      ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+  shield:    ["M12 2l7 4v6c0 5.25-7 10-7 10S5 17.25 5 12V6l7-4z"],
+  chart:     ["M5 20V11","M12 20V4","M19 20v-7"],
+  globe:     ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M2 12h20","M12 2c-2.76 3.63-4 7-4 10s1.24 6.37 4 10c2.76-3.63 4-7 4-10S14.76 2 12 2z"],
+  users:     ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
+  diamond:   ["M12 2l8 9-8 11-8-11L12 2z","M3 11h18"],
+  zap:       ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+  clock:     ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M12 8v4l3 2"],
+  heart:     ["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"],
+  target:    ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z","M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"],
+  arrow:     ["M5 12h14","M12 5l7 7-7 7"],
+  rocket:    ["M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z","M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"],
+  mail:      ["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z","M22 6l-10 7L2 6"],
+  thumbsup:  ["M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z","M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"],
+  award:     ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z","M12 17v5","M9 22h6"],
+  flag:      ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z","M4 22v-7"],
+  phone:     ["M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.07 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 5.81 5.81l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.73 2.02z"],
+  plus:      ["M12 5v14","M5 12h14"],
+  circle:    ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"],
+  dot:       ["M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"],
+};
+
+export const ICON_TYPE_LIST = Object.keys(ICON_PATHS);
+
+function fontHref(family: string): string {
+  return `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, "+")}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`;
+}
+
+function FontLink({ family }: { family?: string | null }) {
+  if (!family) return null;
+  return <link rel="stylesheet" href={fontHref(family)} />;
+}
+
 function resolveFontSize(size: unknown, fallbackRem = 2.25): string {
   if (size && typeof size === "object" && "value" in (size as Record<string, unknown>)) {
     const s = size as { value: number; unit: string };
@@ -102,7 +138,8 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const outer = buildOuterStyle(block.layout, "0px");
       const overlay = buildOverlayStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
-      const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
+      const hasLayerBg = outer.background || outer.backgroundImage;
+      const bg = hasLayerBg ? undefined : ((p.bg_color as string) || "transparent");
       const cols = block.children ?? [];
       const gap = block.layout?.column_gap ?? 16;
       const device = ctx.device ?? "desktop";
@@ -116,7 +153,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
         const tabletTpl  = buildRowGridTemplate(colLayouts, "tablet");
         const mobileTpl  = buildRowGridTemplate(colLayouts, "mobile");
         return (
-          <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
+          <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
             {overlay && <div style={overlay} />}
             <div style={{ ...inner }}>
               <style dangerouslySetInnerHTML={{ __html:
@@ -135,7 +172,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       // Edit mode: apply grid template based on current device preview
       const gridTpl = buildRowGridTemplate(colLayouts, device);
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
           {overlay && <div style={overlay} />}
           <div style={{ ...inner }}>
             <div style={{ display: "grid", gridTemplateColumns: gridTpl, gap, position: "relative" }}>
@@ -148,9 +185,10 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "column": {
       const outer = buildOuterStyle(block.layout, "0px");
-      const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
+      const hasLayerBgCol = outer.background || outer.backgroundImage;
+      const bg = hasLayerBgCol ? undefined : ((p.bg_color as string) || "transparent");
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, minHeight: 0 }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), minHeight: 0 }}>
           {ctx.renderChildren?.(block.children ?? [], block.id)}
         </div>
       );
@@ -160,9 +198,10 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const outer = buildOuterStyle(block.layout, "40px 28px");
       const overlay = buildOverlayStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
-      const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
+      const hasLayerBgSec = outer.background || outer.backgroundImage;
+      const bg = hasLayerBgSec ? undefined : ((p.bg_color as string) || "transparent");
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
           {overlay && <div style={overlay} />}
           <div style={inner}>{ctx.renderChildren?.(block.children ?? [], block.id)}</div>
         </div>
@@ -191,10 +230,13 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "headline": {
       const size = resolveFontSize(p.size, 2.25);
+      const fontFamily = p.font_family as string | undefined;
       return (
         <div style={{ padding: "10px 28px" }}>
+          <FontLink family={fontFamily} />
           <Editable
             tag="h2"
+            richText
             value={(p.text as string) || "Headline"}
             editable={editable}
             onCommit={commit("text")}
@@ -202,45 +244,60 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             style={{
               fontSize: size, fontWeight: (p.weight as string) || "bold", color: (p.color as string) || "#fff",
               textAlign: (p.align as React.CSSProperties["textAlign"]) || "left", lineHeight: 1.2, margin: 0,
+              fontFamily: fontFamily || undefined,
             }}
           />
         </div>
       );
     }
 
-    case "body-text":
+    case "body-text": {
+      const bodyFontFamily = p.font_family as string | undefined;
+      const bodyFontSize = p.font_size ? `${p.font_size as number}px` : (p.size as string) || "1rem";
       return (
         <div style={{ padding: "8px 28px" }}>
+          <FontLink family={bodyFontFamily} />
           <Editable
             tag="p"
+            richText
             value={(p.text as string) || "Paragraph text…"}
             editable={editable}
             onCommit={commit("text")}
             onFocus={focus}
             style={{
-              fontSize: (p.size as string) || "1rem", color: (p.color as string) || "#c7ccd4",
+              fontSize: bodyFontSize, color: (p.color as string) || "#c7ccd4",
               textAlign: (p.align as React.CSSProperties["textAlign"]) || "left", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap",
+              fontFamily: bodyFontFamily || undefined,
             }}
           />
         </div>
       );
+    }
 
     case "list": {
       const li = items("items");
+      const listIconType = (p.icon_type as string) || "check";
+      const listIconColor = (p.icon_color as string) || (p.accent_color as string) || AC;
+      const listTextColor = (p.text_color as string) || "#d7dbe2";
+      const listFontSize = p.text_size ? `${p.text_size as number}px` : "15px";
+      const listFontFamily = p.font_family as string | undefined;
+      const listPaths = ICON_PATHS[listIconType] ?? ICON_PATHS.check;
       return (
         <div style={{ padding: "8px 28px" }}>
+          <FontLink family={listFontFamily} />
           {li.map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
-              <span style={{ flexShrink: 0, marginTop: 3, color: (p.accent_color as string) || AC }}>
-                <Icon paths={["M20 6L9 17l-5-5"]} size={15} sw={2.6} />
+              <span style={{ flexShrink: 0, marginTop: 3, color: listIconColor }}>
+                <Icon paths={listPaths} size={15} sw={2.6} />
               </span>
               <Editable
                 tag="span"
+                richText
                 value={it.text || ""}
                 editable={editable}
                 onCommit={commitItem(i, "text")}
                 onFocus={focus}
-                style={{ color: "#d7dbe2", fontSize: 15, lineHeight: 1.5 }}
+                style={{ color: listTextColor, fontSize: listFontSize, lineHeight: 1.5, fontFamily: listFontFamily || undefined }}
               />
             </div>
           ))}
@@ -250,16 +307,20 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "image": {
       const src = p.src as string | undefined;
-      const img = src ? (
-        <img src={src} alt={(p.alt as string) || ""} style={{ width: "100%", display: "block", borderRadius: (p.radius as number) ?? 0 }} />
+      const imgWidth = (p.width as string) || "100%";
+      const imgAlign = (p.align as string) || "center";
+      const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+      const imgRadius = (p.radius as number) ?? 0;
+      const imgEl = src ? (
+        <img src={src} alt={(p.alt as string) || ""} style={{ width: imgWidth, maxWidth: "100%", display: "block", borderRadius: imgRadius }} />
       ) : editable ? (
-        <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#3a4252" }}>
+        <div style={{ height: 220, width: imgWidth, maxWidth: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#3a4252" }}>
           <Icon paths={["M3 5h18v14H3z", "M3 16l5-5 4 4 3-3 6 6"]} size={28} sw={1.4} />
         </div>
       ) : null;
       return (
-        <div style={{ padding: "10px 28px" }} onClick={editable ? focus : undefined}>
-          {!editable && p.href ? <a href={p.href as string}>{img}</a> : img}
+        <div style={{ padding: "10px 28px", display: "flex", justifyContent: justifyMap[imgAlign] || "center" }} onClick={editable ? focus : undefined}>
+          {!editable && p.href ? <a href={p.href as string}>{imgEl}</a> : imgEl}
         </div>
       );
     }
@@ -513,20 +574,6 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       );
 
     case "info-card": {
-      const ICON_PATHS: Record<string, string[]> = {
-        check:   ["M20 6L9 17l-5-5"],
-        star:    ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
-        bolt:    ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
-        shield:  ["M12 2l7 4v6c0 5.25-7 10-7 10S5 17.25 5 12V6l7-4z"],
-        chart:   ["M5 20V11","M12 20V4","M19 20v-7"],
-        globe:   ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M2 12h20","M12 2c-2.76 3.63-4 7-4 10s1.24 6.37 4 10c2.76-3.63 4-7 4-10S14.76 2 12 2z"],
-        users:   ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
-        diamond: ["M12 2l8 9-8 11-8-11L12 2z","M3 11h18"],
-        zap:     ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
-        clock:   ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M12 8v4l3 2"],
-        heart:   ["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"],
-        target:  ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z","M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"],
-      };
       const iconType  = (p.icon_type   as string) || "check";
       const iconColor = (p.icon_color  as string) || AC;
       const titleColor= (p.title_color as string) || "#ffffff";
@@ -536,7 +583,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const radius    = (p.radius      as number) ?? 12;
       const align     = ((p.align as string) || "left") as React.CSSProperties["textAlign"];
       const showIcon  = p.show_icon !== false;
-      const paths     = ICON_PATHS[iconType] ?? ICON_PATHS.check;
+      const paths     = ICON_PATHS[iconType] ?? ICON_PATHS["check"];
       return (
         <div style={{ padding: "8px 16px" }}>
           <div style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: radius, padding: "24px", textAlign: align }}>
@@ -560,6 +607,113 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
               </div>
             )}
           </div>
+        </div>
+      );
+    }
+
+    case "icon": {
+      const iconType  = (p.icon_type  as string) || "star";
+      const iconColor = (p.icon_color as string) || AC;
+      const iconSize  = (p.icon_size  as number) || 48;
+      const iconBg    = (p.icon_bg    as string) || "";
+      const iconShape = (p.icon_bg_shape as string) || "circle";
+      const iconAlign = (p.align as string) || "center";
+      const justifyMap2: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+      const shapeRadius = iconShape === "circle" ? "50%" : iconShape === "square" ? Math.round(iconSize * 0.22) + "px" : 0;
+      const iconPaths = ICON_PATHS[iconType] ?? ICON_PATHS["star"];
+      return (
+        <div style={{ padding: "12px 28px", display: "flex", justifyContent: justifyMap2[iconAlign] || "center" }} onClick={editable ? focus : undefined}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: iconBg && iconShape !== "none" ? iconSize * 2 : undefined,
+            height: iconBg && iconShape !== "none" ? iconSize * 2 : undefined,
+            borderRadius: iconBg && iconShape !== "none" ? shapeRadius : undefined,
+            background: iconBg && iconShape !== "none" ? iconBg : undefined,
+            color: iconColor,
+          }}>
+            <Icon paths={iconPaths} size={iconSize} sw={1.6} />
+          </div>
+        </div>
+      );
+    }
+
+    case "icon-box": {
+      const iconType    = (p.icon_type    as string) || "bolt";
+      const iconColor   = (p.icon_color   as string) || AC;
+      const iconSize    = (p.icon_size    as number) || 32;
+      const iconPos     = (p.icon_position as string) || "top";
+      const titleColor  = (p.title_color  as string) || "#ffffff";
+      const bodyColor   = (p.body_color   as string) || "#9aa4b2";
+      const titleSize   = (p.title_size   as number) || 18;
+      const bodySize    = (p.body_size    as number) || 15;
+      const iconPaths   = ICON_PATHS[iconType] ?? ICON_PATHS["bolt"];
+      const iconEl = (
+        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: iconSize + 24, height: iconSize + 24, borderRadius: 10,
+          background: `${iconColor}18`, border: `1px solid ${iconColor}33`, color: iconColor, flexShrink: 0 }}>
+          <Icon paths={iconPaths} size={iconSize} sw={1.7} />
+        </div>
+      );
+      const textEl = (
+        <div style={{ flex: iconPos === "left" || iconPos === "right" ? 1 : undefined }}>
+          <Editable tag="h3" richText value={(p.title as string) || "Feature title"} editable={editable} onCommit={commit("title")} onFocus={focus}
+            style={{ fontSize: titleSize, fontWeight: 700, color: titleColor, margin: "0 0 8px", lineHeight: 1.3 }} />
+          <Editable tag="p" richText value={(p.body as string) || "A short description."} editable={editable} onCommit={commit("body")} onFocus={focus}
+            style={{ fontSize: bodySize, color: bodyColor, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }} />
+          {Boolean(p.link_text) && (
+            <div style={{ marginTop: 10 }}>
+              {editable
+                ? <span style={{ fontSize: 13, fontWeight: 600, color: iconColor }}>{p.link_text as string} →</span>
+                : <a href={(p.link_url as string) || "#"} style={{ fontSize: 13, fontWeight: 600, color: iconColor, textDecoration: "none" }}>{p.link_text as string} →</a>
+              }
+            </div>
+          )}
+        </div>
+      );
+      return (
+        <div style={{ padding: "8px 16px" }}>
+          <div style={{
+            display: "flex",
+            flexDirection: iconPos === "left" ? "row" : iconPos === "right" ? "row-reverse" : "column",
+            alignItems: iconPos === "top" ? "flex-start" : "flex-start",
+            gap: 16,
+          }}>
+            {iconEl}
+            {textEl}
+          </div>
+        </div>
+      );
+    }
+
+    case "icon-list": {
+      const ilItems = items("items");
+      const ilIconColor = (p.icon_color as string) || AC;
+      const ilTextColor = (p.text_color as string) || "#d7dbe2";
+      const ilFontSize  = p.text_size ? `${p.text_size as number}px` : "15px";
+      const ilFontFamily = p.font_family as string | undefined;
+      return (
+        <div style={{ padding: "8px 28px" }}>
+          <FontLink family={ilFontFamily} />
+          {ilItems.map((it, i) => {
+            const itemIconType = (it.icon_type as string) || (p.icon_type as string) || "check";
+            const itemPaths = ICON_PATHS[itemIconType] ?? ICON_PATHS["check"];
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
+                <span style={{ flexShrink: 0, marginTop: 2, color: ilIconColor }}>
+                  <Icon paths={itemPaths} size={16} sw={2.2} />
+                </span>
+                <Editable
+                  tag="span"
+                  richText
+                  value={it.text || ""}
+                  editable={editable}
+                  onCommit={commitItem(i, "text")}
+                  onFocus={focus}
+                  style={{ color: ilTextColor, fontSize: ilFontSize, lineHeight: 1.5, fontFamily: ilFontFamily || undefined }}
+                />
+              </div>
+            );
+          })}
         </div>
       );
     }

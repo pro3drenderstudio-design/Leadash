@@ -17,9 +17,7 @@ function ComingSoonOverlay() {
           <span className="text-orange-400 text-xs font-semibold uppercase tracking-widest">Coming Soon</span>
         </div>
 
-        <h1 className="text-4xl font-bold text-white mb-4 leading-tight">
-          Leadash Academy
-        </h1>
+        <img src="/Leadash_academy_logo_white.png" alt="Leadash Academy" style={{ height: 44, width: "auto", marginBottom: 16 }} />
 
         <p className="text-white/50 text-base leading-relaxed mb-10">
           Step-by-step courses and live challenges designed to help Nigerian professionals land foreign clients and earn in dollars.

@@ -362,7 +362,9 @@ function CourseLandingPageInner() {
         <div className="grid lg:grid-cols-5 gap-10">
           {/* Left: course info */}
           <div className="lg:col-span-3">
-            <Link href="/academy" className="text-sm text-white/40 hover:text-white/60 mb-5 inline-block">← Academy</Link>
+            <Link href="/academy" className="mb-5 inline-flex items-center gap-1.5 text-white/40 hover:text-white/70 transition-opacity">
+              <img src="/Leadash_academy_logo_white.png" alt="Leadash Academy" style={{ height: 22, width: "auto", opacity: 0.7 }} />
+            </Link>
             <h1 className="text-3xl lg:text-4xl font-bold text-white leading-tight mb-4">{product.name}</h1>
             {product.description && (
               <p className="text-white/60 text-lg leading-relaxed mb-6">{product.description}</p>
