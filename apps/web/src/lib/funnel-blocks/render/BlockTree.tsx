@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Block } from "../types";
 import { BlockRenderer, BlockRenderContext } from "./BlockRenderer";
-import { buildColumnStyle } from "./wrappers";
+import { buildColumnStyle, buildResponsiveSpacingCss, buildSelfAlignStyle, hasResponsiveLayout } from "./wrappers";
 import { Icon, LABELS } from "./icons";
 import { RevealGate } from "./interactive/RevealGate";
 
@@ -45,19 +45,38 @@ function ChildSlot({ items, parentId, ctx, parentType }: { items: Block[]; paren
   return <BlockTree blocks={items} ctx={ctx} parentId={parentId} parentType={parentType} />;
 }
 
-function blockWrapperPadding(block: Block): React.CSSProperties {
+function blockWrapperPadding(block: Block, device?: string): React.CSSProperties {
   const l = block.layout;
   // Containers (row, section, column) apply padding/margin inside BlockRenderer via buildOuterStyle.
   if (!l || ["row", "section", "column"].includes(block.type)) return {};
+
+  // Helper: pick device-specific spacing, falling back to desktop value.
+  function pick(key: string) {
+    const ll = l as Record<string, unknown>;
+    if (device === "mobile" && ll[`${key}_mobile`]) return ll[`${key}_mobile`] as { value: number; unit: string };
+    if (device === "tablet" && ll[`${key}_tablet`]) return ll[`${key}_tablet`] as { value: number; unit: string };
+    return ll[key] as { value: number; unit: string } | undefined;
+  }
+
   const style: React.CSSProperties = {};
-  if (l.padding_top)    style.paddingTop    = `${l.padding_top.value}${l.padding_top.unit}`;
-  if (l.padding_right)  style.paddingRight  = `${l.padding_right.value}${l.padding_right.unit}`;
-  if (l.padding_bottom) style.paddingBottom = `${l.padding_bottom.value}${l.padding_bottom.unit}`;
-  if (l.padding_left)   style.paddingLeft   = `${l.padding_left.value}${l.padding_left.unit}`;
-  if (l.margin_top)     style.marginTop     = `${l.margin_top.value}${l.margin_top.unit}`;
-  if (l.margin_right)   style.marginRight   = `${l.margin_right.value}${l.margin_right.unit}`;
-  if (l.margin_bottom)  style.marginBottom  = `${l.margin_bottom.value}${l.margin_bottom.unit}`;
-  if (l.margin_left)    style.marginLeft    = `${l.margin_left.value}${l.margin_left.unit}`;
+  const pt = pick("padding_top");
+  const pr = pick("padding_right");
+  const pb = pick("padding_bottom");
+  const pl = pick("padding_left");
+  const mt = pick("margin_top");
+  const mr = pick("margin_right");
+  const mb = pick("margin_bottom");
+  const ml = pick("margin_left");
+  if (pt) style.paddingTop    = `${pt.value}${pt.unit}`;
+  if (pr) style.paddingRight  = `${pr.value}${pr.unit}`;
+  if (pb) style.paddingBottom = `${pb.value}${pb.unit}`;
+  if (pl) style.paddingLeft   = `${pl.value}${pl.unit}`;
+  if (mt) style.marginTop     = `${mt.value}${mt.unit}`;
+  if (mr) style.marginRight   = `${mr.value}${mr.unit}`;
+  if (mb) style.marginBottom  = `${mb.value}${mb.unit}`;
+  if (ml) style.marginLeft    = `${ml.value}${ml.unit}`;
+  // Horizontal self-alignment (non-containers only)
+  Object.assign(style, buildSelfAlignStyle(l));
   return style;
 }
 
@@ -66,8 +85,16 @@ function LiveBlockRow({ block, ctx }: { block: Block; ctx: BlockRenderContext })
   const node = <BlockRenderer block={block} ctx={ctx} />;
   const sourceId = block.layout?.reveal_source_block_id;
   const afterSeconds = block.layout?.reveal_after_seconds;
+  // Responsive spacing/visibility for non-container blocks (containers handle this themselves in BlockRenderer).
+  const isContainer = ["row", "section", "column"].includes(block.type);
+  const respCss = !isContainer ? buildResponsiveSpacingCss(block.id, block.layout) : "";
+  const hasResp = !!respCss;
   return (
-    <div style={{ position: "relative", ...colStyle, ...blockWrapperPadding(block) }}>
+    <div
+      data-blk={hasResp ? block.id : undefined}
+      style={{ position: "relative", ...colStyle, ...blockWrapperPadding(block) }}
+    >
+      {respCss && <style dangerouslySetInnerHTML={{ __html: respCss }} />}
       {sourceId && afterSeconds != null ? (
         <RevealGate sourceBlockId={sourceId} afterSeconds={afterSeconds}>{node}</RevealGate>
       ) : node}
@@ -88,6 +115,10 @@ function EditableBlockRow({ block, ctx, fullCtx }: { block: Block; ctx: BlockRen
     data: { kind: "move", id: block.id },
   });
   const colStyle = block.type === "column" ? buildColumnStyle(block.layout) : undefined;
+  const device = ctx.device;
+  // In canvas: dim the block when it's hidden on the current device
+  const l = block.layout;
+  const hiddenOnDevice = (device === "mobile" && l?.hidden_mobile) || (device === "tablet" && l?.hidden_tablet) || (device === "desktop" && l?.hidden_desktop);
 
   return (
     <div
@@ -95,9 +126,9 @@ function EditableBlockRow({ block, ctx, fullCtx }: { block: Block; ctx: BlockRen
       onMouseLeave={() => setHover(false)}
       onClick={e => { e.stopPropagation(); ctx.onSelect?.(block.id); }}
       style={{
-        position: "relative", cursor: "pointer", opacity: isDragging ? 0.35 : 1,
+        position: "relative", cursor: "pointer", opacity: isDragging ? 0.35 : hiddenOnDevice ? 0.25 : 1,
         boxShadow: sel ? `inset 0 0 0 2px ${AC}` : hover ? `inset 0 0 0 1px ${AC}66` : "none",
-        transition: "box-shadow .12s", ...colStyle, ...blockWrapperPadding(block),
+        transition: "box-shadow .12s", ...colStyle, ...blockWrapperPadding(block, device),
       }}
     >
       <BlockRenderer block={block} ctx={fullCtx} />

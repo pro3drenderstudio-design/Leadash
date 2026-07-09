@@ -737,6 +737,7 @@ export default function BuilderPage() {
             <RightPanel
               selectedBlock={selectedBlock}
               page={page}
+              device={device}
               onDeselect={() => setSelectedId(null)}
               onSetProps={setProps}
               onSetLayout={setLayout}
@@ -946,6 +947,7 @@ const IS = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-s
 
 interface RPProps {
   selectedBlock: Block|null; page: PageData; funnelId: string;
+  device: Device;
   onDeselect: ()=>void;
   onSetProps: (id:string, patch:Record<string,unknown>)=>void;
   onSetLayout: (id:string, patch:Record<string,unknown>)=>void;
@@ -960,7 +962,7 @@ interface RPProps {
   onSaveFunnelTracking: (tracking: Record<string, string>) => void;
 }
 
-function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks, funnelTracking, onSaveFunnelTracking }: RPProps) {
+function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks, funnelTracking, onSaveFunnelTracking }: RPProps) {
   const [rpTab, setRpTab] = useState<"content"|"layout">("content");
 
   const Field = RPField;
@@ -1130,7 +1132,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
       </div>
     );
   }
-  function layoutRangeRow(label: string, val: number, onChange: (v: number) => void, min=0, max=100, _fmt?: (v: number) => string) {
+  function layoutRangeRow(label: string, val: number, onChange: (v: number) => void, min=0, max=100, _fmt?: (v: number) => string, isFallback?: boolean) {
     const isPercent = max <= 1;
     const step = isPercent ? 0.01 : 1;
     const displayNum = isPercent ? Math.round(val * 100) : Math.round(val);
@@ -1138,44 +1140,64 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     return (
       <div className="mb-2.5">
         <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[10.5px] text-white/40 flex-1">{label}</span>
+          <span className={`text-[10.5px] flex-1 ${isFallback ? "text-white/20 italic" : "text-white/40"}`}>{label}{isFallback ? " ↩" : ""}</span>
           <input type="number" value={displayNum} step={1}
             onChange={e => { const n = Number(e.target.value); onChange(isPercent ? n / 100 : n); }}
-            className="w-10 bg-transparent text-[10.5px] text-white/60 font-mono text-right outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            className={`w-10 bg-transparent text-[10.5px] font-mono text-right outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isFallback ? "text-white/25" : "text-white/60"}`} />
           <span className="text-[9.5px] text-white/25 font-mono w-4 shrink-0">{unit}</span>
         </div>
         <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(val, min), max)} onChange={e => onChange(+e.target.value)} className="w-full accent-orange-500" />
       </div>
     );
   }
+
   function paddingCtl() {
     if (!b) return null;
-    const pt = b.layout?.padding_top?.value    ?? 0;
-    const pr = b.layout?.padding_right?.value  ?? 0;
-    const pb = b.layout?.padding_bottom?.value ?? 0;
-    const pl = b.layout?.padding_left?.value   ?? 0;
+    // When in mobile/tablet mode, read the device-specific override (falling back to desktop).
+    const sfx = device === "mobile" ? "_mobile" : device === "tablet" ? "_tablet" : "";
+    const l = b.layout as Record<string, unknown> | undefined;
+    function getVal(key: string): [number, boolean] {
+      if (sfx && l?.[`${key}${sfx}`]) return [(l[`${key}${sfx}`] as { value: number }).value, false];
+      return [(l?.[key] as { value: number } | undefined)?.value ?? 0, !!sfx];
+    }
+    function setKey(key: string) {
+      return (v: number) => onSetLayout(b!.id, { [`${key}${sfx}`]: { value: v, unit: "px" } });
+    }
+    const [pt, ptFb] = getVal("padding_top");
+    const [pr, prFb] = getVal("padding_right");
+    const [pb, pbFb] = getVal("padding_bottom");
+    const [pl, plFb] = getVal("padding_left");
     return (
       <div>
-        {layoutRangeRow("Top",    pt, v => onSetLayout(b.id, { padding_top:    { value: v, unit: "px" } }), 0, 300)}
-        {layoutRangeRow("Right",  pr, v => onSetLayout(b.id, { padding_right:  { value: v, unit: "px" } }), 0, 300)}
-        {layoutRangeRow("Bottom", pb, v => onSetLayout(b.id, { padding_bottom: { value: v, unit: "px" } }), 0, 300)}
-        {layoutRangeRow("Left",   pl, v => onSetLayout(b.id, { padding_left:   { value: v, unit: "px" } }), 0, 300)}
+        {layoutRangeRow("Top",    pt, setKey("padding_top"),    0, 300, undefined, ptFb)}
+        {layoutRangeRow("Right",  pr, setKey("padding_right"),  0, 300, undefined, prFb)}
+        {layoutRangeRow("Bottom", pb, setKey("padding_bottom"), 0, 300, undefined, pbFb)}
+        {layoutRangeRow("Left",   pl, setKey("padding_left"),   0, 300, undefined, plFb)}
       </div>
     );
   }
 
   function marginCtl() {
     if (!b) return null;
-    const mt = b.layout?.margin_top?.value    ?? 0;
-    const mr = b.layout?.margin_right?.value  ?? 0;
-    const mb = b.layout?.margin_bottom?.value ?? 0;
-    const ml = b.layout?.margin_left?.value   ?? 0;
+    const sfx = device === "mobile" ? "_mobile" : device === "tablet" ? "_tablet" : "";
+    const l = b.layout as Record<string, unknown> | undefined;
+    function getVal(key: string): [number, boolean] {
+      if (sfx && l?.[`${key}${sfx}`]) return [(l[`${key}${sfx}`] as { value: number }).value, false];
+      return [(l?.[key] as { value: number } | undefined)?.value ?? 0, !!sfx];
+    }
+    function setKey(key: string) {
+      return (v: number) => onSetLayout(b!.id, { [`${key}${sfx}`]: { value: v, unit: "px" } });
+    }
+    const [mt, mtFb] = getVal("margin_top");
+    const [mr, mrFb] = getVal("margin_right");
+    const [mb, mbFb] = getVal("margin_bottom");
+    const [ml, mlFb] = getVal("margin_left");
     return (
       <div>
-        {layoutRangeRow("Top",    mt, v => onSetLayout(b.id, { margin_top:    { value: v, unit: "px" } }), -200, 200)}
-        {layoutRangeRow("Right",  mr, v => onSetLayout(b.id, { margin_right:  { value: v, unit: "px" } }), -200, 200)}
-        {layoutRangeRow("Bottom", mb, v => onSetLayout(b.id, { margin_bottom: { value: v, unit: "px" } }), -200, 200)}
-        {layoutRangeRow("Left",   ml, v => onSetLayout(b.id, { margin_left:   { value: v, unit: "px" } }), -200, 200)}
+        {layoutRangeRow("Top",    mt, setKey("margin_top"),    -200, 200, undefined, mtFb)}
+        {layoutRangeRow("Right",  mr, setKey("margin_right"),  -200, 200, undefined, mrFb)}
+        {layoutRangeRow("Bottom", mb, setKey("margin_bottom"), -200, 200, undefined, mbFb)}
+        {layoutRangeRow("Left",   ml, setKey("margin_left"),   -200, 200, undefined, mlFb)}
       </div>
     );
   }
@@ -1666,8 +1688,80 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const t = b.type;
     const isRow = t === "section" || t === "row";
     const isContainer = isRow || t === "column";
+    const deviceLabel = device === "mobile" ? "📱 Mobile" : device === "tablet" ? "💻 Tablet" : null;
+    const deviceColor = device === "mobile" ? "#3b82f6" : "#8b5cf6";
+    const hiddenKey = device === "mobile" ? "hidden_mobile" : device === "tablet" ? "hidden_tablet" : "hidden_desktop";
+    const isHidden = !!(b.layout as Record<string,unknown> | undefined)?.[hiddenKey];
+
+    // Alignment options
+    const alignH = b.layout?.align_h;
+    const alignV = b.layout?.align_v;
+    const hOpts: { v: typeof alignH; icon: string; title: string }[] = [
+      { v: "left",   icon: "⬅", title: "Left" },
+      { v: "center", icon: "↔", title: "Center" },
+      { v: "right",  icon: "➡", title: "Right" },
+    ];
+    const vOpts: { v: typeof alignV; icon: string; title: string }[] = [
+      { v: "top",    icon: "⬆", title: "Top" },
+      { v: "center", icon: "↕", title: "Middle" },
+      { v: "bottom", icon: "⬇", title: "Bottom" },
+    ];
+
     return (
       <div>
+        {/* Device indicator */}
+        {deviceLabel && (
+          <div style={{ background: `${deviceColor}18`, border: `1px solid ${deviceColor}44`, borderRadius: 8, padding: "7px 10px", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: deviceColor }}>{deviceLabel}</span>
+            <span style={{ fontSize: 10, color: `${deviceColor}99`, flex: 1 }}>Edits below apply only to {device}</span>
+            <button
+              onClick={() => onSetLayout(b.id, { [hiddenKey]: !isHidden })}
+              title={isHidden ? `Show on ${device}` : `Hide on ${device}`}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: `1px solid ${deviceColor}55`, background: isHidden ? deviceColor : "transparent", color: isHidden ? "#fff" : deviceColor, cursor: "pointer" }}>
+              {isHidden ? "Hidden" : "Hide"}
+            </button>
+          </div>
+        )}
+        {/* Visibility for desktop mode */}
+        {device === "desktop" && (
+          <>
+            <SL text="Visibility" />
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {(["hidden_mobile","hidden_tablet","hidden_desktop"] as const).map(k => {
+                const on = !!(b.layout as Record<string,unknown> | undefined)?.[k];
+                const label = k === "hidden_mobile" ? "📱 Mobile" : k === "hidden_tablet" ? "💻 Tablet" : "🖥 Desktop";
+                return (
+                  <button key={k} onClick={() => onSetLayout(b.id, { [k]: !on })}
+                    style={{ flex: 1, fontSize: 9.5, padding: "4px 4px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)", background: on ? "#ef4444" : "rgba(255,255,255,0.04)", color: on ? "#fff" : "#6b7280", cursor: "pointer" }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {/* Alignment */}
+        <SL text="Alignment" />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 10, color: "#6b7280", minWidth: 14 }}>H</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {hOpts.map(o => (
+              <button key={o.v} title={o.title} onClick={() => onSetLayout(b.id, { align_h: alignH === o.v ? undefined : o.v })}
+                style={{ width: 28, height: 26, borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)", background: alignH === o.v ? "#f97316" : "rgba(255,255,255,0.04)", color: alignH === o.v ? "#fff" : "#9aa3b0", fontSize: 12, cursor: "pointer" }}>
+                {o.icon}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: 10, color: "#6b7280", minWidth: 14, marginLeft: 6 }}>V</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {vOpts.map(o => (
+              <button key={o.v} title={o.title} onClick={() => onSetLayout(b.id, { align_v: alignV === o.v ? undefined : o.v })}
+                style={{ width: 28, height: 26, borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)", background: alignV === o.v ? "#f97316" : "rgba(255,255,255,0.04)", color: alignV === o.v ? "#fff" : "#9aa3b0", fontSize: 12, cursor: "pointer" }}>
+                {o.icon}
+              </button>
+            ))}
+          </div>
+        </div>
         <SL text="Padding" />
         {paddingCtl()}
         <div className="h-3" />

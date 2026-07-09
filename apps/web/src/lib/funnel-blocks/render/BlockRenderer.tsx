@@ -2,7 +2,7 @@
 import React from "react";
 import { Block, BlockLayout } from "../types";
 import { Editable } from "./Editable";
-import { buildOuterStyle, buildOverlayStyle, buildPatternStyle, buildInnerStyle, buildRowGridTemplate, fluid } from "./wrappers";
+import { buildOuterStyle, buildOverlayStyle, buildPatternStyle, buildInnerStyle, buildRowGridTemplate, buildResponsiveSpacingCss, hasResponsiveLayout, fluid } from "./wrappers";
 import { FunnelIcon, FUNNEL_ICON_LIST } from "./funnel-icons";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
@@ -111,7 +111,8 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
   switch (block.type) {
     case "row": {
-      const outer = buildOuterStyle(block.layout, "0px");
+      const device = ctx.device ?? "desktop";
+      const outer = buildOuterStyle(block.layout, "0px", device);
       const overlay = buildOverlayStyle(block.layout);
       const pattern = buildPatternStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
@@ -119,25 +120,24 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const bg = hasLayerBg ? undefined : ((p.bg_color as string) || "transparent");
       const cols = block.children ?? [];
       const gap = block.layout?.column_gap ?? 16;
-      const device = ctx.device ?? "desktop";
       const colLayouts = cols.map(c => c.layout);
 
       if (ctx.mode === "live") {
-        // In live mode emit a <style> tag with responsive media queries so the
-        // grid stacks on mobile by default (or uses any per-column overrides).
         const rowId = block.id;
         const desktopTpl = buildRowGridTemplate(colLayouts, "desktop");
         const tabletTpl  = buildRowGridTemplate(colLayouts, "tablet");
         const mobileTpl  = buildRowGridTemplate(colLayouts, "mobile");
+        const respCss = buildResponsiveSpacingCss(rowId, block.layout);
         return (
-          <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+          <div id={(p.anchor_id as string) || undefined} data-blk={respCss ? rowId : undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
             {pattern && <div style={pattern} />}
             {overlay && <div style={overlay} />}
             <div style={{ ...inner }}>
               <style dangerouslySetInnerHTML={{ __html:
                 `.row-${rowId}{display:grid;gap:${gap}px;grid-template-columns:${desktopTpl};}` +
                 `@media(max-width:640px){.row-${rowId}{grid-template-columns:${mobileTpl};}}` +
-                `@media(min-width:641px) and (max-width:1023px){.row-${rowId}{grid-template-columns:${tabletTpl};}}`
+                `@media(min-width:641px) and (max-width:1023px){.row-${rowId}{grid-template-columns:${tabletTpl};}}` +
+                respCss
               }} />
               <div className={`row-${rowId}`} style={{ position: "relative" }}>
                 {ctx.renderChildren?.(cols, block.id, "row")}
@@ -163,14 +163,17 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "column": {
-      const outer = buildOuterStyle(block.layout, "0px");
+      const device = ctx.device ?? "desktop";
+      const outer = buildOuterStyle(block.layout, "0px", device);
       const overlay = buildOverlayStyle(block.layout);
       const pattern = buildPatternStyle(block.layout);
       const hasLayerBgCol = outer.background || outer.backgroundImage;
       const bg = hasLayerBgCol ? undefined : ((p.bg_color as string) || "transparent");
       const needsRelative = !!(pattern || overlay);
+      const respCss = ctx.mode === "live" ? buildResponsiveSpacingCss(block.id, block.layout) : "";
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), minHeight: 0, ...(needsRelative ? { position: "relative" } : {}) }}>
+        <div id={(p.anchor_id as string) || undefined} data-blk={respCss ? block.id : undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), minHeight: 0, ...(needsRelative ? { position: "relative" } : {}) }}>
+          {respCss && <style dangerouslySetInnerHTML={{ __html: respCss }} />}
           {pattern && <div style={pattern} />}
           {overlay && <div style={overlay} />}
           {ctx.renderChildren?.(block.children ?? [], block.id)}
@@ -179,14 +182,17 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "section": {
-      const outer = buildOuterStyle(block.layout, "40px 28px");
+      const device = ctx.device ?? "desktop";
+      const outer = buildOuterStyle(block.layout, "40px 28px", device);
       const overlay = buildOverlayStyle(block.layout);
       const pattern = buildPatternStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const hasLayerBgSec = outer.background || outer.backgroundImage;
       const bg = hasLayerBgSec ? undefined : ((p.bg_color as string) || "transparent");
+      const respCss = ctx.mode === "live" ? buildResponsiveSpacingCss(block.id, block.layout) : "";
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+        <div id={(p.anchor_id as string) || undefined} data-blk={respCss ? block.id : undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+          {respCss && <style dangerouslySetInnerHTML={{ __html: respCss }} />}
           {pattern && <div style={pattern} />}
           {overlay && <div style={overlay} />}
           <div style={inner}>{ctx.renderChildren?.(block.children ?? [], block.id)}</div>

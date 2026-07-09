@@ -19,6 +19,7 @@ export interface BlockLayout {
   width?: SizeValue;
   max_width?: SizeValue | "none";
   boxed?: boolean;
+  // Desktop spacing
   padding_top?: { value: number; unit: "px" | "rem" };
   padding_bottom?: { value: number; unit: "px" | "rem" };
   padding_left?: { value: number; unit: "px" | "rem" };
@@ -27,6 +28,31 @@ export interface BlockLayout {
   margin_bottom?: { value: number; unit: "px" | "rem" };
   margin_left?: { value: number; unit: "px" | "rem" };
   margin_right?: { value: number; unit: "px" | "rem" };
+  // Mobile spacing overrides
+  padding_top_mobile?: { value: number; unit: "px" | "rem" };
+  padding_bottom_mobile?: { value: number; unit: "px" | "rem" };
+  padding_left_mobile?: { value: number; unit: "px" | "rem" };
+  padding_right_mobile?: { value: number; unit: "px" | "rem" };
+  margin_top_mobile?: { value: number; unit: "px" | "rem" };
+  margin_bottom_mobile?: { value: number; unit: "px" | "rem" };
+  margin_left_mobile?: { value: number; unit: "px" | "rem" };
+  margin_right_mobile?: { value: number; unit: "px" | "rem" };
+  // Tablet spacing overrides
+  padding_top_tablet?: { value: number; unit: "px" | "rem" };
+  padding_bottom_tablet?: { value: number; unit: "px" | "rem" };
+  padding_left_tablet?: { value: number; unit: "px" | "rem" };
+  padding_right_tablet?: { value: number; unit: "px" | "rem" };
+  margin_top_tablet?: { value: number; unit: "px" | "rem" };
+  margin_bottom_tablet?: { value: number; unit: "px" | "rem" };
+  margin_left_tablet?: { value: number; unit: "px" | "rem" };
+  margin_right_tablet?: { value: number; unit: "px" | "rem" };
+  // Per-device visibility
+  hidden_mobile?: boolean;
+  hidden_tablet?: boolean;
+  hidden_desktop?: boolean;
+  // Alignment / positioning
+  align_h?: "left" | "center" | "right";           // horizontal self-position within column
+  align_v?: "top" | "center" | "bottom";            // vertical alignment of children (for containers)
   column_gap?: number;
   width_mobile?: SizeValue;
   width_tablet?: SizeValue;
