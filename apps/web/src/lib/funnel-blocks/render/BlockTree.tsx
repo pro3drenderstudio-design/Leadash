@@ -9,19 +9,23 @@ import { RevealGate } from "./interactive/RevealGate";
 
 const AC = "#f97316";
 
-export function BlockTree({ blocks, ctx, parentId = null }: { blocks: Block[]; ctx: BlockRenderContext; parentId?: string | null }) {
+export function BlockTree({ blocks, ctx, parentId = null, parentType }: { blocks: Block[]; ctx: BlockRenderContext; parentId?: string | null; parentType?: string }) {
   const fullCtx: BlockRenderContext = {
     ...ctx,
-    renderChildren: (items, pid) => <ChildSlot items={items} parentId={pid} ctx={ctx} />,
+    renderChildren: (items, pid, pType) => <ChildSlot items={items} parentId={pid} ctx={ctx} parentType={pType} />,
   };
 
   if (parentId === null && blocks.length === 0) {
     return ctx.mode === "edit" ? <EmptyCanvas /> : null;
   }
 
+  // Don't render DropSlots between columns inside a row — they break the CSS grid layout
+  // by becoming extra grid items that push columns onto separate rows.
+  const showDropSlots = ctx.mode === "edit" && parentType !== "row";
+
   return (
     <>
-      {ctx.mode === "edit" && <DropSlot parentId={parentId} index={0} onQuickInsert={ctx.onQuickInsert} />}
+      {showDropSlots && <DropSlot parentId={parentId} index={0} onQuickInsert={ctx.onQuickInsert} />}
       {blocks.map((b, i) => (
         <React.Fragment key={b.id}>
           {ctx.mode === "edit" ? (
@@ -29,16 +33,16 @@ export function BlockTree({ blocks, ctx, parentId = null }: { blocks: Block[]; c
           ) : (
             <LiveBlockRow block={b} ctx={fullCtx} />
           )}
-          {ctx.mode === "edit" && <DropSlot parentId={parentId} index={i + 1} onQuickInsert={ctx.onQuickInsert} />}
+          {showDropSlots && <DropSlot parentId={parentId} index={i + 1} onQuickInsert={ctx.onQuickInsert} />}
         </React.Fragment>
       ))}
     </>
   );
 }
 
-function ChildSlot({ items, parentId, ctx }: { items: Block[]; parentId: string; ctx: BlockRenderContext }) {
+function ChildSlot({ items, parentId, ctx, parentType }: { items: Block[]; parentId: string; ctx: BlockRenderContext; parentType?: string }) {
   if (items.length === 0 && ctx.mode === "edit") return <EmptyContainerSlot parentId={parentId} />;
-  return <BlockTree blocks={items} ctx={ctx} parentId={parentId} />;
+  return <BlockTree blocks={items} ctx={ctx} parentId={parentId} parentType={parentType} />;
 }
 
 function blockWrapperPadding(block: Block): React.CSSProperties {

@@ -28,7 +28,7 @@ export interface BlockRenderContext {
   onMoveUp?: (id: string) => void;
   onMoveDown?: (id: string) => void;
   onQuickInsert?: (parentId: string | null, index: number) => void;
-  renderChildren?: (children: Block[], parentId: string) => React.ReactNode;
+  renderChildren?: (children: Block[], parentId: string, parentType?: string) => React.ReactNode;
 }
 
 const AC = "#f97316";
@@ -140,7 +140,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
                 `@media(min-width:641px) and (max-width:1023px){.row-${rowId}{grid-template-columns:${tabletTpl};}}`
               }} />
               <div className={`row-${rowId}`} style={{ position: "relative" }}>
-                {ctx.renderChildren?.(cols, block.id)}
+                {ctx.renderChildren?.(cols, block.id, "row")}
               </div>
             </div>
           </div>
@@ -155,7 +155,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
           {overlay && <div style={overlay} />}
           <div style={{ ...inner }}>
             <div style={{ display: "grid", gridTemplateColumns: gridTpl, gap, position: "relative" }}>
-              {ctx.renderChildren?.(cols, block.id)}
+              {ctx.renderChildren?.(cols, block.id, "row")}
             </div>
           </div>
         </div>
