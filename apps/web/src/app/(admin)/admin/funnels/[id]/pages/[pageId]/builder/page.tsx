@@ -23,6 +23,7 @@ import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/
 import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
 import type { BlockRenderContext } from "@/lib/funnel-blocks/render/BlockRenderer";
 import { ICON_TYPE_LIST } from "@/lib/funnel-blocks/render/BlockRenderer";
+import { PATTERN_PRESETS } from "@/lib/funnel-blocks/render/wrappers";
 import { createClient } from "@/lib/supabase/client";
 
 const AC = "#f97316";
@@ -1092,6 +1093,51 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
       </div>
     );
   }
+  function patternCtl() {
+    if (!b) return null;
+    const cur = (b.layout?.bg_pattern as string) ?? "";
+    const opacity = (b.layout?.bg_pattern_opacity as number) ?? 0.15;
+    const color = (b.layout?.bg_pattern_color as string) ?? "#ffffff";
+    return (
+      <div>
+        <div className="grid grid-cols-4 gap-1.5 mb-3">
+          {Object.entries(PATTERN_PRESETS).map(([key, pat]) => {
+            const active = cur === key;
+            return (
+              <button key={key} title={pat.label}
+                onMouseDown={e => { e.preventDefault(); onSetLayout(b.id, { bg_pattern: active ? undefined : key }); }}
+                style={{
+                  width: "100%", height: 36, borderRadius: 7, cursor: "pointer",
+                  background: "#0c0c0f",
+                  backgroundImage: pat.bg.replace(/PCOLOR/g, "rgba(255,255,255,0.3)"),
+                  backgroundSize: pat.size ?? undefined,
+                  border: active ? "2px solid #f97316" : "2px solid rgba(255,255,255,0.08)",
+                  fontSize: 8, color: "rgba(255,255,255,0.35)", display: "flex",
+                  alignItems: "flex-end", justifyContent: "center", paddingBottom: 3,
+                }}
+              >{pat.label}</button>
+            );
+          })}
+        </div>
+        {cur && (
+          <>
+            <Field label="Pattern color">
+              <div className="flex gap-2 items-center">
+                <div className="relative w-[34px] h-[34px] rounded-lg border border-white/10 shrink-0 overflow-hidden" style={{ background: color }}>
+                  <input type="color" value={color}
+                    onChange={e => onSetLayout(b.id, { bg_pattern_color: e.target.value })}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                </div>
+                <input value={color} onChange={e => onSetLayout(b.id, { bg_pattern_color: e.target.value })}
+                  className={IS + " font-mono text-xs"} />
+              </div>
+            </Field>
+            {layoutRangeRow("Pattern opacity", opacity, v => onSetLayout(b.id, { bg_pattern_opacity: v }), 0, 1, v => `${Math.round(v * 100)}%`)}
+          </>
+        )}
+      </div>
+    );
+  }
   function imageSizeCtl() {
     if (!b) return null;
     const alignOpts: [string, string][] = [["left","Left"],["center","Center"],["right","Right"]];
@@ -1483,11 +1529,22 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             <Field label="Background image">
               <ImageUploadField value={b.layout?.bg_image} onChange={url => onSetLayout(b.id, { bg_image: url || undefined })} funnelId={funnelId} />
             </Field>
-            {Boolean(b.layout?.bg_image) && bgOverlayCtl()}
             {!b.layout?.bg_image && (
-              <Field label="Background gradient">
-                {gradientCtl()}
-              </Field>
+              <>
+                <Field label="Background gradient">
+                  {gradientCtl()}
+                </Field>
+                <Field label="Background pattern">
+                  {patternCtl()}
+                </Field>
+              </>
+            )}
+            {(b.layout?.bg_image || b.layout?.bg_gradient || b.layout?.bg_pattern) && (
+              <>
+                <div className="h-3" />
+                <SL text="Color overlay" />
+                {bgOverlayCtl()}
+              </>
             )}
             <div className="h-1.5" />
             <SL text="Border" />

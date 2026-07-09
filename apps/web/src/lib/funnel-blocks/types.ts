@@ -34,6 +34,9 @@ export interface BlockLayout {
   bg_overlay_color?: string;
   bg_overlay_opacity?: number;
   bg_gradient?: string;
+  bg_pattern?: string;
+  bg_pattern_opacity?: number;
+  bg_pattern_color?: string;
   border_color?: string;
   border_width?: number;
   border_radius?: number;

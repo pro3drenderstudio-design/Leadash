@@ -3,7 +3,7 @@ import React from "react";
 import { Block, BlockLayout } from "../types";
 import { Editable } from "./Editable";
 import { Icon } from "./icons";
-import { buildOuterStyle, buildOverlayStyle, buildInnerStyle, buildRowGridTemplate, fluid } from "./wrappers";
+import { buildOuterStyle, buildOverlayStyle, buildPatternStyle, buildInnerStyle, buildRowGridTemplate, fluid } from "./wrappers";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
@@ -137,6 +137,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     case "row": {
       const outer = buildOuterStyle(block.layout, "0px");
       const overlay = buildOverlayStyle(block.layout);
+      const pattern = buildPatternStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const hasLayerBg = outer.background || outer.backgroundImage;
       const bg = hasLayerBg ? undefined : ((p.bg_color as string) || "transparent");
@@ -154,6 +155,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
         const mobileTpl  = buildRowGridTemplate(colLayouts, "mobile");
         return (
           <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+            {pattern && <div style={pattern} />}
             {overlay && <div style={overlay} />}
             <div style={{ ...inner }}>
               <style dangerouslySetInnerHTML={{ __html:
@@ -173,6 +175,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const gridTpl = buildRowGridTemplate(colLayouts, device);
       return (
         <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+          {pattern && <div style={pattern} />}
           {overlay && <div style={overlay} />}
           <div style={{ ...inner }}>
             <div style={{ display: "grid", gridTemplateColumns: gridTpl, gap, position: "relative" }}>
@@ -185,10 +188,15 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "column": {
       const outer = buildOuterStyle(block.layout, "0px");
+      const overlay = buildOverlayStyle(block.layout);
+      const pattern = buildPatternStyle(block.layout);
       const hasLayerBgCol = outer.background || outer.backgroundImage;
       const bg = hasLayerBgCol ? undefined : ((p.bg_color as string) || "transparent");
+      const needsRelative = !!(pattern || overlay);
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), minHeight: 0 }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), minHeight: 0, ...(needsRelative ? { position: "relative" } : {}) }}>
+          {pattern && <div style={pattern} />}
+          {overlay && <div style={overlay} />}
           {ctx.renderChildren?.(block.children ?? [], block.id)}
         </div>
       );
@@ -197,11 +205,13 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     case "section": {
       const outer = buildOuterStyle(block.layout, "40px 28px");
       const overlay = buildOverlayStyle(block.layout);
+      const pattern = buildPatternStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const hasLayerBgSec = outer.background || outer.backgroundImage;
       const bg = hasLayerBgSec ? undefined : ((p.bg_color as string) || "transparent");
       return (
         <div id={(p.anchor_id as string) || undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+          {pattern && <div style={pattern} />}
           {overlay && <div style={overlay} />}
           <div style={inner}>{ctx.renderChildren?.(block.children ?? [], block.id)}</div>
         </div>

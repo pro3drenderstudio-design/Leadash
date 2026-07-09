@@ -52,8 +52,34 @@ export function buildOuterStyle(layout: BlockLayout | undefined, fallbackPadding
   return style;
 }
 
+export const PATTERN_PRESETS: Record<string, { bg: string; size?: string; label: string }> = {
+  dots:      { bg: "radial-gradient(circle, PCOLOR 1px, transparent 1px)", size: "20px 20px", label: "Dots" },
+  "dots-lg": { bg: "radial-gradient(circle, PCOLOR 1.5px, transparent 1.5px)", size: "32px 32px", label: "Dots LG" },
+  grid:      { bg: "linear-gradient(PCOLOR 1px, transparent 1px),linear-gradient(90deg, PCOLOR 1px, transparent 1px)", size: "40px 40px", label: "Grid" },
+  "grid-sm": { bg: "linear-gradient(PCOLOR 1px, transparent 1px),linear-gradient(90deg, PCOLOR 1px, transparent 1px)", size: "20px 20px", label: "Grid SM" },
+  diagonal:  { bg: "repeating-linear-gradient(45deg, PCOLOR 0px, PCOLOR 1px, transparent 1px, transparent 14px)", label: "Diagonals /" },
+  "diag-r":  { bg: "repeating-linear-gradient(-45deg, PCOLOR 0px, PCOLOR 1px, transparent 1px, transparent 14px)", label: "Diagonals \\" },
+  "lines-h": { bg: "repeating-linear-gradient(0deg, PCOLOR 0px, PCOLOR 1px, transparent 1px, transparent 24px)", label: "H Lines" },
+  "lines-v": { bg: "repeating-linear-gradient(90deg, PCOLOR 0px, PCOLOR 1px, transparent 1px, transparent 24px)", label: "V Lines" },
+};
+
+export function buildPatternStyle(layout: BlockLayout | undefined): React.CSSProperties | null {
+  if (!layout?.bg_pattern) return null;
+  const pat = PATTERN_PRESETS[layout.bg_pattern];
+  if (!pat) return null;
+  const color = layout.bg_pattern_color ?? "#ffffff";
+  return {
+    position: "absolute",
+    inset: 0,
+    backgroundImage: pat.bg.replace(/PCOLOR/g, color),
+    backgroundSize: pat.size,
+    opacity: layout.bg_pattern_opacity ?? 0.15,
+    pointerEvents: "none",
+  };
+}
+
 export function buildOverlayStyle(layout: BlockLayout | undefined): React.CSSProperties | null {
-  if ((!layout?.bg_image && !layout?.bg_gradient) || !layout.bg_overlay_color) return null;
+  if (!layout?.bg_overlay_color) return null;
   return {
     position: "absolute",
     inset: 0,
