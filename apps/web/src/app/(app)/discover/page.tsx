@@ -25,6 +25,44 @@ import {
 
 // ── URL helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * Retry a batch POST once on transient failure (5xx / network / 429).
+ * Returns the parsed JSON body on success, or null when the batch has hard-
+ * failed (auth, 4xx-except-429, or exhausted retries). The caller decides
+ * whether to keep going with the next batch — we don't want one hiccup to
+ * lose 5,000 already-selected leads.
+ */
+async function postBatchWithRetry(
+  url: string,
+  body: unknown,
+  isBlob: boolean = false,
+): Promise<{ ok: true; res: Response; json: Record<string, unknown> | null; blob: Blob | null } | { ok: false; error: string; retryable: boolean }> {
+  const attempts = 2;
+  let lastErr = "Failed";
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await wsFetch(url, { method: "POST", body: JSON.stringify(body) });
+      if (res.ok) {
+        if (isBlob) return { ok: true, res, json: null, blob: await res.blob() };
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        return { ok: true, res, json, blob: null };
+      }
+      // 4xx (except 429) is hard-failed — retry won't help.
+      const retryable = res.status >= 500 || res.status === 429;
+      const errBody = await res.json().catch(() => ({ error: res.statusText }));
+      lastErr = (errBody as { error?: string }).error ?? `HTTP ${res.status}`;
+      if (!retryable || attempt === attempts) return { ok: false, error: lastErr, retryable };
+      // Backoff before retry (2s, then give up).
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : "Network error";
+      if (attempt === attempts) return { ok: false, error: lastErr, retryable: true };
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  return { ok: false, error: lastErr, retryable: false };
+}
+
 function normalizeUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   const s = url.trim();
@@ -1441,28 +1479,42 @@ function DiscoverContent() {
       if (format === "csv") {
         if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Exporting" });
         let downloaded = 0;
+        let firstError = "";
+        let failedLeads = 0;
         for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
           const batch = allIds.slice(start, start + EXPORT_BATCH);
-          const res = await wsFetch("/api/discover/export", {
-            method: "POST",
-            body: JSON.stringify({ ids: batch, format: "csv" }),
-          });
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({ error: res.statusText }));
-            setExportMsg({ ok: false, text: j.error ?? "Export failed" });
-            return;
+          const result = await postBatchWithRetry("/api/discover/export", { ids: batch, format: "csv" }, true);
+          if (!result.ok) {
+            // Auth / plan-gate / bad-request — abort the whole run because it
+            // won't succeed on later batches either.
+            if (!result.retryable) {
+              setExportMsg({ ok: false, text: result.error ?? "Export failed" });
+              return;
+            }
+            // Transient — record the failed batch, keep going with the rest.
+            firstError = firstError || result.error;
+            failedLeads += batch.length;
+            setBulkProgress(p => p ? { ...p, current: Math.min(downloaded + failedLeads, allIds.length) } : null);
+            continue;
           }
-          const blob = await res.blob();
+          const blob = result.blob!;
           const url  = URL.createObjectURL(blob);
           const part = allIds.length > EXPORT_BATCH ? `-part${Math.floor(start / EXPORT_BATCH) + 1}` : "";
           Object.assign(document.createElement("a"), { href: url, download: `leadash-discover-${Date.now()}${part}.csv` }).click();
           URL.revokeObjectURL(url);
           downloaded += batch.length;
-          setBulkProgress(p => p ? { ...p, current: Math.min(downloaded, allIds.length) } : null);
+          setBulkProgress(p => p ? { ...p, current: Math.min(downloaded + failedLeads, allIds.length) } : null);
           if (start + batch.length < allIds.length) await new Promise(r => setTimeout(r, 400));
         }
-        const parts = Math.ceil(allIds.length / EXPORT_BATCH);
-        setExportMsg({ ok: true, text: `${allIds.length.toLocaleString()} leads exported${parts > 1 ? ` in ${parts} files` : ""}` });
+        const parts = Math.ceil(downloaded / EXPORT_BATCH);
+        if (failedLeads > 0) {
+          setExportMsg({
+            ok: downloaded > 0,
+            text: `${downloaded.toLocaleString()} exported · ${failedLeads.toLocaleString()} failed (${firstError || "network"}) — reselect the failed leads and retry`,
+          });
+        } else {
+          setExportMsg({ ok: true, text: `${allIds.length.toLocaleString()} leads exported${parts > 1 ? ` in ${parts} files` : ""}` });
+        }
         setSelected(new Set());
         return;
       }
@@ -1471,29 +1523,40 @@ function DiscoverContent() {
       if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
       let resolvedCampaignId = campaignId ?? null;
       let totalAdded = 0;
+      let firstError = "";
+      let failedBatches = 0;
       for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
         const batch = allIds.slice(start, start + EXPORT_BATCH);
-        const res = await wsFetch("/api/discover/export", {
-          method: "POST",
-          body: JSON.stringify({
-            ids:           batch,
-            format:        "campaign",
-            campaign_id:   resolvedCampaignId,
-            campaign_name: start === 0 ? campaignName : null,
-          }),
+        const result = await postBatchWithRetry("/api/discover/export", {
+          ids:           batch,
+          format:        "campaign",
+          campaign_id:   resolvedCampaignId,
+          campaign_name: start === 0 ? campaignName : null,
         });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({ error: res.statusText }));
-          setExportMsg({ ok: false, text: j.error ?? "Export failed" });
-          return;
+        if (!result.ok) {
+          if (!result.retryable) {
+            setExportMsg({ ok: false, text: result.error ?? "Export failed" });
+            return;
+          }
+          firstError = firstError || result.error;
+          failedBatches++;
+          setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
+          continue;
         }
-        const j = await res.json() as { leads_added: number; credits_used: number; campaign_id?: string };
-        totalAdded += j.leads_added ?? 0;
-        if (!resolvedCampaignId && j.campaign_id) resolvedCampaignId = j.campaign_id;
-        if (j.credits_used > 0) { setBalance(b => (b ?? 0) - j.credits_used); emitCreditsChanged(); }
+        const j = result.json as { leads_added?: number; credits_used?: number; campaign_id?: string } | null;
+        totalAdded += j?.leads_added ?? 0;
+        if (!resolvedCampaignId && j?.campaign_id) resolvedCampaignId = j.campaign_id;
+        if ((j?.credits_used ?? 0) > 0) { setBalance(b => (b ?? 0) - (j!.credits_used ?? 0)); emitCreditsChanged(); }
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
-      setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} leads added to campaign` });
+      if (failedBatches > 0) {
+        setExportMsg({
+          ok: totalAdded > 0,
+          text: `${totalAdded.toLocaleString()} added · ${failedBatches} batch${failedBatches !== 1 ? "es" : ""} failed (${firstError || "network"}) — retry to pick up the rest`,
+        });
+      } else {
+        setExportMsg({ ok: true, text: `${totalAdded.toLocaleString()} leads added to campaign` });
+      }
       setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Export failed" });
@@ -1510,38 +1573,44 @@ function DiscoverContent() {
     let totalExisting = 0;
     let resolvedListId = listId;
     try {
+      let firstError = "";
+      let failedBatches = 0;
       for (let start = 0; start < allIds.length; start += EXPORT_BATCH) {
         const batch = allIds.slice(start, start + EXPORT_BATCH);
-        const res = await wsFetch("/api/discover/export", {
-          method: "POST",
-          body: JSON.stringify({
-            ids:       batch,
-            format:    "list",
-            list_id:   resolvedListId,
-            list_name: start === 0 ? listName : null,
-          }),
+        const result = await postBatchWithRetry("/api/discover/export", {
+          ids:       batch,
+          format:    "list",
+          list_id:   resolvedListId,
+          list_name: start === 0 ? listName : null,
         });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({ error: res.statusText }));
-          setExportMsg({ ok: false, text: j.error ?? "Failed to add to list" });
-          return;
+        if (!result.ok) {
+          if (!result.retryable) {
+            setExportMsg({ ok: false, text: result.error ?? "Failed to add to list" });
+            return;
+          }
+          firstError = firstError || result.error;
+          failedBatches++;
+          setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
+          continue;
         }
-        const j = await res.json() as { leads_added: number; already_existed: number; credits_used: number; list_id?: string };
+        const j = (result.json ?? {}) as { leads_added?: number; already_existed?: number; credits_used?: number; list_id?: string };
         totalAdded    += j.leads_added     ?? 0;
         totalExisting += j.already_existed ?? 0;
         if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
-        if (j.credits_used > 0) { setBalance(b => (b ?? 0) - j.credits_used); emitCreditsChanged(); }
+        if ((j.credits_used ?? 0) > 0) { setBalance(b => (b ?? 0) - (j.credits_used ?? 0)); emitCreditsChanged(); }
         setBulkProgress(p => p ? { ...p, current: Math.min(start + batch.length, allIds.length) } : null);
       }
       let msg: string;
-      if (totalAdded === 0 && totalExisting > 0) {
+      if (failedBatches > 0) {
+        msg = `${totalAdded.toLocaleString()} added · ${failedBatches} batch${failedBatches !== 1 ? "es" : ""} failed (${firstError || "network"}) — retry to pick up the rest`;
+      } else if (totalAdded === 0 && totalExisting > 0) {
         msg = `All ${totalExisting.toLocaleString()} leads already in list`;
       } else {
         const parts = [`${totalAdded.toLocaleString()} lead${totalAdded !== 1 ? "s" : ""} added`];
         if (totalExisting > 0) parts.push(`${totalExisting.toLocaleString()} already existed`);
         msg = parts.join(" · ");
       }
-      setExportMsg({ ok: true, text: msg });
+      setExportMsg({ ok: failedBatches === 0, text: msg });
       setSelected(new Set());
     } catch (e) {
       setExportMsg({ ok: false, text: e instanceof Error ? e.message : "Failed to add to list" });

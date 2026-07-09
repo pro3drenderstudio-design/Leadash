@@ -30,8 +30,12 @@ export async function POST(req: NextRequest) {
 
   if (!Array.isArray(ids) || ids.length === 0)
     return NextResponse.json({ error: "No leads selected" }, { status: 400 });
-  if (ids.length > 2500)
-    return NextResponse.json({ error: "Max 2500 leads per export" }, { status: 400 });
+  // Raised from 2500 → 5000 in one call: the client still batches for CSV
+  // (each batch triggers a download), but campaign/list adds can now finish
+  // in half the round-trips for the "scrape 5-7k leads" flow the customer
+  // reported struggling with.
+  if (ids.length > 5000)
+    return NextResponse.json({ error: "Max 5000 leads per export request" }, { status: 400 });
 
   const adminDb = createAdminClient();
 

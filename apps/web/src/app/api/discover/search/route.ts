@@ -203,7 +203,12 @@ export async function GET(req: NextRequest) {
         .rpc("get_workspace_lead_emails", { p_workspace_id: workspaceId });
       const existingEmails = ((emailArray as string[] | null) ?? []).filter(Boolean);
       if (existingEmails.length > 0) {
-        conditions.push(`lower(p.email) NOT IN (SELECT unnest($${i}::text[]))`);
+        // Use `<> ALL($::text[])` instead of `NOT IN (SELECT unnest(...))`.
+        // With large arrays (10k+ emails, common on established workspaces)
+        // the planner picks a much faster hashed-array comparison for ALL
+        // than the row-source it derives from unnest, and this pattern is
+        // the one Postgres actually optimises for anti-set membership.
+        conditions.push(`(p.email IS NULL OR lower(p.email) <> ALL($${i}::text[]))`);
         params.push(existingEmails);
         i++;
       }
@@ -255,22 +260,27 @@ export async function GET(req: NextRequest) {
       new Promise<number>(resolve => setTimeout(() => resolve(HARD_CAP), 12_000)),
     ]);
 
+    // Wrap the rows query so we can classify its failure (timeout vs
+    // connection vs unknown) and return an actionable message instead of
+    // the generic "Search failed" — that's what the customer keeps seeing.
+    const rowsPromise = leadsDb.unsafe(`
+      SELECT
+        p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
+        p.linkedin_url, p.email, p.email_status, p.phone,
+        p.country, p.state, p.city, p.company_name, p.company_id,
+        c.domain AS company_domain,
+        c.industry AS company_industry, c.size_range AS company_size,
+        c.keywords AS company_keywords
+      FROM discover_people p
+      ${joinType} discover_companies c ON c.id = p.company_id
+      ${where}
+      ORDER BY ${sortCol} ${sortDir} NULLS LAST
+      LIMIT $${i} OFFSET $${i + 1}
+    `, [...params, limit, offset] as never[]);
+
     const [rawTotal, rows] = await Promise.all([
       skipCount ? Promise.resolve(-1) : countWithTimeout(),
-      leadsDb.unsafe(`
-        SELECT
-          p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
-          p.linkedin_url, p.email, p.email_status, p.phone,
-          p.country, p.state, p.city, p.company_name, p.company_id,
-          c.domain AS company_domain,
-          c.industry AS company_industry, c.size_range AS company_size,
-          c.keywords AS company_keywords
-        FROM discover_people p
-        ${joinType} discover_companies c ON c.id = p.company_id
-        ${where}
-        ORDER BY ${sortCol} ${sortDir} NULLS LAST
-        LIMIT $${i} OFFSET $${i + 1}
-      `, [...params, limit, offset] as never[]),
+      rowsPromise,
     ]);
 
     const capped   = !skipCount && rawTotal >= HARD_CAP;
@@ -336,7 +346,48 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (err) {
-    console.error("[discover/search]", err instanceof Error ? err.message : err);
+    // Classify the failure so the customer sees an actionable message.
+    // postgres.js surfaces the SQLSTATE code on err.code.
+    const errObj = err as { code?: string; severity?: string; message?: string };
+    const code   = errObj.code ?? "";
+    const msg    = errObj.message ?? String(err);
+
+    // Log a compact fingerprint (workspace + filter keys, no PII) so we can
+    // triage timeouts vs connection drops server-side without a debugger.
+    const fingerprint = {
+      workspace: workspaceId,
+      code,
+      severity: errObj.severity,
+      filters: {
+        keyword:      !!keyword,
+        titles:       titleIncludes.length,
+        seniorities:  seniorities.length,
+        departments:  departments.length,
+        countries:    countryIncludes.length,
+        locations:    locationIncludes.length,
+        industries:   industryIncludes.length,
+        sizes:        companySizes.length,
+        companies:    companyIncludes.length,
+        co_keywords:  companyKeywordIncludes.length,
+        net_new:      netNew,
+        ids_only:     idsOnly,
+      },
+      msg: msg.slice(0, 200),
+    };
+    console.error("[discover/search]", JSON.stringify(fingerprint));
+
+    // 57014 = query_canceled (statement_timeout, hit our per-statement cap).
+    // 08* = connection_exception / broken pipe from PgBouncer or the VPS.
+    if (code === "57014") {
+      return NextResponse.json({
+        error: "This search took too long. Try narrower filters — fewer titles, tighter countries, or a specific industry — and try again.",
+      }, { status: 504 });
+    }
+    if (code.startsWith("08")) {
+      return NextResponse.json({
+        error: "Lost the connection to the leads database. Please try again in a moment.",
+      }, { status: 503 });
+    }
     return NextResponse.json({ error: "Search failed. Please try again." }, { status: 500 });
   }
 }
