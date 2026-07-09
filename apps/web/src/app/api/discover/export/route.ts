@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
+import { invalidateWorkspaceEmails } from "@/lib/discover-cache";
 import type { DiscoverExportRequest } from "@/types/discover";
 
 import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
@@ -255,6 +256,10 @@ export async function POST(req: NextRequest) {
     const leadsAdded     = insertedLeads?.length ?? 0;
     const alreadyExisted = Math.max(0, leads.length - leadsAdded);
 
+    // Bust the NET NEW email cache so the next discover search excludes the
+    // leads we just added instead of surfacing them for another 60s.
+    if (leadsAdded > 0) void invalidateWorkspaceEmails(workspaceId);
+
     return NextResponse.json({
       ok:              true,
       leads_added:     leadsAdded,
@@ -375,6 +380,8 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+
+    if ((insertedLeads?.length ?? 0) > 0) void invalidateWorkspaceEmails(workspaceId);
 
     return NextResponse.json({
       ok:           true,

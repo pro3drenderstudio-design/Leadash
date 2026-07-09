@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
-import { searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit } from "@/lib/discover-cache";
+import {
+  searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit,
+  getCachedWorkspaceEmails, setCachedWorkspaceEmails,
+} from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
 const CREDITS_PER_LEAD = 0.5;
@@ -197,17 +200,39 @@ export async function GET(req: NextRequest) {
       conditions.push(`p.email IS NOT NULL AND p.email <> ''`);
     }
 
+    // Cap the array size we push into the WHERE. Above this threshold, the
+    // hashed `<> ALL($::text[])` shape still works but the network payload
+    // and per-request planning cost grow linearly. For huge established
+    // workspaces we keep the most-recent slice in the anti-join and let any
+    // dupes slip through — the client-side dedup on export catches them and
+    // the UX cost is bounded ("a few dupes I already scraped" vs "search
+    // times out and returns nothing").
+    const NET_NEW_ARRAY_CAP = 20_000;
+
     if (netNew) {
-      const adminDb = createAdminClient();
-      const { data: emailArray } = await adminDb
-        .rpc("get_workspace_lead_emails", { p_workspace_id: workspaceId });
-      const existingEmails = ((emailArray as string[] | null) ?? []).filter(Boolean);
+      // Cache the workspace's existing-email set for 60s (see discover-cache.ts).
+      // Cuts a Supabase RPC round-trip on every filter tweak.
+      let existingEmails = await getCachedWorkspaceEmails(workspaceId);
+      if (existingEmails === null) {
+        const adminDb = createAdminClient();
+        const { data: emailArray } = await adminDb
+          .rpc("get_workspace_lead_emails", { p_workspace_id: workspaceId });
+        existingEmails = ((emailArray as string[] | null) ?? []).filter(Boolean);
+        void setCachedWorkspaceEmails(workspaceId, existingEmails);
+      }
+      if (existingEmails.length > NET_NEW_ARRAY_CAP) {
+        // Keep the tail — get_workspace_lead_emails does not sort, but slicing
+        // from the end still gives a stable subset that's the same across
+        // repeated searches within the cache window, avoiding pagination flicker.
+        existingEmails = existingEmails.slice(-NET_NEW_ARRAY_CAP);
+      }
       if (existingEmails.length > 0) {
         // Use `<> ALL($::text[])` instead of `NOT IN (SELECT unnest(...))`.
-        // With large arrays (10k+ emails, common on established workspaces)
-        // the planner picks a much faster hashed-array comparison for ALL
-        // than the row-source it derives from unnest, and this pattern is
-        // the one Postgres actually optimises for anti-set membership.
+        // With large arrays the planner picks a much faster hashed-array
+        // comparison for ALL than the row-source it derives from unnest, and
+        // this is the pattern Postgres actually optimises for anti-set
+        // membership. The NULL guard preserves rows with no email (previously
+        // excluded accidentally by NOT IN's three-valued logic on NULL).
         conditions.push(`(p.email IS NULL OR lower(p.email) <> ALL($${i}::text[]))`);
         params.push(existingEmails);
         i++;

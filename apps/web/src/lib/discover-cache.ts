@@ -54,6 +54,47 @@ export async function setCachedSearch(key: string, data: object): Promise<void> 
   }
 }
 
+/**
+ * Cache the workspace's existing-email set (used by NET NEW filter on the
+ * discover search endpoint). Refetching this from Supabase RPC on every
+ * search is expensive for established workspaces (5–50k+ rows). 60s TTL is
+ * short enough that "add leads then search again" shows the new dedup
+ * within a minute, long enough that filter-toggling doesn't re-query.
+ */
+const WS_EMAILS_TTL_SECS = 60;
+
+export async function getCachedWorkspaceEmails(workspaceId: string): Promise<string[] | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(`discover:ws-emails:${workspaceId}`);
+    return raw ? (JSON.parse(raw) as string[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedWorkspaceEmails(workspaceId: string, emails: string[]): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.set(`discover:ws-emails:${workspaceId}`, JSON.stringify(emails), "EX", WS_EMAILS_TTL_SECS);
+  } catch {
+    // non-fatal
+  }
+}
+
+/** Bust the cache after operations that add leads (export, campaign add, list add). */
+export async function invalidateWorkspaceEmails(workspaceId: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.del(`discover:ws-emails:${workspaceId}`);
+  } catch {
+    // non-fatal
+  }
+}
+
 // Per-workspace sliding-window rate limiter: 60 requests / 60 seconds.
 // Fails open — if Redis is down, requests go through.
 const RATE_LIMIT   = 60;  // requests
