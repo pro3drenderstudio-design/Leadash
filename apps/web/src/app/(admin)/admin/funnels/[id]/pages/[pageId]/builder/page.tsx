@@ -23,6 +23,7 @@ import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/
 import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
 import type { BlockRenderContext } from "@/lib/funnel-blocks/render/BlockRenderer";
 import { ICON_TYPE_LIST } from "@/lib/funnel-blocks/render/BlockRenderer";
+import { FunnelIcon, FUNNEL_ICON_LIST } from "@/lib/funnel-blocks/render/funnel-icons";
 import { PATTERN_PRESETS } from "@/lib/funnel-blocks/render/wrappers";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,16 +33,167 @@ const GOOGLE_FONTS_SANS    = ["Inter","Poppins","Montserrat","Lato","Open Sans",
 const GOOGLE_FONTS_SERIF   = ["Playfair Display","Merriweather","Lora","EB Garamond","Libre Baskerville"];
 const GOOGLE_FONTS_DISPLAY = ["Space Grotesk","Oswald","Anton","Bebas Neue","Bricolage Grotesque"];
 
-const GRADIENT_PRESETS = [
-  "linear-gradient(135deg,#f97316,#dc2626)",
-  "linear-gradient(135deg,#7c3aed,#4f46e5)",
-  "linear-gradient(135deg,#059669,#0891b2)",
-  "linear-gradient(135deg,#db2777,#f97316)",
-  "linear-gradient(180deg,#111827,#0c0c0f)",
-  "linear-gradient(135deg,#1e2433,#0c0c0f)",
-  "linear-gradient(135deg,#134e4a,#1e3a5f)",
-  "radial-gradient(ellipse at top,#1e2433,#0c0c0f)",
+// ── Gradient builder ──────────────────────────────────────────────────────────
+
+type GStop = { color: string; pos: number };
+type GConfig = { type: "linear"|"radial"|"conic"; angle: number; radialShape: "circle"|"ellipse"; radialPos: string; stops: GStop[] };
+
+const G_DEFAULT: GConfig = { type:"linear", angle:135, radialShape:"circle", radialPos:"center", stops:[{color:"#f97316",pos:0},{color:"#7c3aed",pos:100}] };
+
+const G_QUICK_STARTS: GConfig[] = [
+  { ...G_DEFAULT, stops:[{color:"#f97316",pos:0},{color:"#dc2626",pos:100}] },
+  { ...G_DEFAULT, stops:[{color:"#7c3aed",pos:0},{color:"#4f46e5",pos:100}] },
+  { ...G_DEFAULT, stops:[{color:"#059669",pos:0},{color:"#0891b2",pos:100}] },
+  { ...G_DEFAULT, stops:[{color:"#db2777",pos:0},{color:"#f97316",pos:100}] },
+  { ...G_DEFAULT, angle:180, stops:[{color:"#111827",pos:0},{color:"#0c0c0f",pos:100}] },
+  { ...G_DEFAULT, stops:[{color:"#1e2433",pos:0},{color:"#0c0c0f",pos:100}] },
+  { ...G_DEFAULT, type:"radial", radialShape:"ellipse", radialPos:"top", stops:[{color:"#1e2433",pos:0},{color:"#0c0c0f",pos:100}] },
+  { ...G_DEFAULT, stops:[{color:"#134e4a",pos:0},{color:"#1e3a5f",pos:100}] },
 ];
+
+function buildGCss(cfg: GConfig): string {
+  const s = cfg.stops.map(s => `${s.color} ${s.pos.toFixed(0)}%`).join(", ");
+  if (cfg.type === "radial") return `radial-gradient(${cfg.radialShape} at ${cfg.radialPos}, ${s})`;
+  if (cfg.type === "conic") return `conic-gradient(from ${cfg.angle}deg, ${s})`;
+  return `linear-gradient(${cfg.angle}deg, ${s})`;
+}
+
+function parseGStops(str: string): GStop[] {
+  const parts: string[] = [];
+  let depth = 0, cur = "";
+  for (const ch of str) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "," && depth === 0) { parts.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  return parts.map((p, i) => {
+    const m = p.match(/^(.+?)\s+(\d+(?:\.\d+)?)%$/);
+    if (m) return { color: m[1].trim(), pos: parseFloat(m[2]) };
+    return { color: p.trim(), pos: Math.round((i / Math.max(parts.length - 1, 1)) * 100) };
+  });
+}
+
+function parseGCss(css: string): GConfig {
+  if (!css) return G_DEFAULT;
+  try {
+    const lin = css.match(/^linear-gradient\((\d+(?:\.\d+)?)deg,(.+)\)$/);
+    if (lin) return { ...G_DEFAULT, type:"linear", angle:parseFloat(lin[1]), stops:parseGStops(lin[2]) };
+    const rad = css.match(/^radial-gradient\((circle|ellipse)(?:\s+at\s+([^,]+))?,(.+)\)$/);
+    if (rad) return { ...G_DEFAULT, type:"radial", radialShape:rad[1] as "circle"|"ellipse", radialPos:(rad[2]?.trim()||"center"), stops:parseGStops(rad[3]) };
+    const con = css.match(/^conic-gradient\(from\s+(\d+(?:\.\d+)?)deg,(.+)\)$/);
+    if (con) return { ...G_DEFAULT, type:"conic", angle:parseFloat(con[1]), stops:parseGStops(con[2]) };
+  } catch {}
+  return G_DEFAULT;
+}
+
+const IS_G = "bg-white/5 border border-white/10 rounded-md px-2 py-1 text-xs text-white/80 focus:outline-none focus:border-orange-500/40 font-mono";
+
+function GradientBuilder({ value, onChange }: { value: string; onChange: (css: string) => void }) {
+  const [cfg, setCfg] = React.useState<GConfig>(() => parseGCss(value));
+
+  function apply(next: GConfig) { setCfg(next); onChange(buildGCss(next)); }
+  function upd(patch: Partial<GConfig>) { apply({ ...cfg, ...patch }); }
+  function updStop(idx: number, patch: Partial<GStop>) {
+    apply({ ...cfg, stops: cfg.stops.map((s, i) => i === idx ? { ...s, ...patch } : s) });
+  }
+  function addStop() {
+    const mid = Math.round((cfg.stops[0].pos + cfg.stops[cfg.stops.length - 1].pos) / 2);
+    apply({ ...cfg, stops: [...cfg.stops, { color: "#ffffff", pos: mid }].sort((a, b) => a.pos - b.pos) });
+  }
+  function rmStop(idx: number) {
+    if (cfg.stops.length <= 2) return;
+    apply({ ...cfg, stops: cfg.stops.filter((_, i) => i !== idx) });
+  }
+
+  const preview = buildGCss(cfg);
+
+  return (
+    <div>
+      {/* Preview strip + quick-starts */}
+      <div style={{ height: 28, borderRadius: 7, background: preview, marginBottom: 8, border: "1px solid rgba(255,255,255,0.07)" }} />
+      <div className="flex gap-1 flex-wrap mb-3">
+        {G_QUICK_STARTS.map((qs, i) => (
+          <button key={i} title="Use this preset" onMouseDown={e => { e.preventDefault(); apply(qs); }}
+            style={{ width: 24, height: 24, borderRadius: 5, background: buildGCss(qs), border: "2px solid rgba(255,255,255,0.06)", cursor: "pointer", flexShrink: 0 }} />
+        ))}
+      </div>
+
+      {/* Type tabs */}
+      <div className="flex gap-0.5 bg-white/5 border border-white/10 rounded-lg p-0.5 mb-3">
+        {(["linear","radial","conic"] as const).map(t => (
+          <button key={t} onClick={() => upd({ type:t })}
+            className={`flex-1 py-1 rounded-md text-[10.5px] font-semibold cursor-pointer transition-colors border-none ${cfg.type===t?"bg-orange-500 text-white":"text-white/40 hover:text-white/60 bg-transparent"}`}>
+            {t.charAt(0).toUpperCase()+t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Color stops */}
+      <div className="mb-2">
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-[10.5px] text-white/40">Color stops</span>
+          <button onClick={addStop} className="text-[10px] text-orange-400 cursor-pointer bg-transparent border-none hover:text-orange-300 p-0">+ Add stop</button>
+        </div>
+        {cfg.stops.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5 mb-1.5">
+            <div className="relative w-7 h-7 rounded-md border border-white/10 shrink-0 overflow-hidden" style={{ background: s.color }}>
+              <input type="color" value={s.color} onChange={e => updStop(i, { color: e.target.value })}
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            </div>
+            <input value={s.color} onChange={e => updStop(i, { color: e.target.value })} className={IS_G + " w-[82px]"} />
+            <input type="number" min={0} max={100} value={s.pos}
+              onChange={e => updStop(i, { pos: Math.min(100, Math.max(0, +e.target.value)) })}
+              className={IS_G + " w-11 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"} />
+            <span className="text-[10px] text-white/25">%</span>
+            <button onClick={() => rmStop(i)} disabled={cfg.stops.length <= 2}
+              className="border-none bg-transparent text-white/25 cursor-pointer hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed text-base p-0 ml-auto leading-none">×</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Angle (linear / conic) */}
+      {(cfg.type === "linear" || cfg.type === "conic") && (
+        <div className="mb-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10.5px] text-white/40 flex-1">Angle</span>
+            <input type="number" min={0} max={360} value={cfg.angle} onChange={e => upd({ angle: +e.target.value })}
+              className="w-10 bg-transparent text-[10.5px] text-white/60 font-mono text-right outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            <span className="text-[9.5px] text-white/25 font-mono w-3 shrink-0">°</span>
+          </div>
+          <input type="range" min={0} max={360} value={cfg.angle} onChange={e => upd({ angle: +e.target.value })}
+            className="w-full accent-orange-500" />
+        </div>
+      )}
+
+      {/* Radial options */}
+      {cfg.type === "radial" && (
+        <>
+          <div className="flex gap-1 mb-2">
+            {(["circle","ellipse"] as const).map(sh => (
+              <button key={sh} onClick={() => upd({ radialShape: sh })}
+                className={`flex-1 py-1 rounded-md text-[10.5px] border cursor-pointer transition-colors bg-transparent ${cfg.radialShape===sh?"border-orange-500 text-orange-400":"border-white/10 text-white/40 hover:text-white/60"}`}>
+                {sh.charAt(0).toUpperCase()+sh.slice(1)}
+              </button>
+            ))}
+          </div>
+          <select value={cfg.radialPos} onChange={e => upd({ radialPos: e.target.value })}
+            className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-orange-500/40 mb-2">
+            {["center","top","bottom","left","right","top left","top right","bottom left","bottom right"].map(v => (
+              <option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>
+            ))}
+          </select>
+        </>
+      )}
+
+      <button onClick={() => onChange("")}
+        className="w-full py-1.5 text-[10.5px] text-white/30 border border-white/10 rounded-md cursor-pointer bg-transparent hover:text-white/50 mt-1">
+        Clear gradient
+      </button>
+    </div>
+  );
+}
 
 // ── Design system background tokens ───────────────────────────────────────────
 // #0c0c0f  main app background
@@ -1076,28 +1228,30 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   }
   function iconTypeCtl(key = "icon_type") {
     if (!b) return null;
+    const cur = (b.props[key] as string) ?? "check";
     return (
-      <select value={(b.props[key] as string) ?? "check"} onChange={e => onSetProps(b.id, { [key]: e.target.value })} className={IS}>
-        {ICON_TYPE_LIST.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-      </select>
+      <div className="max-h-44 overflow-y-auto rounded-lg border border-white/10 p-1.5 bg-white/[0.02]">
+        <div className="grid grid-cols-7 gap-0.5">
+          {FUNNEL_ICON_LIST.map(name => (
+            <button key={name} title={name} onClick={() => onSetProps(b.id, { [key]: name })}
+              style={{ color: "currentColor" }}
+              className={`flex items-center justify-center h-7 w-full rounded cursor-pointer border transition-colors ${cur === name ? "border-orange-500 bg-orange-500/15 text-orange-400" : "border-transparent bg-transparent text-white/40 hover:text-white/80 hover:bg-white/8"}`}>
+              <FunnelIcon name={name} size={14} color="currentColor" strokeWidth={1.8} />
+            </button>
+          ))}
+        </div>
+        <div className="mt-1.5 px-0.5 text-[9.5px] text-white/25 font-mono">{cur}</div>
+      </div>
     );
   }
   function gradientCtl() {
     if (!b) return null;
-    const val = (b.layout?.bg_gradient as string) ?? "";
     return (
-      <div>
-        <input value={val} onChange={e => onSetLayout(b.id, { bg_gradient: e.target.value || undefined })}
-          placeholder="e.g. linear-gradient(135deg, #f97316, #dc2626)" className={IS + " font-mono text-xs mb-2"} />
-        <div className="flex gap-1.5 flex-wrap">
-          {GRADIENT_PRESETS.map(g => (
-            <button key={g} onMouseDown={e => { e.preventDefault(); onSetLayout(b.id, { bg_gradient: g }); }}
-              style={{ background: g, width: 28, height: 28, borderRadius: 6, cursor: "pointer", border: val === g ? "2px solid #f97316" : "2px solid transparent" }} />
-          ))}
-          {val && <button onMouseDown={e => { e.preventDefault(); onSetLayout(b.id, { bg_gradient: undefined }); }}
-            className="px-2 h-7 rounded-md text-[10.5px] text-white/40 border border-white/10 bg-white/5 cursor-pointer hover:text-white/60">Clear</button>}
-        </div>
-      </div>
+      <GradientBuilder
+        key={b.id + "-grad"}
+        value={(b.layout?.bg_gradient as string) ?? ""}
+        onChange={css => onSetLayout(b.id, { bg_gradient: css || undefined })}
+      />
     );
   }
   function patternCtl() {
@@ -1225,21 +1379,43 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   }
   function itemsCtl(kind: "stats"|"faq"|"list"|"pricing") {
     if (!b) return null;
+    const isIconList = kind === "list" && b.type === "icon-list";
     const items = (b.props.items as unknown[]) ?? [];
-    const blank = kind === "stats" ? { value: "0", label: "Label" } : kind === "faq" ? { q: "New question?", a: "Answer." } : { text: "New item" };
+    const blank = kind === "stats" ? { value: "0", label: "Label" }
+      : kind === "faq" ? { q: "New question?", a: "Answer." }
+      : isIconList ? { text: "New item", icon_type: "check" }
+      : { text: "New item" };
     return (
       <div>
         <div className="flex flex-col gap-1.5 mb-2">
           {items.map((it, idx) => (
-            <div key={idx} className="flex items-center gap-2 px-2.5 py-2 bg-white/5 border border-white/[0.07] rounded-lg">
-              <span className="flex-1 text-xs text-white/45 truncate">
+            <div key={idx} className="flex items-start gap-2 px-2.5 py-2 bg-white/5 border border-white/[0.07] rounded-lg">
+              {isIconList && (
+                <div className="shrink-0 mt-0.5">
+                  <div className="w-6 h-6 flex items-center justify-center text-orange-400 mb-0.5">
+                    <FunnelIcon name={(it as {icon_type?: string}).icon_type ?? "check"} size={13} color="currentColor" strokeWidth={2} />
+                  </div>
+                  <select
+                    value={(it as {icon_type?: string}).icon_type ?? "check"}
+                    onChange={e => {
+                      const updated = (items as Array<Record<string, unknown>>).map((item, i) =>
+                        i === idx ? { ...item, icon_type: e.target.value } : item
+                      );
+                      onSetProps(b.id, { items: updated });
+                    }}
+                    className="text-[9px] bg-white/5 border border-white/10 rounded px-1 py-0.5 text-white/50 focus:outline-none focus:border-orange-500/40 max-w-[64px]">
+                    {FUNNEL_ICON_LIST.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              )}
+              <span className="flex-1 text-xs text-white/45 truncate self-center">
                 {kind === "stats"
                   ? `${(it as {value:string;label:string}).value} · ${(it as {value:string;label:string}).label}`
                   : kind === "faq"
                   ? (it as {q:string}).q
                   : (it as {text:string}).text}
               </span>
-              <button onClick={() => onRemoveItem(b.id, idx)} className="border-none bg-transparent text-white/25 cursor-pointer p-0.5 hover:text-white/60">
+              <button onClick={() => onRemoveItem(b.id, idx)} className="border-none bg-transparent text-white/25 cursor-pointer p-0.5 hover:text-white/60 self-center">
                 <Icon paths={["M5 12h14"]} size={15} sw={2} />
               </button>
             </div>
@@ -1411,9 +1587,17 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             {t==="headline"&&<><Field label="Size">{headlineSizeCtl()}</Field>{fontCtl("font_family", null)}</>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
             {t==="body-text"&&fontCtl()}
-            {(t==="list"||t==="icon-list")&&<>
+            {t==="list"&&<>
               <Field label="Icon">{iconTypeCtl("icon_type")}</Field>
               <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Icon size">{numCtl("icon_size",{min:10,max:48,default:15})}</Field>
+              <Field label="Text color">{colorCtl("text_color")}</Field>
+              {fontCtl("font_family","text_size")}
+            </>}
+            {t==="icon-list"&&<>
+              <Field label="Default icon (per-item overrides above)">{iconTypeCtl("icon_type")}</Field>
+              <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Icon size">{numCtl("icon_size",{min:10,max:48,default:16})}</Field>
               <Field label="Text color">{colorCtl("text_color")}</Field>
               {fontCtl("font_family","text_size")}
             </>}

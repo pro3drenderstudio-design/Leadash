@@ -2,8 +2,8 @@
 import React from "react";
 import { Block, BlockLayout } from "../types";
 import { Editable } from "./Editable";
-import { Icon } from "./icons";
 import { buildOuterStyle, buildOverlayStyle, buildPatternStyle, buildInnerStyle, buildRowGridTemplate, fluid } from "./wrappers";
+import { FunnelIcon, FUNNEL_ICON_LIST } from "./funnel-icons";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
@@ -33,32 +33,8 @@ export interface BlockRenderContext {
 
 const AC = "#f97316";
 
-export const ICON_PATHS: Record<string, string[]> = {
-  check:     ["M20 6L9 17l-5-5"],
-  star:      ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
-  bolt:      ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
-  shield:    ["M12 2l7 4v6c0 5.25-7 10-7 10S5 17.25 5 12V6l7-4z"],
-  chart:     ["M5 20V11","M12 20V4","M19 20v-7"],
-  globe:     ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M2 12h20","M12 2c-2.76 3.63-4 7-4 10s1.24 6.37 4 10c2.76-3.63 4-7 4-10S14.76 2 12 2z"],
-  users:     ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
-  diamond:   ["M12 2l8 9-8 11-8-11L12 2z","M3 11h18"],
-  zap:       ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
-  clock:     ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M12 8v4l3 2"],
-  heart:     ["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"],
-  target:    ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z","M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"],
-  arrow:     ["M5 12h14","M12 5l7 7-7 7"],
-  rocket:    ["M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z","M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"],
-  mail:      ["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z","M22 6l-10 7L2 6"],
-  thumbsup:  ["M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z","M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"],
-  award:     ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z","M12 17v5","M9 22h6"],
-  flag:      ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z","M4 22v-7"],
-  phone:     ["M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.07 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 5.81 5.81l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.73 2.02z"],
-  plus:      ["M12 5v14","M5 12h14"],
-  circle:    ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"],
-  dot:       ["M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"],
-};
-
-export const ICON_TYPE_LIST = Object.keys(ICON_PATHS);
+/** @deprecated use FUNNEL_ICON_LIST */
+export const ICON_TYPE_LIST = FUNNEL_ICON_LIST;
 
 function fontHref(family: string): string {
   return `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, "+")}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`;
@@ -119,7 +95,7 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)" }}>
       <div style={{ width: placeholderSize, height: placeholderSize, borderRadius: "50%", background: AC, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-        <Icon paths={["M10 9l5 3-5 3z"]} size={Math.round(placeholderSize / 3)} sw={0} />
+        <FunnelIcon name="play" size={Math.round(placeholderSize / 3)} strokeWidth={0} />
       </div>
     </div>
   );
@@ -288,17 +264,17 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const li = items("items");
       const listIconType = (p.icon_type as string) || "check";
       const listIconColor = (p.icon_color as string) || (p.accent_color as string) || AC;
+      const listIconSize = (p.icon_size as number) || 15;
       const listTextColor = (p.text_color as string) || "#d7dbe2";
       const listFontSize = p.text_size ? `${p.text_size as number}px` : "15px";
       const listFontFamily = p.font_family as string | undefined;
-      const listPaths = ICON_PATHS[listIconType] ?? ICON_PATHS.check;
       return (
         <div style={{ padding: "8px 28px" }}>
           <FontLink family={listFontFamily} />
           {li.map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
               <span style={{ flexShrink: 0, marginTop: 3, color: listIconColor }}>
-                <Icon paths={listPaths} size={15} sw={2.6} />
+                <FunnelIcon name={listIconType} size={listIconSize} strokeWidth={2.2} />
               </span>
               <Editable
                 tag="span"
@@ -325,7 +301,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
         <img src={src} alt={(p.alt as string) || ""} style={{ width: imgWidth, maxWidth: "100%", display: "block", borderRadius: imgRadius }} />
       ) : editable ? (
         <div style={{ height: 220, width: imgWidth, maxWidth: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#3a4252" }}>
-          <Icon paths={["M3 5h18v14H3z", "M3 16l5-5 4 4 3-3 6 6"]} size={28} sw={1.4} />
+          <FunnelIcon name="image" size={28} strokeWidth={1.4} />
         </div>
       ) : null;
       return (
@@ -450,7 +426,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 9 }}>
               {feats.map((f, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <span style={{ color: (p.accent_color as string) || AC, marginTop: 2 }}><Icon paths={["M20 6L9 17l-5-5"]} size={14} sw={2.6} /></span>
+                  <span style={{ color: (p.accent_color as string) || AC, marginTop: 2 }}><FunnelIcon name="check" size={14} strokeWidth={2.6} /></span>
                   <Editable tag="span" value={f.text || ""} editable={editable} onCommit={commitItem(i, "text")} onFocus={focus} style={{ fontSize: 13.5, color: "#d7dbe2" }} />
                 </div>
               ))}
@@ -593,14 +569,13 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const radius    = (p.radius      as number) ?? 12;
       const align     = ((p.align as string) || "left") as React.CSSProperties["textAlign"];
       const showIcon  = p.show_icon !== false;
-      const paths     = ICON_PATHS[iconType] ?? ICON_PATHS["check"];
       return (
         <div style={{ padding: "8px 16px" }}>
           <div style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: radius, padding: "24px", textAlign: align }}>
             {showIcon && (
               <div style={{ display: "flex", justifyContent: align === "center" ? "center" : "flex-start", marginBottom: 14 }}>
                 <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 10, background: `${iconColor}18`, border: `1px solid ${iconColor}33`, color: iconColor }}>
-                  <Icon paths={paths} size={22} sw={1.8} />
+                  <FunnelIcon name={iconType} size={22} strokeWidth={1.8} />
                 </div>
               </div>
             )}
@@ -630,7 +605,6 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const iconAlign = (p.align as string) || "center";
       const justifyMap2: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
       const shapeRadius = iconShape === "circle" ? "50%" : iconShape === "square" ? Math.round(iconSize * 0.22) + "px" : 0;
-      const iconPaths = ICON_PATHS[iconType] ?? ICON_PATHS["star"];
       return (
         <div style={{ padding: "12px 28px", display: "flex", justifyContent: justifyMap2[iconAlign] || "center" }} onClick={editable ? focus : undefined}>
           <div style={{
@@ -641,7 +615,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             background: iconBg && iconShape !== "none" ? iconBg : undefined,
             color: iconColor,
           }}>
-            <Icon paths={iconPaths} size={iconSize} sw={1.6} />
+            <FunnelIcon name={iconType} size={iconSize} strokeWidth={1.6} />
           </div>
         </div>
       );
@@ -656,12 +630,11 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const bodyColor   = (p.body_color   as string) || "#9aa4b2";
       const titleSize   = (p.title_size   as number) || 18;
       const bodySize    = (p.body_size    as number) || 15;
-      const iconPaths   = ICON_PATHS[iconType] ?? ICON_PATHS["bolt"];
       const iconEl = (
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: iconSize + 24, height: iconSize + 24, borderRadius: 10,
           background: `${iconColor}18`, border: `1px solid ${iconColor}33`, color: iconColor, flexShrink: 0 }}>
-          <Icon paths={iconPaths} size={iconSize} sw={1.7} />
+          <FunnelIcon name={iconType} size={iconSize} strokeWidth={1.7} />
         </div>
       );
       const textEl = (
@@ -697,20 +670,20 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "icon-list": {
       const ilItems = items("items");
-      const ilIconColor = (p.icon_color as string) || AC;
-      const ilTextColor = (p.text_color as string) || "#d7dbe2";
-      const ilFontSize  = p.text_size ? `${p.text_size as number}px` : "15px";
+      const ilIconColor  = (p.icon_color as string) || AC;
+      const ilIconSize   = (p.icon_size as number) || 16;
+      const ilTextColor  = (p.text_color as string) || "#d7dbe2";
+      const ilFontSize   = p.text_size ? `${p.text_size as number}px` : "15px";
       const ilFontFamily = p.font_family as string | undefined;
       return (
         <div style={{ padding: "8px 28px" }}>
           <FontLink family={ilFontFamily} />
           {ilItems.map((it, i) => {
             const itemIconType = (it.icon_type as string) || (p.icon_type as string) || "check";
-            const itemPaths = ICON_PATHS[itemIconType] ?? ICON_PATHS["check"];
             return (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
                 <span style={{ flexShrink: 0, marginTop: 2, color: ilIconColor }}>
-                  <Icon paths={itemPaths} size={16} sw={2.2} />
+                  <FunnelIcon name={itemIconType} size={ilIconSize} strokeWidth={2.2} />
                 </span>
                 <Editable
                   tag="span"
