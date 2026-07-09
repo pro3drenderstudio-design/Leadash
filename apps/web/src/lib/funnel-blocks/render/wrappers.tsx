@@ -29,7 +29,20 @@ export function buildOuterStyle(layout: BlockLayout | undefined, fallbackPadding
   }
   const pt = layout.padding_top ? sizeToCss(layout.padding_top) : undefined;
   const pb = layout.padding_bottom ? sizeToCss(layout.padding_bottom) : undefined;
-  style.padding = pt || pb ? `${pt ?? "0px"} 0px ${pb ?? "0px"}` : fallbackPadding;
+  const pl = layout.padding_left ? sizeToCss(layout.padding_left) : undefined;
+  const pr = layout.padding_right ? sizeToCss(layout.padding_right) : undefined;
+  if (pt || pb || pl || pr) {
+    style.paddingTop = pt ?? "0px";
+    style.paddingRight = pr ?? "0px";
+    style.paddingBottom = pb ?? "0px";
+    style.paddingLeft = pl ?? "0px";
+  } else {
+    style.padding = fallbackPadding;
+  }
+  if (layout.margin_top) style.marginTop = sizeToCss(layout.margin_top);
+  if (layout.margin_bottom) style.marginBottom = sizeToCss(layout.margin_bottom);
+  if (layout.margin_left) style.marginLeft = sizeToCss(layout.margin_left);
+  if (layout.margin_right) style.marginRight = sizeToCss(layout.margin_right);
   if (layout.border_color) style.borderColor = layout.border_color;
   if (layout.border_width != null) style.borderWidth = layout.border_width;
   if (layout.border_width) style.borderStyle = "solid";
@@ -55,11 +68,47 @@ export function buildInnerStyle(layout: BlockLayout | undefined, pageMaxWidth: n
   return { maxWidth: mw, margin: "0 auto", width: "100%", position: "relative" };
 }
 
-export function buildColumnStyle(layout: BlockLayout | undefined): React.CSSProperties {
-  const width = layout?.width ? sizeToCss(layout.width) : undefined;
-  return {
-    flex: width ? `0 0 ${width}` : "1 1 0%",
-    minWidth: 0,
-    width: width,
-  };
+/** Column items in a grid row don't need explicit flex/width — the grid track handles sizing. */
+export function buildColumnStyle(_layout: BlockLayout | undefined): React.CSSProperties {
+  return { minWidth: 0 };
+}
+
+type ColLayout = { width?: { value: number; unit: string }; width_mobile?: { value: number; unit: string }; width_tablet?: { value: number; unit: string } };
+
+/**
+ * Build the CSS grid-template-columns value for a row.
+ * Uses `fr` units converted from percentage widths so gap is automatically
+ * excluded from the fraction calculation — this eliminates the column-wrap bug
+ * that occurred with percentage widths and explicit gap in flexbox.
+ *
+ * Responsive behaviour (device = "mobile" | "tablet" | "desktop"):
+ *   mobile  — if no width_mobile overrides, returns "1fr" (full-width stacking)
+ *   tablet  — if no width_tablet overrides, falls back to desktop widths
+ *   desktop — uses width.value as fr units
+ */
+export function buildRowGridTemplate(colLayouts: (ColLayout | undefined)[], device: string): string {
+  if (colLayouts.length === 0) return "1fr";
+
+  if (device === "mobile") {
+    const hasOverride = colLayouts.some(l => l?.width_mobile);
+    if (!hasOverride) return "1fr";
+    return colLayouts.map(l => {
+      const w = l?.width_mobile;
+      return w ? `${w.value}fr` : "1fr";
+    }).join(" ");
+  }
+
+  if (device === "tablet") {
+    const hasOverride = colLayouts.some(l => l?.width_tablet);
+    return colLayouts.map(l => {
+      const w = hasOverride ? (l?.width_tablet ?? l?.width) : l?.width;
+      return w ? `${w.value}fr` : "1fr";
+    }).join(" ");
+  }
+
+  // desktop
+  return colLayouts.map(l => {
+    const w = l?.width;
+    return w ? `${w.value}fr` : "1fr";
+  }).join(" ");
 }

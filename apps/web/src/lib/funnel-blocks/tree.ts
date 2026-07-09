@@ -39,6 +39,7 @@ export function defaultProps(type: BlockType): Record<string, unknown> {
     case "spacer":         return { height:48 };
     case "divider":        return { bg_color:"transparent" };
     case "custom-html":    return { html:"<p>Custom HTML goes here</p>" };
+    case "info-card":      return { icon_type:"check", title:"Key benefit", body:"Explain why this matters in one or two sentences.", link_text:"", link_url:"", show_icon:true, card_bg:"rgba(255,255,255,0.03)", card_border:"rgba(255,255,255,0.07)", icon_color:"#f97316", title_color:"#ffffff", body_color:"#9aa4b2", radius:12, align:"left" };
     default:               return {};
   }
 }

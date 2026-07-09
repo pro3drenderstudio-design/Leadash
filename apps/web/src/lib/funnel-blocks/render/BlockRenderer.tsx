@@ -3,13 +3,12 @@ import React from "react";
 import { Block, BlockLayout } from "../types";
 import { Editable } from "./Editable";
 import { Icon } from "./icons";
-import { buildOuterStyle, buildOverlayStyle, buildInnerStyle, fluid } from "./wrappers";
+import { buildOuterStyle, buildOverlayStyle, buildInnerStyle, buildRowGridTemplate, fluid } from "./wrappers";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
 import { YouTubePlayer } from "./interactive/YouTubePlayer";
 import { FunnelTracking } from "@/lib/tracking/pixels";
-import styles from "./blocks.module.css";
 
 export type RenderMode = "edit" | "live";
 
@@ -19,6 +18,7 @@ export interface BlockRenderContext {
   selectedId?: string | null;
   pageId?: string;
   sessionId?: string;
+  device?: string;
   tracking?: FunnelTracking | null;
   onCommitProp?: (id: string, key: string, val: string) => void;
   onCommitItem?: (id: string, idx: number, field: string | null, val: string) => void;
@@ -103,12 +103,43 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const overlay = buildOverlayStyle(block.layout);
       const inner = buildInnerStyle(block.layout, ctx.pageMaxWidth);
       const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
+      const cols = block.children ?? [];
+      const gap = block.layout?.column_gap ?? 16;
+      const device = ctx.device ?? "desktop";
+      const colLayouts = cols.map(c => c.layout);
+
+      if (ctx.mode === "live") {
+        // In live mode emit a <style> tag with responsive media queries so the
+        // grid stacks on mobile by default (or uses any per-column overrides).
+        const rowId = block.id;
+        const desktopTpl = buildRowGridTemplate(colLayouts, "desktop");
+        const tabletTpl  = buildRowGridTemplate(colLayouts, "tablet");
+        const mobileTpl  = buildRowGridTemplate(colLayouts, "mobile");
+        return (
+          <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
+            {overlay && <div style={overlay} />}
+            <div style={{ ...inner }}>
+              <style dangerouslySetInnerHTML={{ __html:
+                `.row-${rowId}{display:grid;gap:${gap}px;grid-template-columns:${desktopTpl};}` +
+                `@media(max-width:640px){.row-${rowId}{grid-template-columns:${mobileTpl};}}` +
+                `@media(min-width:641px) and (max-width:1023px){.row-${rowId}{grid-template-columns:${tabletTpl};}}`
+              }} />
+              <div className={`row-${rowId}`} style={{ position: "relative" }}>
+                {ctx.renderChildren?.(cols, block.id)}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Edit mode: apply grid template based on current device preview
+      const gridTpl = buildRowGridTemplate(colLayouts, device);
       return (
         <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, position: "relative" }}>
           {overlay && <div style={overlay} />}
           <div style={{ ...inner }}>
-            <div className={styles.row} style={{ gap: 16, position: "relative" }}>
-              {ctx.renderChildren?.(block.children ?? [], block.id)}
+            <div style={{ display: "grid", gridTemplateColumns: gridTpl, gap, position: "relative" }}>
+              {ctx.renderChildren?.(cols, block.id)}
             </div>
           </div>
         </div>
@@ -116,10 +147,10 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "column": {
-      const outer = buildOuterStyle(block.layout, "16px");
+      const outer = buildOuterStyle(block.layout, "0px");
       const bg = (p.bg_color as string) || (outer.backgroundImage ? undefined : "transparent");
       return (
-        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, minHeight: 0, height: "100%" }}>
+        <div id={(p.anchor_id as string) || undefined} style={{ ...outer, background: bg, minHeight: 0 }}>
           {ctx.renderChildren?.(block.children ?? [], block.id)}
         </div>
       );
@@ -235,9 +266,12 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "video": {
       const url = (p.url as string) || "";
+      const sizeMap: Record<string, number | string> = { s: 480, m: 680, l: 860, xl: "100%" };
+      const sizeProp = (p.size as string) || "m";
+      const maxW = sizeMap[sizeProp] ?? 680;
       return (
         <div style={{ padding: "10px 28px" }}>
-          <div style={{ maxWidth: 680, margin: "0 auto", aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "#000", position: "relative" }}>
+          <div style={{ maxWidth: maxW === "100%" ? "100%" : maxW, margin: "0 auto", aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "#000", position: "relative" }}>
             {renderEmbed(block.id, url, ctx.mode)}
           </div>
         </div>
@@ -477,6 +511,58 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       ) : (
         <div style={{ padding: "8px 28px" }} dangerouslySetInnerHTML={{ __html: (p.html as string) || "" }} />
       );
+
+    case "info-card": {
+      const ICON_PATHS: Record<string, string[]> = {
+        check:   ["M20 6L9 17l-5-5"],
+        star:    ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
+        bolt:    ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+        shield:  ["M12 2l7 4v6c0 5.25-7 10-7 10S5 17.25 5 12V6l7-4z"],
+        chart:   ["M5 20V11","M12 20V4","M19 20v-7"],
+        globe:   ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M2 12h20","M12 2c-2.76 3.63-4 7-4 10s1.24 6.37 4 10c2.76-3.63 4-7 4-10S14.76 2 12 2z"],
+        users:   ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
+        diamond: ["M12 2l8 9-8 11-8-11L12 2z","M3 11h18"],
+        zap:     ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+        clock:   ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z","M12 8v4l3 2"],
+        heart:   ["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"],
+        target:  ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z","M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z","M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"],
+      };
+      const iconType  = (p.icon_type   as string) || "check";
+      const iconColor = (p.icon_color  as string) || AC;
+      const titleColor= (p.title_color as string) || "#ffffff";
+      const bodyColor = (p.body_color  as string) || "#9aa4b2";
+      const cardBg    = (p.card_bg     as string) || "rgba(255,255,255,0.03)";
+      const cardBd    = (p.card_border as string) || "rgba(255,255,255,0.07)";
+      const radius    = (p.radius      as number) ?? 12;
+      const align     = ((p.align as string) || "left") as React.CSSProperties["textAlign"];
+      const showIcon  = p.show_icon !== false;
+      const paths     = ICON_PATHS[iconType] ?? ICON_PATHS.check;
+      return (
+        <div style={{ padding: "8px 16px" }}>
+          <div style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: radius, padding: "24px", textAlign: align }}>
+            {showIcon && (
+              <div style={{ display: "flex", justifyContent: align === "center" ? "center" : "flex-start", marginBottom: 14 }}>
+                <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 10, background: `${iconColor}18`, border: `1px solid ${iconColor}33`, color: iconColor }}>
+                  <Icon paths={paths} size={22} sw={1.8} />
+                </div>
+              </div>
+            )}
+            <Editable tag="h3" value={(p.title as string) || "Key benefit"} editable={editable} onCommit={commit("title")} onFocus={focus}
+              style={{ fontSize: 16, fontWeight: 700, color: titleColor, lineHeight: 1.3, margin: "0 0 8px" }} />
+            <Editable tag="p" value={(p.body as string) || "Describe this benefit in one or two sentences."} editable={editable} onCommit={commit("body")} onFocus={focus}
+              style={{ fontSize: 14, color: bodyColor, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }} />
+            {Boolean(p.link_text) && (
+              <div style={{ marginTop: 14 }}>
+                {editable
+                  ? <span style={{ fontSize: 13, fontWeight: 600, color: iconColor }}>{p.link_text as string} →</span>
+                  : <a href={(p.link_url as string) || "#"} style={{ fontSize: 13, fontWeight: 600, color: iconColor, textDecoration: "none" }}>{p.link_text as string} →</a>
+                }
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     default:
       return null;

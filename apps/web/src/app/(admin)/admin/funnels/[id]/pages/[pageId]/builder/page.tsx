@@ -63,11 +63,14 @@ function histReducer(s: HistState, a: HistAction): HistState {
 function genId() { return `b_${Math.random().toString(36).slice(2,9)}`; }
 
 const COLUMN_PRESETS: { label: string; widths: number[] }[] = [
-  { label: "1",        widths: [100] },
-  { label: "50/50",    widths: [50, 50] },
-  { label: "33/33/33", widths: [33.33, 33.33, 33.34] },
-  { label: "30/70",    widths: [30, 70] },
-  { label: "70/30",    widths: [70, 30] },
+  { label: "100",      widths: [100] },
+  { label: "50·50",    widths: [50, 50] },
+  { label: "33·33·33", widths: [33.33, 33.33, 33.34] },
+  { label: "30·70",    widths: [30, 70] },
+  { label: "70·30",    widths: [70, 30] },
+  { label: "25×4",     widths: [25, 25, 25, 25] },
+  { label: "20×5",     widths: [20, 20, 20, 20, 20] },
+  { label: "16×6",     widths: [16.67, 16.67, 16.66, 16.67, 16.67, 16.66] },
 ];
 
 // ── Main Builder ───────────────────────────────────────────────────────────────
@@ -301,6 +304,7 @@ export default function BuilderPage() {
     mode: preview ? "live" : "edit",
     pageMaxWidth,
     selectedId,
+    device,
     pageId: page.id,
     sessionId: previewSessionId.current,
     onCommitProp: commitProp,
@@ -960,12 +964,32 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   }
   function paddingCtl() {
     if (!b) return null;
-    const pt = b.layout?.padding_top?.value ?? 0;
+    const pt = b.layout?.padding_top?.value    ?? 0;
+    const pr = b.layout?.padding_right?.value  ?? 0;
     const pb = b.layout?.padding_bottom?.value ?? 0;
+    const pl = b.layout?.padding_left?.value   ?? 0;
     return (
       <div>
         {layoutRangeRow("Top",    pt, v => onSetLayout(b.id, { padding_top:    { value: v, unit: "px" } }), 0, 200)}
+        {layoutRangeRow("Right",  pr, v => onSetLayout(b.id, { padding_right:  { value: v, unit: "px" } }), 0, 200)}
         {layoutRangeRow("Bottom", pb, v => onSetLayout(b.id, { padding_bottom: { value: v, unit: "px" } }), 0, 200)}
+        {layoutRangeRow("Left",   pl, v => onSetLayout(b.id, { padding_left:   { value: v, unit: "px" } }), 0, 200)}
+      </div>
+    );
+  }
+
+  function marginCtl() {
+    if (!b) return null;
+    const mt = b.layout?.margin_top?.value    ?? 0;
+    const mr = b.layout?.margin_right?.value  ?? 0;
+    const mb = b.layout?.margin_bottom?.value ?? 0;
+    const ml = b.layout?.margin_left?.value   ?? 0;
+    return (
+      <div>
+        {layoutRangeRow("Top",    mt, v => onSetLayout(b.id, { margin_top:    { value: v, unit: "px" } }), 0, 120)}
+        {layoutRangeRow("Right",  mr, v => onSetLayout(b.id, { margin_right:  { value: v, unit: "px" } }), 0, 120)}
+        {layoutRangeRow("Bottom", mb, v => onSetLayout(b.id, { margin_bottom: { value: v, unit: "px" } }), 0, 120)}
+        {layoutRangeRow("Left",   ml, v => onSetLayout(b.id, { margin_left:   { value: v, unit: "px" } }), 0, 120)}
       </div>
     );
   }
@@ -1069,22 +1093,73 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   }
   function columnPresetCtl() {
     if (!b) return null;
-    const current = (b.children ?? []).map(c => c.layout?.width?.value);
+    const cols = b.children ?? [];
+    const current = cols.map(c => c.layout?.width?.value);
+
+    function addColumn() {
+      const n = cols.length + 1;
+      const base = Math.floor(100 / n);
+      const widths = Array(n).fill(base);
+      widths[n - 1] = 100 - base * (n - 1);
+      onColumnPreset(b!.id, widths);
+    }
+    function removeColumn(idx: number) {
+      const remaining = cols.filter((_, i) => i !== idx).map(c => c.layout?.width?.value ?? Math.round(100 / cols.length));
+      const sum = remaining.reduce((a, v) => a + v, 0);
+      const normalized = remaining.map(w => parseFloat(((w * 100) / sum).toFixed(2)));
+      normalized[normalized.length - 1] = parseFloat((100 - normalized.slice(0, -1).reduce((a, v) => a + v, 0)).toFixed(2));
+      onColumnPreset(b!.id, normalized);
+    }
+    function updateColWidth(idx: number, pct: number) {
+      const widths = cols.map((c, i) => i === idx ? pct : (c.layout?.width?.value ?? Math.round(100 / cols.length)));
+      onColumnPreset(b!.id, widths);
+    }
+
     return (
-      <div className="grid grid-cols-2 gap-1.5">
-        {COLUMN_PRESETS.map(preset => {
-          const active = current.length === preset.widths.length && current.every((w, i) => Math.abs((w??0) - preset.widths[i]) < 0.5);
-          return (
-            <button key={preset.label} onClick={() => onColumnPreset(b.id, preset.widths)}
-              className={`py-2 px-1.5 border rounded-lg text-[11.5px] font-semibold cursor-pointer transition-all ${
-                active
-                  ? "border-orange-500 bg-orange-500/[0.12] text-orange-300"
-                  : "border-white/10 bg-white/5 text-white/40 hover:border-white/20 hover:text-white/60"
-              }`}>
-              {preset.label}
-            </button>
-          );
-        })}
+      <div>
+        {/* Preset buttons */}
+        <div className="grid grid-cols-2 gap-1.5 mb-3">
+          {COLUMN_PRESETS.map(preset => {
+            const active = current.length === preset.widths.length && current.every((w, i) => Math.abs((w??0) - preset.widths[i]) < 0.5);
+            return (
+              <button key={preset.label} onClick={() => onColumnPreset(b!.id, preset.widths)}
+                className={`py-2 px-1.5 border rounded-lg text-[10.5px] font-semibold cursor-pointer transition-all ${
+                  active
+                    ? "border-orange-500 bg-orange-500/[0.12] text-orange-300"
+                    : "border-white/10 bg-white/5 text-white/40 hover:border-white/20 hover:text-white/60"
+                }`}>
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Per-column width controls */}
+        {cols.length > 0 && (
+          <div className="mb-2.5">
+            <div className="text-[10px] text-white/30 mb-1.5">Custom widths (%)</div>
+            {cols.map((col, i) => (
+              <div key={col.id} className="flex items-center gap-2 mb-1.5">
+                <span className="text-[11px] text-white/40 w-12 shrink-0">Col {i + 1}</span>
+                <input type="number" min={5} max={95} step={1}
+                  value={Math.round(col.layout?.width?.value ?? Math.round(100 / cols.length))}
+                  onChange={e => updateColWidth(i, +e.target.value)}
+                  className="w-14 bg-white/5 border border-white/10 rounded-md px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-orange-500/40" />
+                <span className="text-[11px] text-white/30">%</span>
+                {cols.length > 1 && (
+                  <button onClick={() => removeColumn(i)} title="Remove this column"
+                    className="ml-auto text-red-400/50 hover:text-red-400 border-none bg-transparent cursor-pointer p-0.5">
+                    <Icon paths={["M4 7h16","M6 7l1 13h10l1-13","M9 7V4h6v3"]} size={13} sw={1.8} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Add column */}
+        <button onClick={addColumn}
+          className="w-full flex items-center justify-center gap-1.5 py-2 bg-white/[0.03] border border-dashed border-white/15 rounded-lg text-white/40 text-[11.5px] cursor-pointer hover:border-orange-500/40 hover:text-orange-400 transition-colors">
+          <Icon paths={["M12 5v14","M5 12h14"]} size={13} sw={2.4} /> Add Column
+        </button>
       </div>
     );
   }
@@ -1092,7 +1167,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
   function BlockSettings() {
     if (!b) return null;
     const t = b.type;
-    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || t === "hero" || t === "stats-bar" || t === "faq-accordion" || t === "testimonial" || t === "optin-form" || b.props.bg_color !== undefined;
+    const hasStyle = t === "headline" || t === "body-text" || t === "countdown-timer" || t === "cta-button" || t === "hero" || t === "stats-bar" || t === "faq-accordion" || t === "testimonial" || t === "optin-form" || t === "info-card" || b.props.bg_color !== undefined;
     const evergreen = Boolean(b.props.evergreen);
     const noContent = ["section","row","column","divider"].includes(t);
     return (
@@ -1107,7 +1182,24 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         <SL text="Content" />
         {t==="hero"&&<><Field label="Eyebrow tag">{textCtl("eyebrow")}</Field><Field label="Headline">{textCtl("headline")}</Field><Field label="Sub-headline">{areaCtl("subtext")}</Field><Field label="Primary button">{textCtl("button_text")}</Field><Field label="Primary button URL">{textCtl("button_url")}</Field><Field label="Secondary button (optional)">{textCtl("button2_text")}</Field><Field label="Secondary button URL">{textCtl("button2_url")}</Field><Field label="Anchor ID (for #link targets)">{textCtl("anchor_id")}</Field></>}
         {t==="countdown-timer"&&<><Field label="Label">{textCtl("label")}</Field><Field label="Evergreen (per-visitor timer)">{toggleCtl("evergreen")}</Field>{evergreen?<Field label="Duration (minutes)">{numCtl("duration_minutes")}</Field>:<Field label="Target date & time"><input type="datetime-local" value={(b.props.target_date as string)??""} onChange={e=>onSetProps(b.id,{target_date:e.target.value})} className={IS} /></Field>}</>}
-        {t==="video"&&<><Field label="Video"><VideoUploadField value={b.props.url as string} onChange={url=>onSetProps(b.id,{url})} funnelId={funnelId} /></Field><Field label="Or paste a video / YouTube URL">{textCtl("url")}</Field><Field label="Caption">{textCtl("caption")}</Field></>}
+        {t==="video"&&<>
+          <Field label="Video"><VideoUploadField value={b.props.url as string} onChange={url=>onSetProps(b.id,{url})} funnelId={funnelId} /></Field>
+          <Field label="Or paste a video / YouTube URL">{textCtl("url")}</Field>
+          <Field label="Caption">{textCtl("caption")}</Field>
+          <Field label="Size">
+            <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+              {(["s","m","l","xl"] as const).map(v => (
+                <button key={v} onClick={() => onSetProps(b.id, { size: v })}
+                  className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${
+                    ((b.props.size as string)||"m") === v ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
+                  }`}>
+                  {v.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10.5px] text-white/25 mt-1.5">S=480px · M=680px · L=860px · XL=full width</p>
+          </Field>
+        </>}
         {t==="optin-form"&&<>
           <SL text="Section header" />
           <Field label="Section label (eyebrow)">{textCtl("section_label")}</Field>
@@ -1136,6 +1228,12 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
         {t==="spacer"&&<Field label="Height">{numCtl("height")}</Field>}
         {t==="image"&&<><Field label="Image"><ImageUploadField value={b.props.src as string} onChange={url=>onSetProps(b.id,{src:url})} funnelId={funnelId} /></Field><Field label="Alt text">{textCtl("alt")}</Field><Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:0})}</Field></>}
         {t==="custom-html"&&<Field label="HTML"><textarea value={(b.props.html as string)??""} onChange={e=>onSetProps(b.id,{html:e.target.value})} rows={6} className={IS} style={{resize:"vertical",fontFamily:"monospace"}} /></Field>}
+        {t==="info-card"&&<>
+          <Field label="Title">{textCtl("title")}</Field>
+          <Field label="Body">{areaCtl("body")}</Field>
+          <Field label="Link text (optional)">{textCtl("link_text")}</Field>
+          <Field label="Link URL">{textCtl("link_url")}</Field>
+        </>}
         {noContent && <p className="text-xs text-white/40 leading-relaxed mb-2">This block has no text content. Use the Layout tab to adjust spacing and style.</p>}
         {hasStyle && (
           <>
@@ -1149,6 +1247,23 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
             {t==="stats-bar"&&<><Field label="Value color">{colorCtl("value_color")}</Field><Field label="Label color">{colorCtl("label_color")}</Field></>}
             {t==="faq-accordion"&&<><Field label="Item background">{colorCtl("item_bg")}</Field><Field label="Item border">{colorCtl("item_border")}</Field><Field label="Question color">{colorCtl("q_color")}</Field><Field label="Answer color">{colorCtl("a_color")}</Field></>}
             {t==="testimonial"&&<><Field label="Card background">{colorCtl("card_bg")}</Field><Field label="Card border">{colorCtl("card_border")}</Field><Field label="Quote color">{colorCtl("quote_color")}</Field><Field label="Name color">{colorCtl("name_color")}</Field><Field label="Result/role color">{colorCtl("role_color")}</Field></>}
+            {t==="info-card"&&<>
+              <Field label="Icon">
+                <select value={(b.props.icon_type as string)||"check"} onChange={e=>onSetProps(b.id,{icon_type:e.target.value})} className={IS}>
+                  {["check","star","bolt","shield","chart","globe","users","diamond","zap","clock","heart","target"].map(i=>(
+                    <option key={i} value={i}>{i.charAt(0).toUpperCase()+i.slice(1)}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Show icon">{toggleCtl("show_icon")}</Field>
+              <Field label="Alignment">{alignCtl()}</Field>
+              <Field label="Icon color">{colorCtl("icon_color")}</Field>
+              <Field label="Title color">{colorCtl("title_color")}</Field>
+              <Field label="Body color">{colorCtl("body_color")}</Field>
+              <Field label="Card background">{colorCtl("card_bg")}</Field>
+              <Field label="Card border">{colorCtl("card_border")}</Field>
+              <Field label="Corner radius">{numCtl("radius",{min:0,max:40,default:12})}</Field>
+            </>}
             {b.props.bg_color !== undefined && <Field label="Background">{colorCtl("bg_color")}</Field>}
           </>
         )}
@@ -1163,8 +1278,44 @@ function RightPanel({ selectedBlock:b, page, funnelId, onDeselect, onSetProps, o
     const isContainer = isRow || t === "column";
     return (
       <div>
-        <SL text="Spacing" />
-        <Field label="Padding">{paddingCtl()}</Field>
+        <SL text="Padding" />
+        {paddingCtl()}
+        <div className="h-3" />
+        <SL text="Margin" />
+        {marginCtl()}
+        {t === "row" && (
+          <>
+            <div className="h-4" />
+            <SL text="Column gap" />
+            {layoutRangeRow("Gap between columns", b.layout?.column_gap ?? 16, v => onSetLayout(b.id, { column_gap: v }), 0, 80, v => `${v}px`)}
+          </>
+        )}
+        {t === "column" && (
+          <>
+            <div className="h-4" />
+            <SL text="Responsive width" />
+            <p className="text-[10.5px] text-white/30 mb-3 leading-relaxed">
+              Override this column&apos;s width per device. Desktop width is set in the parent Row. Mobile defaults to full-width (stacked).
+            </p>
+            <Field label="Tablet width (%)">
+              <input type="number" min={10} max={100} step={1}
+                value={b.layout?.width_tablet?.value ?? ""}
+                placeholder={`${Math.round(b.layout?.width?.value ?? 100)} (desktop)`}
+                onChange={e => onSetLayout(b.id, { width_tablet: e.target.value ? { value: +e.target.value, unit: "%" } : undefined })}
+                className={IS} />
+            </Field>
+            <Field label="Mobile width (%)">
+              <input type="number" min={10} max={100} step={1}
+                value={b.layout?.width_mobile?.value ?? ""}
+                placeholder="100 (stacked by default)"
+                onChange={e => onSetLayout(b.id, { width_mobile: e.target.value ? { value: +e.target.value, unit: "%" } : undefined })}
+                className={IS} />
+            </Field>
+            <p className="text-[10.5px] text-white/25 mt-1 leading-relaxed">
+              When no mobile override is set, all columns stack (100% wide) below 640px.
+            </p>
+          </>
+        )}
         {isRow && (
           <>
             <div className="h-4" />

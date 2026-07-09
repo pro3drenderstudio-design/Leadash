@@ -43,11 +43,18 @@ function ChildSlot({ items, parentId, ctx }: { items: Block[]; parentId: string;
 
 function blockWrapperPadding(block: Block): React.CSSProperties {
   const l = block.layout;
+  // Containers (row, section, column) apply padding/margin inside BlockRenderer via buildOuterStyle.
   if (!l || ["row", "section", "column"].includes(block.type)) return {};
-  return {
-    paddingTop:    l.padding_top    ? `${l.padding_top.value}${l.padding_top.unit}`       : undefined,
-    paddingBottom: l.padding_bottom ? `${l.padding_bottom.value}${l.padding_bottom.unit}` : undefined,
-  };
+  const style: React.CSSProperties = {};
+  if (l.padding_top)    style.paddingTop    = `${l.padding_top.value}${l.padding_top.unit}`;
+  if (l.padding_right)  style.paddingRight  = `${l.padding_right.value}${l.padding_right.unit}`;
+  if (l.padding_bottom) style.paddingBottom = `${l.padding_bottom.value}${l.padding_bottom.unit}`;
+  if (l.padding_left)   style.paddingLeft   = `${l.padding_left.value}${l.padding_left.unit}`;
+  if (l.margin_top)     style.marginTop     = `${l.margin_top.value}${l.margin_top.unit}`;
+  if (l.margin_right)   style.marginRight   = `${l.margin_right.value}${l.margin_right.unit}`;
+  if (l.margin_bottom)  style.marginBottom  = `${l.margin_bottom.value}${l.margin_bottom.unit}`;
+  if (l.margin_left)    style.marginLeft    = `${l.margin_left.value}${l.margin_left.unit}`;
+  return style;
 }
 
 function LiveBlockRow({ block, ctx }: { block: Block; ctx: BlockRenderContext }) {

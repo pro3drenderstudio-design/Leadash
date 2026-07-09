@@ -18,6 +18,7 @@ export const LABELS: Record<BlockType, string> = {
   "hero":"Hero","countdown-timer":"Countdown","testimonial":"Testimonial",
   "pricing-card":"Pricing","faq-accordion":"FAQ","stats-bar":"Stats Bar",
   "cta-button":"CTA Button","optin-form":"Signup Form","custom-html":"Custom HTML",
+  "info-card":"Info Card",
 };
 
 export const ICONS: Partial<Record<BlockType, string[]>> = {
@@ -40,6 +41,7 @@ export const ICONS: Partial<Record<BlockType, string[]>> = {
   "row":            ["M4 4h7v16H4z","M13 4h7v16h-7z"],
   "column":         ["M4 4h16v16H4z"],
   "custom-html":    ["M10 20l4-16","M6.5 7.5l-4 4 4 4","M17.5 16.5l4-4-4-4"],
+  "info-card":      ["M3 5h18v14H3z","M7 9h4","M7 13h8","M15 5v14"],
 };
 
 export const LIB_GROUPS: { group: string; types: BlockType[] }[] = [
@@ -47,6 +49,7 @@ export const LIB_GROUPS: { group: string; types: BlockType[] }[] = [
   { group:"Text",       types:["headline","body-text","list"] },
   { group:"Media",      types:["image","video"] },
   { group:"Conversion", types:["hero","optin-form","cta-button","countdown-timer","pricing-card","testimonial","stats-bar","faq-accordion"] },
+  { group:"Cards",      types:["info-card"] },
   { group:"Other",      types:["custom-html"] },
 ];
 

@@ -4,7 +4,8 @@ export type BlockType =
   | "headline" | "body-text" | "list"
   | "image" | "video"
   | "hero" | "countdown-timer" | "testimonial" | "pricing-card" | "faq-accordion" | "stats-bar"
-  | "cta-button" | "optin-form" | "custom-html";
+  | "cta-button" | "optin-form" | "custom-html"
+  | "info-card";
 
 export type SizeUnit = "px" | "rem" | "%";
 
@@ -19,6 +20,15 @@ export interface BlockLayout {
   boxed?: boolean;
   padding_top?: { value: number; unit: "px" | "rem" };
   padding_bottom?: { value: number; unit: "px" | "rem" };
+  padding_left?: { value: number; unit: "px" | "rem" };
+  padding_right?: { value: number; unit: "px" | "rem" };
+  margin_top?: { value: number; unit: "px" | "rem" };
+  margin_bottom?: { value: number; unit: "px" | "rem" };
+  margin_left?: { value: number; unit: "px" | "rem" };
+  margin_right?: { value: number; unit: "px" | "rem" };
+  column_gap?: number;
+  width_mobile?: SizeValue;
+  width_tablet?: SizeValue;
   bg_image?: string;
   bg_overlay_color?: string;
   bg_overlay_opacity?: number;
