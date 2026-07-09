@@ -93,6 +93,105 @@ export function hasResponsiveLayout(layout: BlockLayout | undefined): boolean {
   );
 }
 
+/**
+ * Generates CSS custom-property overrides in media queries for per-device prop overrides
+ * (font-size, color, text-align, icon-size, spacer height, etc.).
+ *
+ * The caller must ensure [data-blk="{blockId}"] is on a wrapper ancestor so that
+ * the CSS variables are inherited by the block's inner elements.
+ *
+ * Also emits direct [data-blk] svg width/height overrides for icon_size since SVG
+ * presentation attributes can't be controlled via a parent CSS variable alone.
+ */
+export function buildPropResponsiveCss(
+  blockId: string,
+  mP: Record<string, unknown>,
+  tP: Record<string, unknown>,
+): string {
+  const blkSel = `[data-blk="${blockId}"]`;
+  const svgSel = `[data-blk="${blockId}"] svg`;
+  const mVars: string[] = [];
+  const tVars: string[] = [];
+  const mSvg: string[] = [];
+  const tSvg: string[] = [];
+
+  function addEntry(vars: string[], svgs: string[], key: string, value: unknown) {
+    switch (key) {
+      case "size":
+        // headline: size is a {value, unit} object
+        if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
+          const s = value as { value: number; unit: string };
+          vars.push(`--blk-${blockId}-fs:${s.value}${s.unit}`);
+        }
+        break;
+      case "font_size":
+      case "text_size":
+        if (typeof value === "number") vars.push(`--blk-${blockId}-fs:${value}px`);
+        break;
+      case "color":
+      case "text_color":
+        if (typeof value === "string") vars.push(`--blk-${blockId}-fc:${value}`);
+        break;
+      case "icon_color":
+        if (typeof value === "string") vars.push(`--blk-${blockId}-ic:${value}`);
+        break;
+      case "align":
+        if (typeof value === "string") {
+          vars.push(`--blk-${blockId}-ta:${value}`);
+          // Also emit justify-content equivalent (for image/icon alignment)
+          const jc: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+          vars.push(`--blk-${blockId}-jc:${jc[value as string] ?? "center"}`);
+        }
+        break;
+      case "icon_size":
+        if (typeof value === "number") {
+          vars.push(`--blk-${blockId}-is:${value}px`);
+          // SVG elements need direct width/height override (they use HTML attributes)
+          svgs.push(`width:${value}px!important;height:${value}px!important`);
+        }
+        break;
+      case "height":
+        if (typeof value === "number") vars.push(`--blk-${blockId}-h:${value}px`);
+        break;
+      case "title_size":
+        if (typeof value === "number") vars.push(`--blk-${blockId}-ts:${value}px`);
+        break;
+      case "body_size":
+        if (typeof value === "number") vars.push(`--blk-${blockId}-bs:${value}px`);
+        break;
+      case "width":
+        // image width — string like "100%", "320px"
+        if (typeof value === "string") vars.push(`--blk-${blockId}-iw:${value}`);
+        break;
+      case "full_width": {
+        // cta-button: expand/collapse button width
+        const isFull = Boolean(value);
+        vars.push(`--blk-${blockId}-fd:${isFull ? "flex" : "inline-flex"}`);
+        vars.push(`--blk-${blockId}-fw:${isFull ? "100%" : "auto"}`);
+        break;
+      }
+      case "icon_position": {
+        // icon-box: icon above vs left/right of text
+        const dirMap: Record<string, string> = { top: "column", left: "row", right: "row-reverse" };
+        vars.push(`--blk-${blockId}-ipos:${dirMap[value as string] ?? "column"}`);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  for (const [k, v] of Object.entries(mP)) addEntry(mVars, mSvg, k, v);
+  for (const [k, v] of Object.entries(tP)) addEntry(tVars, tSvg, k, v);
+
+  let css = "";
+  if (mVars.length) css += `@media(max-width:640px){${blkSel}{${mVars.join(";")}}}`;
+  if (mSvg.length)  css += `@media(max-width:640px){${svgSel}{${mSvg.join(";")}}}`;
+  if (tVars.length) css += `@media(min-width:641px) and (max-width:1023px){${blkSel}{${tVars.join(";")}}}`;
+  if (tSvg.length)  css += `@media(min-width:641px) and (max-width:1023px){${svgSel}{${tSvg.join(";")}}}`;
+  return css;
+}
+
 // Generates CSS with !important media-query overrides for responsive spacing/visibility.
 // The caller must add data-blk={blockId} to the block's outermost div.
 export function buildResponsiveSpacingCss(blockId: string, layout: BlockLayout | undefined): string {

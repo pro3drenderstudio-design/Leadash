@@ -102,8 +102,21 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
 }
 
 export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderContext }) {
-  const p = block.props;
+  // Per-device prop overrides: merge mobile/tablet overrides into props for canvas preview.
+  // In live mode these become CSS custom properties (emitted by LiveBlockRow via buildPropResponsiveCss).
+  const mP = (block.layout?.props_mobile ?? {}) as Record<string, unknown>;
+  const tP = (block.layout?.props_tablet ?? {}) as Record<string, unknown>;
+  const pOverride = ctx.device === "mobile" ? mP : ctx.device === "tablet" ? tP : {};
+  const p = Object.keys(pOverride).length ? { ...block.props, ...pOverride } : block.props;
+  const bid = block.id;
   const editable = ctx.mode === "edit";
+  const isLive = ctx.mode === "live";
+  // Returns true when, in live mode, a responsive prop override exists for any of the given keys.
+  // Used to decide whether to use CSS variable syntax in inline styles.
+  function hasResp(...keys: string[]): boolean {
+    if (!isLive) return false;
+    return keys.some(k => k in mP || k in tP);
+  }
   const commit = (key: string) => (val: string) => ctx.onCommitProp?.(block.id, key, val);
   const focus = () => ctx.onSelect?.(block.id);
   const items = (key: string) => (Array.isArray(p[key]) ? (p[key] as Array<Record<string, string>>) : []);
@@ -123,23 +136,22 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const colLayouts = cols.map(c => c.layout);
 
       if (ctx.mode === "live") {
-        const rowId = block.id;
         const desktopTpl = buildRowGridTemplate(colLayouts, "desktop");
         const tabletTpl  = buildRowGridTemplate(colLayouts, "tablet");
         const mobileTpl  = buildRowGridTemplate(colLayouts, "mobile");
-        const respCss = buildResponsiveSpacingCss(rowId, block.layout);
+        const respCss = buildResponsiveSpacingCss(bid, block.layout);
         return (
-          <div id={(p.anchor_id as string) || undefined} data-blk={respCss ? rowId : undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
+          <div id={(p.anchor_id as string) || undefined} data-blk={respCss ? bid : undefined} style={{ ...outer, ...(bg !== undefined ? { background: bg } : {}), position: "relative" }}>
             {pattern && <div style={pattern} />}
             {overlay && <div style={overlay} />}
             <div style={{ ...inner }}>
               <style dangerouslySetInnerHTML={{ __html:
-                `.row-${rowId}{display:grid;gap:${gap}px;grid-template-columns:${desktopTpl};}` +
-                `@media(max-width:640px){.row-${rowId}{grid-template-columns:${mobileTpl};}}` +
-                `@media(min-width:641px) and (max-width:1023px){.row-${rowId}{grid-template-columns:${tabletTpl};}}` +
+                `.row-${bid}{display:grid;gap:${gap}px;grid-template-columns:${desktopTpl};}` +
+                `@media(max-width:640px){.row-${bid}{grid-template-columns:${mobileTpl};}}` +
+                `@media(min-width:641px) and (max-width:1023px){.row-${bid}{grid-template-columns:${tabletTpl};}}` +
                 respCss
               }} />
-              <div className={`row-${rowId}`} style={{ position: "relative" }}>
+              <div className={`row-${bid}`} style={{ position: "relative" }}>
                 {ctx.renderChildren?.(cols, block.id, "row")}
               </div>
             </div>
@@ -202,8 +214,9 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "spacer": {
       const h = (p.height as number) ?? 40;
+      const heightStyle = hasResp("height") ? (`var(--blk-${bid}-h, ${h}px)` as unknown as number) : h;
       return (
-        <div style={{ height: h, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ height: heightStyle, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {editable && (
             <span style={{ fontSize: 10.5, color: "#3a4252", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 5, padding: "1px 7px" }}>
               Spacer · {h}px
@@ -222,6 +235,8 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "headline": {
       const size = resolveFontSize(p.size, 2.25);
+      const color = (p.color as string) || "#fff";
+      const textAlign = (p.align as string) || "left";
       const fontFamily = p.font_family as string | undefined;
       return (
         <div style={{ padding: "10px 28px" }}>
@@ -234,8 +249,11 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             onCommit={commit("text")}
             onFocus={focus}
             style={{
-              fontSize: size, fontWeight: (p.weight as string) || "bold", color: (p.color as string) || "#fff",
-              textAlign: (p.align as React.CSSProperties["textAlign"]) || "left", lineHeight: 1.2, margin: 0,
+              fontSize: hasResp("size") ? (`var(--blk-${bid}-fs, ${size})` as string) : size,
+              fontWeight: (p.weight as string) || "bold",
+              color: hasResp("color") ? `var(--blk-${bid}-fc, ${color})` : color,
+              textAlign: (hasResp("align") ? `var(--blk-${bid}-ta, ${textAlign})` : textAlign) as React.CSSProperties["textAlign"],
+              lineHeight: 1.2, margin: 0,
               fontFamily: fontFamily || undefined,
             }}
           />
@@ -246,6 +264,8 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     case "body-text": {
       const bodyFontFamily = p.font_family as string | undefined;
       const bodyFontSize = p.font_size ? `${p.font_size as number}px` : (p.size as string) || "1rem";
+      const bodyColor = (p.color as string) || "#c7ccd4";
+      const bodyAlign = (p.align as string) || "left";
       return (
         <div style={{ padding: "8px 28px" }}>
           <FontLink family={bodyFontFamily} />
@@ -257,8 +277,10 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             onCommit={commit("text")}
             onFocus={focus}
             style={{
-              fontSize: bodyFontSize, color: (p.color as string) || "#c7ccd4",
-              textAlign: (p.align as React.CSSProperties["textAlign"]) || "left", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap",
+              fontSize: hasResp("font_size") ? `var(--blk-${bid}-fs, ${bodyFontSize})` : bodyFontSize,
+              color: hasResp("color") ? `var(--blk-${bid}-fc, ${bodyColor})` : bodyColor,
+              textAlign: (hasResp("align") ? `var(--blk-${bid}-ta, ${bodyAlign})` : bodyAlign) as React.CSSProperties["textAlign"],
+              lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap",
               fontFamily: bodyFontFamily || undefined,
             }}
           />
@@ -274,12 +296,15 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const listTextColor = (p.text_color as string) || "#d7dbe2";
       const listFontSize = p.text_size ? `${p.text_size as number}px` : "15px";
       const listFontFamily = p.font_family as string | undefined;
+      const iconColorStyle = hasResp("icon_color") ? `var(--blk-${bid}-ic, ${listIconColor})` : listIconColor;
+      const textColorStyle = hasResp("text_color") ? `var(--blk-${bid}-fc, ${listTextColor})` : listTextColor;
+      const fontSizeStyle  = hasResp("text_size")  ? `var(--blk-${bid}-fs, ${listFontSize})`  : listFontSize;
       return (
         <div style={{ padding: "8px 28px" }}>
           <FontLink family={listFontFamily} />
           {li.map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
-              <span style={{ flexShrink: 0, marginTop: 3, color: listIconColor }}>
+              <span style={{ flexShrink: 0, marginTop: 3, color: iconColorStyle }}>
                 <FunnelIcon name={listIconType} size={listIconSize} strokeWidth={2.2} />
               </span>
               <Editable
@@ -289,7 +314,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
                 editable={editable}
                 onCommit={commitItem(i, "text")}
                 onFocus={focus}
-                style={{ color: listTextColor, fontSize: listFontSize, lineHeight: 1.5, fontFamily: listFontFamily || undefined }}
+                style={{ color: textColorStyle, fontSize: fontSizeStyle, lineHeight: 1.5, fontFamily: listFontFamily || undefined }}
               />
             </div>
           ))}
@@ -303,15 +328,17 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const imgAlign = (p.align as string) || "center";
       const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
       const imgRadius = (p.radius as number) ?? 0;
+      const imgWidthStyle = hasResp("width") ? (`var(--blk-${bid}-iw, ${imgWidth})` as string) : imgWidth;
+      const justifyStyle  = hasResp("align") ? (`var(--blk-${bid}-jc, ${justifyMap[imgAlign] || "center"})` as string) : (justifyMap[imgAlign] || "center");
       const imgEl = src ? (
-        <img src={src} alt={(p.alt as string) || ""} style={{ width: imgWidth, maxWidth: "100%", display: "block", borderRadius: imgRadius }} />
+        <img src={src} alt={(p.alt as string) || ""} style={{ width: imgWidthStyle, maxWidth: "100%", display: "block", borderRadius: imgRadius }} />
       ) : editable ? (
-        <div style={{ height: 220, width: imgWidth, maxWidth: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#3a4252" }}>
+        <div style={{ height: 220, width: imgWidthStyle, maxWidth: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.12)", borderRadius: 8, color: "#3a4252" }}>
           <FunnelIcon name="image" size={28} strokeWidth={1.4} />
         </div>
       ) : null;
       return (
-        <div style={{ padding: "10px 28px", display: "flex", justifyContent: justifyMap[imgAlign] || "center" }} onClick={editable ? focus : undefined}>
+        <div style={{ padding: "10px 28px", display: "flex", justifyContent: justifyStyle }} onClick={editable ? focus : undefined}>
           {!editable && p.href ? <a href={p.href as string}>{imgEl}</a> : imgEl}
         </div>
       );
@@ -514,9 +541,17 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const size = p.size as "sm" | "md" | "lg" | undefined;
       const pad = size === "lg" ? "18px 44px" : size === "sm" ? "10px 22px" : "15px 34px";
       const fs = size === "lg" ? 18 : size === "sm" ? 13.5 : 16;
+      // For live mode: full_width can be toggled per device via CSS variables
+      const displayStyle = hasResp("full_width")
+        ? (`var(--blk-${bid}-fd, ${p.full_width ? "flex" : "inline-flex"})` as React.CSSProperties["display"])
+        : (p.full_width ? "flex" : "inline-flex");
+      const widthStyle = hasResp("full_width")
+        ? (`var(--blk-${bid}-fw, ${p.full_width ? "100%" : "auto"})` as string)
+        : (p.full_width ? "100%" : undefined);
       const btnStyle: React.CSSProperties = {
-        display: p.full_width ? "flex" : "inline-flex", justifyContent: "center", background: ac, color: (p.text_color as string) || "#fff",
-        fontWeight: 700, fontSize: fs, padding: pad, borderRadius: 11, boxShadow: `0 12px 28px -8px ${ac}88`, textDecoration: "none", width: p.full_width ? "100%" : undefined,
+        display: displayStyle, justifyContent: "center", background: ac, color: (p.text_color as string) || "#fff",
+        fontWeight: 700, fontSize: fs, padding: pad, borderRadius: 11, boxShadow: `0 12px 28px -8px ${ac}88`, textDecoration: "none",
+        width: widthStyle,
       };
       return (
         <div style={{ background: (p.bg_color as string) || "transparent", padding: "24px 28px", textAlign: "center" }}>
@@ -611,15 +646,18 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const iconAlign = (p.align as string) || "center";
       const justifyMap2: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
       const shapeRadius = iconShape === "circle" ? "50%" : iconShape === "square" ? Math.round(iconSize * 0.22) + "px" : 0;
+      // CSS variables for live mode responsive overrides (icon_size targets SVG via [data-blk] svg selector in LiveBlockRow)
+      const iconColorStyle  = hasResp("icon_color") ? `var(--blk-${bid}-ic, ${iconColor})` : iconColor;
+      const justifyStyle2   = hasResp("align")      ? `var(--blk-${bid}-jc, ${justifyMap2[iconAlign] || "center"})` : (justifyMap2[iconAlign] || "center");
       return (
-        <div style={{ padding: "12px 28px", display: "flex", justifyContent: justifyMap2[iconAlign] || "center" }} onClick={editable ? focus : undefined}>
+        <div style={{ padding: "12px 28px", display: "flex", justifyContent: justifyStyle2 }} onClick={editable ? focus : undefined}>
           <div style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: iconBg && iconShape !== "none" ? iconSize * 2 : undefined,
             height: iconBg && iconShape !== "none" ? iconSize * 2 : undefined,
             borderRadius: iconBg && iconShape !== "none" ? shapeRadius : undefined,
             background: iconBg && iconShape !== "none" ? iconBg : undefined,
-            color: iconColor,
+            color: iconColorStyle,
           }}>
             <FunnelIcon name={iconType} size={iconSize} strokeWidth={1.6} />
           </div>
@@ -636,24 +674,37 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const bodyColor   = (p.body_color   as string) || "#9aa4b2";
       const titleSize   = (p.title_size   as number) || 18;
       const bodySize    = (p.body_size    as number) || 15;
+      // CSS variable refs for live mode responsive overrides
+      const iconColorStyle = hasResp("icon_color")   ? `var(--blk-${bid}-ic, ${iconColor})`   : iconColor;
+      const titleSizeStyle = hasResp("title_size")   ? `var(--blk-${bid}-ts, ${titleSize}px)` : `${titleSize}px`;
+      const bodySizeStyle  = hasResp("body_size")    ? `var(--blk-${bid}-bs, ${bodySize}px)`  : `${bodySize}px`;
+      const iconPosDir     = iconPos === "left" ? "row" : iconPos === "right" ? "row-reverse" : "column";
+      const flexDirStyle   = (hasResp("icon_position")
+        ? `var(--blk-${bid}-ipos, ${iconPosDir})`
+        : iconPosDir) as React.CSSProperties["flexDirection"];
+      // Icon wrapper: use calc() so the container scales when icon_size changes
+      const iconWrapSize = hasResp("icon_size")
+        ? `calc(var(--blk-${bid}-is, ${iconSize}px) + 24px)`
+        : `${iconSize + 24}px`;
       const iconEl = (
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: iconSize + 24, height: iconSize + 24, borderRadius: 10,
-          background: `${iconColor}18`, border: `1px solid ${iconColor}33`, color: iconColor, flexShrink: 0 }}>
+          width: iconWrapSize, height: iconWrapSize, borderRadius: 10,
+          background: `${iconColorStyle}18`, border: `1px solid ${iconColorStyle}33`,
+          color: iconColorStyle, flexShrink: 0 }}>
           <FunnelIcon name={iconType} size={iconSize} strokeWidth={1.7} />
         </div>
       );
       const textEl = (
         <div style={{ flex: iconPos === "left" || iconPos === "right" ? 1 : undefined }}>
           <Editable tag="h3" richText value={(p.title as string) || "Feature title"} editable={editable} onCommit={commit("title")} onFocus={focus}
-            style={{ fontSize: titleSize, fontWeight: 700, color: titleColor, margin: "0 0 8px", lineHeight: 1.3 }} />
+            style={{ fontSize: titleSizeStyle, fontWeight: 700, color: titleColor, margin: "0 0 8px", lineHeight: 1.3 }} />
           <Editable tag="p" richText value={(p.body as string) || "A short description."} editable={editable} onCommit={commit("body")} onFocus={focus}
-            style={{ fontSize: bodySize, color: bodyColor, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }} />
+            style={{ fontSize: bodySizeStyle, color: bodyColor, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }} />
           {Boolean(p.link_text) && (
             <div style={{ marginTop: 10 }}>
               {editable
-                ? <span style={{ fontSize: 13, fontWeight: 600, color: iconColor }}>{p.link_text as string} →</span>
-                : <a href={(p.link_url as string) || "#"} style={{ fontSize: 13, fontWeight: 600, color: iconColor, textDecoration: "none" }}>{p.link_text as string} →</a>
+                ? <span style={{ fontSize: 13, fontWeight: 600, color: iconColorStyle }}>{p.link_text as string} →</span>
+                : <a href={(p.link_url as string) || "#"} style={{ fontSize: 13, fontWeight: 600, color: iconColorStyle, textDecoration: "none" }}>{p.link_text as string} →</a>
               }
             </div>
           )}
@@ -661,12 +712,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       );
       return (
         <div style={{ padding: "8px 16px" }}>
-          <div style={{
-            display: "flex",
-            flexDirection: iconPos === "left" ? "row" : iconPos === "right" ? "row-reverse" : "column",
-            alignItems: iconPos === "top" ? "flex-start" : "flex-start",
-            gap: 16,
-          }}>
+          <div style={{ display: "flex", flexDirection: flexDirStyle, alignItems: "flex-start", gap: 16 }}>
             {iconEl}
             {textEl}
           </div>
@@ -681,6 +727,9 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const ilTextColor  = (p.text_color as string) || "#d7dbe2";
       const ilFontSize   = p.text_size ? `${p.text_size as number}px` : "15px";
       const ilFontFamily = p.font_family as string | undefined;
+      const ilIconColorStyle = hasResp("icon_color") ? `var(--blk-${bid}-ic, ${ilIconColor})` : ilIconColor;
+      const ilTextColorStyle = hasResp("text_color") ? `var(--blk-${bid}-fc, ${ilTextColor})` : ilTextColor;
+      const ilFontSizeStyle  = hasResp("text_size")  ? `var(--blk-${bid}-fs, ${ilFontSize})`  : ilFontSize;
       return (
         <div style={{ padding: "8px 28px" }}>
           <FontLink family={ilFontFamily} />
@@ -688,7 +737,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
             const itemIconType = (it.icon_type as string) || (p.icon_type as string) || "check";
             return (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 9 }}>
-                <span style={{ flexShrink: 0, marginTop: 2, color: ilIconColor }}>
+                <span style={{ flexShrink: 0, marginTop: 2, color: ilIconColorStyle }}>
                   <FunnelIcon name={itemIconType} size={ilIconSize} strokeWidth={2.2} />
                 </span>
                 <Editable
@@ -698,7 +747,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
                   editable={editable}
                   onCommit={commitItem(i, "text")}
                   onFocus={focus}
-                  style={{ color: ilTextColor, fontSize: ilFontSize, lineHeight: 1.5, fontFamily: ilFontFamily || undefined }}
+                  style={{ color: ilTextColorStyle, fontSize: ilFontSizeStyle, lineHeight: 1.5, fontFamily: ilFontFamily || undefined }}
                 />
               </div>
             );

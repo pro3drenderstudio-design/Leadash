@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Block } from "../types";
 import { BlockRenderer, BlockRenderContext } from "./BlockRenderer";
-import { buildColumnStyle, buildResponsiveSpacingCss, buildSelfAlignStyle, hasResponsiveLayout } from "./wrappers";
+import { buildColumnStyle, buildPropResponsiveCss, buildResponsiveSpacingCss, buildSelfAlignStyle, hasResponsiveLayout } from "./wrappers";
 import { Icon, LABELS } from "./icons";
 import { RevealGate } from "./interactive/RevealGate";
 
@@ -88,13 +88,19 @@ function LiveBlockRow({ block, ctx }: { block: Block; ctx: BlockRenderContext })
   // Responsive spacing/visibility for non-container blocks (containers handle this themselves in BlockRenderer).
   const isContainer = ["row", "section", "column"].includes(block.type);
   const respCss = !isContainer ? buildResponsiveSpacingCss(block.id, block.layout) : "";
-  const hasResp = !!respCss;
+  // Responsive prop overrides (font-size, color, alignment, icon-size, etc.) for any block type.
+  const mP = (block.layout?.props_mobile ?? {}) as Record<string, unknown>;
+  const tP = (block.layout?.props_tablet ?? {}) as Record<string, unknown>;
+  const hasPropOverrides = Object.keys(mP).length > 0 || Object.keys(tP).length > 0;
+  const propCss = hasPropOverrides ? buildPropResponsiveCss(block.id, mP, tP) : "";
+  const allCss = respCss + propCss;
+  const hasResp = !!allCss;
   return (
     <div
       data-blk={hasResp ? block.id : undefined}
       style={{ position: "relative", ...colStyle, ...blockWrapperPadding(block) }}
     >
-      {respCss && <style dangerouslySetInnerHTML={{ __html: respCss }} />}
+      {allCss && <style dangerouslySetInnerHTML={{ __html: allCss }} />}
       {sourceId && afterSeconds != null ? (
         <RevealGate sourceBlockId={sourceId} afterSeconds={afterSeconds}>{node}</RevealGate>
       ) : node}

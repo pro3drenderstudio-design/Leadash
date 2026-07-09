@@ -976,32 +976,68 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
     if (!b) return null;
     return <textarea value={(b.props[key] as string)??""} onChange={e => onSetProps(b.id, {[key]: e.target.value})} rows={rows} className={IS} style={{ resize: "vertical", lineHeight: 1.5 }} />;
   }
+  // ── Device-aware prop helpers ──────────────────────────────────────────────
+  // When in mobile/tablet mode, reads from layout.props_mobile/tablet (falling back to desktop)
+  // and writes to those override buckets instead of block.props.
+  function dpLayoutKey() {
+    return device === "mobile" ? "props_mobile" : device === "tablet" ? "props_tablet" : "";
+  }
+  function dpOverrides() {
+    const lk = dpLayoutKey();
+    return lk ? (((b?.layout as Record<string,unknown>)?.[lk] ?? {}) as Record<string,unknown>) : {};
+  }
+  function getDP(key: string): unknown {
+    if (!b) return undefined;
+    const lk = dpLayoutKey();
+    if (!lk) return b.props[key];
+    const ov = ((b.layout as Record<string,unknown>)?.[lk] ?? {}) as Record<string,unknown>;
+    return key in ov ? ov[key] : b.props[key];
+  }
+  function setDP(key: string, value: unknown) {
+    if (!b) return;
+    const lk = dpLayoutKey();
+    if (lk) {
+      const existing = ((b.layout as Record<string,unknown>)?.[lk] ?? {}) as Record<string,unknown>;
+      onSetLayout(b.id, { [lk]: { ...existing, [key]: value } });
+    } else {
+      onSetProps(b.id, { [key]: value });
+    }
+  }
+  function isPropFallback(key: string): boolean {
+    if (!b || !dpLayoutKey()) return false;
+    return !(key in dpOverrides());
+  }
+  // ── End device-aware helpers ───────────────────────────────────────────────
+
   function colorCtl(key: string) {
     if (!b) return null;
-    const v = (b.props[key] as string) ?? "#0c0c0f";
+    const isFallback = isPropFallback(key);
+    const v = (getDP(key) as string) ?? "#0c0c0f";
     const safe = v === "transparent" ? "#0c0c0f" : v;
     return (
       <div className="flex gap-2 items-center">
-        <div className="relative w-[34px] h-[34px] rounded-lg border border-white/10 shrink-0" style={{ background: safe }}>
-          <input type="color" value={safe} onChange={e => onSetProps(b.id, {[key]: e.target.value})}
+        <div className="relative w-[34px] h-[34px] rounded-lg shrink-0"
+          style={{ background: safe, border: isFallback ? "1px dashed rgba(255,255,255,0.12)" : "1px solid rgba(255,255,255,0.1)", opacity: isFallback ? 0.6 : 1 }}>
+          <input type="color" value={safe} onChange={e => setDP(key, e.target.value)}
             className="absolute inset-0 opacity-0 w-full h-full border-none p-0 cursor-pointer" />
         </div>
-        <input value={v} onChange={e => onSetProps(b.id, {[key]: e.target.value})} className={IS + " font-mono text-xs"} />
+        <input value={v} onChange={e => setDP(key, e.target.value)} className={IS + " font-mono text-xs"} />
       </div>
     );
   }
   function alignCtl() {
     if (!b) return null;
-    const cur = (b.props.align as string) ?? "left";
+    const isFallback = isPropFallback("align");
+    const cur = (getDP("align") as string) ?? "left";
     const opts: [string, string[]][] = [
       ["left",   ["M4 6h16","M4 12h10","M4 18h13"]],
       ["center", ["M4 6h16","M7 12h10","M5 18h14"]],
       ["right",  ["M4 6h16","M10 12h10","M7 18h13"]],
     ];
     return (
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5" style={{ opacity: isFallback ? 0.55 : 1 }}>
         {opts.map(([a, paths]) => (
-          <button key={a} onClick={() => onSetProps(b.id, { align: a })}
+          <button key={a} onClick={() => setDP("align", a)}
             className={`flex-1 flex justify-center py-1.5 border-none rounded-md cursor-pointer transition-colors ${
               cur === a ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
             }`}>
@@ -1014,22 +1050,27 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
   function numCtl(key: string, opts?: { min?:number; max?:number; default?:number; suffix?:string }) {
     if (!b) return null;
     const min = opts?.min ?? 8, max = opts?.max ?? 160, def = opts?.default ?? 48, suffix = opts?.suffix ?? "px";
-    const val = (b.props[key] as number) ?? def;
+    const isFallback = isPropFallback(key);
+    const val = (getDP(key) as number) ?? def;
     return (
       <div className="flex items-center gap-2">
-        <input type="range" min={min} max={max} value={val} onChange={e => onSetProps(b.id, {[key]: +e.target.value})} className="flex-1 accent-orange-500" />
-        <span className="text-xs text-white/50 font-mono min-w-[46px] text-right">{val}{suffix}</span>
+        <input type="range" min={min} max={max} value={val} onChange={e => setDP(key, +e.target.value)}
+          className={`flex-1 accent-orange-500${isFallback ? " opacity-40" : ""}`} />
+        <span className={`text-xs font-mono min-w-[46px] text-right${isFallback ? " text-white/25" : " text-white/50"}`}>
+          {val}{suffix}{isFallback ? " ↩" : ""}
+        </span>
       </div>
     );
   }
   function ctaSizeCtl() {
     if (!b) return null;
+    const isFallback = isPropFallback("size");
+    const cur = (getDP("size") as string) ?? "md";
     const opts: ["sm"|"md"|"lg", string][] = [["sm","S"],["md","M"],["lg","L"]];
-    const cur = (b.props.size as string) ?? "md";
     return (
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5" style={{ opacity: isFallback ? 0.55 : 1 }}>
         {opts.map(([v, l]) => (
-          <button key={v} onClick={() => onSetProps(b.id, { size: v })}
+          <button key={v} onClick={() => setDP("size", v)}
             className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${
               cur === v ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
             }`}>
@@ -1039,28 +1080,44 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
       </div>
     );
   }
+  function fullWidthCtl() {
+    if (!b) return null;
+    const isFallback = isPropFallback("full_width");
+    const on = Boolean(getDP("full_width"));
+    return (
+      <button onClick={() => setDP("full_width", !on)}
+        className="flex items-center gap-2 border-none bg-transparent cursor-pointer p-0" style={{ opacity: isFallback ? 0.6 : 1 }}>
+        <span className={`relative w-[34px] h-[19px] rounded-full transition-colors shrink-0 ${on ? "bg-orange-500" : "bg-white/15"}`}>
+          <span className={`absolute top-[2px] w-[15px] h-[15px] rounded-full bg-white transition-all ${on ? "left-[17px]" : "left-[2px]"}`} />
+        </span>
+        <span className="text-[12.5px] text-white/60">{on ? "On" : "Off"}{isFallback ? " ↩" : ""}</span>
+      </button>
+    );
+  }
   function headlineSizeCtl() {
     if (!b) return null;
-    const cur = b.props.size as { value: number; unit: string } | undefined;
+    const isFallback = isPropFallback("size");
+    const cur = getDP("size") as { value: number; unit: string } | undefined;
     const curVal = cur?.value ?? 2.25;
     const curUnit = cur?.unit ?? "rem";
     const displayPx = curUnit === "rem" ? Math.round(curVal * 16) : Math.round(curVal);
+    function setSize(sizeObj: { value: number; unit: string }) { setDP("size", sizeObj); }
     return (
-      <div>
+      <div style={{ opacity: isFallback ? 0.6 : 1 }}>
         <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5 mb-2">
           {([[1.5,"S"],[1.875,"M"],[2.25,"L"],[3,"XL"]] as [number,string][]).map(([v, l]) => (
-            <button key={l} onClick={() => onSetProps(b.id, { size: { value: v, unit: "rem" } })}
+            <button key={l} onClick={() => setSize({ value: v, unit: "rem" })}
               className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${
-                curUnit === "rem" && Math.abs(curVal - v) < 0.01 ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
+                !isFallback && curUnit === "rem" && Math.abs(curVal - v) < 0.01 ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"
               }`}>
               {l}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10.5px] text-white/35 whitespace-nowrap">custom:</span>
+          <span className="text-[10.5px] text-white/35 whitespace-nowrap">custom{isFallback ? " ↩" : ""}:</span>
           <input type="number" min={8} max={200} value={displayPx}
-            onChange={e => onSetProps(b.id, { size: { value: +e.target.value, unit: "px" } })}
+            onChange={e => setSize({ value: +e.target.value, unit: "px" })}
             className="w-16 bg-white/5 border border-white/10 rounded-md px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-orange-500/40" />
           <span className="text-[10.5px] text-white/35">px</span>
         </div>
@@ -1225,8 +1282,11 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
   }
   function fontCtl(keyFamily = "font_family", keySize: string | null = "font_size") {
     if (!b) return null;
+    // Font family is not device-specific (keeps the same font across breakpoints)
     const famVal = (b.props[keyFamily] as string) ?? "";
-    const sizeVal = keySize ? ((b.props[keySize] as number) ?? 16) : 16;
+    // Font size IS device-specific
+    const isFsDeviceFallback = keySize ? isPropFallback(keySize) : false;
+    const sizeVal = keySize ? ((getDP(keySize) as number) ?? 16) : 16;
     return (
       <>
         <Field label="Font family">
@@ -1240,8 +1300,12 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
         {keySize && (
           <Field label="Font size">
             <div className="flex items-center gap-2">
-              <input type="range" min={10} max={80} value={sizeVal} onChange={e => onSetProps(b.id, { [keySize]: +e.target.value })} className="flex-1 accent-orange-500" />
-              <span className="text-xs text-white/50 font-mono min-w-[46px] text-right">{sizeVal}px</span>
+              <input type="range" min={10} max={80} value={sizeVal}
+                onChange={e => setDP(keySize, +e.target.value)}
+                className={`flex-1 accent-orange-500${isFsDeviceFallback ? " opacity-40" : ""}`} />
+              <span className={`text-xs font-mono min-w-[46px] text-right${isFsDeviceFallback ? " text-white/25" : " text-white/50"}`}>
+                {sizeVal}px{isFsDeviceFallback ? " ↩" : ""}
+              </span>
             </div>
           </Field>
         )}
@@ -1323,31 +1387,33 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
   }
   function imageSizeCtl() {
     if (!b) return null;
+    const isFbAlign = isPropFallback("align");
+    const isFbWidth = isPropFallback("width");
+    const curAlign = (getDP("align") as string) ?? "center";
+    const curWidth = (getDP("width") as string) ?? "100%";
     const alignOpts: [string, string][] = [["left","Left"],["center","Center"],["right","Right"]];
-    const curAlign = (b.props.align as string) ?? "center";
-    const curWidth = (b.props.width as string) ?? "100%";
     return (
       <>
         <Field label="Alignment">
-          <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+          <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5" style={{ opacity: isFbAlign ? 0.55 : 1 }}>
             {alignOpts.map(([v, l]) => (
-              <button key={v} onClick={() => onSetProps(b.id, { align: v })}
+              <button key={v} onClick={() => setDP("align", v)}
                 className={`flex-1 py-1.5 border-none rounded-md cursor-pointer text-[11.5px] font-semibold transition-colors ${curAlign === v ? "bg-orange-500 text-white" : "bg-transparent text-white/35 hover:text-white/60"}`}>
                 {l}
               </button>
             ))}
           </div>
         </Field>
-        <Field label="Width">
+        <Field label={`Width${isFbWidth ? " ↩" : ""}`}>
           <div className="flex gap-2">
             {["100%","75%","50%","auto"].map(w => (
-              <button key={w} onClick={() => onSetProps(b.id, { width: w })}
+              <button key={w} onClick={() => setDP("width", w)}
                 className={`flex-1 py-1.5 border rounded-md cursor-pointer text-[11px] font-mono font-semibold transition-colors ${curWidth === w ? "border-orange-500 bg-orange-500/[0.12] text-orange-300" : "border-white/10 bg-white/5 text-white/40 hover:text-white/60"}`}>
                 {w}
               </button>
             ))}
           </div>
-          <input value={curWidth} onChange={e => onSetProps(b.id, { width: e.target.value })}
+          <input value={curWidth} onChange={e => setDP("width", e.target.value)}
             placeholder="e.g. 320px or 60%" className={IS + " mt-1.5 font-mono text-xs"} />
         </Field>
       </>
@@ -1605,6 +1671,17 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
         {hasStyle && (
           <>
             <div className="h-4" />
+            {/* Device badge for responsive style editing */}
+            {device !== "desktop" && (() => {
+              const dl = device === "mobile" ? "📱 Mobile" : "💻 Tablet";
+              const dc = device === "mobile" ? "#3b82f6" : "#8b5cf6";
+              return (
+                <div style={{ background: `${dc}18`, border: `1px solid ${dc}44`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: dc }}>{dl}</span>
+                  <span style={{ fontSize: 10, color: `${dc}99`, flex: 1 }}>Style overrides for {device} — ↩ means desktop fallback</span>
+                </div>
+              );
+            })()}
             <SL text="Style" />
             {t==="headline"&&<><Field label="Size">{headlineSizeCtl()}</Field>{fontCtl("font_family", null)}</>}
             {(t==="headline"||t==="body-text")&&<><Field label="Alignment">{alignCtl()}</Field><Field label="Text color">{colorCtl("color")}</Field></>}
@@ -1623,7 +1700,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
               <Field label="Text color">{colorCtl("text_color")}</Field>
               {fontCtl("font_family","text_size")}
             </>}
-            {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{toggleCtl("full_width")}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
+            {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{fullWidthCtl()}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
             {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="hero"||t==="faq-accordion"||t==="optin-form")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
             {t==="hero"&&<><Field label="Headline color">{colorCtl("color")}</Field><Field label="Subtext color">{colorCtl("subtext_color")}</Field></>}
             {t==="stats-bar"&&<><Field label="Value color">{colorCtl("value_color")}</Field><Field label="Label color">{colorCtl("label_color")}</Field></>}

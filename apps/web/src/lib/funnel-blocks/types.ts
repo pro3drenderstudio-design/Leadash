@@ -68,6 +68,9 @@ export interface BlockLayout {
   border_radius?: number;
   reveal_source_block_id?: string;
   reveal_after_seconds?: number;
+  // Per-device prop overrides (font size, color, alignment, etc.)
+  props_mobile?: Record<string, unknown>;
+  props_tablet?: Record<string, unknown>;
 }
 
 export interface Block {
