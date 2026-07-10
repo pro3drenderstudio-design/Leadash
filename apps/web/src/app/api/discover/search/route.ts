@@ -8,6 +8,8 @@ import {
 } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
+export const maxDuration = 60;
+
 const CREDITS_PER_LEAD = 0.5;
 const DEFAULT_LIMIT    = 25;
 const MAX_LIMIT        = 100;
@@ -180,11 +182,21 @@ export async function GET(req: NextRequest) {
     }
     addOr("p.title",      titleIncludes,   true);
     addNone("p.title",    titleExcludes,   true);
-    addOrExact("p.seniority",   seniorities);
+    // Multi-value seniority is handled via UNION ALL (one subquery per value) so each
+    // sub-query drives seniority_created_idx directly. Single value goes into conditions
+    // normally. Exclusions always go into conditions regardless.
+    if (seniorities.length <= 1) {
+      addOrExact("p.seniority", seniorities);
+    }
     addNoneExact("p.seniority", senioritiesExclude);
     addOr("p.department",  departments,        true);
     addNone("p.department", departmentsExclude, true);
-    addOrLower("p.country",   countryIncludes);
+    // When we will generate a UNION ALL per (seniority × country), pull countries out of
+    // the shared WHERE so each subquery gets exact equality on both columns and the planner
+    // can use discover_people_sen_country_created_idx. Single-country queries leave the
+    // country in WHERE (the index handles seniority+country= fine with one value).
+    const splitCountries = seniorities.length > 1 && countryIncludes.length > 1;
+    if (!splitCountries) addOrLower("p.country", countryIncludes);
     addNoneLower("p.country", countryExcludes);
     addLocationOr(locationIncludes);
     addLocationNone(locationExcludes);
@@ -249,17 +261,86 @@ export async function GET(req: NextRequest) {
       || companyKeywordIncludes.length > 0 || companyKeywordExcludes.length > 0;
     const joinType = hasCompanyFilter ? "INNER JOIN" : "LEFT JOIN";
 
+    // When multiple seniority values are selected the planner ignores the seniority
+    // composite index and falls back to a full country-scan (or created_at scan) that
+    // times out on large markets like Nigeria. Generate one sub-query per seniority
+    // value so each sub-query drives discover_people_seniority_created_idx directly,
+    // then UNION ALL the results and re-sort in memory over a tiny merged set.
+    const multiSen = seniorities.length > 1 ? seniorities : null;
+
+    // For each seniority value, the subquery param index is i + <value_index>.
+    // After all seniority params: limit is at i + seniorities.length (or i for single).
+    const senLenForParams = multiSen ? multiSen.length : 0;
+
+    // Extend the base WHERE with seniority/country ANY() clauses for count + idsOnly paths.
+    // These already have timeout fallbacks so a slower plan is acceptable there.
+    const whereWithAnySen = multiSen
+      ? `${where ? `${where} AND ` : "WHERE "}lower(p.seniority) = ANY($${i}::text[])`
+      : where;
+    const anySenParams = multiSen ? [...params, multiSen.map(s => s.toLowerCase())] : params;
+    // When countries were pulled out of base WHERE (splitCountries), re-add them for the
+    // count + idsOnly paths via ANY so those queries still filter correctly.
+    const whereForSimplePaths = splitCountries
+      ? `${whereWithAnySen} AND lower(p.country) = ANY($${i + 1}::text[])`
+      : whereWithAnySen;
+    const paramsForSimplePaths = splitCountries
+      ? [...anySenParams, countryIncludes.map(c => c.toLowerCase())]
+      : anySenParams;
+    // How many extra params were appended for the simple-path ANY conditions
+    const simpleExtraParams = splitCountries ? 2 : multiSen ? 1 : 0;
+
+    // Build one sub-query string for each seniority value (UNION ALL data path).
+    // i + idx maps to the seniority value param; each sub-query is independently
+    // planned so the planner drives the seniority_created_idx for each value.
+    const DATA_SELECT = `
+      p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
+      p.linkedin_url, p.email, p.email_status, p.phone,
+      p.country, p.state, p.city, p.company_name, p.company_id,
+      c.domain AS company_domain,
+      c.industry AS company_industry, c.size_range AS company_size,
+      c.keywords AS company_keywords,
+      p.created_at AS _sort_at`;
+
+    function buildUnionSubqueries(neededEach: number): string {
+      if (splitCountries) {
+        // One subquery per (seniority × country) pair — each gets exact equality on both
+        // columns so the planner uses discover_people_sen_country_created_idx directly.
+        const combos = (multiSen ?? []).flatMap(sen => countryIncludes.map(ctry => ({ sen, ctry })));
+        return combos.map(({ sen, ctry }, idx) => {
+          const senParam  = `$${i + idx * 2}`;
+          const ctryParam = `$${i + idx * 2 + 1}`;
+          const subWhere = where
+            ? `${where} AND lower(p.seniority) = lower(${senParam}) AND lower(p.country) = lower(${ctryParam})`
+            : `WHERE lower(p.seniority) = lower(${senParam}) AND lower(p.country) = lower(${ctryParam})`;
+          return `(SELECT ${DATA_SELECT} FROM discover_people p ${joinType} discover_companies c ON c.id = p.company_id ${subWhere} ORDER BY p.created_at DESC NULLS LAST LIMIT ${neededEach})`;
+        }).join(" UNION ALL ");
+      }
+      return (multiSen ?? []).map((_, idx) => {
+        const senWhere = where ? `${where} AND lower(p.seniority) = lower($${i + idx})` : `WHERE lower(p.seniority) = lower($${i + idx})`;
+        return `(SELECT ${DATA_SELECT} FROM discover_people p ${joinType} discover_companies c ON c.id = p.company_id ${senWhere} ORDER BY p.created_at DESC NULLS LAST LIMIT ${neededEach})`;
+      }).join(" UNION ALL ");
+    }
+
+    // Outer ORDER BY for UNION ALL: strip table aliases (p./c.) for the derived table.
+    // created_at is aliased as _sort_at; all other sort cols exist under their own names.
+    const outerSortExpr = sortRaw === "created_at"
+      ? "_sort_at"
+      : sortCol.split(",").map(s => s.trim().replace(/^[pc]\./, "")).join(", ");
+
     // Lightweight ID-only path — used by the frontend's "select all" bulk operations.
     // Returns raw IDs without reveal lookups or email masking, supporting up to 50k.
     if (idsOnly) {
-      const idRows = await leadsDb.unsafe<{ id: string }[]>(`
+      const idSql = `
         SELECT p.id
         FROM discover_people p
         ${joinType} discover_companies c ON c.id = p.company_id
-        ${where}
+        ${whereForSimplePaths}
         ORDER BY p.created_at DESC NULLS LAST
-        LIMIT $${i}
-      `, [...params, limit] as never[]);
+        LIMIT $${i + simpleExtraParams}
+      `;
+      const idRows = await leadsDb.unsafe<{ id: string }[]>(
+        idSql, [...paramsForSimplePaths, limit] as never[],
+      );
       return NextResponse.json({ ids: idRows.map(r => r.id) });
     }
 
@@ -273,10 +354,10 @@ export async function GET(req: NextRequest) {
         FROM (
           SELECT 1 FROM discover_people p
           ${joinType} discover_companies c ON c.id = p.company_id
-          ${where}
+          ${whereForSimplePaths}
           LIMIT 100001
         ) cnt
-      `, params as never[])
+      `, paramsForSimplePaths as never[])
       .then(rows => parseInt((rows[0] as unknown as { total: string }).total, 10))
       .catch((): number => HARD_CAP);
 
@@ -285,6 +366,7 @@ export async function GET(req: NextRequest) {
       new Promise<number>(resolve => setTimeout(() => resolve(HARD_CAP), 12_000)),
     ]);
 
+<<<<<<< HEAD
     // Wrap the rows query so we can classify its failure (timeout vs
     // connection vs unknown) and return an actionable message instead of
     // the generic "Search failed" — that's what the customer keeps seeing.
@@ -306,6 +388,77 @@ export async function GET(req: NextRequest) {
     const [rawTotal, rows] = await Promise.all([
       skipCount ? Promise.resolve(-1) : countWithTimeout(),
       rowsPromise,
+=======
+    // When title ILIKE filters are present alongside multiple seniorities, the GIN trigram
+    // index on p.title is more selective than the seniority+country compound index.
+    // Using UNION ALL here would issue N × M separate bitmap heap scans (one per
+    // seniority × country pair), each fetching ~30k scattered rows, which multiplies the
+    // random I/O cost. Instead, fall back to a flat query: the GIN index drives a single
+    // bitmap scan, then ANY() conditions apply seniority/country on the small result set.
+    const useGinPath = titleIncludes.length > 0 && multiSen !== null;
+
+    let dataPromise: Promise<Record<string, unknown>[]>;
+    if (multiSen && !useGinPath) {
+      const neededEach = offset + limit;
+      let unionDataParams: unknown[];
+      let limitIdx: number;
+      let offsetIdx: number;
+      if (splitCountries) {
+        // (seniority × country) cartesian product — params alternate [sen, ctry, sen, ctry, ...]
+        const comboParams = multiSen.flatMap(sen => countryIncludes.flatMap(ctry => [sen, ctry]));
+        limitIdx  = i + comboParams.length;
+        offsetIdx = i + comboParams.length + 1;
+        unionDataParams = [...params, ...comboParams, limit, offset];
+      } else {
+        limitIdx  = i + senLenForParams;
+        offsetIdx = i + senLenForParams + 1;
+        unionDataParams = [...params, ...multiSen, limit, offset];
+      }
+      const unionSQL = `
+        SELECT id, first_name, last_name, title, seniority, department,
+          linkedin_url, email, email_status, phone,
+          country, state, city, company_name, company_id,
+          company_domain, company_industry, company_size, company_keywords
+        FROM (${buildUnionSubqueries(neededEach)}) _u
+        ORDER BY ${outerSortExpr} ${sortDir} NULLS LAST
+        LIMIT $${limitIdx} OFFSET $${offsetIdx}
+      `;
+      dataPromise = leadsDb.unsafe<Record<string, unknown>[]>(
+        unionSQL, unionDataParams as never[],
+      );
+    } else {
+      // Flat query path: single seniority, OR GIN-path (title filters present with multi-sen).
+      // Uses whereForSimplePaths which folds seniority/country into ANY() clauses.
+      const flatWhere  = (multiSen && useGinPath) ? whereForSimplePaths : where;
+      const flatParams = (multiSen && useGinPath) ? paramsForSimplePaths : params;
+      const flatExtra  = (multiSen && useGinPath) ? simpleExtraParams : 0;
+      dataPromise = leadsDb.unsafe<Record<string, unknown>[]>(`
+          SELECT
+            p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
+            p.linkedin_url, p.email, p.email_status, p.phone,
+            p.country, p.state, p.city, p.company_name, p.company_id,
+            c.domain AS company_domain,
+            c.industry AS company_industry, c.size_range AS company_size,
+            c.keywords AS company_keywords
+          FROM discover_people p
+          ${joinType} discover_companies c ON c.id = p.company_id
+          ${flatWhere}
+          ORDER BY ${sortCol} ${sortDir} NULLS LAST
+          LIMIT $${i + flatExtra} OFFSET $${i + flatExtra + 1}
+        `, [...flatParams, limit, offset] as never[]);
+    }
+
+    const dataWithTimeout = () => Promise.race([
+      dataPromise,
+      new Promise<Record<string, unknown>[]>(resolve =>
+        setTimeout(() => resolve([]), 50_000)
+      ),
+    ]);
+
+    const [rawTotal, rows] = await Promise.all([
+      skipCount ? Promise.resolve(-1) : countWithTimeout(),
+      dataWithTimeout(),
+>>>>>>> 9850092f (fix(discover): GIN-path for title+multi-seniority queries + empty result on timeout)
     ]);
 
     const capped   = !skipCount && rawTotal >= HARD_CAP;
@@ -371,6 +524,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (err) {
+<<<<<<< HEAD
     // Classify the failure so the customer sees an actionable message.
     // postgres.js surfaces the SQLSTATE code on err.code.
     const errObj = err as { code?: string; severity?: string; message?: string };
@@ -413,6 +567,10 @@ export async function GET(req: NextRequest) {
         error: "Lost the connection to the leads database. Please try again in a moment.",
       }, { status: 503 });
     }
+=======
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[discover/search]", msg);
+>>>>>>> 9850092f (fix(discover): GIN-path for title+multi-seniority queries + empty result on timeout)
     return NextResponse.json({ error: "Search failed. Please try again." }, { status: 500 });
   }
 }
