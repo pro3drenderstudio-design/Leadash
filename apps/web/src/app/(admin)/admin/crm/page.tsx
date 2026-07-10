@@ -556,11 +556,26 @@ function CrmInboxContent() {
     return () => clearInterval(id);
   }, [loadConvos]);
 
-  // Beep when unread count rises between polls
+  // Request browser notification permission on first render
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Beep + browser notification when unread count rises between polls
   useEffect(() => {
     const total = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
     if (prevUnreadRef.current >= 0 && total > prevUnreadRef.current) {
       playNotificationBeep();
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        const newest = conversations.find(c => (c.unread_count ?? 0) > 0);
+        const name   = newest?.crm_contacts?.display_name ?? newest?.crm_contacts?.email ?? newest?.channel_identifier ?? "Someone";
+        const body   = newest?.latest_message?.body?.slice(0, 80) ?? "New message in your inbox";
+        try {
+          new Notification(`New message from ${name}`, { body, icon: "/favicon.ico", tag: "crm-new-msg" });
+        } catch { /* some browsers block without prior interaction */ }
+      }
     }
     prevUnreadRef.current = total;
   }, [conversations]);

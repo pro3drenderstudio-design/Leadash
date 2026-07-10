@@ -151,9 +151,10 @@ export async function POST(req: NextRequest) {
           .from("admin_settings")
           .select("key, value")
           .in("key", ["crm_auto_reopen_on_reply", "crm_support_email"]);
-        const reopenVal  = crmSettings?.find(s => s.key === "crm_auto_reopen_on_reply")?.value;
+        type SettingRow = { key: string; value: unknown };
+        const reopenVal  = crmSettings?.find((s: SettingRow) => s.key === "crm_auto_reopen_on_reply")?.value;
         const autoReopen = reopenVal !== "false" && reopenVal !== false;
-        const notifyEmail = (crmSettings?.find(s => s.key === "crm_support_email")?.value as string) || SUPPORT_EMAIL;
+        const notifyEmail = (crmSettings?.find((s: SettingRow) => s.key === "crm_support_email")?.value as string) || SUPPORT_EMAIL;
 
         if (existingConvo) {
           conversationId = existingConvo.id as string;

@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         from:    `Leadash Academy <${RESEND_FROM}>`,
         to:      [emailNorm],
-        subject: "You're registered! Message our agent to get access faster 🎉",
+        subject: "You're in! Join the WhatsApp group to get started 🎉",
         html: `
 <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;color:#374151">
   <div style="background:#111827;padding:24px 32px;border-radius:12px 12px 0 0;text-align:center">
@@ -230,20 +230,20 @@ export async function POST(req: NextRequest) {
     <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111827">You're registered, ${firstName}! 🎉</h2>
     <p style="color:#6b7280;font-size:15px;line-height:1.6;margin-bottom:20px">
       We received your signup for the <strong>7-Day Job &amp; Client Acquisition Challenge</strong>.
-      Your account has been created — the next step is to confirm your payment so we can grant you access.
+      Your payment is being confirmed — here's what to do next.
     </p>
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:18px 20px;margin-bottom:24px">
       <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 10px">Next steps:</p>
       <ol style="font-size:13px;color:#78350f;line-height:1.8;margin:0;padding-left:18px">
-        <li>Message our agent on WhatsApp — tap the button below</li>
-        <li>We confirm your payment and grant you access within 2 hours</li>
-        <li>Day 1 lesson starts next Monday at 9PM WAT</li>
+        <li>Join the WhatsApp group using the button below</li>
+        <li>Your payment will be confirmed within 2 hours</li>
+        <li>Challenge starts next Monday at 9PM WAT</li>
       </ol>
     </div>
     <p style="text-align:center;margin:0 0 24px">
-      <a href="${waEmailUrl}"
+      <a href="${APP_URL}/go/7-days-challenge"
          style="display:inline-block;background:#25d366;color:#fff;padding:13px 28px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">
-        💬 Message Our Agent on WhatsApp
+        💬 Join WhatsApp Group
       </a>
     </p>
     <p style="font-size:14px;color:#374151;margin-bottom:6px">Your login details:</p>
