@@ -6,8 +6,10 @@ import { buildOuterStyle, buildOverlayStyle, buildPatternStyle, buildInnerStyle,
 import { FunnelIcon, FUNNEL_ICON_LIST } from "./funnel-icons";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
+import { StatsBarBlock } from "./interactive/StatsBarBlock";
 import { publishVideoTime } from "./interactive/videoTimeBus";
 import { YouTubePlayer } from "./interactive/YouTubePlayer";
+import { HLSPlayer } from "./interactive/HLSPlayer";
 import { FunnelTracking } from "@/lib/tracking/pixels";
 
 export type RenderMode = "edit" | "live";
@@ -66,7 +68,7 @@ function youtubeId(url: string): string | undefined {
  * so other blocks (e.g. a CTA button) can reveal themselves once playback
  * crosses a threshold, without any shared React context.
  */
-function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholderSize = 60): React.ReactNode {
+function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholderSize = 60, poster?: string): React.ReactNode {
   const ytId = url ? youtubeId(url) : undefined;
   if (ytId) {
     return mode === "live"
@@ -81,12 +83,24 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
         />
       );
   }
+  if (url && url.includes(".m3u8")) {
+    return mode === "live"
+      ? <HLSPlayer blockId={blockId} src={url} poster={poster} />
+      : (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#000", color: "#fff", fontSize: 13, gap: 8, flexDirection: "column" }}>
+          <FunnelIcon name="play" size={32} strokeWidth={0} />
+          <span style={{ opacity: 0.6 }}>HLS video (live preview only)</span>
+        </div>
+      );
+  }
   if (url) {
     return (
       <video
         src={url}
         controls
         playsInline
+        preload="none"
+        poster={poster || undefined}
         style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
         onTimeUpdate={mode === "live" ? e => publishVideoTime(blockId, e.currentTarget.currentTime) : undefined}
       />
@@ -346,13 +360,14 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
 
     case "video": {
       const url = (p.url as string) || "";
+      const poster = (p.poster as string) || "";
       const sizeMap: Record<string, number | string> = { s: 480, m: 680, l: 860, xl: "100%" };
       const sizeProp = (p.size as string) || "m";
       const maxW = sizeMap[sizeProp] ?? 680;
       return (
         <div style={{ padding: "10px 28px" }}>
           <div style={{ maxWidth: maxW === "100%" ? "100%" : maxW, margin: "0 auto", aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "#000", position: "relative" }}>
-            {renderEmbed(block.id, url, ctx.mode)}
+            {renderEmbed(block.id, url, ctx.mode, 60, poster)}
           </div>
         </div>
       );
@@ -500,7 +515,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
                   <Editable tag="div" value={q.q || ""} editable onCommit={commitItem(i, "q")} onFocus={focus} style={{ fontWeight: 700, fontSize: 14.5, color: qColor, flex: 1 }} />
                 </div>
                 <div style={{ paddingLeft: showNum ? 44 : 0, marginTop: 6 }}>
-                  <Editable tag="div" value={q.a || ""} editable onCommit={commitItem(i, "a")} onFocus={focus} style={{ fontSize: 13.5, color: aColor, lineHeight: 1.55 }} />
+                  <Editable tag="div" richText value={q.a || ""} editable onCommit={commitItem(i, "a")} onFocus={focus} style={{ fontSize: 13.5, color: aColor, lineHeight: 1.55 }} />
                 </div>
               </div>
             ) : (
@@ -512,7 +527,7 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
                   <span style={{ flex: 1 }}>{q.q}</span>
                   <span style={{ fontSize: 18, color: aColor, flexShrink: 0 }}>+</span>
                 </summary>
-                <p style={{ fontSize: 13.5, color: aColor, margin: 0, padding: showNum ? "0 16px 14px 60px" : "0 16px 14px", lineHeight: 1.6 }}>{q.a}</p>
+                <div style={{ fontSize: 13.5, color: aColor, margin: 0, padding: showNum ? "0 16px 14px 60px" : "0 16px 14px", lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: q.a || "" }} />
               </details>
             )
           )}
@@ -521,18 +536,38 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     }
 
     case "stats-bar": {
+      if (ctx.mode === "live") return <StatsBarBlock block={block} />;
       const stats = items("items");
-      const valColor = (p.value_color as string) || "#fff";
-      const lblColor = (p.label_color as string) || "#7e8794";
+      const valColor   = (p.accent_color as string) || (p.value_color as string) || "#fff";
+      const lblColor   = (p.label_color as string) || "#7e8794";
+      const valSize    = (p.value_size as number) || 34;
+      const lblSize    = (p.label_size as number) || 12;
+      const uppercase  = p.label_uppercase !== false;
+      const showIcons  = Boolean(p.show_icons);
+      const dividers   = Boolean(p.dividers);
+      const fontFamily = (p.font_family as string) || null;
       return (
-        <div style={{ padding: "26px 28px", display: "flex", justifyContent: "center", gap: fluid(22, 64), flexWrap: "wrap" }}>
+        <>
+        {fontFamily && <FontLink family={fontFamily} />}
+        <div style={{ padding: "32px 28px", display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: dividers ? 0 : "clamp(24px, 5vw, 64px)", fontFamily: fontFamily ? `"${fontFamily}", sans-serif` : undefined }}>
           {stats.map((s, i) => (
-            <div key={i} style={{ textAlign: "center" }}>
-              <Editable tag="div" value={s.value || ""} editable={editable} onCommit={commitItem(i, "value")} onFocus={focus} style={{ fontSize: fluid(24, 34), fontWeight: 800, color: valColor }} />
-              <Editable tag="div" value={s.label || ""} editable={editable} onCommit={commitItem(i, "label")} onFocus={focus} style={{ fontSize: 12, color: lblColor, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.06em" }} />
-            </div>
+            <React.Fragment key={i}>
+              {dividers && i > 0 && <div style={{ width: 1, height: 52, background: "rgba(255,255,255,0.12)", flexShrink: 0, alignSelf: "center" }} />}
+              <div style={{ textAlign: "center", padding: dividers ? "0 clamp(18px, 4vw, 44px)" : 0 }}>
+                {showIcons && (s.icon as string) && (
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+                    <FunnelIcon name={s.icon as string} size={24} color={valColor} strokeWidth={1.8} />
+                  </div>
+                )}
+                <Editable tag="div" value={s.value || ""} editable={editable} onCommit={commitItem(i, "value")} onFocus={focus}
+                  style={{ fontSize: valSize, fontWeight: 800, color: valColor, lineHeight: 1.15, letterSpacing: "-0.02em" }} />
+                <Editable tag="div" value={s.label || ""} editable={editable} onCommit={commitItem(i, "label")} onFocus={focus}
+                  style={{ fontSize: lblSize, color: lblColor, marginTop: 7, textTransform: uppercase ? "uppercase" : "none", letterSpacing: uppercase ? "0.07em" : "0", fontWeight: 500 }} />
+              </div>
+            </React.Fragment>
           ))}
         </div>
+        </>
       );
     }
 
@@ -548,46 +583,78 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
       const widthStyle = hasResp("full_width")
         ? (`var(--blk-${bid}-fw, ${p.full_width ? "100%" : "auto"})` as string)
         : (p.full_width ? "100%" : undefined);
+      const ctaFont = (p.font_family as string) || null;
       const btnStyle: React.CSSProperties = {
         display: displayStyle, justifyContent: "center", background: ac, color: (p.text_color as string) || "#fff",
         fontWeight: 700, fontSize: fs, padding: pad, borderRadius: 11, boxShadow: `0 12px 28px -8px ${ac}88`, textDecoration: "none",
         width: widthStyle,
+        fontFamily: ctaFont ? `"${ctaFont}", sans-serif` : undefined,
       };
       return (
-        <div style={{ background: (p.bg_color as string) || "transparent", padding: "24px 28px", textAlign: "center" }}>
-          {editable ? (
-            <Editable tag="span" value={(p.text as string) || "Click here"} editable onCommit={commit("text")} onFocus={focus} style={btnStyle} />
-          ) : (
-            <a href={(p.url as string) || "#"} style={btnStyle}>{(p.text as string) || "Click here"}</a>
-          )}
-        </div>
+        <>
+          {ctaFont && <FontLink family={ctaFont} />}
+          <div style={{ background: (p.bg_color as string) || "transparent", padding: "24px 28px", textAlign: "center" }}>
+            {editable ? (
+              <Editable tag="span" value={(p.text as string) || "Click here"} editable onCommit={commit("text")} onFocus={focus} style={btnStyle} />
+            ) : (
+              <a href={(p.url as string) || "#"} style={btnStyle}>{(p.text as string) || "Click here"}</a>
+            )}
+          </div>
+        </>
       );
     }
 
-    case "optin-form":
+    case "optin-form": {
+      const optinFont = (p.font_family as string) || null;
       return ctx.mode === "live" ? (
         <ChallengeSignupFormBlock block={block} />
       ) : (
-        // Editor preview — static mockup of the challenge form
-        <div style={{ background: (p.bg_color as string) || "#f9fafb", padding: `${fluid(40, 50)} ${fluid(22, 32)}` }}>
-          <div style={{ maxWidth: 480, margin: "0 auto", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: "32px 28px", boxShadow: "0 12px 40px -12px rgba(0,0,0,.1)" }}>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>{(p.heading as string) || "Join the 7-Day Challenge"}</div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{(p.subtext as string) || "₦10,000 one-time"}</div>
-            </div>
-            {["Full Name","Email Address","WhatsApp Number","Password"].map(f => (
-              <div key={f} style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: "10px 12px", color: "#9ca3af", fontSize: 13, background: "#f9fafb", marginBottom: 8 }}>{f}</div>
-            ))}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "12px 0" }}>
-              <div style={{ border: `2px solid ${(p.accent_color as string) || AC}`, borderRadius: 8, padding: 9, fontSize: 12, color: "#c2410c", background: "#fff7ed", textAlign: "center" }}>🏦 Bank Transfer</div>
-              <div style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 9, fontSize: 12, color: "#6b7280", background: "#f9fafb", textAlign: "center" }}>💳 Pay Online</div>
-            </div>
-            <div style={{ background: (p.accent_color as string) || AC, color: "#fff", fontWeight: 700, fontSize: 14, padding: 12, borderRadius: 10, textAlign: "center" }}>
-              I&apos;ve Paid — Register Me →
+        // Canvas preview — mirrors the live ChallengeSignupFormBlock layout closely
+        <>
+        {optinFont && <FontLink family={optinFont} />}
+        <div style={{ background: (p.bg_color as string) || "#f9fafb", padding: "56px 24px", fontFamily: optinFont ? `"${optinFont}", sans-serif` : undefined }}>
+          <div style={{ maxWidth: 480, margin: "0 auto" }}>
+            {Boolean(p.section_label) && (
+              <p style={{ textAlign: "center", fontSize: 13, color: (p.accent_color as string) || AC, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+                {p.section_label as string}
+              </p>
+            )}
+            {Boolean(p.section_heading) && (
+              <h2 style={{ textAlign: "center", fontSize: "clamp(22px,4vw,32px)", fontWeight: 800, color: "#111827", marginBottom: 6 }}>
+                {p.section_heading as string}
+              </h2>
+            )}
+            {Boolean(p.section_subtext) && (
+              <p style={{ textAlign: "center", color: "#6b7280", fontSize: 14, marginBottom: 28 }}>
+                {p.section_subtext as string}
+              </p>
+            )}
+            <div style={{ background: "#fff", borderRadius: 16, padding: "36px 32px", border: "1px solid #e5e7eb", boxShadow: "0 20px 60px -20px rgba(0,0,0,0.12)" }}>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{(p.heading as string) || "Join the 7-Day Challenge"}</div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>{(p.subtext as string) || "₦10,000 one-time · Lifetime access to community"}</div>
+              </div>
+              {(["Full Name", "Email Address", "WhatsApp Number", "Password (for your account)"] as const).map(f => (
+                <div key={f} style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: "11px 13px", color: "#9ca3af", fontSize: 14, background: "#f9fafb", marginBottom: 10, fontFamily: "inherit" }}>{f}</div>
+              ))}
+              {p.show_paystack !== false && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "14px 0" }}>
+                  <div style={{ border: `2px solid ${(p.accent_color as string) || AC}`, borderRadius: 8, padding: 10, fontSize: 13, color: "#c2410c", background: "#fff7ed", textAlign: "center" }}>🏦 Bank Transfer</div>
+                  <div style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 10, fontSize: 13, color: "#6b7280", background: "#f9fafb", textAlign: "center" }}>💳 Pay Online</div>
+                </div>
+              )}
+              <div style={{ background: (p.accent_color as string) || AC, color: "#fff", fontWeight: 700, fontSize: 15, padding: 14, borderRadius: 10, textAlign: "center" }}>
+                I&apos;ve Paid — Register Me →
+              </div>
+              {Boolean(p.confirmation_note) && (
+                <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, marginTop: 10 }}>{p.confirmation_note as string}</p>
+              )}
             </div>
           </div>
         </div>
+        </>
       );
+    }
 
     case "custom-html":
       return editable ? (
