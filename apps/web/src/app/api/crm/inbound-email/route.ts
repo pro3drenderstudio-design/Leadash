@@ -12,8 +12,10 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
 
 const SECRET = process.env.POSTAL_WEBHOOK_SECRET;
-const SUPPORT_EMAIL  = process.env.CRM_SUPPORT_EMAIL  ?? "support@leadash.com";
+const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
+const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
+const APP_URL         = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 interface PostalPayload {
   id:          number;
@@ -129,12 +131,13 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   // Load auto-reopen setting
-  const { data: reopenSetting } = await db
+  const { data: crmSettings } = await db
     .from("admin_settings")
-    .select("value")
-    .eq("key", "crm_auto_reopen_on_reply")
-    .maybeSingle();
-  const autoReopen = (reopenSetting?.value as string | boolean) !== "false" && reopenSetting?.value !== false;
+    .select("key, value")
+    .in("key", ["crm_auto_reopen_on_reply", "crm_support_email"]);
+  const reopenVal = crmSettings?.find(s => s.key === "crm_auto_reopen_on_reply")?.value;
+  const autoReopen = reopenVal !== "false" && reopenVal !== false;
+  const notifyEmail = (crmSettings?.find(s => s.key === "crm_support_email")?.value as string) || SUPPORT_EMAIL;
 
   if (existingConvo) {
     conversationId = existingConvo.id as string;
@@ -183,6 +186,22 @@ export async function POST(req: NextRequest) {
     status:             "delivered",
     delivered_at:       now,
   });
+
+  // Admin notification email — fire and forget
+  if (RESEND_API_KEY && notifyEmail) {
+    const preview = payload.plain_body?.slice(0, 400) ?? "";
+    fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from:     `Leadash CRM <${SUPPORT_EMAIL}>`,
+        to:       [notifyEmail],
+        reply_to: [fromEmail],
+        subject:  `New email from ${fromName || fromEmail}`,
+        html:     `<p><strong>${fromName || fromEmail}</strong> sent a message${payload.subject ? ` re: <em>${payload.subject}</em>` : ""}:</p><blockquote style="border-left:3px solid #e5e7eb;padding-left:12px;color:#374151">${preview.replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
+      }),
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ ok: true });
 }

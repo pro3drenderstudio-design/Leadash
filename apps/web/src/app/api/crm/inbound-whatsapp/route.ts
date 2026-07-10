@@ -10,8 +10,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
 
-const APP_SECRET = process.env.WHATSAPP_APP_SECRET ?? "";
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
+const APP_SECRET      = process.env.WHATSAPP_APP_SECRET  ?? "";
+const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
+const RESEND_API_KEY  = process.env.RESEND_API_KEY        ?? "";
+const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL     ?? "support@leadash.com";
+const APP_URL         = process.env.NEXT_PUBLIC_APP_URL   ?? "https://leadash.com";
 
 function verifySignature(rawBody: string, sig: string): boolean {
   if (!APP_SECRET) return true; // Dev mode
@@ -144,12 +147,13 @@ export async function POST(req: NextRequest) {
           .limit(1)
           .maybeSingle();
 
-        const { data: reopenSetting } = await db
+        const { data: crmSettings } = await db
           .from("admin_settings")
-          .select("value")
-          .eq("key", "crm_auto_reopen_on_reply")
-          .maybeSingle();
-        const autoReopen = (reopenSetting?.value as string | boolean) !== "false" && reopenSetting?.value !== false;
+          .select("key, value")
+          .in("key", ["crm_auto_reopen_on_reply", "crm_support_email"]);
+        const reopenVal  = crmSettings?.find(s => s.key === "crm_auto_reopen_on_reply")?.value;
+        const autoReopen = reopenVal !== "false" && reopenVal !== false;
+        const notifyEmail = (crmSettings?.find(s => s.key === "crm_support_email")?.value as string) || SUPPORT_EMAIL;
 
         if (existingConvo) {
           conversationId = existingConvo.id as string;
@@ -192,6 +196,20 @@ export async function POST(req: NextRequest) {
           status:             "delivered",
           delivered_at:       now,
         });
+
+        // Admin notification email — fire and forget
+        if (RESEND_API_KEY && notifyEmail && msgBody) {
+          fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              from:    `Leadash CRM <${SUPPORT_EMAIL}>`,
+              to:      [notifyEmail],
+              subject: `New WhatsApp from ${phone}`,
+              html:    `<p><strong>${phone}</strong> sent a WhatsApp message:</p><blockquote style="border-left:3px solid #25d366;padding-left:12px;color:#374151">${msgBody.slice(0, 400).replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
+            }),
+          }).catch(() => {});
+        }
 
         // Also record in whatsapp_messages for audit trail
         await db.from("whatsapp_messages").insert({

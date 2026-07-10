@@ -65,6 +65,23 @@ interface Task { id: string; title: string; due_at: string|null; completed_at: s
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function playNotificationBeep() {
+  try {
+    const ctx  = new AudioContext();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+    ctx.close().catch(() => {});
+  } catch { /* blocked without prior user gesture */ }
+}
+
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins  = Math.floor(diff / 60_000);
@@ -518,7 +535,8 @@ function CrmInboxContent() {
   const [waTemplates,      setWaTemplates]      = useState<Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }>>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [templateParams,   setTemplateParams]   = useState<Record<string, string>>({});
-  const threadRef = useRef<HTMLDivElement>(null);
+  const threadRef        = useRef<HTMLDivElement>(null);
+  const prevUnreadRef    = useRef(-1); // -1 = suppress beep on first load
 
   const loadConvos = useCallback(async () => {
     setLoading(true);
@@ -531,6 +549,21 @@ function CrmInboxContent() {
   }, [statusFilter, channelFilter]);
 
   useEffect(() => { loadConvos(); }, [loadConvos]);
+
+  // Poll every 30 s for new messages
+  useEffect(() => {
+    const id = setInterval(loadConvos, 30_000);
+    return () => clearInterval(id);
+  }, [loadConvos]);
+
+  // Beep when unread count rises between polls
+  useEffect(() => {
+    const total = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
+    if (prevUnreadRef.current >= 0 && total > prevUnreadRef.current) {
+      playNotificationBeep();
+    }
+    prevUnreadRef.current = total;
+  }, [conversations]);
 
   useEffect(() => {
     setTemplateMode(false);

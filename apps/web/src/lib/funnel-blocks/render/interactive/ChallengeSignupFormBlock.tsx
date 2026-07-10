@@ -29,13 +29,26 @@ export function ChallengeSignupFormBlock({ block }: { block: Block }) {
   const opayName      = (p.opay_name   as string)   || "Vescrow Solutions";
   const amountNgn     = (p.amount_ngn  as number)   || 10_000;
   const waNumber      = (p.wa_number   as string)   || "2349110260332";
+  const waGroupLink   = (p.wa_group_link as string)  || "";
   const ac            = (p.accent_color as string)  || "#f97316";
   const bg            = (p.bg_color    as string)   || "#f9fafb";
   const heading       = (p.heading     as string)   || "Join the 7-Day Challenge";
   const sub           = (p.subtext     as string)   || `₦${amountNgn.toLocaleString()} one-time · Lifetime access to community`;
   const confirmNote   = (p.confirmation_note as string) || "Our community manager confirms within 2 hours and adds you to the WhatsApp group.";
   const showPaystack  = p.show_paystack !== false;
-  const pk            = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "") : "";
+
+  // Success / confirmation screen props
+  const successHeadline    = (p.success_headline    as string) || "You're registered!";
+  const successMessage     = (p.success_message     as string) || "Message our community manager on WhatsApp to confirm your payment and get added to the group.";
+  const successButtonText  = (p.success_button_text as string) || "Message Us on WhatsApp";
+  const successButtonIcon  = (p.success_button_icon as string) || "💬";
+  const successGroupText   = (p.success_group_text  as string) || "Or join the group directly:";
+  const successGroupLabel  = (p.success_group_label as string) || "Join WhatsApp Group →";
+
+  const fontFamily    = (p.font_family as string) || null;
+  const fontFaceStyle = fontFamily ? `"${fontFamily}", sans-serif` : undefined;
+
+  const pk = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "") : "";
 
   const [form,    setForm]    = useState<FS>({ fullName:"", email:"", phone:"", bankName:"", password:"", method:"bank" });
   const [loading, setLoad]    = useState(false);
@@ -70,13 +83,16 @@ export function ChallengeSignupFormBlock({ block }: { block: Block }) {
         body: JSON.stringify({
           full_name: form.fullName, email: form.email, phone: form.phone,
           bank_account_name: method === "bank" ? form.bankName : form.fullName,
-          password: form.password, payment_method: method,
+          password: form.password, payment_method: method === "bank" ? "bank_transfer" : method,
           paystack_reference: paystackRef ?? null,
         }),
       });
       const d = await res.json() as { ok?: boolean; wa_url?: string; error?: string };
       if (!res.ok) { setError(d.error ?? "Something went wrong."); return; }
-      if (typeof window.fbq === "function") window.fbq("track", "Lead", { value: amountNgn, currency: "NGN" });
+      if (typeof window.fbq === "function") {
+        window.fbq("track", "Lead", { value: amountNgn, currency: "NGN" });
+        window.fbq("track", "Purchase", { value: amountNgn, currency: "NGN" });
+      }
       setSuccess({ wa_url: d.wa_url! });
     } catch { setError("Network error — please try again."); }
     finally { setLoad(false); }
@@ -108,31 +124,55 @@ export function ChallengeSignupFormBlock({ block }: { block: Block }) {
   };
   const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 4 };
 
+  // ── Success / confirmation screen ─────────────────────────────────────────
   if (success) return (
-    <div style={{ background: bg, padding: "56px 24px" }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: "40px 32px", textAlign: "center", maxWidth: 440, margin: "0 auto", border: "1px solid #e5e7eb" }}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-          <svg width="28" height="28" fill="none" stroke="#16a34a" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+    <>
+    {fontFamily && <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, "+")}:wght@400;500;600;700;800&display=swap`} />}
+    <div style={{ background: bg, padding: "56px 24px", fontFamily: fontFaceStyle }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: "40px 32px", textAlign: "center", maxWidth: 440, margin: "0 auto", border: "1px solid #e5e7eb", boxShadow: "0 20px 60px -20px rgba(0,0,0,.1)" }}>
+        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 28 }}>
+          {successButtonIcon === "💬" ? (
+            <svg width="28" height="28" fill="none" stroke="#16a34a" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          ) : (
+            <span>{successButtonIcon}</span>
+          )}
         </div>
-        <h3 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>You&apos;re registered!</h3>
+        <h3 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{successHeadline}</h3>
         <p style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
-          Message our community manager on WhatsApp to confirm your payment and get added to the group.
-          We also sent your login details by email.
+          {successMessage}
         </p>
+        {/* Primary WA action — DM to manager */}
         <a href={success.wa_url} target="_blank" rel="noreferrer"
-          style={{ display: "block", background: "#25d366", color: "#fff", fontWeight: 700, fontSize: 15, padding: "14px 28px", borderRadius: 10, textDecoration: "none", marginBottom: 12 }}>
-          💬 Message Us on WhatsApp
+          style={{ display: "block", background: "#25d366", color: "#fff", fontWeight: 700, fontSize: 15, padding: "14px 28px", borderRadius: 10, textDecoration: "none", marginBottom: waGroupLink ? 12 : 0 }}>
+          {successButtonIcon} {successButtonText}
         </a>
-        <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noreferrer"
-          style={{ display: "block", color: "#9ca3af", fontSize: 11, textDecoration: "none" }}>
-          We confirm and add you to the group within 2 hours during business hours.
-        </a>
+        {/* Optional group link (configured separately) */}
+        {waGroupLink && (
+          <div style={{ marginTop: 16 }}>
+            {successGroupText && (
+              <p style={{ color: "#9ca3af", fontSize: 12, marginBottom: 8 }}>{successGroupText}</p>
+            )}
+            <a href={waGroupLink} target="_blank" rel="noreferrer"
+              style={{ display: "inline-block", background: "#dcfce7", color: "#16a34a", fontWeight: 600, fontSize: 13, padding: "10px 20px", borderRadius: 8, textDecoration: "none", border: "1px solid #bbf7d0" }}>
+              {successGroupLabel}
+            </a>
+          </div>
+        )}
+        <p style={{ color: "#9ca3af", fontSize: 11, marginTop: 16 }}>
+          {confirmNote}
+        </p>
       </div>
     </div>
+    </>
   );
 
+  // ── Sign-up form ──────────────────────────────────────────────────────────
   return (
-    <div style={{ background: bg, padding: "56px 24px" }}>
+    <>
+    {fontFamily && <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, "+")}:wght@400;500;600;700;800&display=swap`} />}
+    <div style={{ background: bg, padding: "56px 24px", fontFamily: fontFaceStyle }}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
         {Boolean(p.section_label) && (
           <p style={{ textAlign: "center", fontSize: 13, color: ac, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
@@ -238,5 +278,6 @@ export function ChallengeSignupFormBlock({ block }: { block: Block }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
