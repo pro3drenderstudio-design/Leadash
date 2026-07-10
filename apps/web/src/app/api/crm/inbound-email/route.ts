@@ -14,6 +14,7 @@ import { createHmac } from "crypto";
 const SECRET = process.env.POSTAL_WEBHOOK_SECRET;
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
+const ACADEMY_EMAIL   = process.env.CRM_ACADEMY_EMAIL   ?? "academy@leadash.com";
 const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
 const APP_URL         = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
@@ -35,10 +36,11 @@ function verifySignature(rawBody: string, sig: string): boolean {
   return expected === sig;
 }
 
-function resolveInbox(to: string): "support" | "marketing" | null {
+function resolveInbox(to: string): "support" | "marketing" | "academy" | null {
   const normalized = to.toLowerCase().trim();
-  if (normalized.includes(SUPPORT_EMAIL.toLowerCase())) return "support";
+  if (normalized.includes(SUPPORT_EMAIL.toLowerCase()))   return "support";
   if (normalized.includes(MARKETING_EMAIL.toLowerCase())) return "marketing";
+  if (normalized.includes(ACADEMY_EMAIL.toLowerCase()))   return "academy";
   return null;
 }
 
