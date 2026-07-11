@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
 
     if (!existingWs) {
       const slug = `${full_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20)}-${Date.now().toString(36)}`;
-      await db.from("workspaces").insert({
+      const { error: wsEnsureError } = await db.from("workspaces").insert({
         name: full_name.trim(),
         slug,
         owner_id: userId,
@@ -130,7 +130,8 @@ export async function POST(req: NextRequest) {
         plan_status: "active",
         billing_email: emailNorm,
         whatsapp_number: phone,
-      }).catch((e: unknown) => console.error("[challenge/signup] workspace ensure error:", e));
+      });
+      if (wsEnsureError) console.error("[challenge/signup] workspace ensure error:", wsEnsureError.message);
     }
   } else {
     userId = signUpData.user.id;
@@ -150,8 +151,8 @@ export async function POST(req: NextRequest) {
     if (wsError) console.error("[challenge/signup] workspace create error:", wsError.message);
 
     if (newWs) {
-      await db.from("workspace_members").insert({ workspace_id: newWs.id, user_id: userId, role: "owner" })
-        .catch((e: unknown) => console.error("[challenge/signup] workspace_member error:", e));
+      const { error: memberError } = await db.from("workspace_members").insert({ workspace_id: newWs.id, user_id: userId, role: "owner" });
+      if (memberError) console.error("[challenge/signup] workspace_member error:", memberError.message);
     }
   }
 
