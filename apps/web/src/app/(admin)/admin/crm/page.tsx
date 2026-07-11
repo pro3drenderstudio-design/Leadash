@@ -743,7 +743,7 @@ function CrmInboxContent() {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto pb-14">
-          {loading ? (
+          {loading && conversations.length === 0 ? (
             <div className="space-y-1 p-3">
               {[1,2,3,4,5].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-white/5 rounded-lg animate-pulse" />)}
             </div>
