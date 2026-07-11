@@ -15,9 +15,8 @@ const SECRET          = process.env.POSTAL_WEBHOOK_SECRET;
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
 const ACADEMY_EMAIL   = process.env.CRM_ACADEMY_EMAIL   ?? "academy@leadash.com";
-const POSTAL_API_KEY  = process.env.POSTAL_API_KEY ?? "";
-const POSTAL_HOST     = process.env.POSTAL_HOST    ?? "209.145.55.138";
-const POSTAL_API_URL  = `http://${POSTAL_HOST}:5000/api/v1/send/message`;
+const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 const APP_URL         = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 interface PostalPayload {
@@ -193,17 +192,17 @@ export async function POST(req: NextRequest) {
   });
 
   // Admin notification email — fire and forget
-  if (POSTAL_API_KEY && notifyEmail) {
+  if (RESEND_API_KEY && notifyEmail) {
     const preview = payload.plain_body?.slice(0, 400) ?? "";
-    fetch(POSTAL_API_URL, {
+    fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { "X-Server-API-Key": POSTAL_API_KEY, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from:      SUPPORT_EMAIL,
-        to:        [notifyEmail],
-        reply_to:  [fromEmail],
-        subject:   `New email from ${fromName || fromEmail}`,
-        html_body: `<p><strong>${fromName || fromEmail}</strong> sent a message${payload.subject ? ` re: <em>${payload.subject}</em>` : ""}:</p><blockquote style="border-left:3px solid #e5e7eb;padding-left:12px;color:#374151">${preview.replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
+        from:     `Leadash CRM <${RESEND_FROM}>`,
+        to:       [notifyEmail],
+        reply_to: [fromEmail],
+        subject:  `New email from ${fromName || fromEmail}`,
+        html:     `<p><strong>${fromName || fromEmail}</strong> sent a message${payload.subject ? ` re: <em>${payload.subject}</em>` : ""}:</p><blockquote style="border-left:3px solid #e5e7eb;padding-left:12px;color:#374151">${preview.replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
       }),
     }).catch(() => {});
   }
