@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, FlatList, RefreshControl, Pressable, ScrollView, Alert } from "react-native";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
@@ -76,7 +78,7 @@ function ThreadsTab() {
         <FlatList
           data={threads}
           keyExtractor={(t: CrmThread) => t.enrollment_id}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 16, flexGrow: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 16 + TAB_CLEARANCE, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={q.isRefetching && !q.isFetchingNextPage} onRefresh={q.refetch} tintColor={C.accent} />}
           onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage(); }}
           onEndReachedThreshold={0.4}
@@ -152,7 +154,7 @@ function UnmatchedTab() {
     <FlatList
       data={rows}
       keyExtractor={r => r.id}
-      contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 10, flexGrow: 1 }}
+      contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: 16 + TAB_CLEARANCE, gap: 10, flexGrow: 1 }}
       refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={C.accent} />}
       ListEmptyComponent={<EmptyState title="No unmatched replies" hint="Replies that can't be matched to a campaign lead show up here." />}
       renderItem={({ item: r }) => (
@@ -203,7 +205,7 @@ function WarmupTab() {
     <FlatList
       data={rows}
       keyExtractor={r => r.id}
-      contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 8, flexGrow: 1 }}
+      contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: 16 + TAB_CLEARANCE, gap: 8, flexGrow: 1 }}
       refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={C.accent} />}
       ListEmptyComponent={<EmptyState title="No warmup activity" hint="Warmup emails between your inboxes appear here." />}
       renderItem={({ item: r }) => (
@@ -229,11 +231,12 @@ function WarmupTab() {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function InboxScreen() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("campaigns");
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: insets.top + 12, paddingBottom: 12 }}>
         <Text style={{ fontSize: 22, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.4 }}>Inbox</Text>
       </View>
 

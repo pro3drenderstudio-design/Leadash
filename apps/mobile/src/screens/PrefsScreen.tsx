@@ -1,4 +1,5 @@
 import React from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, ScrollView, Switch, Alert } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPrefs, updatePrefs, NotificationPrefs, unregisterDevice } from "../lib/api";
@@ -68,7 +69,7 @@ export default function PrefsScreen() {
   const p = q.data?.prefs;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 16 + TAB_CLEARANCE, gap: 16 }}>
       {q.isError && !p ? (
         <ErrorState message="Couldn't load preferences" onRetry={q.refetch} />
       ) : !p ? (

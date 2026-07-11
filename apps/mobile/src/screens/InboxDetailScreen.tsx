@@ -1,4 +1,5 @@
 import React from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -52,7 +53,7 @@ export default function InboxDetailScreen({ route }: Props) {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 16 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 + TAB_CLEARANCE, gap: 16 }}
       refreshControl={<RefreshControl refreshing={dnsQ.isRefetching} onRefresh={() => { inboxesQ.refetch(); dnsQ.refetch(); }} tintColor={C.accent} />}
     >
       {/* Header */}

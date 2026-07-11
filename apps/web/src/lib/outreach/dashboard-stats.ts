@@ -44,10 +44,12 @@ export async function getStats(workspaceId: string) {
       .eq("status", "opened"),
     db.from("outreach_replies").select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId).gte("received_at", startOfMonth)
-      .not("enrollment_id", "is", null),
+      .not("enrollment_id", "is", null)
+      .or("is_warmup.is.null,is_warmup.eq.false"),
     db.from("outreach_replies").select("received_at")
       .eq("workspace_id", workspaceId).gte("received_at", thirtyDaysAgo)
-      .not("enrollment_id", "is", null),
+      .not("enrollment_id", "is", null)
+      .or("is_warmup.is.null,is_warmup.eq.false"),
     db.from("outreach_replies")
       .select(`
         from_name, body_text, received_at, ai_category,

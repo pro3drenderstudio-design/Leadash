@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, SectionList, RefreshControl, Pressable } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
@@ -62,7 +63,7 @@ export default function NotificationsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={n => n.id}
-          contentContainerStyle={{ padding: 16, gap: 8, flexGrow: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 16 + TAB_CLEARANCE, gap: 8, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={C.accent} />}
           ListEmptyComponent={<EmptyState title="Nothing yet" hint="Replies, milestones and inbox alerts will show up here." />}
           renderSectionHeader={({ section }) => (

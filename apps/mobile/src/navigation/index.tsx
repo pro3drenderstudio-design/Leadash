@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from "react";
-import { NavigationContainer, DarkTheme, NavigationContainerRef } from "@react-navigation/native";
+import { NavigationContainer, DarkTheme, NavigationContainerRef, getFocusedRouteNameFromRoute } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Pressable } from "react-native";
+import { Pressable, Platform, StyleSheet } from "react-native";
+import { BlurView } from "expo-blur";
 import * as Notifications from "expo-notifications";
 import { useQuery } from "@tanstack/react-query";
 import { C, FONT } from "../theme/tokens";
@@ -88,6 +89,27 @@ const TAB_ICON: Record<keyof TabParams, IconName> = {
   InboxesTab:   "server",
 };
 
+// iOS gets a liquid-glass tab bar: translucent blur floating over content.
+// Android keeps a solid docked bar (Material convention).
+const glassTabBar = Platform.OS === "ios"
+  ? {
+      tabBarStyle: {
+        position: "absolute" as const,
+        backgroundColor: "transparent",
+        borderTopColor: "rgba(255,255,255,0.10)",
+        elevation: 0,
+      },
+      tabBarBackground: () => (
+        <BlurView tint="systemChromeMaterialDark" intensity={80} style={StyleSheet.absoluteFill} />
+      ),
+    }
+  : {
+      tabBarStyle: {
+        backgroundColor: "rgba(14,14,19,0.98)",
+        borderTopColor: C.border,
+      },
+    };
+
 function Tabs() {
   const { data: notifData } = useQuery({
     queryKey: ["notifications", 0],
@@ -100,10 +122,7 @@ function Tabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: "rgba(14,14,19,0.98)",
-          borderTopColor: C.border,
-        },
+        ...glassTabBar,
         tabBarActiveTintColor: C.accent,
         tabBarInactiveTintColor: C.textQuiet,
         tabBarLabelStyle: { fontFamily: FONT.semibold, fontSize: 10.5 },
@@ -114,11 +133,15 @@ function Tabs() {
     >
       <Tab.Screen name="HomeTab" component={HomeStackNav} options={{ title: "Home" }} />
       <Tab.Screen name="CampaignsTab" component={CampaignsStackNav} options={{ title: "Campaigns" }} />
-      <Tab.Screen name="InboxTab" component={InboxStackNav} options={{
+      <Tab.Screen name="InboxTab" component={InboxStackNav} options={({ route }) => ({
         title: "Inbox",
         tabBarBadge: unread > 0 ? (unread > 9 ? "9+" : unread) : undefined,
         tabBarBadgeStyle: { backgroundColor: C.accent, color: "#fff", fontSize: 9, fontFamily: FONT.bold },
-      }} />
+        // Hide the tab bar inside a conversation so the composer sits flush
+        ...(getFocusedRouteNameFromRoute(route) === "Thread"
+          ? { tabBarStyle: { display: "none" as const } }
+          : {}),
+      })} />
       <Tab.Screen name="InboxesTab" component={InboxesStackNav} options={{ title: "Inboxes" }} />
     </Tab.Navigator>
   );

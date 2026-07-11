@@ -1,4 +1,5 @@
 import React from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -58,7 +59,7 @@ export default function CampaignDetailScreen({ route }: Props) {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 16 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 + TAB_CLEARANCE, gap: 16 }}
       refreshControl={<RefreshControl refreshing={campaignQ.isRefetching} onRefresh={() => { campaignQ.refetch(); analyticsQ.refetch(); }} tintColor={C.accent} />}
     >
       {!c ? (

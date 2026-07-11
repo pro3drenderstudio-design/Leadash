@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import type { Session } from "@supabase/supabase-js";
@@ -66,6 +67,7 @@ export default function App() {
   if (!fontsLoaded || !sessionReady) return null;
 
   return (
+    <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <View style={{ flex: 1, backgroundColor: C.bg }} onLayout={onLayout}>
         <StatusBar style="light" />
@@ -82,5 +84,6 @@ export default function App() {
         )}
       </View>
     </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

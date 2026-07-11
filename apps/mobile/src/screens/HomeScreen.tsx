@@ -1,5 +1,7 @@
 import React from "react";
-import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
+import { TAB_CLEARANCE } from "../lib/layout";
+import { View, Text, ScrollView, RefreshControl, Pressable, Image } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -23,6 +25,7 @@ function StatTile({ value, label, color }: { value: string; label: string; color
 export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParams>>();
   const appNav = useAppNav();
+  const insets = useSafeAreaInsets();
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["dashboard"],
@@ -43,9 +46,6 @@ export default function HomeScreen() {
 
   const trend = data?.chartData.slice(-14) ?? [];
   const maxReplies = Math.max(1, ...trend.map(d => d.replies));
-  const replyRate = data && data.sentThisMonth > 0
-    ? Math.round((data.replies / data.sentThisMonth) * 1000) / 10
-    : 0;
 
   const attention = [
     ...(data?.errorInboxes ?? []).map(i => ({
@@ -63,16 +63,14 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 16 }}
+      contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 32 + TAB_CLEARANCE, gap: 16 }}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.accent} />}
     >
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-        <View>
-          <Text style={{ fontSize: 12.5, fontFamily: FONT.regular, color: C.textQuiet }}>Welcome back</Text>
-          <Text style={{ fontSize: 22, fontFamily: FONT.bold, color: C.text }}>
-            Lead<Text style={{ color: C.accent }}>ash</Text>
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+          <Image source={require("../../assets/logo-mark.png")} style={{ width: 26, height: 26 }} resizeMode="contain" />
+          <Text style={{ fontSize: 21, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.4 }}>Leadash</Text>
         </View>
         <Pressable
           onPress={() => navigation.navigate("Notifications")}
@@ -99,7 +97,7 @@ export default function HomeScreen() {
             <StatTile value={String(data.activeInboxes)} label="active inboxes"
               color={data.errorInboxes.length > 0 ? C.warning : C.success} />
             <StatTile value={data.sentThisMonth.toLocaleString()} label="sent this month" />
-            <StatTile value={`${replyRate}%`} label="reply rate" color={C.accent} />
+            <StatTile value={data.replies.toLocaleString()} label="replies this month" color={C.accent} />
           </View>
 
           {/* 14-day reply trend */}

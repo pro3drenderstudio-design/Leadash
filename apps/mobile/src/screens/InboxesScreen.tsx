@@ -1,6 +1,8 @@
 import React from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, FlatList, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Circle } from "react-native-svg";
@@ -46,6 +48,7 @@ export function inboxHealthPct(i: OutreachInboxSafe): number {
 
 export default function InboxesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<InboxesStackParams>>();
+  const insets = useSafeAreaInsets();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["inboxes"],
     queryFn:  getInboxes,
@@ -53,7 +56,7 @@ export default function InboxesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: insets.top + 12, paddingBottom: 12 }}>
         <Text style={{ fontSize: 22, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.4 }}>Inboxes</Text>
       </View>
 
@@ -65,7 +68,7 @@ export default function InboxesScreen() {
         <FlatList
           data={data ?? []}
           keyExtractor={i => i.id}
-          contentContainerStyle={{ padding: 16, paddingTop: 0, gap: 10, flexGrow: 1 }}
+          contentContainerStyle={{ padding: 16, paddingTop: 0, paddingBottom: 16 + TAB_CLEARANCE, gap: 10, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.accent} />}
           ListEmptyComponent={<EmptyState title="No inboxes connected" hint="Connect a sending inbox on leadash.com to get started." />}
           renderItem={({ item: i }) => {

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { TAB_CLEARANCE } from "../lib/layout";
 import { View, Text, FlatList, RefreshControl, Pressable, ScrollView } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getCampaigns } from "../lib/api";
@@ -12,6 +14,7 @@ const FILTERS = ["all", "active", "paused", "draft", "completed"] as const;
 
 export default function CampaignsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CampaignsStackParams>>();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -24,7 +27,7 @@ export default function CampaignsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* Header */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: insets.top + 12, paddingBottom: 12 }}>
         <Text style={{ fontSize: 22, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.4 }}>Campaigns</Text>
       </View>
 
@@ -53,7 +56,7 @@ export default function CampaignsScreen() {
         <FlatList
           data={filtered}
           keyExtractor={c => c.id}
-          contentContainerStyle={{ padding: 16, paddingTop: 0, gap: 10, flexGrow: 1 }}
+          contentContainerStyle={{ padding: 16, paddingTop: 0, paddingBottom: 16 + TAB_CLEARANCE, gap: 10, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.accent} />}
           ListEmptyComponent={
             <EmptyState

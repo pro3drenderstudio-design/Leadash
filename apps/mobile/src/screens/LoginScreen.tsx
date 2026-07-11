@@ -44,10 +44,11 @@ export default function LoginScreen() {
       style={{ flex: 1, backgroundColor: C.bg, justifyContent: "center", padding: 24 }}
     >
       <View style={{ marginBottom: 36, alignItems: "center" }}>
-        <Text style={{ fontSize: 28, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.5 }}>
-          Lead<Text style={{ color: C.accent }}>ash</Text>
-        </Text>
-        <Text style={{ fontSize: 13, fontFamily: FONT.regular, color: C.textQuiet, marginTop: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Image source={require("../../assets/logo-mark.png")} style={{ width: 32, height: 32 }} resizeMode="contain" />
+          <Text style={{ fontSize: 28, fontFamily: FONT.bold, color: C.text, letterSpacing: -0.5 }}>Leadash</Text>
+        </View>
+        <Text style={{ fontSize: 13, fontFamily: FONT.regular, color: C.textQuiet, marginTop: 10 }}>
           Sign in to your workspace
         </Text>
       </View>
