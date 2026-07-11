@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { Linkify, AttachmentGrid, LocationCard, ContactCard, HtmlBody } from "@/components/crm/rich-message";
 import { VoiceRecorderButton } from "@/components/crm/voice-recorder";
+import { createClient } from "@/lib/supabase/client";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ interface CrmAttachment { name: string; mimeType: string; size: number; url: str
 interface CrmLocation { latitude: number; longitude: number; name?: string; address?: string; }
 interface WaSharedContact { name: string; phone: string; }
 
-interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url: string; }
+interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url?: string; }
 interface ComposerAttachment {
   id: string;
   name: string;
@@ -955,19 +956,36 @@ function CrmInboxContent() {
     await loadConvos();
   }
 
-  function uploadComposerAttachment(file: File | Blob, name: string) {
+  // Uploads directly to Supabase Storage from the browser — the file bytes
+  // never pass through our serverless function (which only mints a signed
+  // upload token via tiny JSON request/response). This avoids Vercel's
+  // ~4.5MB request-body cap, which a proxied upload would hit for anything
+  // longer than a short voice note and return as a plain-text 413 that broke
+  // JSON parsing client-side.
+  async function uploadComposerAttachment(file: File | Blob, name: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setAttachments(prev => [...prev, { id, name, size: file.size, status: "uploading" }]);
-    const form = new FormData();
-    form.append("file", file, name);
-    fetch("/api/crm/media/upload", { method: "POST", body: form })
-      .then(async r => {
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error ?? "Upload failed");
-        return d as CrmMediaRef;
-      })
-      .then(ref => setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "done", ref } : a)))
-      .catch((err: unknown) => setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "error", error: err instanceof Error ? err.message : String(err) } : a)));
+    try {
+      const mimeType = file.type || "application/octet-stream";
+      const mintRes = await fetch("/api/crm/media/upload", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ name, mimeType, size: file.size }),
+      });
+      const mintText = await mintRes.text();
+      const mint = mintText ? JSON.parse(mintText) : {};
+      if (!mintRes.ok) throw new Error(mint.error ?? `Upload failed (${mintRes.status})`);
+
+      const { error } = await createClient().storage
+        .from("crm-media")
+        .uploadToSignedUrl(mint.path, mint.token, file, { contentType: mimeType });
+      if (error) throw new Error(error.message);
+
+      const ref: CrmMediaRef = { path: mint.path, name: mint.name, mimeType: mint.mimeType, size: mint.size };
+      setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "done", ref } : a));
+    } catch (err) {
+      setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "error", error: err instanceof Error ? err.message : String(err) } : a));
+    }
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {

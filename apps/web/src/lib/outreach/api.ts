@@ -1,4 +1,5 @@
 import { wsFetch } from "@/lib/workspace/client";
+import { createClient } from "@/lib/supabase/client";
 import type {
   OutreachInboxSafe, OutreachList, OutreachCampaign, OutreachSequenceStep,
   ImportResult, CrmThread, OutreachTemplate, OutreachReply, OutreachCrmFilter,
@@ -258,13 +259,31 @@ export const updateCrmLabels   = (enrollmentId: string, crm_labels: string[]) =>
 export const suggestReply      = (enrollmentId: string) =>
   post<{ suggestion: string; next_action?: string; action_reason?: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
-export interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url: string }
+export interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url?: string }
 export const sendCrmReply      = (enrollmentId: string, body: string, html_body?: string, attachments?: CrmMediaRef[]) =>
   post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body, html_body, attachments });
-export const uploadCrmMedia    = (file: File | Blob, filename?: string) => {
-  const form = new FormData();
-  form.append("file", file, filename);
-  return wsFetch(`${base}/crm/media/upload`, { method: "POST", body: form }).then(r => json<CrmMediaRef>(r));
+
+/**
+ * Uploads a composer attachment directly to Supabase Storage from the
+ * browser — this route only mints a signed upload token (tiny JSON
+ * request/response); the actual file bytes never pass through our
+ * serverless function, which avoids Vercel's ~4.5MB request-body cap that a
+ * proxied upload would hit for anything longer than a short voice note.
+ */
+export const uploadCrmMedia = async (file: File | Blob, filename?: string): Promise<CrmMediaRef> => {
+  const name = filename ?? (file instanceof File ? file.name : "file");
+  const mimeType = file.type || "application/octet-stream";
+  const mint = await wsFetch(`${base}/crm/media/upload`, {
+    method: "POST",
+    body: JSON.stringify({ name, mimeType, size: file.size }),
+  }).then(r => json<{ path: string; token: string; name: string; mimeType: string; size: number }>(r));
+
+  const { error } = await createClient().storage
+    .from("crm-media")
+    .uploadToSignedUrl(mint.path, mint.token, file, { contentType: mimeType });
+  if (error) throw new Error(error.message);
+
+  return { path: mint.path, name: mint.name, mimeType: mint.mimeType, size: mint.size };
 };
 export const getConversation   = (enrollmentId: string) =>
   get<{ messages: ConversationMessage[]; notes: import("@/types/outreach").CrmNote[] }>(`${base}/crm/${enrollmentId}`);

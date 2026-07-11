@@ -4,6 +4,11 @@
  * Outreach CRM equivalent of /api/crm/media/upload (admin CRM) — same
  * private `crm-media` bucket, but gated by workspace membership rather than
  * admin status, since this composer is used by regular workspace users.
+ *
+ * Mints a signed upload URL/token — the browser uploads the actual file
+ * bytes directly to Supabase Storage, bypassing this route (and Vercel's
+ * ~4.5MB serverless request-body cap, which the old file-proxying
+ * implementation hit for any recording/attachment over that size).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
@@ -16,38 +21,25 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const form = await req.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "file is required" }, { status: 400 });
-  }
-  if (file.size > MAX_SIZE) {
+  const { name, mimeType, size } = await req.json() as { name?: string; mimeType?: string; size?: number };
+  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (typeof size === "number" && size > MAX_SIZE) {
     return NextResponse.json({ error: `File exceeds the ${MAX_SIZE / 1024 / 1024}MB limit` }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "file";
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_") || "file";
   const path = `composer/${workspaceId}/${randomUUID()}-${safeName}`;
 
-  const { error: uploadError } = await db.storage
-    .from("crm-media")
-    .upload(path, buffer, { contentType: file.type || "application/octet-stream", upsert: false });
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
-
-  const { data: signed, error: signError } = await db.storage
-    .from("crm-media")
-    .createSignedUrl(path, 60 * 60 * 24 * 365);
-  if (signError || !signed?.signedUrl) {
-    return NextResponse.json({ error: "Upload succeeded but failed to sign URL" }, { status: 500 });
+  const { data: signed, error } = await db.storage.from("crm-media").createSignedUploadUrl(path);
+  if (error || !signed) {
+    return NextResponse.json({ error: error?.message ?? "Failed to create upload URL" }, { status: 500 });
   }
 
   return NextResponse.json({
     path,
-    url:      signed.signedUrl,
-    name:     file.name,
-    mimeType: file.type || "application/octet-stream",
-    size:     file.size,
+    token:    signed.token,
+    name,
+    mimeType: mimeType || "application/octet-stream",
+    size:     size ?? 0,
   });
 }
