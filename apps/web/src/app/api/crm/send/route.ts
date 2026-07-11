@@ -21,8 +21,9 @@ import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
 const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
-const SUPPORT_FROM    = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
-const MARKETING_FROM  = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL   ?? "no-reply@notifications.leadash.com";
+const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
+const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
 const REDIS_URL       = process.env.UPSTASH_REDIS_URL   ?? process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 
 function getQueue() {
@@ -109,24 +110,26 @@ export async function POST(req: NextRequest) {
     const toEmail = contact.email;
     if (!toEmail) return NextResponse.json({ error: "Contact has no email" }, { status: 400 });
 
-    const fromAddress = (convo.inbox_address as string) === "marketing" ? MARKETING_FROM : SUPPORT_FROM;
+    const replyTo     = (convo.inbox_address as string) === "marketing" ? MARKETING_EMAIL : SUPPORT_EMAIL;
     const subject     = body.subject ?? `Re: ${convo.channel_identifier ?? "Your inquiry"}`;
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method:  "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from:    fromAddress,
-        to:      [toEmail],
+        from:     `Leadash Support <${RESEND_FROM}>`,
+        to:       [toEmail],
+        reply_to: [replyTo],
         subject,
-        text:    msgBody,
-        html:    body.html ?? `<p>${msgBody.replace(/\n/g, "<br>")}</p>`,
+        text:     msgBody,
+        html:     body.html ?? `<p>${msgBody.replace(/\n/g, "<br>")}</p>`,
       }),
     });
 
-    const resendData = await resendRes.json() as { id?: string; error?: string };
+    const resendData = await resendRes.json() as { id?: string; name?: string; message?: string; statusCode?: number };
     if (!resendRes.ok) {
-      return NextResponse.json({ error: resendData.error ?? "Email send failed" }, { status: 502 });
+      console.error("[crm/send] Resend error:", resendData);
+      return NextResponse.json({ error: resendData.message ?? "Email send failed" }, { status: 502 });
     }
 
     // Insert CRM message
@@ -135,7 +138,7 @@ export async function POST(req: NextRequest) {
       contact_id:         contact.id,
       direction:          "outbound",
       channel:            "email",
-      from_address:       fromAddress,
+      from_address:       RESEND_FROM,
       subject,
       body:               msgBody,
       body_html:          body.html ?? null,
