@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
+export const maxDuration = 30;
+
 const WA_COMMUNITY_MANAGER  = "2349110260332";
 const APP_URL               = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 const RESEND_API_KEY        = process.env.RESEND_API_KEY;
@@ -56,6 +58,10 @@ export async function POST(req: NextRequest) {
 
   const db = createAdminClient();
   const emailNorm = email.toLowerCase().trim();
+
+  // Independent of the auth/workspace chain below — kick it off now so it
+  // resolves in parallel instead of adding its own round trip later.
+  const pricePromise = db.from("admin_settings").select("value").eq("key", "funnel_challenge_price").maybeSingle();
 
   // ── Check for duplicate signup (same email, still pending/confirmed) ──────
   const { data: existing } = await db
@@ -129,9 +135,10 @@ export async function POST(req: NextRequest) {
   } else {
     userId = signUpData.user.id;
 
-    // Create workspace for brand-new user
+    // Create workspace for brand-new user (select the inserted row directly —
+    // avoids a redundant round trip to re-fetch it by owner_id).
     const slug = `${full_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20)}-${Date.now().toString(36)}`;
-    const { error: wsError } = await db.from("workspaces").insert({
+    const { data: newWs, error: wsError } = await db.from("workspaces").insert({
       name:            full_name.trim(),
       slug,
       owner_id:        userId,
@@ -139,20 +146,18 @@ export async function POST(req: NextRequest) {
       plan_status:     "active",
       billing_email:   emailNorm,
       whatsapp_number: phone,
-    });
+    }).select("id").single();
     if (wsError) console.error("[challenge/signup] workspace create error:", wsError.message);
 
-    // workspace_members
-    const { data: ws } = await db.from("workspaces").select("id").eq("owner_id", userId).maybeSingle();
-    if (ws) {
-      await db.from("workspace_members").insert({ workspace_id: ws.id, user_id: userId, role: "owner" })
+    if (newWs) {
+      await db.from("workspace_members").insert({ workspace_id: newWs.id, user_id: userId, role: "owner" })
         .catch((e: unknown) => console.error("[challenge/signup] workspace_member error:", e));
     }
   }
 
   // ── Verify Paystack payment server-side ──────────────────────────────────
   // Read challenge price from admin_settings; fall back to ₦10,000
-  const { data: priceRow } = await db.from("admin_settings").select("value").eq("key", "funnel_challenge_price").maybeSingle();
+  const { data: priceRow } = await pricePromise;
   const amountNgn = typeof priceRow?.value === "number" ? priceRow.value : 10_000;
 
   let paymentConfirmed = false;
