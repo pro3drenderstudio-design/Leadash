@@ -242,21 +242,46 @@ async function executeFlow(
           }
 
           case "sendWhatsapp": {
-            if (!workspace_id) { stepSkipReason = "No workspace context for WhatsApp"; break; }
-
             const { template_name, template_params, body } = node.data as {
               template_name?: string;
               template_params?: Record<string, string>;
               body?: string;
             };
 
-            const { data: ws } = await db
-              .from("workspaces")
-              .select("whatsapp_number")
-              .eq("id", workspace_id)
-              .single();
+            // Recipient resolution order:
+            //   1. payload.contact_id → crm_contacts.whatsapp_number  (funnel + CRM flows)
+            //   2. payload.phone directly (funnel.form_submitted emits this)
+            //   3. workspace's whatsapp_number (legacy user.opted_in flows)
+            // The first two paths mean a flow triggered by a raw CRM contact
+            // (someone who isn't a Leadash workspace owner) can still receive
+            // a WhatsApp reply — which is the entire "reply to challenge
+            // signups" scenario.
+            let phone: string | null = null;
 
-            const phone = ws?.whatsapp_number as string | null;
+            const contactIdRaw = (ctx as Record<string, unknown>).contact_id;
+            if (typeof contactIdRaw === "string" && contactIdRaw) {
+              const { data: c } = await db
+                .from("crm_contacts")
+                .select("whatsapp_number")
+                .eq("id", contactIdRaw)
+                .maybeSingle();
+              phone = (c?.whatsapp_number as string | null) ?? null;
+            }
+
+            if (!phone) {
+              const payloadPhone = (ctx as Record<string, unknown>).phone;
+              if (typeof payloadPhone === "string" && payloadPhone) phone = payloadPhone;
+            }
+
+            if (!phone && workspace_id) {
+              const { data: ws } = await db
+                .from("workspaces")
+                .select("whatsapp_number")
+                .eq("id", workspace_id)
+                .single();
+              phone = (ws?.whatsapp_number as string | null) ?? null;
+            }
+
             if (!phone) { output = { skipped: "no_phone" }; break; }
 
             const resolvedParams = template_params
@@ -550,8 +575,11 @@ function evaluateCondition(actual: unknown, operator: string, expected: unknown)
     case "lt":           return Number(actual) < Number(expected);
     case "gte":          return Number(actual) >= Number(expected);
     case "lte":          return Number(actual) <= Number(expected);
-    case "contains":     return String(actual).includes(String(expected));
-    case "not_contains": return !String(actual).includes(String(expected));
+    // Case-insensitive by default — keyword matching on user-typed text
+    // ("PAID" vs "paid" vs "Paid") should behave the same. Flows that need
+    // exact match can normalise with an updateField step first.
+    case "contains":     return String(actual).toLowerCase().includes(String(expected).toLowerCase());
+    case "not_contains": return !String(actual).toLowerCase().includes(String(expected).toLowerCase());
     case "is_null":      return actual == null;
     case "is_not_null":  return actual != null;
     default:             return false;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { enqueueAutomation } from "@/lib/queue/client";
+import { normalisePhoneNG } from "@/lib/phone";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -68,25 +69,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }, { onConflict: "workspace_id,product_id" });
 
         if (enrollError) console.error("[challenge-signups/confirm] enroll error:", enrollError.message);
-
-        // Fire enrollment automation
-        try {
-          await enqueueAutomation({
-            event:        "academy.enrollment_created",
-            workspace_id: workspaceId,
-            user_id:      signup.user_id ?? null,
-            payload: {
-              product_slug:  "challenge-7day",
-              product_name:  "7-Day Job & Client Acquisition Challenge",
-              full_name:     signup.full_name,
-              email:         signup.email,
-              phone:         signup.phone,
-              payment_method: signup.payment_method,
-            },
-          });
-        } catch (e) {
-          console.error("[challenge-signups/confirm] automation error:", e);
-        }
       }
     }
 
@@ -96,6 +78,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       confirmed_by: userId,
       updated_at:   new Date().toISOString(),
     }).eq("id", id);
+
+    // ── Fire enrollment automation ───────────────────────────────────────
+    // Runs on every confirm — including signups that never became workspaces,
+    // which is the typical "form filler" case. The payload includes contact_id
+    // and a normalised phone so the sendWhatsapp step in the flow can look up
+    // the CRM recipient directly (falling back on the crm_contacts row we
+    // created via /api/funnels/submit).
+    const normalisedPhone = normalisePhoneNG(signup.phone as string | null);
+    let signupContactId: string | null = null;
+    if (signup.email) {
+      const { data: c } = await db.from("crm_contacts")
+        .select("id").eq("email", signup.email).maybeSingle();
+      signupContactId = (c?.id as string) ?? null;
+    }
+    if (!signupContactId && normalisedPhone) {
+      const { data: c } = await db.from("crm_contacts")
+        .select("id").eq("whatsapp_number", normalisedPhone).maybeSingle();
+      signupContactId = (c?.id as string) ?? null;
+    }
+
+    try {
+      await enqueueAutomation({
+        event:        "academy.enrollment_created",
+        workspace_id: (signup.workspace_id as string | null) ?? null,
+        user_id:      (signup.user_id as string | null) ?? null,
+        payload: {
+          product_slug:   "challenge-7day",
+          product_name:   "7-Day Job & Client Acquisition Challenge",
+          full_name:      signup.full_name,
+          email:          signup.email,
+          phone:          normalisedPhone,
+          contact_id:     signupContactId,
+          payment_method: signup.payment_method,
+        },
+      });
+    } catch (e) {
+      console.error("[challenge-signups/confirm] automation error:", e);
+    }
 
     // Send enrollment confirmation email
     const resendKey = process.env.RESEND_API_KEY;

@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
 import { fetchWhatsAppMedia, type WhatsAppMediaResult } from "@/lib/whatsapp/media";
+import { enqueueAutomation } from "@/lib/queue/client";
+import { normalisePhoneNG } from "@/lib/phone";
 
 const APP_SECRET      = process.env.WHATSAPP_APP_SECRET  ?? "";
 const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -107,7 +109,11 @@ export async function POST(req: NextRequest) {
       // ── Inbound messages ───────────────────────────────────────────────
       const messages = (value.messages as Array<Record<string, unknown>>) ?? [];
       for (const msg of messages) {
-        const phone     = (msg.from as string).replace(/^\+?/, "+");
+        // WhatsApp delivers wa_id as digits-only ("2348012345678"). We normalise
+        // to the same 234-prefixed digits-only shape stored by /funnels/submit
+        // so a form contact and a WhatsApp contact for the same person link up.
+        const rawFrom   = msg.from as string;
+        const phone     = normalisePhoneNG(rawFrom) ?? rawFrom.replace(/^\+/, "");
         const msgId     = msg.id as string;
         const msgType   = msg.type as string;
         let   msgBody   = "";
@@ -242,6 +248,27 @@ export async function POST(req: NextRequest) {
           location,
           contacts,
         });
+
+        // ── Fire automation trigger ──────────────────────────────────────
+        // Emitted for every inbound WhatsApp regardless of caption/type so
+        // automations can filter on body / channel / message type themselves.
+        // body_lower is denormalised to make case-insensitive keyword flows
+        // easy to author in the builder ("contains 'paid'" etc.).
+        await enqueueAutomation({
+          event:        "crm.message_received",
+          workspace_id: null,
+          user_id:      null,
+          payload: {
+            contact_id:      contactId,
+            conversation_id: conversationId,
+            channel:         "whatsapp",
+            direction:       "inbound",
+            body:            msgBody ?? "",
+            body_lower:     (msgBody ?? "").toLowerCase(),
+            wa_message_type: msgType,
+            phone,
+          },
+        }).catch(err => console.error("[crm/inbound-whatsapp] automation enqueue error:", err));
 
         // Admin notification email — fire and forget. msgBody can legitimately be
         // empty for media/location/contact messages with no caption, so fall back

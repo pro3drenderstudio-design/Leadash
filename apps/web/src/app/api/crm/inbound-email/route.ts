@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
+import { enqueueAutomation } from "@/lib/queue/client";
 
 const SECRET          = process.env.POSTAL_WEBHOOK_SECRET;
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
@@ -229,6 +230,25 @@ export async function POST(req: NextRequest) {
     status:             "delivered",
     delivered_at:       now,
   });
+
+  // ── Fire automation trigger ────────────────────────────────────────────
+  // Same event shape as inbound-whatsapp so a single flow can react to both
+  // channels (branching on payload.channel if needed).
+  await enqueueAutomation({
+    event:        "crm.message_received",
+    workspace_id: null,
+    user_id:      null,
+    payload: {
+      contact_id:      contactId,
+      conversation_id: conversationId,
+      channel:         "email",
+      direction:       "inbound",
+      body:            payload.plain_body ?? "",
+      body_lower:     (payload.plain_body ?? "").toLowerCase(),
+      subject:         payload.subject ?? null,
+      email:           fromEmail,
+    },
+  }).catch(err => console.error("[crm/inbound-email] automation enqueue error:", err));
 
   // Admin notification email — fire and forget
   if (RESEND_API_KEY && notifyEmail) {

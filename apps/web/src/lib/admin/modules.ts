@@ -1,15 +1,48 @@
 /**
- * Admin module catalog — single source of truth used by:
- *  - The AdminSidebar to decide which groups to render for a given admin
- *  - The team page's preset editor to render module checkboxes
- *  - The API helpers (auth.ts) to authorize requests
+ * Admin module catalog — SINGLE source of truth for both:
+ *   - The AdminSidebar (which nav items to render for each module)
+ *   - The team page's preset editor (which module checkboxes exist)
+ *   - The API helpers (auth.ts) that authorize requests
  *
- * Keep this in lock-step with the sidebar groups in components/admin/AdminSidebar.tsx.
- * "Overview" is intentionally always-on — every admin can see the landing page.
+ * Add a new admin section = add ONE module entry here (with its nav items).
+ * The sidebar renders from `items`; the team page renders module checkboxes
+ * from the top-level list. Both surfaces stay in lock-step with zero drift.
  *
- * "team_config" gates the /admin/team and /admin/settings routes; granting it
- * to a non-super_admin lets them manage admins AND custom presets.
+ * "overview" is always-on — every admin sees the landing page.
+ * "team_config" gates /admin/team + /admin/settings; granting it to a
+ * non-super_admin lets them manage admins AND custom presets.
  */
+
+import type { IconSvgElement } from "@hugeicons/react";
+import {
+  Dashboard01Icon,
+  Activity01Icon,
+  UserGroupIcon,
+  Building01Icon,
+  ChartBarLineIcon,
+  Briefcase01Icon,
+  Beta01Icon,
+  Mail01Icon,
+  Coins01Icon,
+  Wallet01Icon,
+  GraduationScrollIcon,
+  Settings02Icon,
+  HeadsetIcon,
+  Megaphone01Icon,
+  Notification01Icon,
+  ShieldUserIcon,
+  ServerStack01Icon,
+  Configuration01Icon,
+  Database01Icon,
+  Plug01Icon,
+  WorkflowSquare01Icon,
+  AnalyticsUpIcon,
+  CustomerService01Icon,
+  GitBranchIcon,
+  Login03Icon,
+  Sale01Icon,
+  Link01Icon,
+} from "@/v2-app/icons";
 
 export type AdminModuleKey =
   | "overview"
@@ -19,95 +52,174 @@ export type AdminModuleKey =
   | "academy"
   | "funnel"
   | "offers"
+  | "affiliates"
   | "support"
   | "outreach"
   | "growth"
   | "infrastructure"
   | "team_config";
 
-export type AdminModule = {
-  key: AdminModuleKey;
+export type AdminNavItem = {
+  href:  string;
   label: string;
-  description: string;
-  /** Sidebar group labels this module gates. The AdminSidebar matches by group label. */
-  sidebarGroups: string[];
+  icon:  IconSvgElement;
+};
+
+export type AdminModule = {
+  key:                AdminModuleKey;
+  label:              string;
+  description:        string;
+  /** Sidebar group header label — shown above the item list. */
+  sidebarGroupLabel:  string;
   /** Whether this module is always granted (Overview is). */
-  always?: boolean;
+  always?:            boolean;
+  /** Nav items rendered under this group in the sidebar. */
+  items:              AdminNavItem[];
 };
 
 export const ADMIN_MODULES: AdminModule[] = [
   {
-    key:           "overview",
-    label:         "Overview",
-    description:   "Dashboard and platform activity log.",
-    sidebarGroups: ["Overview"],
-    always:        true,
+    key:               "overview",
+    label:             "Overview",
+    description:       "Dashboard and platform activity log.",
+    sidebarGroupLabel: "Overview",
+    always:            true,
+    items: [
+      { href: "/admin",          label: "Dashboard", icon: Dashboard01Icon },
+      { href: "/admin/activity", label: "Activity",  icon: Activity01Icon },
+    ],
   },
   {
-    key:           "users_billing",
-    label:         "Users & Billing",
-    description:   "Users, workspaces, financials, plans, and the beta programme.",
-    sidebarGroups: ["Users & Billing"],
+    key:               "users_billing",
+    label:             "Users & Billing",
+    description:       "Users, workspaces, financials, plans, and the beta programme.",
+    sidebarGroupLabel: "Users & Billing",
+    items: [
+      { href: "/admin/users",       label: "Users",          icon: UserGroupIcon },
+      { href: "/admin/workspaces",  label: "Workspaces",     icon: Building01Icon },
+      { href: "/admin/financials",  label: "Financials",     icon: ChartBarLineIcon },
+      { href: "/admin/plans",       label: "Plans",          icon: Briefcase01Icon },
+      { href: "/admin/beta",        label: "Beta programme", icon: Beta01Icon },
+    ],
   },
   {
-    key:           "leadgen",
-    label:         "Lead Gen",
-    description:   "Lead campaigns and the credit ledger.",
-    sidebarGroups: ["Lead Gen"],
+    key:               "leadgen",
+    label:             "Lead Gen",
+    description:       "Lead campaigns and the credit ledger.",
+    sidebarGroupLabel: "Lead Gen",
+    items: [
+      { href: "/admin/campaigns", label: "Campaigns",     icon: Mail01Icon },
+      { href: "/admin/credits",   label: "Credit ledger", icon: Coins01Icon },
+    ],
   },
   {
-    key:           "leadpay",
-    label:         "LeadPay",
-    description:   "LeadPay overview, accounts, payouts, transactions, settings.",
-    sidebarGroups: ["LeadPay"],
+    key:               "leadpay",
+    label:             "LeadPay",
+    description:       "LeadPay overview, accounts, payouts, transactions, settings.",
+    sidebarGroupLabel: "LeadPay",
+    items: [
+      { href: "/admin/leadpay",              label: "Overview",     icon: Wallet01Icon },
+      { href: "/admin/leadpay/accounts",     label: "Accounts",     icon: UserGroupIcon },
+      { href: "/admin/leadpay/payouts",      label: "Payouts",      icon: Login03Icon },
+      { href: "/admin/leadpay/transactions", label: "Transactions", icon: AnalyticsUpIcon },
+      { href: "/admin/leadpay/settings",     label: "Settings",     icon: Settings02Icon },
+    ],
   },
   {
-    key:           "academy",
-    label:         "Academy",
-    description:   "Academy course and content management.",
-    sidebarGroups: ["Academy"],
+    key:               "academy",
+    label:             "Academy",
+    description:       "Academy course and content management.",
+    sidebarGroupLabel: "Academy",
+    items: [
+      { href: "/admin/academy",           label: "Academy",           icon: GraduationScrollIcon },
+      { href: "/admin/challenge-signups", label: "Challenge Signups", icon: UserGroupIcon },
+    ],
   },
   {
-    key:           "funnel",
-    label:         "Funnel",
-    description:   "Course funnel settings, automation builder, and CRM inbox.",
-    sidebarGroups: ["Funnel"],
+    key:               "funnel",
+    label:             "Funnel",
+    description:       "Funnel pages, automation builder, and CRM inbox.",
+    sidebarGroupLabel: "Funnel",
+    items: [
+      { href: "/admin/funnels",      label: "Funnels",         icon: GitBranchIcon },
+      { href: "/admin/funnel",       label: "Funnel settings", icon: AnalyticsUpIcon },
+      { href: "/admin/automations",  label: "Automations",     icon: WorkflowSquare01Icon },
+      { href: "/admin/crm",          label: "CRM inbox",       icon: CustomerService01Icon },
+      { href: "/admin/crm-settings", label: "CRM settings",    icon: Configuration01Icon },
+    ],
   },
   {
-    key:           "offers",
-    label:         "Offers",
-    description:   "Sellable offer bundles, checkout pages, bumps/upsells, and discount codes.",
-    sidebarGroups: ["Monetization"],
+    key:               "offers",
+    label:             "Offers",
+    description:       "Sellable offer bundles, checkout pages, bumps/upsells, and discount codes.",
+    sidebarGroupLabel: "Monetization",
+    items: [
+      { href: "/admin/offers", label: "Offers", icon: Sale01Icon },
+    ],
   },
   {
-    key:           "support",
-    label:         "Support",
-    description:   "Support tickets, broadcast emails, and notification settings.",
-    sidebarGroups: ["Support"],
+    key:               "affiliates",
+    label:             "Affiliates",
+    description:       "Affiliate program management, payouts, and referral commissions.",
+    sidebarGroupLabel: "Affiliates",
+    items: [
+      { href: "/admin/affiliates", label: "Affiliates", icon: UserGroupIcon },
+    ],
   },
   {
-    key:           "outreach",
-    label:         "Outreach",
-    description:   "Cross-workspace view of user inboxes, campaigns, warmup pool, and failed sends.",
-    sidebarGroups: ["Outreach"],
+    key:               "support",
+    label:             "Support",
+    description:       "Support tickets, broadcast emails, and notification settings.",
+    sidebarGroupLabel: "Support",
+    items: [
+      { href: "/admin/support",       label: "Tickets",       icon: HeadsetIcon },
+      { href: "/admin/broadcast",     label: "Broadcast",     icon: Megaphone01Icon },
+      { href: "/admin/notifications", label: "Notifications", icon: Notification01Icon },
+    ],
   },
   {
-    key:           "growth",
-    label:         "Growth",
-    description:   "Link tracker, challenge signup queue, and A/B testing.",
-    sidebarGroups: ["Growth"],
+    key:               "outreach",
+    label:             "Outreach",
+    description:       "Cross-workspace view of user inboxes, campaigns, warmup pool, and failed sends.",
+    sidebarGroupLabel: "Outreach",
+    items: [
+      { href: "/admin/outreach/inboxes",   label: "Inboxes",      icon: Mail01Icon },
+      { href: "/admin/outreach/campaigns", label: "Campaigns",    icon: WorkflowSquare01Icon },
+      { href: "/admin/outreach/warmup",    label: "Warmup Pool",  icon: Activity01Icon },
+      { href: "/admin/outreach/queue",     label: "Failed Sends", icon: ChartBarLineIcon },
+    ],
   },
   {
-    key:           "infrastructure",
-    label:         "Infrastructure",
-    description:   "Sending domains, dedicated IPs, SMTP nodes, system health.",
-    sidebarGroups: ["Infrastructure"],
+    key:               "growth",
+    label:             "Growth",
+    description:       "Link tracker and growth analytics.",
+    sidebarGroupLabel: "Growth",
+    items: [
+      { href: "/admin/links", label: "Link Tracker", icon: Link01Icon },
+    ],
   },
   {
-    key:           "team_config",
-    label:         "Team & Config",
-    description:   "Manage the admin team, custom role presets, and platform settings.",
-    sidebarGroups: ["Config"],
+    key:               "infrastructure",
+    label:             "Infrastructure",
+    description:       "Sending domains, dedicated IPs, SMTP nodes, system health.",
+    sidebarGroupLabel: "Infrastructure",
+    items: [
+      { href: "/admin/domains",        label: "Domains",        icon: Plug01Icon },
+      { href: "/admin/dedicated-ip",   label: "Dedicated IPs",  icon: Database01Icon },
+      { href: "/admin/infrastructure", label: "Infrastructure", icon: ServerStack01Icon },
+      { href: "/admin/postal-nodes",   label: "SMTP nodes",     icon: ServerStack01Icon },
+      { href: "/admin/system",         label: "System",         icon: Configuration01Icon },
+    ],
+  },
+  {
+    key:               "team_config",
+    label:             "Team & Config",
+    description:       "Manage the admin team, custom role presets, and platform settings.",
+    sidebarGroupLabel: "Config",
+    items: [
+      { href: "/admin/team",     label: "Team",     icon: ShieldUserIcon },
+      { href: "/admin/settings", label: "Settings", icon: Settings02Icon },
+    ],
   },
 ];
 
@@ -136,10 +248,9 @@ export const BUILTIN_ROLE_MODULES: Record<Exclude<AdminRole, "custom">, AdminMod
   // Billing/finance: financial side of the platform but no support tickets, no
   // infrastructure, no admin team management.
   billing:     ["overview", "users_billing", "leadpay"],
-  // Read-only: visibility into everything except the team panel. (View-only at
-  // the action level is still a future enhancement — for now this controls which
-  // modules they can navigate into.)
-  readonly:    ["overview", "users_billing", "leadgen", "leadpay", "academy", "funnel", "offers", "support", "outreach", "growth", "infrastructure"],
+  // Read-only: visibility into everything except the team panel. New modules
+  // are opted-in here automatically at build time.
+  readonly:    ALL_MODULE_KEYS.filter(k => k !== "team_config"),
 };
 
 export const ROLE_LABELS: Record<AdminRole, string> = {

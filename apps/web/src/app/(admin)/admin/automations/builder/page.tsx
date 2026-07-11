@@ -68,7 +68,16 @@ const TRIGGER_GROUPS = [
     icon: "🏷",
     color: "#64748b",
     items: [
-      { event: "crm.tag_added", label: "Tag added to contact", desc: "A tag was applied to a contact" },
+      { event: "crm.tag_added",         label: "Tag added to contact",  desc: "A tag was applied to a contact" },
+      { event: "crm.message_received",  label: "Message received",      desc: "A contact sent an inbound WhatsApp / email — payload has body, body_lower, channel, contact_id" },
+    ],
+  },
+  {
+    label: "Funnels",
+    icon: "🧩",
+    color: "#0ea5e9",
+    items: [
+      { event: "funnel.form_submitted", label: "Funnel form submitted", desc: "Any funnel page form was submitted — payload has funnel_slug, page_slug, contact_id, name, email, phone" },
     ],
   },
 ] as const;

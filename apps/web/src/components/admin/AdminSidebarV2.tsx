@@ -1,158 +1,25 @@
 "use client";
 
 /**
- * v2-app admin sidebar — replaces the legacy AdminSidebar.
+ * v2-app admin sidebar.
  *
- * Reuses the existing NAV data (mapping admin routes to modules) and the
- * module-visibility logic so a custom-preset admin sees exactly the same
- * groups they did before. Visual switch: v2-app palette, denser rows,
- * orange accent left-rail on active items, "ADMIN" tag pill instead of a
- * separate red brand colour.
+ * Reads the nav structure directly from ADMIN_MODULES (lib/admin/modules.ts) —
+ * that file is the single source of truth for both the sidebar and the team
+ * page's preset editor. Adding a new admin section is one edit: add a module
+ * entry with its items, and the checkbox + nav both appear automatically.
  *
- * The /api/admin/notifications unread poll is preserved so the bell-badge
- * on the Notifications link still updates.
+ * The /api/admin/notifications unread poll is preserved so the bell-badge on
+ * the Notifications link still updates.
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { createClient } from "@/lib/supabase/client";
 import { ADMIN_MODULES, type AdminModuleKey } from "@/lib/admin/modules";
-import {
-  Dashboard01Icon,
-  Activity01Icon,
-  UserGroupIcon,
-  Building01Icon,
-  ChartBarLineIcon,
-  Briefcase01Icon,
-  Beta01Icon,
-  Mail01Icon,
-  Coins01Icon,
-  Wallet01Icon,
-  GraduationScrollIcon,
-  Settings02Icon,
-  HeadsetIcon,
-  Megaphone01Icon,
-  Notification01Icon,
-  ShieldUserIcon,
-  ServerStack01Icon,
-  Configuration01Icon,
-  Database01Icon,
-  Plug01Icon,
-  WorkflowSquare01Icon,
-  AnalyticsUpIcon,
-  CustomerService01Icon,
-  GitBranchIcon,
-  Login03Icon,
-  Logout03Icon,
-  Sale01Icon,
-  Link01Icon,
-} from "@/v2-app/icons";
+import { Logout03Icon, Login03Icon } from "@/v2-app/icons";
 import "@/v2-app/v2-app.css";
-
-type NavItemDef = { href: string; label: string; icon: IconSvgElement };
-type NavGroupDef = { label: string; items: NavItemDef[] };
-
-const NAV: NavGroupDef[] = [
-  {
-    label: "Overview",
-    items: [
-      { href: "/admin",          label: "Dashboard", icon: Dashboard01Icon },
-      { href: "/admin/activity", label: "Activity",  icon: Activity01Icon },
-    ],
-  },
-  {
-    label: "Users & Billing",
-    items: [
-      { href: "/admin/users",       label: "Users",          icon: UserGroupIcon },
-      { href: "/admin/workspaces",  label: "Workspaces",     icon: Building01Icon },
-      { href: "/admin/financials",  label: "Financials",     icon: ChartBarLineIcon },
-      { href: "/admin/plans",       label: "Plans",          icon: Briefcase01Icon },
-      { href: "/admin/beta",        label: "Beta programme", icon: Beta01Icon },
-    ],
-  },
-  {
-    label: "Lead Gen",
-    items: [
-      { href: "/admin/campaigns", label: "Campaigns",     icon: Mail01Icon },
-      { href: "/admin/credits",   label: "Credit ledger", icon: Coins01Icon },
-    ],
-  },
-  {
-    label: "LeadPay",
-    items: [
-      { href: "/admin/leadpay",              label: "Overview",     icon: Wallet01Icon },
-      { href: "/admin/leadpay/accounts",     label: "Accounts",     icon: UserGroupIcon },
-      { href: "/admin/leadpay/payouts",      label: "Payouts",      icon: Login03Icon },
-      { href: "/admin/leadpay/transactions", label: "Transactions", icon: AnalyticsUpIcon },
-      { href: "/admin/leadpay/settings",     label: "Settings",     icon: Settings02Icon },
-    ],
-  },
-  {
-    label: "Academy",
-    items: [
-      { href: "/admin/academy", label: "Academy", icon: GraduationScrollIcon },
-    ],
-  },
-  {
-    label: "Funnel",
-    items: [
-      { href: "/admin/funnels",      label: "Funnels",         icon: GitBranchIcon },
-      { href: "/admin/funnel",       label: "Funnel settings", icon: AnalyticsUpIcon },
-      { href: "/admin/automations",  label: "Automations",     icon: WorkflowSquare01Icon },
-      { href: "/admin/crm",          label: "CRM inbox",       icon: CustomerService01Icon },
-      { href: "/admin/crm-settings", label: "CRM settings",    icon: Configuration01Icon },
-    ],
-  },
-  {
-    label: "Monetization",
-    items: [
-      { href: "/admin/offers", label: "Offers", icon: Sale01Icon },
-    ],
-  },
-  {
-    label: "Support",
-    items: [
-      { href: "/admin/support",       label: "Tickets",       icon: HeadsetIcon },
-      { href: "/admin/broadcast",     label: "Broadcast",     icon: Megaphone01Icon },
-      { href: "/admin/notifications", label: "Notifications", icon: Notification01Icon },
-    ],
-  },
-  {
-    label: "Outreach",
-    items: [
-      { href: "/admin/outreach/inboxes",   label: "Inboxes",      icon: Mail01Icon },
-      { href: "/admin/outreach/campaigns", label: "Campaigns",    icon: WorkflowSquare01Icon },
-      { href: "/admin/outreach/warmup",    label: "Warmup Pool",  icon: Activity01Icon },
-      { href: "/admin/outreach/queue",     label: "Failed Sends", icon: ChartBarLineIcon },
-    ],
-  },
-  {
-    label: "Growth",
-    items: [
-      { href: "/admin/links",             label: "Link Tracker",      icon: Link01Icon },
-      { href: "/admin/challenge-signups", label: "Challenge Signups", icon: UserGroupIcon },
-    ],
-  },
-  {
-    label: "Infrastructure",
-    items: [
-      { href: "/admin/domains",        label: "Domains",        icon: Plug01Icon },
-      { href: "/admin/dedicated-ip",   label: "Dedicated IPs",  icon: Database01Icon },
-      { href: "/admin/infrastructure", label: "Infrastructure", icon: ServerStack01Icon },
-      { href: "/admin/postal-nodes",   label: "SMTP nodes",     icon: ServerStack01Icon },
-      { href: "/admin/system",         label: "System",         icon: Configuration01Icon },
-    ],
-  },
-  {
-    label: "Config",
-    items: [
-      { href: "/admin/team",     label: "Team",     icon: ShieldUserIcon },
-      { href: "/admin/settings", label: "Settings", icon: Settings02Icon },
-    ],
-  },
-];
 
 interface Props {
   adminEmail:   string;
@@ -160,26 +27,18 @@ interface Props {
   adminModules: AdminModuleKey[];
 }
 
-// Group label → required module key.
-const GROUP_MODULE_MAP: Record<string, AdminModuleKey> = (() => {
-  const out: Record<string, AdminModuleKey> = {};
-  for (const m of ADMIN_MODULES) {
-    for (const group of m.sidebarGroups) out[group] = m.key;
-  }
-  return out;
-})();
-
 export default function AdminSidebarV2({ adminEmail, adminRole, adminModules }: Props) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [unread, setUnread] = useState(0);
 
   const allowed = useMemo(() => new Set(adminModules), [adminModules]);
+  // Filter ADMIN_MODULES down to the ones this admin is permitted to see, then
+  // reshape into the {label, items} tuple the render loop expects.
   const visibleNav = useMemo(
-    () => NAV.filter(group => {
-      const requiredModule = GROUP_MODULE_MAP[group.label];
-      return !requiredModule || allowed.has(requiredModule);
-    }),
+    () => ADMIN_MODULES
+      .filter(m => allowed.has(m.key))
+      .map(m => ({ label: m.sidebarGroupLabel, items: m.items })),
     [allowed],
   );
 
