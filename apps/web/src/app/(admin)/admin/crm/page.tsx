@@ -277,8 +277,16 @@ function TaskItem({ task, contactId, onToggle }: { task: Task; contactId: string
   );
 }
 
-function ContactProfilePanel({ contact, conversationId }: { contact: CrmContact; conversationId: string }) {
+function ContactProfilePanel({ contact: propContact, conversationId }: { contact: CrmContact; conversationId: string }) {
   const [profile, setProfile] = useState<ContactProfile | null>(null);
+  // The parent-owned conversation object supplies `propContact` as read-only.
+  // When we PATCH a field (name, notes, tags…) the parent doesn't know to
+  // re-fetch, so its `crm_contacts` prop stays stale and the render bounces
+  // back to the old value the moment we clear editingField. Overlaying a
+  // local copy that we update from the PATCH response fixes that: reads flow
+  // through `contact`, writes update `contact` immediately.
+  const [contact, setContact] = useState<CrmContact>(propContact);
+  useEffect(() => { setContact(propContact); }, [propContact.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [addingTask, setAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -313,14 +321,24 @@ function ContactProfilePanel({ contact, conversationId }: { contact: CrmContact;
 
   async function saveField(field: string) {
     setSaving(true);
-    await fetch(`/api/crm/contacts/${contact.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: fieldVal }),
-    });
-    setSaving(false);
-    setEditingField(null);
-    loadProfile();
+    try {
+      const res = await fetch(`/api/crm/contacts/${contact.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: fieldVal }),
+      });
+      const d = await res.json().catch(() => null) as { contact?: CrmContact } | null;
+      if (res.ok && d?.contact) {
+        // Merge the fresh row into local state so the render reflects the
+        // saved value the instant we drop out of edit mode — no waiting on
+        // loadProfile to hit the server.
+        setContact(prev => ({ ...prev, ...d.contact }));
+      }
+    } finally {
+      setSaving(false);
+      setEditingField(null);
+      loadProfile();
+    }
   }
 
   function startEdit(field: string, current: string) {
@@ -762,6 +780,118 @@ function NewConversationModal({ onClose, onCreated }: {
   );
 }
 
+// ── Add contact modal ────────────────────────────────────────────────────────
+
+function AddContactModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [name,       setName]       = useState("");
+  const [email,      setEmail]      = useState("");
+  const [whatsapp,   setWhatsapp]   = useState("");
+  const [company,    setCompany]    = useState("");
+  const [stage,      setStage]      = useState("lead");
+  const [tagsInput,  setTagsInput]  = useState("");
+  const [notes,      setNotes]      = useState("");
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState("");
+
+  async function save() {
+    setError("");
+    if (!name.trim() && !email.trim() && !whatsapp.trim()) {
+      setError("Enter at least a name, email, or WhatsApp number.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/crm/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name:    name.trim() || null,
+          email:           email.trim() || null,
+          whatsapp_number: whatsapp.trim() || null,
+          company:         company.trim() || null,
+          lifecycle_stage: stage,
+          tags:            tagsInput.split(",").map(t => t.trim()).filter(Boolean),
+          notes:           notes.trim() || null,
+        }),
+      });
+      const d = await res.json() as { contact?: CrmContact; error?: string; merged?: boolean };
+      if (!res.ok) { setError(d.error ?? "Could not save the contact."); return; }
+      onCreated();
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const label = "block text-[10px] text-white/40 uppercase tracking-widest mb-1 font-semibold";
+  const inp   = "w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/25 focus:outline-none focus:border-orange-500 transition-colors";
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm p-4 sm:pt-16 overflow-y-auto">
+      <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-[#141414] border border-white/10 rounded-2xl p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-white">Add contact</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <p className="text-[11px] text-white/40 mb-5">
+          Manually create a CRM contact. Duplicate email or WhatsApp number will merge into the existing row instead of creating a copy.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <p className={label}>Full name</p>
+            <input className={inp} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Adaora Okonkwo" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className={label}>Email</p>
+              <input className={inp} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+            </div>
+            <div>
+              <p className={label}>WhatsApp</p>
+              <input className={inp} value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="+234 801…" />
+            </div>
+          </div>
+          <div>
+            <p className={label}>Company (optional)</p>
+            <input className={inp} value={company} onChange={e => setCompany(e.target.value)} placeholder="Company or organisation" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className={label}>Lifecycle stage</p>
+              <select className={inp} value={stage} onChange={e => setStage(e.target.value)}>
+                <option value="lead">Lead</option>
+                <option value="prospect">Prospect</option>
+                <option value="customer">Customer</option>
+                <option value="churned">Churned</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div>
+              <p className={label}>Tags (comma-separated)</p>
+              <input className={inp} value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="7-day-challenge, vip" />
+            </div>
+          </div>
+          <div>
+            <p className={label}>Notes (optional)</p>
+            <textarea className={`${inp} resize-none`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Internal notes about this contact…" />
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="text-xs font-semibold text-white/60 hover:text-white px-4 py-2 rounded-lg">Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="text-xs font-bold bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors">
+            {saving ? "Saving…" : "Add contact"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Bulk action bar ───────────────────────────────────────────────────────────
 
 function BulkActionBar({ selected, total, onResolveAll, onClearSelection }: {
@@ -802,6 +932,7 @@ function CrmInboxContent() {
   const [error,          setError]          = useState("");
   const [selected,       setSelected]       = useState<Set<string>>(new Set());
   const [newConvoOpen,   setNewConvoOpen]   = useState(false);
+  const [newContactOpen, setNewContactOpen] = useState(false);
   const [templateMode,     setTemplateMode]     = useState(false);
   const [waTemplates,      setWaTemplates]      = useState<Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }>>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -1043,6 +1174,12 @@ function CrmInboxContent() {
           }}
         />
       )}
+      {newContactOpen && (
+        <AddContactModal
+          onClose={() => setNewContactOpen(false)}
+          onCreated={() => { setNewContactOpen(false); void loadConvos(); }}
+        />
+      )}
 
       {/* ── Left: conversation list ─────────────────────────────────────── */}
       <div className="w-[300px] flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-slate-200 dark:border-white/10 flex flex-col relative">
@@ -1051,9 +1188,13 @@ function CrmInboxContent() {
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-base font-bold text-slate-800 dark:text-white">Inbox</h1>
             <div className="flex items-center gap-2">
+              <button onClick={() => setNewContactOpen(true)}
+                className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white/80 px-2.5 py-1 rounded-lg transition-colors">
+                + Contact
+              </button>
               <button onClick={() => setNewConvoOpen(true)}
                 className="text-[10px] font-bold bg-orange-500 hover:bg-orange-400 text-white px-2.5 py-1 rounded-lg transition-colors">
-                + New
+                + Chat
               </button>
               <a href="/admin/crm-settings" className="text-[10px] text-white/30 hover:text-white/60 transition-colors">⚙</a>
             </div>
