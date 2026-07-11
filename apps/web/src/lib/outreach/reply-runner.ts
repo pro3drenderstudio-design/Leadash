@@ -350,6 +350,17 @@ async function ingestMessages(
 
     if (send) {
       await markEnrollmentReplied(send.enrollment_id, send.id);
+
+      // Mobile push — fire and forget, never blocks ingestion
+      import("@/lib/queue").then(({ enqueuePush }) => enqueuePush({
+        type:          "reply",
+        workspace_id:  workspaceId,
+        enrollment_id: send!.enrollment_id,
+        ai_category:   aiCategory,
+        title:         msg.fromName || msg.fromEmail || "New reply",
+        body:          (msg.bodyText ?? msg.subject ?? "").slice(0, 140),
+      })).catch(() => {});
+
       if (aiConfidence >= 0.7 && aiCategory !== "neutral") {
         const { data: enr } = await db.from("outreach_enrollments").select("crm_status").eq("id", send.enrollment_id).single();
         if (enr?.crm_status === "neutral") {

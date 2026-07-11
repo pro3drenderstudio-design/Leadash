@@ -54,6 +54,37 @@ export async function enqueueEnrichBulk(jobId: string, workspaceId: string): Pro
   });
 }
 
+export interface PushJob {
+  type:           "reply" | "milestone" | "health";
+  workspace_id:   string;
+  title:          string;
+  body?:          string;
+  enrollment_id?: string;
+  campaign_id?:   string;
+  inbox_id?:      string;
+  ai_category?:   string | null;
+}
+
+/**
+ * Enqueue a mobile push notification. Fire-and-forget — never throws, never
+ * blocks the caller (reply ingestion / send scheduling must not fail because
+ * push is down). The worker fans out to registered devices per user prefs.
+ */
+export async function enqueuePush(payload: PushJob): Promise<void> {
+  try {
+    const queue = makeQueue("leadash:push");
+    if (!queue) return;
+    await queue.add("push", payload, {
+      attempts: 2,
+      backoff:  { type: "fixed", delay: 5_000 },
+      removeOnComplete: 1000,
+      removeOnFail:     1000,
+    });
+  } catch (e) {
+    console.error("[enqueuePush] failed:", e);
+  }
+}
+
 export async function enqueueProvision(domainRecordId: string, workspaceId: string): Promise<void> {
   const queue = makeQueue("leadash:provision");
   if (!queue) throw new Error("Redis not configured — cannot enqueue provision job");

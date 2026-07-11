@@ -162,4 +162,55 @@ export async function advanceEnrollment(
     next_send_at: nextSendAt?.toISOString() ?? null,
     completed_at: completed ? new Date().toISOString() : null,
   }).eq("id", enrollmentId);
+
+  if (completed) {
+    await maybeCompleteCampaign(enrollmentId).catch(e =>
+      console.error("[scheduler] campaign-completion check failed:", e));
+  }
+}
+
+/**
+ * When the last live enrollment of a campaign finishes, flip the campaign to
+ * 'completed' and push a milestone notification. The status-guarded update
+ * makes the flip idempotent under concurrent enrollment completions — only
+ * the update that actually changes the row fires the push.
+ */
+async function maybeCompleteCampaign(enrollmentId: string): Promise<void> {
+  const supabase = adminClient();
+
+  const { data: enr } = await supabase
+    .from("outreach_enrollments")
+    .select("campaign_id, workspace_id")
+    .eq("id", enrollmentId)
+    .single();
+  if (!enr) return;
+
+  const { count: liveCount } = await supabase
+    .from("outreach_enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", enr.campaign_id)
+    .in("status", ["active", "paused"]);
+  if ((liveCount ?? 0) > 0) return;
+
+  const { data: flipped } = await supabase
+    .from("outreach_campaigns")
+    .update({ status: "completed" })
+    .eq("id", enr.campaign_id)
+    .eq("status", "active")
+    .select("id, name")
+    .maybeSingle();
+  if (!flipped) return;
+
+  const { count: totalEnrolled } = await supabase
+    .from("outreach_enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", enr.campaign_id);
+
+  import("@/lib/queue").then(({ enqueuePush }) => enqueuePush({
+    type:         "milestone",
+    workspace_id: enr.workspace_id,
+    campaign_id:  enr.campaign_id,
+    title:        "Sequence finished",
+    body:         `"${flipped.name}" finished sending to ${totalEnrolled ?? 0} enrolled leads.`,
+  })).catch(() => {});
 }

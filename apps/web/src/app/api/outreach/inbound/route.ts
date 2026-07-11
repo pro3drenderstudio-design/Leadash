@@ -383,6 +383,18 @@ async function handleInbound(req: NextRequest) {
     return NextResponse.json({ error: "Failed to store reply" }, { status: 500 });
   }
 
+  // Mobile push — matched, non-warmup, non-filtered replies only
+  if (enrollmentId && !isFiltered && !isWarmup) {
+    import("@/lib/queue").then(({ enqueuePush }) => enqueuePush({
+      type:          "reply",
+      workspace_id:  workspaceId,
+      enrollment_id: enrollmentId,
+      ai_category:   aiCategory,
+      title:         fromName || from || "New reply",
+      body:          (text || subject || "").slice(0, 140),
+    })).catch(() => {});
+  }
+
   // ── Update enrollment + send if matched ──────────────────────────────────────
   if (enrollmentId) {
     // Always record send replied_at (factual event regardless of stop setting)

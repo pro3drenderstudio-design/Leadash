@@ -147,6 +147,24 @@ export async function runInboxDnsHealth(): Promise<void> {
           await sendInboxDnsAlertEmail({ to: toEmail, domain: row.domain, failures, warnings })
             .catch(e => console.error(`[dns-health] alert email failed for ${row.domain}:`, e));
         }
+
+        // Mobile push — deep-links to the first affected inbox
+        const { data: firstInbox } = await db
+          .from("outreach_inboxes")
+          .select("id")
+          .eq("workspace_id", row.workspace_id)
+          .ilike("email_address", `%@${row.domain}`)
+          .limit(1)
+          .maybeSingle();
+        const { enqueuePush } = await import("../../../web/src/lib/queue");
+        await enqueuePush({
+          type:         "health",
+          workspace_id: row.workspace_id,
+          inbox_id:     firstInbox?.id,
+          title:        "Inbox needs attention",
+          body:         `${row.domain} — ${failures[0] ?? "DNS check failing"}`.slice(0, 140),
+        });
+
         console.log(`[dns-health] ALERT ${row.domain}: ${failures.join("; ")}`);
       }
 
@@ -190,6 +208,24 @@ export async function runInboxDnsHealth(): Promise<void> {
         await sendInboxDnsRecoveryEmail({ to: toEmail, domain: row.domain })
           .catch(e => console.error(`[dns-health] recovery email failed for ${row.domain}:`, e));
       }
+
+      // Mobile push — good news is worth a banner too
+      const { data: recoveredInbox } = await db
+        .from("outreach_inboxes")
+        .select("id")
+        .eq("workspace_id", row.workspace_id)
+        .ilike("email_address", `%@${row.domain}`)
+        .limit(1)
+        .maybeSingle();
+      const { enqueuePush } = await import("../../../web/src/lib/queue");
+      await enqueuePush({
+        type:         "health",
+        workspace_id: row.workspace_id,
+        inbox_id:     recoveredInbox?.id,
+        title:        "Inbox recovered",
+        body:         `${row.domain} — DNS records are passing again. Sending resumed.`,
+      });
+
       console.log(`[dns-health] RECOVERED ${row.domain}`);
     }
   }
