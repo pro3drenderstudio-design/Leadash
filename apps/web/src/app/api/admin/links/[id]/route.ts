@@ -10,25 +10,33 @@ async function requireAdmin() {
   return admin ? { db } : null;
 }
 
-// GET /api/admin/links/[id] — link detail with click analytics
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// GET /api/admin/links/[id]?from=YYYY-MM-DD&to=YYYY-MM-DD — link detail with click analytics
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { db } = auth;
   const { id } = await params;
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const sevenDaysAgo  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
-  const today         = new Date(new Date().setUTCHours(0, 0, 0, 0)).toISOString();
+  // Date range — default to last 30 days
+  const url = new URL(req.url);
+  const fromParam = url.searchParams.get("from");
+  const toParam   = url.searchParams.get("to");
+  const windowFrom = fromParam
+    ? new Date(`${fromParam}T00:00:00.000Z`).toISOString()
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const windowTo = toParam
+    ? new Date(`${toParam}T23:59:59.999Z`).toISOString()
+    : new Date().toISOString();
 
   const [{ data: link }, { data: clicks }] = await Promise.all([
     db.from("tracked_links").select("*").eq("id", id).single(),
     db.from("tracked_link_clicks")
       .select("clicked_at, device_type, country, referrer, visitor_id")
       .eq("link_id", id)
-      .gte("clicked_at", thirtyDaysAgo)
-      .order("clicked_at", { ascending: false })
-      .limit(500),
+      .gte("clicked_at", windowFrom)
+      .lte("clicked_at", windowTo)
+      .order("clicked_at", { ascending: true })
+      .limit(5000),
   ]);
 
   if (!link) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -36,11 +44,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   type ClickRow = { clicked_at: string; device_type: string | null; country: string | null; referrer: string | null; visitor_id: string | null };
   const typedClicks = (clicks ?? []) as ClickRow[];
 
-  const clicksToday  = typedClicks.filter(c => c.clicked_at >= today).length;
-  const clicks7d     = typedClicks.filter(c => c.clicked_at >= sevenDaysAgo).length;
-  const clicks30d    = typedClicks.length;
+  const total   = typedClicks.length;
+  const unique  = new Set(typedClicks.map(c => c.visitor_id).filter(Boolean)).size;
 
-  // Daily breakdown for sparkline (last 30 days)
+  // Daily breakdown for the selected window
   const dailyMap: Record<string, number> = {};
   for (const c of typedClicks) {
     const day = c.clicked_at.slice(0, 10);
@@ -58,14 +65,17 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   // Top referrers
   const referrers: Record<string, number> = {};
   for (const c of typedClicks) {
-    const r = c.referrer ? new URL(c.referrer).hostname : "direct";
+    let r = "direct";
+    if (c.referrer) {
+      try { r = new URL(c.referrer).hostname; } catch { r = c.referrer.slice(0, 40); }
+    }
     referrers[r] = (referrers[r] ?? 0) + 1;
   }
   const top_referrers = Object.entries(referrers).sort(([,a],[,b]) => b - a).slice(0, 10).map(([source, count]) => ({ source, count }));
 
   return NextResponse.json({
     link,
-    analytics: { clicks_today: clicksToday, clicks_7d: clicks7d, clicks_30d: clicks30d, daily, devices, top_referrers },
+    analytics: { total, unique, daily, devices, top_referrers, window_from: windowFrom, window_to: windowTo },
   });
 }
 

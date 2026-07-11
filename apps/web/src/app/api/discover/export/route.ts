@@ -8,6 +8,8 @@ import type { DiscoverExportRequest } from "@/types/discover";
 
 import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
@@ -80,7 +82,6 @@ export async function POST(req: NextRequest) {
     company_industry: string | null; company_size: string | null;
   };
 
-  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
   const people = await leadsDb.unsafe<PersonRow[]>(`
     SELECT
       p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
@@ -90,8 +91,8 @@ export async function POST(req: NextRequest) {
       c.industry AS company_industry, c.size_range AS company_size
     FROM discover_people p
     LEFT JOIN discover_companies c ON c.id = p.company_id
-    WHERE p.id IN (${placeholders})
-  `, ids as never[]);
+    WHERE p.id = ANY($1::uuid[])
+  `, [ids] as never[]);
 
   // Merge reveal data (use revealed email/phone if available)
   const mergedPeople = people.map(p => {

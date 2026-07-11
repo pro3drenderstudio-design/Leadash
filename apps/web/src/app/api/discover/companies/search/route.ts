@@ -3,6 +3,8 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import leadsDb from "@/lib/postgres/leads-db";
 import type { DiscoverCompanySearchResponse, DiscoverCompanyResult } from "@/types/discover";
 
+export const maxDuration = 60;
+
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT     = 100;
 const IDS_ONLY_MAX  = 50_000;
@@ -168,16 +170,25 @@ export async function GET(req: NextRequest) {
 
     const needsPeopleCount = sortRaw === "people_count";
 
+    const HARD_CAP = 50_000;
+    const countPromise = skipCount
+      ? Promise.resolve(null)
+      : leadsDb.unsafe(`
+          SELECT count(*) AS total
+          FROM (
+            SELECT 1 FROM discover_companies c ${where}
+            LIMIT 100001
+          ) cnt
+        `, params as never[])
+          .catch(() => null);
+
+    const countWithTimeout = () => Promise.race([
+      countPromise,
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 12_000)),
+    ]);
+
     const [countRows, rows] = await Promise.all([
-      skipCount
-        ? Promise.resolve(null)
-        : leadsDb.unsafe(`
-            SELECT count(*) AS total
-            FROM (
-              SELECT 1 FROM discover_companies c ${where}
-              LIMIT 100001
-            ) cnt
-          `, params as never[]),
+      skipCount ? Promise.resolve(null) : countWithTimeout(),
       needsPeopleCount
         ? leadsDb.unsafe(`
             SELECT
@@ -211,7 +222,7 @@ export async function GET(req: NextRequest) {
           `, [...params, limit, offset] as never[]),
     ]);
 
-    const total = skipCount ? -1 : parseInt((countRows![0] as unknown as { total: string }).total, 10);
+    const total = skipCount ? -1 : (countRows ? parseInt((countRows[0] as unknown as { total: string }).total, 10) : HARD_CAP);
 
     const results: DiscoverCompanyResult[] = (rows as Record<string, unknown>[]).map(r => ({
       id:            r.id            as string,

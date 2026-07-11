@@ -31,3 +31,5 @@ scripts/migrate-bubble/exports/*.csv
 
 .env.prod
 .env.staging
+
+.env*.local

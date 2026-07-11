@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
 
+  // Bot detection: bots submit single-word random-char names (no spaces, >14 chars, embedded caps)
+  if (full_name) {
+    const n = full_name.trim();
+    if (!n.includes(" ") && n.length > 14 && /[A-Z]/.test(n.slice(1))) {
+      return NextResponse.json({ error: "Please enter your full name (first and last)." }, { status: 400 });
+    }
+  }
+
   const admin = createAdminClient();
 
   // Check if signup is enabled (admin settings)

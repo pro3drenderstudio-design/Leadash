@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import leadsDb from "@/lib/postgres/leads-db";
 
+export const maxDuration = 60;
+
 const MAX_PER_REQUEST = 5_000;
 
 export async function POST(req: NextRequest) {
@@ -23,7 +25,6 @@ export async function POST(req: NextRequest) {
     keywords: string | null;
   };
 
-  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
   const rows = await leadsDb.unsafe<CompanyRow[]>(`
     SELECT
       c.name, c.domain, c.industry, c.size_range, c.employee_count,
@@ -31,9 +32,9 @@ export async function POST(req: NextRequest) {
       c.website_url, c.linkedin_url,
       c.keywords
     FROM discover_companies c
-    WHERE c.id IN (${placeholders})
+    WHERE c.id = ANY($1::uuid[])
     ORDER BY c.name ASC
-  `, ids as never[]);
+  `, [ids] as never[]);
 
   const csvRows = rows.map(r =>
     [
