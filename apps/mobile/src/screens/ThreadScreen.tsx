@@ -127,16 +127,16 @@ export default function ThreadScreen({ route }: Props) {
     >
       {/* Status chips row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 7 }}>
+        style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" }}>
         {Object.entries(CRM_STATUS).map(([key, t]) => {
           const active = status === key;
           return (
             <Pressable key={key} onPress={() => setStatusMut.mutate(key)} style={{
-              paddingHorizontal: 11, paddingVertical: 5, borderRadius: R.pill,
+              paddingHorizontal: 14, paddingVertical: 8, borderRadius: R.pill,
               backgroundColor: active ? t.soft : "transparent",
               borderWidth: 1, borderColor: active ? t.color : C.border,
             }}>
-              <Text style={{ fontSize: 11.5, lineHeight: 15, fontFamily: FONT.semibold, color: active ? t.color : C.textQuiet }}>{t.label}</Text>
+              <Text style={{ fontSize: 12, lineHeight: 16, fontFamily: FONT.semibold, color: active ? t.color : C.textQuiet }}>{t.label}</Text>
             </Pressable>
           );
         })}

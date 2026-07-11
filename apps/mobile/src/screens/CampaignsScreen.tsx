@@ -35,16 +35,16 @@ export default function CampaignsScreen() {
 
       {/* Filter chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 7 }}>
+        style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 2, paddingBottom: 12, gap: 8, alignItems: "center" }}>
         {FILTERS.map(f => {
           const active = filter === f;
           return (
             <Pressable key={f} onPress={() => setFilter(f)} style={{
-              paddingHorizontal: 13, paddingVertical: 6, borderRadius: R.pill,
+              paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill,
               borderWidth: 1, borderColor: active ? C.accent : C.border,
               backgroundColor: active ? C.accentSoft : "transparent",
             }}>
-              <Text style={{ fontSize: 12.5, lineHeight: 17, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted, textTransform: "capitalize" }}>{f}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted, textTransform: "capitalize" }}>{f}</Text>
             </Pressable>
           );
         })}
