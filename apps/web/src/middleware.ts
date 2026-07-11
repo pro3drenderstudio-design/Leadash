@@ -16,6 +16,8 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/join",
   "/free-training",
+  "/challenge",
+  "/api/challenge",
   "/api/billing/webhook",
   "/api/billing/paystack",
   "/api/track",
