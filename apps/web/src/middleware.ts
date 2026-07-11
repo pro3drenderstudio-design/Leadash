@@ -146,6 +146,13 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // API requests carrying a Bearer token (mobile app) skip the cookie-based
+  // login redirect — every API route does its own auth via requireWorkspace/
+  // requireUser, which validates the token against the Supabase auth server.
+  if (pathname.startsWith("/api/") && request.headers.get("authorization")?.startsWith("Bearer ")) {
+    return supabaseResponse;
+  }
+
   // Redirect unauthenticated users away from app routes
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();

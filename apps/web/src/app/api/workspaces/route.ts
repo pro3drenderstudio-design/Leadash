@@ -1,5 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/workspace";
+
+/**
+ * GET /api/workspaces — list the caller's workspace memberships.
+ * Used by the mobile app's workspace picker. Accepts cookie or Bearer auth.
+ */
+export async function GET(req: NextRequest) {
+  const ctx = await requireUser(req);
+  if (!ctx.ok) return ctx.res;
+  const { user, db } = ctx;
+
+  const { data, error } = await db
+    .from("workspace_members")
+    .select("role, workspaces ( id, name, slug )")
+    .eq("user_id", user.id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  type MemberRow = { role: string; workspaces: { id: string; name: string; slug: string } | null };
+  const workspaces = ((data ?? []) as unknown as MemberRow[])
+    .map((m) => m.workspaces ? { id: m.workspaces.id, name: m.workspaces.name, slug: m.workspaces.slug, role: m.role } : null)
+    .filter(Boolean);
+
+  return NextResponse.json({ workspaces });
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

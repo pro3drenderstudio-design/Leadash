@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:'Geist','Segoe UI',system-ui,-apple-system,sans-serif;background:#07070A;color:#F5F5F7;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:0;height:0}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  @keyframes slideDown{from{opacity:0;transform:translate(-50%,-16px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</helmet>
+<div style="display:none">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="1,1"></x-import>
+  <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="1,1"></x-import>
+</div>
+<div style="display:flex;flex-direction:column;height:100vh;width:100%;background:#07070A;color:#F5F5F7;overflow:hidden;font-family:'Geist','Segoe UI',system-ui,-apple-system,sans-serif">
+  <div style="flex:1;min-height:0;overflow:auto;position:relative">
+    {{ stage }}
+  </div>
+  {{ switcher }}
+  {{ toastEl }}
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#F97316&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startPlatform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ios&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;android&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;home&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;campaigns&quot;,&quot;campaignDetail&quot;,&quot;inbox&quot;,&quot;thread&quot;,&quot;inboxes&quot;,&quot;inboxDetail&quot;,&quot;notifications&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  C = {
+    bg:'#07070A', elev:'#0E0E13', sunken:'#050507',
+    surf:'rgba(255,255,255,0.04)', surfStrong:'rgba(255,255,255,0.07)',
+    bd:'rgba(255,255,255,0.08)', bdStrong:'rgba(255,255,255,0.13)',
+    tx:'#F5F5F7', mut:'#9CA0AE', quiet:'#5B5B68', faint:'#2A2A33',
+    ac:'#F97316', acSoft:'rgba(249,115,22,0.14)', acLine:'rgba(249,115,22,0.32)',
+    ok:'#34D399', okSoft:'rgba(52,211,153,0.12)', warn:'#FBBF24', warnSoft:'rgba(251,191,36,0.12)',
+    danger:'#F87171', dangerSoft:'rgba(248,113,113,0.12)', info:'#60A5FA', infoSoft:'rgba(96,165,250,0.12)', violet:'#A78BFA',
+  };
+  mono = "'Geist Mono', ui-monospace, monospace";
+
+  SCREENS = [['home','Home'],['campaigns','Campaigns'],['campaignDetail','Campaign detail'],['inbox','CRM inbox'],['thread','Thread'],['inboxes','Inboxes health'],['inboxDetail','Inbox detail'],['notifications','Notifications']];
+  TABS = [['home','Home'],['campaigns','Campaigns'],['inbox','Inbox'],['inboxes','Inboxes']];
+
+  I = {
+    home:['M4 11l8-7 8 7','M6 10v9h12v-9'], campaign:['M4 6h16v13H4z','M4 10h16','M9 14h6'], inbox:['M3 8l9 6 9-6','M3 8v10h18V8'],
+    server:['M4 5h16v6H4z','M4 13h16v6H4z','M7 8h.01','M7 16h.01'], bell:['M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z','M10 19a2 2 0 0 0 4 0'],
+    chevR:['M9 6l6 6-6 6'], chevL:['M15 18l-6-6 6-6'], search:['M11 11a6 6 0 1 0-12 0 6 6 0 0 0 12 0z','M20 20l-5-5'],
+    star:['M12 3l2.7 5.5 6 .9-4.4 4.2 1 6-5.3-2.8-5.3 2.8 1-6-4.4-4.2 6-.9z'], starFill:['M12 3l2.7 5.5 6 .9-4.4 4.2 1 6-5.3-2.8-5.3 2.8 1-6-4.4-4.2 6-.9z'],
+    check:['M5 12l4 4 10-10'], warn:['M12 9v4','M12 17h.01','M10.3 3.9L2.5 17a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'],
+    send:['M22 2L11 13','M22 2l-7 20-4-9-9-4z'], attach:['M21.4 11.1l-8.5 8.5a5 5 0 0 1-7.1-7.1l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-2.8-2.8l8-8'],
+    ai:['M12 2l1.8 4.6L18 8l-4.2 1.4L12 14l-1.8-4.6L6 8l4.2-1.4z','M19 15l.9 2.3L22 18l-2.1.7L19 21l-.9-2.3L16 18l2.1-.7z'],
+    trend:['M4 19V9','M10 19V5','M16 19v-7','M22 19H2'], mail:['M3 6h18v12H3z','M3 6l9 7 9-7'], flame:['M12 2c1.5 3 5 5 5 10a5 5 0 0 1-10 0c0-1.7.8-2.8 1.6-3.8.3 2 1.8 2.8 1.8 2.8-.6-2.6.5-5 1.6-9z'],
+    plus:['M12 5v14','M5 12h14'], pause:['M8 5h3v14H8z','M13 5h3v14h-3z'], play:['M7 4l13 8-13 8z'], dots:['M5 12h.01','M12 12h.01','M19 12h.01'],
+    filter:['M4 6h16','M7 12h10','M10 18h4'], shield:['M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z','M9 12l2 2 4-4'],
+    clock:['M12 8v4l3 2','M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z'], gear:['M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z','M19 12a7 7 0 0 0-.15-1.5l2-1.5-2-3.5-2.3 1a7 7 0 0 0-2.6-1.5L13.5 2h-3l-.45 2.5a7 7 0 0 0-2.6 1.5l-2.3-1-2 3.5 2 1.5A7 7 0 0 0 3 12a7 7 0 0 0 .15 1.5l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 2.6 1.5L10.5 22h3l.45-2.5a7 7 0 0 0 2.6-1.5l2.3 1 2-3.5-2-1.5A7 7 0 0 0 19 12z'],
+  };
+
+  CAMPAIGNS = [
+    { id:'c1', name:'SaaS Founders — US Outreach', status:'active', enrolled:842, replied:96, opened:412, bounced:14, days:'Mon–Fri', window:'8am–12pm', steps:[['Opener — the 1-line hook',0,412,58],['Value email — case study',3,298,41],['Proof email — metric drop',6,201,29],['Breakup email',10,140,19]] },
+    { id:'c2', name:'E-commerce Brands — UK', status:'active', enrolled:511, replied:38, opened:203, bounced:22, days:'Tue,Thu', window:'9am–1pm', steps:[['Opener',0,203,40],['Follow-up 1',4,120,23],['Follow-up 2',8,71,14]] },
+    { id:'c3', name:'Agencies — Cold List Q3', status:'paused', enrolled:1204, replied:61, opened:530, bounced:48, days:'Mon–Fri', window:'7am–11am', steps:[['Opener',0,530,44],['Value email',3,301,25],['Breakup',9,140,12]] },
+    { id:'c4', name:'Fintech Decision Makers', status:'draft', enrolled:0, replied:0, opened:0, bounced:0, days:'Mon–Fri', window:'9am–5pm', steps:[['Opener',0,0,0]] },
+    { id:'c5', name:'Local Realtors — Nigeria', status:'completed', enrolled:340, replied:52, opened:210, bounced:9, days:'Mon–Fri', window:'8am–2pm', steps:[['Opener',0,210,62],['Follow-up',3,120,35],['Breakup',7,60,18]] },
+  ];
+  THREADS = [
+    { id:'t1', name:'Tunde Bakare', company:'Fintra Ltd', campaign:'SaaS Founders — US Outreach', status:'interested', unread:true, starred:true, snippet:'This looks interesting — can we hop on a call this week?', time:'12m', ai:true },
+    { id:'t2', name:'Amara Chen', company:'BrightPath Co', campaign:'E-commerce Brands — UK', status:'meeting_booked', unread:true, starred:false, snippet:'Great, Thursday 3pm works for me. Sending an invite.', time:'41m', ai:false },
+    { id:'t3', name:'James Okoro', company:'Vantage Group', campaign:'Agencies — Cold List Q3', status:'neutral', unread:false, starred:false, snippet:'Thanks for reaching out, let me check with my team.', time:'2h', ai:false },
+    { id:'t4', name:'Sarah Whitfield', company:'Northline Retail', campaign:'E-commerce Brands — UK', status:'follow_up', unread:false, starred:true, snippet:'Circling back — any update on pricing?', time:'5h', ai:true },
+    { id:'t5', name:'David Wu', company:'Orbit Systems', campaign:'SaaS Founders — US Outreach', status:'not_interested', unread:false, starred:false, snippet:'Not a fit for us right now, please remove me.', time:'1d', ai:false },
+    { id:'t6', name:'Ijeoma Nwosu', company:'Clearline Media', campaign:'Local Realtors — Nigeria', status:'won', unread:false, starred:true, snippet:'We just signed — excited to get started!', time:'2d', ai:false },
+  ];
+  MESSAGES = [
+    { from:true, name:'Tunde Bakare', text:'Hey, thanks for reaching out. What exactly does Leadash do?', time:'Yesterday, 4:12pm' },
+    { from:false, text:'Hi Tunde — great question. We help teams like Fintra send personalized cold email at scale without hurting deliverability. Worth a quick 15-min call?', time:'Yesterday, 4:20pm' },
+    { from:true, name:'Tunde Bakare', text:'This looks interesting — can we hop on a call this week?', time:'12m ago' },
+  ];
+  INBOXES = [
+    { id:'i1', email:'alex@getleadash.com', domain:'getleadash.com', health:96, warmup:100, dailyLimit:42, sentToday:31, status:'healthy', spf:true, dkim:true, dmarc:true, mx:true },
+    { id:'i2', email:'sam@leadash-mail.com', domain:'leadash-mail.com', health:88, warmup:100, dailyLimit:40, sentToday:38, status:'healthy', spf:true, dkim:true, dmarc:true, mx:true },
+    { id:'i3', email:'priya@getleadash.io', domain:'getleadash.io', health:54, warmup:62, dailyLimit:25, sentToday:9, status:'warning', spf:true, dkim:false, dmarc:true, mx:true },
+    { id:'i4', email:'noah@leadash-sales.com', domain:'leadash-sales.com', health:22, warmup:8, dailyLimit:10, sentToday:0, status:'paused', spf:false, dkim:false, dmarc:false, mx:true },
+  ];
+  NOTIFS = [
+    { group:'Today', kind:'reply', color:null, title:'Tunde Bakare replied', body:'“This looks interesting — can we hop on a call this week?”', time:'12m', positive:true },
+    { group:'Today', kind:'reply', color:null, title:'Ijeoma Nwosu replied', body:'“We just signed — excited to get started!”', time:'2d→today', positive:true },
+    { group:'Today', kind:'health', color:'warn', title:'Inbox needs attention', body:'priya@getleadash.io — DKIM record missing', time:'3h' },
+    { group:'Earlier', kind:'milestone', color:'info', title:'Sequence finished', body:'“Local Realtors — Nigeria” completed with a 15% reply rate', time:'1d' },
+    { group:'Earlier', kind:'health', color:'danger', title:'Inbox paused', body:'noah@leadash-sales.com — sending paused, DNS failing', time:'2d' },
+    { group:'Earlier', kind:'milestone', color:'ok', title:'New milestone', body:'You crossed 5,000 emails sent this month', time:'3d' },
+  ];
+
+  state = { platform: this.props.startPlatform || 'ios', screen: this.props.startScreen || 'home', tab:'home', campaignFilter:'all', crmFilter:'all', replyText:'', showPush:false, frameworkReady:false, activeCampaign:'c1', activeThread:'t1', activeInbox:'i3' };
+  _pollId=null; _pushTimer=null; _toastClear=null;
+  componentDidMount(){
+    this._pollId = setInterval(()=>{ if(typeof window!=='undefined' && window.IOSDevice && window.AndroidDevice){ this.setState({frameworkReady:true}); clearInterval(this._pollId); } }, 120);
+    this._pushTimer = setTimeout(()=>{ this.setState({showPush:true}); setTimeout(()=>this.setState({showPush:false}), 3600); }, 1400);
+  }
+  componentWillUnmount(){ if(this._pollId) clearInterval(this._pollId); if(this._pushTimer) clearTimeout(this._pushTimer); }
+  ac(){ return this.props.accentColor || this.C.ac; }
+  toast(m){ this.setState({toast:m}); if(this._toastClear) clearTimeout(this._toastClear); this._toastClear=setTimeout(()=>this.setState({toast:null}),2000); }
+  go(screen,extra){ this.setState(Object.assign({screen}, extra||{})); }
+  ic(paths,size=16,sw=1.8){ return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'},(paths||[]).map((d,i)=>React.createElement('path',{key:i,d}))); }
+  icFill(paths,size=16,color){ return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:color||'currentColor'},(paths||[]).map((d,i)=>React.createElement('path',{key:i,d}))); }
+
+  chip(label,tone){ const C=this.C; const m={ ok:[C.ok,C.okSoft], warn:[C.warn,C.warnSoft], danger:[C.danger,C.dangerSoft], info:[C.info,C.infoSoft], violet:[C.violet,'rgba(167,139,250,0.14)'], plain:[C.mut,C.surf] }; const [c,b]=m[tone]||m.plain;
+    return React.createElement('span',{style:{display:'inline-flex',alignItems:'center',padding:'3px 8px',borderRadius:999,fontSize:10.5,fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em',color:c,background:b,whiteSpace:'nowrap'}}, label); }
+  STATUS_LABEL = { neutral:'Neutral', interested:'Interested', meeting_booked:'Meeting booked', won:'Won', not_interested:'Not interested', ooo:'OOO', follow_up:'Follow up' };
+  STATUS_TONE = { neutral:'plain', interested:'ok', meeting_booked:'info', won:'warn', not_interested:'danger', ooo:'plain', follow_up:'violet' };
+  campStatusTone(s){ return { active:'ok', paused:'warn', draft:'plain', completed:'info' }[s]; }
+  card(children,style){ const C=this.C; return React.createElement('div',{style:{background:C.elev,border:'1px solid '+C.bd,borderRadius:14,...style}}, children); }
+  avatar(name,color,size){ size=size||36; const init=name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); return React.createElement('div',{style:{width:size,height:size,borderRadius:999,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:Math.round(size*0.36),fontWeight:700,color:'#07070A',background:color||this.ac()}}, init); }
+  progressBar(pct,color,h2){ const C=this.C; return React.createElement('div',{style:{height:h2||6,background:C.surfStrong,borderRadius:999,overflow:'hidden'}}, React.createElement('div',{style:{height:'100%',width:Math.min(100,pct)+'%',background:color||this.ac(),borderRadius:999}})); }
+  ring(pct,size,stroke,color){ const h=React.createElement; size=size||48; stroke=stroke||5; const r=(size-stroke)/2, circ=2*Math.PI*r, off=circ*(1-Math.min(pct,1));
+    return h('svg',{width:size,height:size,style:{transform:'rotate(-90deg)',flexShrink:0}}, h('circle',{cx:size/2,cy:size/2,r,fill:'none',stroke:'rgba(255,255,255,0.08)',strokeWidth:stroke}), h('circle',{cx:size/2,cy:size/2,r,fill:'none',stroke:color||this.ac(),strokeWidth:stroke,strokeDasharray:circ,strokeDashoffset:off,strokeLinecap:'round'})); }
+
+  // ── header used atop every screen (custom, dark, brand) ──
+  screenHeader(title,{back,onBack,right}={}){ const C=this.C,h=React.createElement;
+    return h('div',{style:{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'2px 16px 12px',minHeight:40}},
+      back? h('button',{onClick:onBack,style:{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:C.surfStrong,border:'none',color:C.tx,flexShrink:0}}, this.ic(this.I.chevL,18,2.2)) : null,
+      h('h1',{style:{flex:1,fontSize:22,fontWeight:800,letterSpacing:'-0.02em',color:C.tx,margin:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},title),
+      right||null);
+  }
+  bellButton(){ const C=this.C,h=React.createElement; const unread=this.NOTIFS.filter(n=>n.group==='Today').length;
+    return h('button',{onClick:()=>this.go('notifications'),style:{position:'relative',display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:C.surfStrong,border:'none',color:C.tx,flexShrink:0}},
+      this.ic(this.I.bell,17,1.9),
+      unread>0? h('span',{style:{position:'absolute',top:4,right:5,width:8,height:8,borderRadius:999,background:this.ac(),border:'1.5px solid '+C.elev}}):null);
+  }
+
+  // ── bottom tab bar ──
+  tabBar(){ const C=this.C,h=React.createElement,s=this.state;
+    return h('div',{style:{flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-around',padding:'8px 6px 4px',borderTop:'1px solid '+C.bd,background:'rgba(14,14,19,0.92)',backdropFilter:'blur(10px)'}},
+      this.TABS.map(([k,label])=>{ const a=(s.tab===k);
+        const icnMap={home:this.I.home,campaigns:this.I.campaign,inbox:this.I.inbox,inboxes:this.I.server};
+        const badge = k==='inbox' ? this.THREADS.filter(t=>t.unread).length : 0;
+        return h('button',{key:k,onClick:()=>this.setState({tab:k,screen:k}),style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,background:'transparent',border:'none',color:a?this.ac():C.quiet,padding:'4px 10px',position:'relative',flex:1}},
+          h('div',{style:{position:'relative'}}, this.ic(icnMap[k],21,a?2.1:1.8),
+            badge>0? h('span',{style:{position:'absolute',top:-4,right:-7,minWidth:14,height:14,borderRadius:999,background:this.ac(),color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px'}},badge):null),
+          h('span',{style:{fontSize:10.5,fontWeight:a?700:500}},label)); }));
+  }
+
+  // ── screen content router ──
+  screenBody(){ switch(this.state.screen){
+    case 'home': return this.scrHome();
+    case 'campaigns': return this.scrCampaigns();
+    case 'campaignDetail': return this.scrCampaignDetail();
+    case 'inbox': return this.scrInbox();
+    case 'thread': return this.scrThread();
+    case 'inboxes': return this.scrInboxes();
+    case 'inboxDetail': return this.scrInboxDetail();
+    case 'notifications': return this.scrNotifications();
+    default: return null; } }
+
+  // ═══ HOME ═══
+  scrHome(){ const C=this.C,h=React.createElement,s=this.state;
+    const activeCampaigns = this.CAMPAIGNS.filter(c=>c.status==='active').length;
+    const healthyInboxes = this.INBOXES.filter(i=>i.status==='healthy').length;
+    const sentThisMonth = 4820, replyRate = 9.4;
+    const attn = [ ...this.INBOXES.filter(i=>i.status!=='healthy').map(i=>({type:'inbox',id:i.id,label:i.email,detail:i.status==='paused'?'Paused — DNS failing':'DKIM record missing',tone:i.status==='paused'?'danger':'warn'})),
+      ...this.CAMPAIGNS.filter(c=>c.status==='paused').map(c=>({type:'campaign',id:c.id,label:c.name,detail:'Campaign paused',tone:'warn'})) ];
+    const recentReplies = this.THREADS.slice(0,3);
+    const spark=[3,5,4,7,6,9,8,11,9,13,12,15,14,17,16];
+    const maxS=Math.max(...spark);
+    return h('div',{style:{padding:'0 16px 18px',display:'flex',flexDirection:'column',gap:16}},
+      h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:4}},
+        h('div',null, h('div',{style:{fontSize:12.5,color:C.quiet}},'Good morning'), h('div',{style:{fontSize:22,fontWeight:800,color:C.tx}},'Ada')),
+        this.bellButton()),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}},
+        this.card([ h('div',{key:'v',style:{fontSize:22,fontWeight:800,color:C.tx}},activeCampaigns), h('div',{key:'l',style:{fontSize:11.5,color:C.mut,marginTop:2}},'active campaigns') ],{padding:'13px 14px'}),
+        this.card([ h('div',{key:'v',style:{fontSize:22,fontWeight:800,color:healthyInboxes===this.INBOXES.length?C.ok:C.warn}},healthyInboxes+'/'+this.INBOXES.length), h('div',{key:'l',style:{fontSize:11.5,color:C.mut,marginTop:2}},'inboxes healthy') ],{padding:'13px 14px'}),
+        this.card([ h('div',{key:'v',style:{fontSize:22,fontWeight:800,color:C.tx}},sentThisMonth.toLocaleString()), h('div',{key:'l',style:{fontSize:11.5,color:C.mut,marginTop:2}},'sent this month') ],{padding:'13px 14px'}),
+        this.card([ h('div',{key:'v',style:{fontSize:22,fontWeight:800,color:this.ac()}},replyRate+'%'), h('div',{key:'l',style:{fontSize:11.5,color:C.mut,marginTop:2}},'reply rate') ],{padding:'13px 14px'})),
+      this.card([
+        h('div',{key:'h',style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}, h('span',{style:{fontSize:12.5,fontWeight:700,color:C.tx}},'Replies — 14 days'), h('span',{style:{fontSize:11,color:C.ok,fontWeight:700}},'+18%')),
+        h('div',{key:'c',style:{display:'flex',alignItems:'flex-end',gap:3,height:52}}, spark.map((v,i)=>h('div',{key:i,style:{flex:1,height:(v/maxS*48)+'px',borderRadius:'2px 2px 0 0',background:i===spark.length-1?this.ac():this.ac()+'40'}})))
+      ],{padding:'14px 15px'}),
+      attn.length? h('div',null,
+        h('div',{style:{fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:C.quiet,marginBottom:8}},'Needs attention'),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, attn.map((a,i)=>h('div',{key:i,onClick:()=>a.type==='inbox'?this.go('inboxDetail',{activeInbox:a.id}):this.go('campaignDetail',{activeCampaign:a.id}),style:{display:'flex',alignItems:'center',gap:11,background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'11px 13px'}},
+          h('span',{style:{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:this.C[a.tone],background:this.C[a.tone+'Soft']}},this.ic(this.I.warn,15,1.9)),
+          h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:13,fontWeight:600,color:C.tx,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},a.label), h('div',{style:{fontSize:11.5,color:C.mut}},a.detail)),
+          this.ic(this.I.chevR,15,2))))):null,
+      h('div',null,
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}, h('span',{style:{fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:C.quiet}},'Recent replies'), h('button',{onClick:()=>this.go('inbox'),style:{background:'transparent',border:'none',color:this.ac(),fontSize:12,fontWeight:700,fontFamily:'inherit'}},'See all')),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, recentReplies.map(t=>h('div',{key:t.id,onClick:()=>this.go('thread',{activeThread:t.id}),style:{display:'flex',alignItems:'center',gap:11,background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'11px 13px'}},
+          this.avatar(t.name,this.ac(),34),
+          h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{display:'flex',alignItems:'center',gap:7}}, h('span',{style:{fontSize:13,fontWeight:700,color:C.tx}},t.name), t.unread?h('span',{style:{width:6,height:6,borderRadius:999,background:this.ac(),flexShrink:0}}):null), h('div',{style:{fontSize:11.5,color:C.mut,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},t.snippet)),
+          h('span',{style:{fontSize:10.5,color:C.quiet,flexShrink:0}},t.time)))))
+    );
+  }
+
+  // ═══ CAMPAIGNS LIST ═══
+  scrCampaigns(){ const C=this.C,h=React.createElement,s=this.state;
+    const filters=['all','active','paused','draft','completed'];
+    const filtered = s.campaignFilter==='all'?this.CAMPAIGNS:this.CAMPAIGNS.filter(c=>c.status===s.campaignFilter);
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Campaigns',{right:h('button',{onClick:()=>this.toast('New campaign'),style:{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:this.ac(),border:'none',color:'#fff'}},this.ic(this.I.plus,17,2.2))}),
+      h('div',{style:{padding:'0 16px 10px',display:'flex',gap:7,overflowX:'auto'}}, filters.map(f=>{ const a=s.campaignFilter===f; return h('button',{key:f,onClick:()=>this.setState({campaignFilter:f}),style:{flexShrink:0,padding:'6px 13px',borderRadius:999,fontSize:12.5,fontWeight:600,fontFamily:'inherit',border:'1px solid '+(a?this.ac():C.bd),background:a?this.ac()+'1c':'transparent',color:a?this.ac():C.mut,textTransform:'capitalize'}},f); })),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 16px 16px',display:'flex',flexDirection:'column',gap:10}}, filtered.map(c=>{
+        const pct = c.enrolled>0? Math.round(c.replied/c.enrolled*100):0;
+        const progressRow = c.enrolled>0
+          ? h('div',null,
+              h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11.5,color:C.mut,marginBottom:5}}, h('span',null,c.enrolled+' enrolled'), h('span',{style:{color:C.tx,fontWeight:700}},pct+'% replied')),
+              this.progressBar(pct,this.ac()))
+          : h('div',{style:{fontSize:11.5,color:C.quiet,fontStyle:'italic'}},'Not started yet');
+        return h('div',{key:c.id,onClick:()=>this.go('campaignDetail',{activeCampaign:c.id}),style:{background:C.elev,border:'1px solid '+C.bd,borderRadius:14,padding:'14px 15px'}},
+          h('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10,marginBottom:9}}, h('span',{style:{fontSize:14.5,fontWeight:700,color:C.tx,lineHeight:1.3}},c.name), this.chip(c.status,this.campStatusTone(c.status))),
+          h('div',{style:{fontSize:11.5,color:C.quiet,marginBottom:10}},c.days+' · '+c.window),
+          progressRow);
+      }))
+    );
+  }
+
+  // ═══ CAMPAIGN DETAIL ═══
+  scrCampaignDetail(){ const C=this.C,h=React.createElement,s=this.state; const c=this.CAMPAIGNS.find(x=>x.id===s.activeCampaign)||this.CAMPAIGNS[0];
+    const openPct = c.enrolled? Math.round(c.opened/c.enrolled*100):0, replyPct = c.enrolled? Math.round(c.replied/c.enrolled*100):0, bouncePct = c.enrolled? Math.round(c.bounced/c.enrolled*100):0;
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Campaign',{back:true,onBack:()=>this.go('campaigns'),right:h('button',{onClick:()=>this.toast(c.status==='active'?'Campaign paused':'Campaign resumed'),style:{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:C.surfStrong,border:'none',color:C.tx}},this.ic(c.status==='active'?this.I.pause:this.I.play,15,2))}),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 16px 16px',display:'flex',flexDirection:'column',gap:16}},
+        h('div',null, h('div',{style:{fontSize:18,fontWeight:800,color:C.tx,marginBottom:8,lineHeight:1.3}},c.name), this.chip(c.status,this.campStatusTone(c.status))),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10}},
+          this.card([ h('div',{key:'v',style:{fontSize:19,fontWeight:800,color:C.tx}},c.enrolled), h('div',{key:'l',style:{fontSize:11,color:C.mut,marginTop:2}},'enrolled') ],{padding:'12px 14px'}),
+          this.card([ h('div',{key:'v',style:{fontSize:19,fontWeight:800,color:C.info}},openPct+'%'), h('div',{key:'l',style:{fontSize:11,color:C.mut,marginTop:2}},'opened') ],{padding:'12px 14px'}),
+          this.card([ h('div',{key:'v',style:{fontSize:19,fontWeight:800,color:this.ac()}},replyPct+'%'), h('div',{key:'l',style:{fontSize:11,color:C.mut,marginTop:2}},'replied') ],{padding:'12px 14px'}),
+          this.card([ h('div',{key:'v',style:{fontSize:19,fontWeight:800,color:bouncePct>10?C.danger:C.tx}},bouncePct+'%'), h('div',{key:'l',style:{fontSize:11,color:C.mut,marginTop:2}},'bounced') ],{padding:'12px 14px'})),
+        h('div',null, h('div',{style:{fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:C.quiet,marginBottom:10}},'Sequence'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:0}}, c.steps.map((st,i)=>h('div',{key:i,style:{display:'flex',gap:12,paddingBottom:i<c.steps.length-1?18:0,position:'relative'}},
+            h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}, h('div',{style:{width:26,height:26,borderRadius:999,background:this.ac()+'22',border:'2px solid '+this.ac(),display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:this.ac()}},i+1), i<c.steps.length-1?h('div',{style:{width:2,flex:1,background:C.bd,marginTop:4}}):null),
+            h('div',{style:{flex:1,paddingBottom:4}}, h('div',{style:{fontSize:13.5,fontWeight:700,color:C.tx,marginBottom:3}},st[0]), h('div',{style:{fontSize:11.5,color:C.quiet,marginBottom:6}},st[1]===0?'Sent immediately':'Day '+st[1]), h('div',{style:{fontSize:11.5,color:C.mut}},st[2]+' opened · '+st[3]+'% reply rate'))))))
+      ));
+  }
+
+  // ═══ CRM INBOX LIST ═══
+  scrInbox(){ const C=this.C,h=React.createElement,s=this.state;
+    const filters=[['all','All'],['interested','Interested'],['meeting_booked','Meetings'],['follow_up','Follow up'],['won','Won']];
+    const filtered = s.crmFilter==='all'?this.THREADS:this.THREADS.filter(t=>t.status===s.crmFilter);
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Inbox',{right:this.bellButton()}),
+      h('div',{style:{padding:'0 16px 10px',display:'flex',gap:7,overflowX:'auto'}}, filters.map(([k,label])=>{ const a=s.crmFilter===k; return h('button',{key:k,onClick:()=>this.setState({crmFilter:k}),style:{flexShrink:0,padding:'6px 13px',borderRadius:999,fontSize:12.5,fontWeight:600,fontFamily:'inherit',border:'1px solid '+(a?this.ac():C.bd),background:a?this.ac()+'1c':'transparent',color:a?this.ac():C.mut}},label); })),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 8px 12px'}}, filtered.map(t=>h('div',{key:t.id,onClick:()=>this.go('thread',{activeThread:t.id}),style:{display:'flex',alignItems:'flex-start',gap:11,padding:'11px 8px',borderRadius:12,background:t.unread?C.surf:'transparent'}},
+        this.avatar(t.name,t.unread?this.ac():C.quiet,38),
+        h('div',{style:{flex:1,minWidth:0}},
+          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:2}}, h('span',{style:{fontSize:13.5,fontWeight:t.unread?800:600,color:C.tx,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},t.name), h('span',{style:{fontSize:10.5,color:C.quiet,flexShrink:0}},t.time)),
+          h('div',{style:{fontSize:11.5,color:C.quiet,marginBottom:4}},t.company+' · '+t.campaign),
+          h('div',{style:{fontSize:12.5,color:t.unread?C.mut:C.quiet,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:6}},t.snippet),
+          h('div',{style:{display:'flex',alignItems:'center',gap:6}}, this.chip(this.STATUS_LABEL[t.status],this.STATUS_TONE[t.status]), t.ai?h('span',{style:{color:this.C.violet}},this.ic(this.I.ai,12,1.8)):null)),
+        h('button',{onClick:e=>{e.stopPropagation();this.toast(t.starred?'Unstarred':'Starred');},style:{background:'transparent',border:'none',color:t.starred?this.C.warn:C.faint,flexShrink:0,padding:4}}, t.starred?this.icFill(this.I.starFill,17,this.C.warn):this.ic(this.I.star,17,1.8)))))
+    );
+  }
+
+  // ═══ THREAD DETAIL ═══
+  scrThread(){ const C=this.C,h=React.createElement,s=this.state; const t=this.THREADS.find(x=>x.id===s.activeThread)||this.THREADS[0];
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader(t.name,{back:true,onBack:()=>this.go('inbox'),right:h('button',{onClick:()=>this.toast('More options'),style:{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:C.surfStrong,border:'none',color:C.tx}},this.ic(this.I.dots,17,2))}),
+      h('div',{style:{padding:'0 16px 10px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}, this.chip(this.STATUS_LABEL[t.status],this.STATUS_TONE[t.status]), h('span',{style:{fontSize:11.5,color:C.quiet}},t.company+' · '+t.campaign)),
+      h('div',{style:{flex:1,overflow:'auto',padding:'6px 16px',display:'flex',flexDirection:'column',gap:12}}, this.MESSAGES.map((m,i)=>h('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:m.from?'flex-start':'flex-end'}},
+        h('div',{style:{maxWidth:'82%',background:m.from?C.elev:this.ac()+'20',border:'1px solid '+(m.from?C.bd:this.ac()+'40'),borderRadius:m.from?'4px 16px 16px 16px':'16px 4px 16px 16px',padding:'10px 13px'}},
+          h('div',{style:{fontSize:13,color:C.tx,lineHeight:1.5}},m.text)),
+        h('div',{style:{fontSize:10.5,color:C.quiet,marginTop:4}},m.time))),
+        t.ai? h('div',{style:{display:'flex',alignItems:'flex-start',gap:8,background:'rgba(167,139,250,0.10)',border:'1px solid rgba(167,139,250,0.25)',borderRadius:12,padding:'11px 13px',marginTop:2}},
+          this.ic(this.I.ai,15,1.8),
+          h('div',{style:{flex:1}}, h('div',{style:{fontSize:11,fontWeight:700,color:C.violet,marginBottom:4}},'AI suggested reply'), h('div',{style:{fontSize:12.5,color:C.mut,lineHeight:1.5}},'“Would Wednesday or Thursday afternoon work for a quick call?”')),
+          h('button',{onClick:()=>this.setState({replyText:'Would Wednesday or Thursday afternoon work for a quick call?'}),style:{flexShrink:0,fontSize:11.5,fontWeight:700,color:C.violet,background:'transparent',border:'none',fontFamily:'inherit'}},'Use')):null),
+      h('div',{style:{flexShrink:0,padding:'10px 12px',borderTop:'1px solid '+C.bd,display:'flex',alignItems:'flex-end',gap:8}},
+        h('button',{onClick:()=>this.toast('Attach file'),style:{width:36,height:36,borderRadius:999,background:C.surfStrong,border:'none',color:C.mut,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}},this.ic(this.I.attach,16,1.8)),
+        h('div',{style:{flex:1,background:C.elev,border:'1px solid '+C.bdStrong,borderRadius:20,padding:'8px 14px',minHeight:36,display:'flex',alignItems:'center'}}, h('span',{style:{fontSize:13,color:s.replyText?C.tx:C.quiet}},s.replyText||'Type a reply…')),
+        h('button',{onClick:()=>{ this.setState({replyText:''}); this.toast('Reply sent'); },style:{width:36,height:36,borderRadius:999,background:this.ac(),border:'none',color:'#fff',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}},this.ic(this.I.send,15,2))));
+  }
+
+  // ═══ INBOXES HEALTH LIST ═══
+  scrInboxes(){ const C=this.C,h=React.createElement;
+    const toneOf=(s)=> s==='healthy'?'ok':s==='warning'?'warn':'danger';
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Inboxes',{right:h('button',{onClick:()=>this.toast('Add inbox'),style:{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:999,background:this.ac(),border:'none',color:'#fff'}},this.ic(this.I.plus,17,2.2))}),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 16px 16px',display:'flex',flexDirection:'column',gap:10}}, this.INBOXES.map(i=>h('div',{key:i.id,onClick:()=>this.go('inboxDetail',{activeInbox:i.id}),style:{display:'flex',alignItems:'center',gap:13,background:C.elev,border:'1px solid '+C.bd,borderRadius:14,padding:'13px 14px'}},
+        h('div',{style:{position:'relative',flexShrink:0}}, this.ring(i.health/100,46,5,this.C[toneOf(i.status)]), h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}, h('span',{style:{fontSize:11,fontWeight:700,color:C.tx}},i.health))),
+        h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:13.5,fontWeight:700,color:C.tx,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},i.email), h('div',{style:{fontSize:11.5,color:C.quiet,marginTop:2}},i.sentToday+'/'+i.dailyLimit+' sent today'+(i.warmup<100?' · warming '+i.warmup+'%':'')),
+          i.warmup<100? this.progressBar(i.warmup,this.C[toneOf(i.status)],4) : null),
+        this.chip(i.status,toneOf(i.status))))));
+  }
+
+  // ═══ INBOX DETAIL ═══
+  scrInboxDetail(){ const C=this.C,h=React.createElement,s=this.state; const i=this.INBOXES.find(x=>x.id===s.activeInbox)||this.INBOXES[0];
+    const toneOf=(st)=> st==='healthy'?'ok':st==='warning'?'warn':'danger';
+    const dns=[['SPF',i.spf],['DKIM',i.dkim],['DMARC',i.dmarc],['MX',i.mx]];
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Inbox health',{back:true,onBack:()=>this.go('inboxes')}),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 16px 16px',display:'flex',flexDirection:'column',gap:16}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:14}}, this.ring(i.health/100,66,7,this.C[toneOf(i.status)]),
+          h('div',null, h('div',{style:{fontSize:16,fontWeight:800,color:C.tx}},i.email), h('div',{style:{fontSize:12,color:C.quiet,marginTop:2}},i.domain), h('div',{style:{marginTop:6}},this.chip(i.status,toneOf(i.status))))),
+        i.warmup<100? this.card([ h('div',{key:'h',style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:8}}, h('span',{style:{color:C.mut}},'Warm-up progress'), h('span',{style:{color:C.tx,fontWeight:700}},i.warmup+'%')), this.progressBar(i.warmup,this.C[toneOf(i.status)],7) ],{padding:'14px 15px'}):null,
+        this.card([ h('div',{key:'h',style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:8}}, h('span',{style:{color:C.mut}},'Daily sending limit'), h('span',{style:{color:C.tx,fontWeight:700}},i.sentToday+' / '+i.dailyLimit)), this.progressBar(i.sentToday/i.dailyLimit*100,this.ac(),7) ],{padding:'14px 15px'}),
+        h('div',null, h('div',{style:{fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:C.quiet,marginBottom:10}},'DNS records'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, dns.map(([label,pass])=>h('div',{key:label,style:{display:'flex',alignItems:'center',gap:11,background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'11px 14px'}},
+            h('span',{style:{width:26,height:26,borderRadius:999,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:pass?C.ok:C.danger,background:pass?C.okSoft:C.dangerSoft}},this.ic(pass?this.I.check:this.I.warn,13,2.2)),
+            h('span',{style:{flex:1,fontSize:13,fontWeight:600,color:C.tx}},label),
+            h('span',{style:{fontSize:11.5,color:pass?C.ok:C.danger,fontWeight:700}},pass?'Pass':'Failing')))))
+      ));
+  }
+
+  // ═══ NOTIFICATIONS ═══
+  scrNotifications(){ const C=this.C,h=React.createElement;
+    const groups = ['Today','Earlier'];
+    const iconFor=(kind)=> kind==='reply'?this.I.mail:kind==='health'?this.I.warn:this.I.flame;
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+      this.screenHeader('Notifications',{back:true,onBack:()=>this.go('home')}),
+      h('div',{style:{flex:1,overflow:'auto',padding:'0 16px 16px'}}, groups.map(g=>{ const items=this.NOTIFS.filter(n=>n.group===g); if(!items.length) return null;
+        return h('div',{key:g,style:{marginBottom:16}}, h('div',{style:{fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:C.quiet,marginBottom:8}},g),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, items.map((n,i)=>{ const tone = n.positive?'ok': n.color||'plain';
+            return h('div',{key:i,onClick:()=>this.toast(n.title),style:{display:'flex',alignItems:'flex-start',gap:11,background:C.elev,border:'1px solid '+C.bd,borderRadius:12,padding:'12px 14px'}},
+              h('span',{style:{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:this.C[tone]||this.C.mut,background:(this.C[tone+'Soft'])||C.surf}}, this.ic(iconFor(n.kind),15,1.9)),
+              h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{fontSize:13,fontWeight:700,color:C.tx,marginBottom:3}},n.title), h('div',{style:{fontSize:12,color:C.mut,lineHeight:1.5}},n.body)),
+              h('span',{style:{fontSize:10.5,color:C.quiet,flexShrink:0}},n.time)); }))); }))
+    );
+  }
+
+  // ── screen content composed for a given device wrapper ──
+  deviceContent(){ const C=this.C,h=React.createElement;
+    return h('div',{style:{display:'flex',flexDirection:'column',height:'100%',background:C.bg,color:C.tx,fontFamily:"'Geist',system-ui,sans-serif"}},
+      h('div',{style:{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',paddingTop:this.state.platform==='ios'?54:0}},
+        h('div',{style:{flex:1,overflow:'auto'}}, this.screenBody())),
+      this.tabBar());
+  }
+
+  // ── platform + screen switcher ──
+  switcher(){ const C=this.C,h=React.createElement,s=this.state;
+    return h('div',{style:{position:'absolute',bottom:14,left:'50%',transform:'translateX(-50%)',zIndex:80,display:'flex',flexDirection:'column',alignItems:'center',gap:8,maxWidth:'94vw'}},
+      h('div',{style:{display:'flex',gap:2,background:'rgba(14,14,19,0.94)',backdropFilter:'blur(14px)',border:'1px solid '+C.bdStrong,borderRadius:11,padding:4}},
+        [['ios','iOS'],['android','Android']].map(([k,label])=>{ const a=s.platform===k; return h('button',{key:k,onClick:()=>this.setState({platform:k}),style:{padding:'6px 16px',borderRadius:8,fontSize:12.5,fontWeight:700,fontFamily:'inherit',border:'none',cursor:'pointer',background:a?this.ac():'transparent',color:a?'#fff':C.quiet}},label); })),
+      h('div',{style:{display:'flex',gap:2,background:'rgba(14,14,19,0.94)',backdropFilter:'blur(14px)',border:'1px solid '+C.bdStrong,borderRadius:11,padding:4,overflowX:'auto',maxWidth:'94vw'}},
+        this.SCREENS.map(([k,label])=>{ const a=s.screen===k; return h('button',{key:k,onClick:()=>this.setState({screen:k,tab:this.TABS.some(t=>t[0]===k)?k:s.tab}),style:{flexShrink:0,padding:'6px 11px',borderRadius:8,fontSize:11.5,fontWeight:a?700:500,fontFamily:'inherit',border:'none',cursor:'pointer',background:a?C.surfStrong:'transparent',color:a?C.tx:C.quiet,whiteSpace:'nowrap'}},label); })));
+  }
+
+  // ── stage: centered device mockup ──
+  stage(){ const C=this.C,h=React.createElement,s=this.state;
+    if(!s.frameworkReady){ return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',color:C.quiet,fontSize:13}},'Loading device frame…'); }
+    const content = this.deviceContent();
+    const device = s.platform==='ios'
+      ? React.createElement(window.IOSDevice, { dark:true, width:390, height:844 }, content)
+      : React.createElement(window.AndroidDevice, { dark:true, width:390, height:844 }, content);
+    return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100%',padding:'40px 20px 140px',position:'relative'}},
+      device,
+      s.showPush? this.pushBanner():null);
+  }
+
+  pushBanner(){ const C=this.C,h=React.createElement;
+    return h('div',{style:{position:'absolute',top:56,left:'50%',transform:'translateX(-50%)',zIndex:95,width:340,animation:'slideDown .3s cubic-bezier(0.16,1,0.3,1)'}},
+      h('div',{style:{display:'flex',alignItems:'flex-start',gap:11,background:'rgba(28,28,32,0.92)',backdropFilter:'blur(16px)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:18,padding:'12px 14px',boxShadow:'0 16px 40px -10px rgba(0,0,0,0.6)'}},
+        h('div',{style:{width:34,height:34,borderRadius:9,background:this.ac(),display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0}}, this.ic(this.I.mail,17,1.9)),
+        h('div',{style:{flex:1,minWidth:0}}, h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:2}}, h('span',{style:{fontSize:12.5,fontWeight:700,color:'#fff'}},'Leadash'), h('span',{style:{fontSize:10.5,color:'rgba(255,255,255,0.4)'}},'now')),
+          h('div',{style:{fontSize:12.5,fontWeight:600,color:'#fff',marginBottom:2}},'Tunde Bakare replied'),
+          h('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},'“This looks interesting — can we hop on a call this week?”'))));
+  }
+
+  renderVals(){ const s=this.state,C=this.C,h=React.createElement;
+    const toastEl=s.toast?h('div',{style:{position:'absolute',bottom:180,left:'50%',transform:'translateX(-50%)',zIndex:90,background:'#1A1A22',border:'1px solid '+C.bdStrong,color:C.tx,fontSize:13,fontWeight:500,padding:'10px 18px',borderRadius:10,boxShadow:'0 16px 40px -10px rgba(0,0,0,.6)',display:'flex',alignItems:'center',gap:9}}, h('span',{style:{color:this.ac()}},this.ic(this.I.check,15,2.4)), s.toast):null;
+    return { stage:this.stage(), switcher:this.switcher(), toastEl };
+  }
+}
+</script>
+</body>
+</html>
