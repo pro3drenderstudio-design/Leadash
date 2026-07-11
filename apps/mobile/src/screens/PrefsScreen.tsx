@@ -1,17 +1,19 @@
 import React from "react";
 import { TAB_CLEARANCE } from "../lib/layout";
-import { View, Text, ScrollView, Switch, Alert } from "react-native";
+import { View, Text, ScrollView, Switch, Alert, Pressable } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPrefs, updatePrefs, NotificationPrefs, unregisterDevice } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { clearWorkspaceId } from "../lib/workspace";
 import { getStoredPushToken } from "../lib/push";
-import { C, FONT } from "../theme/tokens";
+import { FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Skeleton, ErrorState, Btn, SectionLabel } from "../components/ui";
 
 function PrefRow({ label, hint, value, onChange, disabled }: {
   label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean;
 }) {
+  const { C } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, gap: 12, opacity: disabled ? 0.4 : 1 }}>
       <View style={{ flex: 1 }}>
@@ -29,7 +31,14 @@ function PrefRow({ label, hint, value, onChange, disabled }: {
   );
 }
 
+const THEME_OPTIONS = [
+  { key: "system", label: "System" },
+  { key: "light",  label: "Light" },
+  { key: "dark",   label: "Dark" },
+] as const;
+
 export default function PrefsScreen() {
+  const { C, mode, setMode } = useTheme();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["prefs"], queryFn: getPrefs });
 
@@ -108,6 +117,30 @@ export default function PrefsScreen() {
             <Text style={{ fontSize: 11, fontFamily: FONT.regular, color: C.textQuiet, marginTop: 8 }}>
               Muted alerts still appear in the Notifications feed — these switches only control push banners.
             </Text>
+          </View>
+
+          <View>
+            <SectionLabel>Appearance</SectionLabel>
+            <View style={{ flexDirection: "row", backgroundColor: C.surface, borderRadius: 12, padding: 3 }}>
+              {THEME_OPTIONS.map(opt => {
+                const active = mode === opt.key;
+                return (
+                  <Pressable key={opt.key} onPress={() => setMode(opt.key)} style={{
+                    flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: "center",
+                    backgroundColor: active ? C.elevated : "transparent",
+                    borderWidth: active ? 1 : 0, borderColor: C.border,
+                  }}>
+                    <Text style={{
+                      fontSize: 12.5,
+                      fontFamily: active ? FONT.bold : FONT.medium,
+                      color: active ? C.text : C.textQuiet,
+                    }}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           <View>

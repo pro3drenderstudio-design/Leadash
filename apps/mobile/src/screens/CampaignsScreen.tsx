@@ -6,13 +6,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getCampaigns } from "../lib/api";
-import { C, R, FONT, CAMPAIGN_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Chip, Skeleton, ErrorState, EmptyState, ProgressBar } from "../components/ui";
 import type { CampaignsStackParams } from "../navigation/types";
 
 const FILTERS = ["all", "active", "paused", "draft", "completed"] as const;
 
 export default function CampaignsScreen() {
+  const { C, CAMPAIGN_STATUS } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<CampaignsStackParams>>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");

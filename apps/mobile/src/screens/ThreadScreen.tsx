@@ -10,7 +10,8 @@ import {
   getConversation, sendCrmReply, updateCrmStatus, suggestReply,
   ConversationMessage,
 } from "../lib/api";
-import { C, R, FONT, CRM_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Skeleton, ErrorState, Chip } from "../components/ui";
 import { Icon } from "../components/Icon";
 import type { InboxStackParams } from "../navigation/types";
@@ -19,6 +20,7 @@ import { timeAgo } from "../lib/format";
 type Props = NativeStackScreenProps<InboxStackParams, "Thread">;
 
 function Bubble({ m }: { m: ConversationMessage }) {
+  const { C } = useTheme();
   const isReply = m.type === "reply"; // from the lead
   const failed  = m.status === "bounced" || m.status === "failed";
   const text    = isReply ? (m.body_text ?? "") : (m.body ?? "");
@@ -55,6 +57,7 @@ function Bubble({ m }: { m: ConversationMessage }) {
 }
 
 export default function ThreadScreen({ route }: Props) {
+  const { C, CRM_STATUS } = useTheme();
   const { enrollmentId } = route.params;
   const qc = useQueryClient();
   const listRef = useRef<FlatList>(null);

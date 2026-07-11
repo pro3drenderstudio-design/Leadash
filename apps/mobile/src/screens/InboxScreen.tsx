@@ -11,7 +11,8 @@ import {
   toggleCrmStar, promoteUnmatched, ignoreReply,
 } from "../lib/api";
 import type { CrmThread } from "../types/outreach";
-import { C, R, FONT, CRM_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Chip, Skeleton, ErrorState, EmptyState, Avatar } from "../components/ui";
 import { Icon } from "../components/Icon";
 import type { InboxStackParams } from "../navigation/types";
@@ -30,6 +31,7 @@ const STATUS_FILTERS = [
 
 // ── Campaigns tab: real CRM threads ──────────────────────────────────────────
 function ThreadsTab() {
+  const { C, CRM_STATUS } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<InboxStackParams>>();
   const qc = useQueryClient();
   const [status, setStatus] = useState("all");
@@ -129,6 +131,7 @@ function ThreadsTab() {
 
 // ── Unmatched tab ─────────────────────────────────────────────────────────────
 function UnmatchedTab() {
+  const { C } = useTheme();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["crm-unmatched"], queryFn: () => getCrmUnmatched(1, 50) });
 
@@ -195,6 +198,7 @@ function UnmatchedTab() {
 
 // ── Warmup tab ────────────────────────────────────────────────────────────────
 function WarmupTab() {
+  const { C } = useTheme();
   const q = useQuery({ queryKey: ["crm-warmup"], queryFn: getCrmWarmup });
   const rows = q.data ?? [];
 
@@ -231,6 +235,7 @@ function WarmupTab() {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function InboxScreen() {
+  const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("campaigns");
 

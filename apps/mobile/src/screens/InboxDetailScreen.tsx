@@ -4,7 +4,8 @@ import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getInboxes, checkInboxDns } from "../lib/api";
-import { C, R, FONT, INBOX_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Chip, Skeleton, ErrorState, ProgressBar, SectionLabel } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { HealthRing, inboxHealthPct } from "./InboxesScreen";
@@ -13,6 +14,7 @@ import type { InboxesStackParams } from "../navigation/types";
 type Props = NativeStackScreenProps<InboxesStackParams, "InboxDetail">;
 
 export default function InboxDetailScreen({ route }: Props) {
+  const { C, INBOX_STATUS } = useTheme();
   const { id } = route.params;
 
   // Inbox row comes from the list endpoint (no single-inbox GET needed)

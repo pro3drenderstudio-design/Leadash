@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getDashboard, getNotifications } from "../lib/api";
-import { C, R, FONT } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Skeleton, ErrorState, SectionLabel, Avatar } from "../components/ui";
 import { Icon } from "../components/Icon";
 import type { HomeStackParams } from "../navigation/types";
@@ -14,6 +15,7 @@ import { useAppNav } from "../navigation/useAppNav";
 import { timeAgo } from "../lib/format";
 
 function StatTile({ value, label, color }: { value: string; label: string; color?: string }) {
+  const { C } = useTheme();
   return (
     <Card style={{ flex: 1, minWidth: "45%", paddingVertical: 13, paddingHorizontal: 14 }}>
       <Text style={{ fontSize: 22, fontFamily: FONT.bold, color: color ?? C.text }}>{value}</Text>
@@ -23,6 +25,7 @@ function StatTile({ value, label, color }: { value: string; label: string; color
 }
 
 export default function HomeScreen() {
+  const { C } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParams>>();
   const appNav = useAppNav();
   const insets = useSafeAreaInsets();

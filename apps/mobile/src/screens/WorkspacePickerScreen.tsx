@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, FlatList } from "react-native";
 import { getWorkspaces, WorkspaceSummary } from "../lib/api";
 import { setWorkspaceId } from "../lib/workspace";
-import { C, FONT } from "../theme/tokens";
+import { FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Skeleton, ErrorState, Btn, Avatar } from "../components/ui";
 import { supabase } from "../lib/supabase";
 
 export default function WorkspacePickerScreen({ onPicked }: { onPicked: () => void }) {
+  const { C } = useTheme();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null);
   const [error, setError] = useState("");
 

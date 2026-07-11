@@ -5,20 +5,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getNotifications, markNotificationsRead, MobileNotification } from "../lib/api";
-import { C, R, FONT } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Skeleton, ErrorState, EmptyState } from "../components/ui";
 import { Icon, IconName } from "../components/Icon";
 import type { HomeStackParams } from "../navigation/types";
 import { useAppNav } from "../navigation/useAppNav";
 import { timeAgo } from "../lib/format";
 
-const KIND_ICON: Record<string, { icon: IconName; color: string; soft: string }> = {
-  reply:     { icon: "mail",  color: C.success, soft: C.successSoft },
-  milestone: { icon: "flame", color: C.info,    soft: C.infoSoft },
-  health:    { icon: "warn",  color: C.warning, soft: C.warningSoft },
-};
-
 export default function NotificationsScreen() {
+  const { C } = useTheme();
+
+  const KIND_ICON: Record<string, { icon: IconName; color: string; soft: string }> = {
+    reply:     { icon: "mail",  color: C.success, soft: C.successSoft },
+    milestone: { icon: "flame", color: C.info,    soft: C.infoSoft },
+    health:    { icon: "warn",  color: C.warning, soft: C.warningSoft },
+  };
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParams>>();
   const appNav = useAppNav();
   const qc = useQueryClient();

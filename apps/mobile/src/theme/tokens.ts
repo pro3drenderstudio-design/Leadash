@@ -1,9 +1,26 @@
 /**
- * Leadash design tokens — ported from apps/web/src/v2-app/v2-app.css.
- * Do not re-derive colors; that file is the source of truth.
- * Dark theme only (the product is dark-only across all surfaces).
+ * Leadash design tokens — dark palette ported from apps/web/src/v2-app/v2-app.css
+ * (source of truth for dark values; do not re-derive). Light palette derived to
+ * hold the same hue relationships on a light ground.
+ *
+ * Components get the active palette via useTheme() from ./ThemeContext —
+ * never import a palette directly.
  */
-export const C = {
+
+export interface Palette {
+  bg: string; elevated: string; sunken: string;
+  surface: string; surfaceStrong: string;
+  border: string; borderStrong: string;
+  text: string; textMuted: string; textQuiet: string; textFaint: string;
+  accent: string; accentSoft: string; accentLine: string;
+  success: string; successSoft: string;
+  warning: string; warningSoft: string;
+  danger: string; dangerSoft: string;
+  info: string; infoSoft: string;
+  violet: string; violetSoft: string;
+}
+
+export const DARK: Palette = {
   bg:        "#07070A",
   elevated:  "#0E0E13",
   sunken:    "#050507",
@@ -32,7 +49,38 @@ export const C = {
   infoSoft:    "rgba(96,165,250,0.12)",
   violet:      "#A78BFA",
   violetSoft:  "rgba(167,139,250,0.14)",
-} as const;
+};
+
+export const LIGHT: Palette = {
+  bg:        "#F6F6F8",
+  elevated:  "#FFFFFF",
+  sunken:    "#EFEFF2",
+
+  surface:       "rgba(10,10,20,0.04)",
+  surfaceStrong: "rgba(10,10,20,0.07)",
+  border:        "rgba(10,10,20,0.08)",
+  borderStrong:  "rgba(10,10,20,0.15)",
+
+  text:      "#17171C",
+  textMuted: "#5B6070",
+  textQuiet: "#8A8F9E",
+  textFaint: "#C9CBD3",
+
+  accent:     "#F97316",
+  accentSoft: "rgba(249,115,22,0.13)",
+  accentLine: "rgba(249,115,22,0.38)",
+
+  success:     "#059669",
+  successSoft: "rgba(5,150,105,0.11)",
+  warning:     "#B45309",
+  warningSoft: "rgba(180,83,9,0.11)",
+  danger:      "#DC2626",
+  dangerSoft:  "rgba(220,38,38,0.09)",
+  info:        "#2563EB",
+  infoSoft:    "rgba(37,99,235,0.09)",
+  violet:      "#7C3AED",
+  violetSoft:  "rgba(124,58,237,0.11)",
+};
 
 export const R = {
   sm:   9,
@@ -48,28 +96,36 @@ export const FONT = {
   bold:     "Geist-Bold",
 } as const;
 
+export interface StatusTone { label: string; color: string; soft: string }
+
 /** crm_status → label + tone, mirrors the web CRM */
-export const CRM_STATUS: Record<string, { label: string; color: string; soft: string }> = {
-  neutral:        { label: "Neutral",        color: C.textMuted, soft: C.surface },
-  interested:     { label: "Interested",     color: C.success,   soft: C.successSoft },
-  meeting_booked: { label: "Meeting booked", color: C.info,      soft: C.infoSoft },
-  won:            { label: "Won",            color: C.warning,   soft: C.warningSoft },
-  not_interested: { label: "Not interested", color: C.danger,    soft: C.dangerSoft },
-  ooo:            { label: "OOO",            color: C.textMuted, soft: C.surface },
-  follow_up:      { label: "Follow up",      color: C.violet,    soft: C.violetSoft },
-};
+export function crmStatusMap(C: Palette): Record<string, StatusTone> {
+  return {
+    neutral:        { label: "Neutral",        color: C.textMuted, soft: C.surface },
+    interested:     { label: "Interested",     color: C.success,   soft: C.successSoft },
+    meeting_booked: { label: "Meeting booked", color: C.info,      soft: C.infoSoft },
+    won:            { label: "Won",            color: C.warning,   soft: C.warningSoft },
+    not_interested: { label: "Not interested", color: C.danger,    soft: C.dangerSoft },
+    ooo:            { label: "OOO",            color: C.textMuted, soft: C.surface },
+    follow_up:      { label: "Follow up",      color: C.violet,    soft: C.violetSoft },
+  };
+}
 
 /** campaign status → tone */
-export const CAMPAIGN_STATUS: Record<string, { color: string; soft: string }> = {
-  active:    { color: C.success,   soft: C.successSoft },
-  paused:    { color: C.warning,   soft: C.warningSoft },
-  draft:     { color: C.textMuted, soft: C.surface },
-  completed: { color: C.info,      soft: C.infoSoft },
-};
+export function campaignStatusMap(C: Palette): Record<string, { color: string; soft: string }> {
+  return {
+    active:    { color: C.success,   soft: C.successSoft },
+    paused:    { color: C.warning,   soft: C.warningSoft },
+    draft:     { color: C.textMuted, soft: C.surface },
+    completed: { color: C.info,      soft: C.infoSoft },
+  };
+}
 
 /** inbox status → tone (statuses are active|paused|error — no 'warning' exists) */
-export const INBOX_STATUS: Record<string, { color: string; soft: string }> = {
-  active: { color: C.success, soft: C.successSoft },
-  paused: { color: C.warning, soft: C.warningSoft },
-  error:  { color: C.danger,  soft: C.dangerSoft },
-};
+export function inboxStatusMap(C: Palette): Record<string, { color: string; soft: string }> {
+  return {
+    active: { color: C.success, soft: C.successSoft },
+    paused: { color: C.warning, soft: C.warningSoft },
+    error:  { color: C.danger,  soft: C.dangerSoft },
+  };
+}

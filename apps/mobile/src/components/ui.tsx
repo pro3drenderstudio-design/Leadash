@@ -4,11 +4,13 @@
  */
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { C, R, FONT } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 
 export function Card({ children, style, onPress }: {
   children: React.ReactNode; style?: ViewStyle; onPress?: () => void;
 }) {
+  const { C } = useTheme();
   const base: ViewStyle = {
     backgroundColor: C.elevated,
     borderWidth: 1,
@@ -44,6 +46,7 @@ export function Btn({ label, onPress, disabled, loading, variant = "primary", st
   label: string; onPress: () => void; disabled?: boolean; loading?: boolean;
   variant?: "primary" | "secondary" | "ghost"; style?: ViewStyle;
 }) {
+  const { C } = useTheme();
   const bg = variant === "primary" ? C.accent : variant === "secondary" ? C.surfaceStrong : "transparent";
   const fg = variant === "primary" ? "#fff" : C.text;
   return (
@@ -71,12 +74,14 @@ export function Btn({ label, onPress, disabled, loading, variant = "primary", st
 }
 
 export function Skeleton({ height = 64, style }: { height?: number; style?: ViewStyle }) {
+  const { C } = useTheme();
   return (
     <View style={[{ height, borderRadius: R.md, backgroundColor: C.surface, opacity: 0.7 }, style]} />
   );
 }
 
 export function SectionLabel({ children, style }: { children: string; style?: TextStyle }) {
+  const { C } = useTheme();
   return (
     <Text style={[{
       fontSize: 11, fontFamily: FONT.bold, letterSpacing: 0.8,
@@ -88,6 +93,7 @@ export function SectionLabel({ children, style }: { children: string; style?: Te
 }
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+  const { C } = useTheme();
   return (
     <View style={styles.centerBox}>
       <Text style={{ fontSize: 14, fontFamily: FONT.semibold, color: C.textMuted, textAlign: "center" }}>{title}</Text>
@@ -97,6 +103,7 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { C } = useTheme();
   return (
     <View style={styles.centerBox}>
       <Text style={{ fontSize: 13, fontFamily: FONT.medium, color: C.danger, textAlign: "center" }}>{message}</Text>
@@ -106,6 +113,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 }
 
 export function Avatar({ name, size = 36, color }: { name: string; size?: number; color?: string }) {
+  const { C } = useTheme();
   const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
   return (
     <View style={{
@@ -118,6 +126,7 @@ export function Avatar({ name, size = 36, color }: { name: string; size?: number
 }
 
 export function ProgressBar({ pct, color, height = 6 }: { pct: number; color?: string; height?: number }) {
+  const { C } = useTheme();
   return (
     <View style={{ height, backgroundColor: C.surfaceStrong, borderRadius: R.pill, overflow: "hidden" }}>
       <View style={{ height: "100%", width: `${Math.min(100, Math.max(0, pct))}%`, backgroundColor: color ?? C.accent, borderRadius: R.pill }} />

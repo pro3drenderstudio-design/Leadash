@@ -7,7 +7,8 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Circle } from "react-native-svg";
 import { getInboxes } from "../lib/api";
-import { C, R, FONT, INBOX_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Chip, Skeleton, ErrorState, EmptyState, ProgressBar } from "../components/ui";
 import type { InboxesStackParams } from "../navigation/types";
 import type { OutreachInboxSafe } from "../types/outreach";
@@ -15,6 +16,7 @@ import type { OutreachInboxSafe } from "../types/outreach";
 export function HealthRing({ pct, size = 46, stroke = 5, color }: {
   pct: number; size?: number; stroke?: number; color: string;
 }) {
+  const { C } = useTheme();
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   return (
@@ -47,6 +49,7 @@ export function inboxHealthPct(i: OutreachInboxSafe): number {
 }
 
 export default function InboxesScreen() {
+  const { C, INBOX_STATUS } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<InboxesStackParams>>();
   const insets = useSafeAreaInsets();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({

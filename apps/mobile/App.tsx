@@ -9,7 +9,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
 import { getWorkspaceId } from "./src/lib/workspace";
 import { registerForPush } from "./src/lib/push";
-import { C } from "./src/theme/tokens";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 import LoginScreen from "./src/screens/LoginScreen";
 import WorkspacePickerScreen from "./src/screens/WorkspacePickerScreen";
 import AppNavigator from "./src/navigation";
@@ -26,13 +26,8 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function App() {
-  const [fontsLoaded] = useFonts({
-    "Geist-Regular":  require("./assets/fonts/Geist-Regular.ttf"),
-    "Geist-Medium":   require("./assets/fonts/Geist-Medium.ttf"),
-    "Geist-SemiBold": require("./assets/fonts/Geist-SemiBold.ttf"),
-    "Geist-Bold":     require("./assets/fonts/Geist-Bold.ttf"),
-  });
+function Root() {
+  const { C, isDark } = useTheme();
 
   const [session,      setSession]      = useState<Session | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -61,29 +56,46 @@ export default function App() {
   }, [session, hasWorkspace]);
 
   const onLayout = useCallback(() => {
-    if (fontsLoaded && sessionReady) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded, sessionReady]);
+    if (sessionReady) SplashScreen.hideAsync().catch(() => {});
+  }, [sessionReady]);
 
-  if (!fontsLoaded || !sessionReady) return null;
+  if (!sessionReady) return null;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }} onLayout={onLayout}>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      {!session ? (
+        <LoginScreen />
+      ) : hasWorkspace === null ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: C.bg }}>
+          <ActivityIndicator color={C.accent} />
+        </View>
+      ) : !hasWorkspace ? (
+        <WorkspacePickerScreen onPicked={() => setHasWorkspace(true)} />
+      ) : (
+        <AppNavigator />
+      )}
+    </View>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    "Geist-Regular":  require("./assets/fonts/Geist-Regular.ttf"),
+    "Geist-Medium":   require("./assets/fonts/Geist-Medium.ttf"),
+    "Geist-SemiBold": require("./assets/fonts/Geist-SemiBold.ttf"),
+    "Geist-Bold":     require("./assets/fonts/Geist-Bold.ttf"),
+  });
+
+  if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
-    <QueryClientProvider client={queryClient}>
-      <View style={{ flex: 1, backgroundColor: C.bg }} onLayout={onLayout}>
-        <StatusBar style="light" />
-        {!session ? (
-          <LoginScreen />
-        ) : hasWorkspace === null ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: C.bg }}>
-            <ActivityIndicator color={C.accent} />
-          </View>
-        ) : !hasWorkspace ? (
-          <WorkspacePickerScreen onPicked={() => setHasWorkspace(true)} />
-        ) : (
-          <AppNavigator />
-        )}
-      </View>
-    </QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <Root />
+        </QueryClientProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

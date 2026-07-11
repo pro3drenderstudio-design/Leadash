@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { supabase } from "../lib/supabase";
-import { C, R, FONT } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Btn } from "../components/ui";
 
 export default function LoginScreen() {
+  const { C } = useTheme();
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);

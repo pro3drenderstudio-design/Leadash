@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 import { getCampaign, getCampaignAnalytics, updateCampaign } from "../lib/api";
-import { C, R, FONT, CAMPAIGN_STATUS } from "../theme/tokens";
+import { R, FONT } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeContext";
 import { Card, Chip, Skeleton, ErrorState } from "../components/ui";
 import { Icon } from "../components/Icon";
 import type { CampaignsStackParams } from "../navigation/types";
@@ -13,6 +14,7 @@ import type { CampaignsStackParams } from "../navigation/types";
 type Props = NativeStackScreenProps<CampaignsStackParams, "CampaignDetail">;
 
 function StatCell({ value, label, color }: { value: string; label: string; color?: string }) {
+  const { C } = useTheme();
   return (
     <Card style={{ flex: 1, minWidth: "45%", paddingVertical: 12, paddingHorizontal: 14 }}>
       <Text style={{ fontSize: 19, fontFamily: FONT.bold, color: color ?? C.text }}>{value}</Text>
@@ -22,6 +24,7 @@ function StatCell({ value, label, color }: { value: string; label: string; color
 }
 
 export default function CampaignDetailScreen({ route }: Props) {
+  const { C, CAMPAIGN_STATUS } = useTheme();
   const { id } = route.params;
   const qc = useQueryClient();
 
