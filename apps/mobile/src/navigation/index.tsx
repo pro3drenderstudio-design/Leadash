@@ -51,7 +51,11 @@ function HomeStackNav() {
       <HomeStack.Screen name="Notifications" component={NotificationsScreen} options={({ navigation }) => ({
         title: "Notifications",
         headerRight: () => (
-          <Pressable onPress={() => navigation.navigate("Prefs")} hitSlop={8}>
+          <Pressable
+            onPress={() => navigation.navigate("Prefs")}
+            hitSlop={8}
+            style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}
+          >
             <Icon name="gear" size={18} color={C.textMuted} />
           </Pressable>
         ),

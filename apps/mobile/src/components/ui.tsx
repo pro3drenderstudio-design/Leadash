@@ -35,7 +35,7 @@ export function Card({ children, style, onPress }: {
 export function Chip({ label, color, soft }: { label: string; color: string; soft: string }) {
   return (
     <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill, backgroundColor: soft, alignSelf: "flex-start" }}>
-      <Text style={{ fontSize: 10.5, fontFamily: FONT.bold, color, textTransform: "uppercase", letterSpacing: 0.4 }}>
+      <Text style={{ fontSize: 10.5, lineHeight: 14, fontFamily: FONT.bold, color, textTransform: "uppercase", letterSpacing: 0.4 }}>
         {label}
       </Text>
     </View>

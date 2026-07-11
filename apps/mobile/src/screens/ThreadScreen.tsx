@@ -136,7 +136,7 @@ export default function ThreadScreen({ route }: Props) {
               backgroundColor: active ? t.soft : "transparent",
               borderWidth: 1, borderColor: active ? t.color : C.border,
             }}>
-              <Text style={{ fontSize: 11.5, fontFamily: FONT.semibold, color: active ? t.color : C.textQuiet }}>{t.label}</Text>
+              <Text style={{ fontSize: 11.5, lineHeight: 15, fontFamily: FONT.semibold, color: active ? t.color : C.textQuiet }}>{t.label}</Text>
             </Pressable>
           );
         })}

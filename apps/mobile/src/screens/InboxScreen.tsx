@@ -66,7 +66,7 @@ function ThreadsTab() {
               borderWidth: 1, borderColor: active ? C.accent : C.border,
               backgroundColor: active ? C.accentSoft : "transparent",
             }}>
-              <Text style={{ fontSize: 12.5, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted }}>{label}</Text>
+              <Text style={{ fontSize: 12.5, lineHeight: 17, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted }}>{label}</Text>
             </Pressable>
           );
         })}

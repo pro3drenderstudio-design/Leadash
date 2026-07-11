@@ -44,7 +44,7 @@ export default function CampaignsScreen() {
               borderWidth: 1, borderColor: active ? C.accent : C.border,
               backgroundColor: active ? C.accentSoft : "transparent",
             }}>
-              <Text style={{ fontSize: 12.5, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted, textTransform: "capitalize" }}>{f}</Text>
+              <Text style={{ fontSize: 12.5, lineHeight: 17, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted, textTransform: "capitalize" }}>{f}</Text>
             </Pressable>
           );
         })}
