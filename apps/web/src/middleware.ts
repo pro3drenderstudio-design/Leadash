@@ -39,6 +39,8 @@ const PUBLIC_PATHS = [
   "/api/funnels/submit",
   "/f",
   "/o",
+  "/go",
+  "/whatsapp_send",
   "/api/offers",
 ];
 
@@ -49,7 +51,7 @@ function isPublic(path: string) {
     path.startsWith("/favicon");
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
