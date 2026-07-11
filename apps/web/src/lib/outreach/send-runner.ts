@@ -109,20 +109,40 @@ interface InboxSlot { inbox: OutreachInbox; remaining: number; used: number; }
 
 const MAX_DAILY_SENDS = 40; // hard cap for all inboxes (warmup + campaigns combined)
 
-async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: OutreachCampaign): Promise<InboxSlot[]> {
-  if (!campaign.inbox_ids?.length) return [];
+interface InboxPoolResult {
+  slots:       InboxSlot[];
+  /** True when every inbox assigned to the campaign is structurally unusable
+   *  (not active, or its domain's hosting payment failed) — as opposed to
+   *  merely out of daily send capacity for today, which is expected/temporary. */
+  allBlocked:  boolean;
+  blockReason: string | null;
+}
+
+async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: OutreachCampaign): Promise<InboxPoolResult> {
+  if (!campaign.inbox_ids?.length) return { slots: [], allBlocked: false, blockReason: null };
   const { data: rows } = await db
     .from("outreach_inboxes")
     .select("*, outreach_domains(warmup_ends_at, status)")
-    .in("id", campaign.inbox_ids)
-    .eq("status", "active");
+    .in("id", campaign.inbox_ids);
 
   const slots: InboxSlot[] = [];
+  let structurallyBlocked = 0;
+  let blockReason: string | null = null;
+
   for (const row of rows ?? []) {
     const domain = (row as Record<string, unknown>).outreach_domains as Record<string, unknown> | null;
 
-    // Block inboxes whose domain is suspended (payment failed)
-    if (domain?.status === "payment_failed") continue;
+    // Structural blocks: won't resolve on their own (unlike daily-cap exhaustion, which resets tomorrow)
+    if (row.status !== "active") {
+      structurallyBlocked++;
+      blockReason ??= "One or more assigned inboxes are disabled";
+      continue;
+    }
+    if (domain?.status === "payment_failed") {
+      structurallyBlocked++;
+      blockReason = "Assigned inbox's domain hosting payment failed";
+      continue;
+    }
 
     // Block inboxes still in the 21-day warmup period
     const domainWarmupEndsAt = domain?.warmup_ends_at as string | null ?? null;
@@ -140,7 +160,10 @@ async function buildInboxPool(db: ReturnType<typeof supabase>, campaign: Outreac
     const remaining = await checkDailyLimits(row.id, sendLimit);
     if (remaining > 0) slots.push({ inbox: row as OutreachInbox, remaining, used: 0 });
   }
-  return slots;
+
+  const totalAssigned = campaign.inbox_ids.length;
+  const allBlocked = totalAssigned > 0 && structurallyBlocked === totalAssigned;
+  return { slots, allBlocked, blockReason: allBlocked ? blockReason : null };
 }
 
 function pickInbox(
@@ -266,9 +289,20 @@ export async function runSendBatch(
   for (const item of due) {
     const cid = item.campaign.id;
     if (!byCampaign.has(cid)) {
-      const slots = await buildInboxPool(db, item.campaign);
-      console.log(`[send-runner] campaign=${cid} inbox_ids=${JSON.stringify(item.campaign.inbox_ids)} slots=${slots.length}`);
-      byCampaign.set(cid, { items: [], slots, rrIdx: 0 });
+      const pool = await buildInboxPool(db, item.campaign);
+      console.log(`[send-runner] campaign=${cid} inbox_ids=${JSON.stringify(item.campaign.inbox_ids)} slots=${pool.slots.length}`);
+
+      // Every assigned inbox is structurally dead (not active, or its domain's
+      // hosting payment failed) — stop silently reprocessing this campaign
+      // forever and tell the customer why, instead of a permanent sent=0 loop.
+      if (pool.allBlocked) {
+        await db.from("outreach_campaigns")
+          .update({ status: "paused", pause_reason: pool.blockReason, updated_at: new Date().toISOString() })
+          .eq("id", cid).eq("status", "active");
+        console.log(`[send-runner] campaign=${cid} auto-paused — ${pool.blockReason}`);
+      }
+
+      byCampaign.set(cid, { items: [], slots: pool.slots, rrIdx: 0 });
     }
     byCampaign.get(cid)!.items.push(item);
   }
