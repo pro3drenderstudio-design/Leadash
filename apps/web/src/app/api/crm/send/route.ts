@@ -12,7 +12,7 @@
  *  - Enqueues to leadash:whatsapp BullMQ queue (same as automation worker)
  *
  * For email:
- *  - Sends via Resend from the inbox's configured address
+ *  - Sends via Postal (self-hosted) from the inbox's actual address
  *  - Records in crm_messages
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -20,10 +20,12 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
-const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
-const RESEND_FROM     = process.env.RESEND_FROM_EMAIL   ?? "no-reply@notifications.leadash.com";
+const POSTAL_API_KEY  = process.env.POSTAL_API_KEY ?? "";
+const POSTAL_HOST     = process.env.POSTAL_HOST    ?? "209.145.55.138";
+const POSTAL_API_URL  = `http://${POSTAL_HOST}:5000/api/v1/send/message`;
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
+const ACADEMY_EMAIL   = process.env.CRM_ACADEMY_EMAIL   ?? "academy@leadash.com";
 const REDIS_URL       = process.env.UPSTASH_REDIS_URL   ?? process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 
 function getQueue() {
@@ -110,26 +112,28 @@ export async function POST(req: NextRequest) {
     const toEmail = contact.email;
     if (!toEmail) return NextResponse.json({ error: "Contact has no email" }, { status: 400 });
 
-    const replyTo     = (convo.inbox_address as string) === "marketing" ? MARKETING_EMAIL : SUPPORT_EMAIL;
+    const inbox       = (convo.inbox_address as string);
+    const fromEmail   = inbox === "marketing" ? MARKETING_EMAIL
+                      : inbox === "academy"   ? ACADEMY_EMAIL
+                      :                        SUPPORT_EMAIL;
     const subject     = body.subject ?? `Re: ${convo.channel_identifier ?? "Your inquiry"}`;
 
-    const resendRes = await fetch("https://api.resend.com/emails", {
+    const postalRes = await fetch(POSTAL_API_URL, {
       method:  "POST",
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "X-Server-API-Key": POSTAL_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from:     `Leadash Support <${RESEND_FROM}>`,
-        to:       [toEmail],
-        reply_to: [replyTo],
+        from:       fromEmail,
+        to:         [toEmail],
         subject,
-        text:     msgBody,
-        html:     body.html ?? `<p>${msgBody.replace(/\n/g, "<br>")}</p>`,
+        plain_body: msgBody,
+        html_body:  body.html ?? `<p>${msgBody.replace(/\n/g, "<br>")}</p>`,
       }),
     });
 
-    const resendData = await resendRes.json() as { id?: string; name?: string; message?: string; statusCode?: number };
-    if (!resendRes.ok) {
-      console.error("[crm/send] Resend error:", resendData);
-      return NextResponse.json({ error: resendData.message ?? "Email send failed" }, { status: 502 });
+    const postalData = await postalRes.json() as { status: string; data?: { message_id?: string; code?: string; message?: string } };
+    if (!postalRes.ok || postalData.status !== "success") {
+      console.error("[crm/send] Postal error:", postalData);
+      return NextResponse.json({ error: postalData.data?.message ?? "Email send failed" }, { status: 502 });
     }
 
     // Insert CRM message
@@ -138,11 +142,11 @@ export async function POST(req: NextRequest) {
       contact_id:         contact.id,
       direction:          "outbound",
       channel:            "email",
-      from_address:       RESEND_FROM,
+      from_address:       fromEmail,
       subject,
       body:               msgBody,
       body_html:          body.html ?? null,
-      provider_message_id: resendData.id ?? null,
+      provider_message_id: postalData.data?.message_id ?? null,
       sent_by:            user.id,
       status:             "sent",
     });
@@ -153,7 +157,7 @@ export async function POST(req: NextRequest) {
       status: (convo.status === "resolved" || convo.status === "closed") ? "open" : convo.status,
     }).eq("id", conversation_id);
 
-    return NextResponse.json({ ok: true, type: "email", provider_id: resendData.id });
+    return NextResponse.json({ ok: true, type: "email", provider_id: postalData.data?.message_id });
   }
 
   // ── WhatsApp send ────────────────────────────────────────────────────────
