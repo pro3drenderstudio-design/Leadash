@@ -22,6 +22,23 @@ export function whatsAppMediaType(mimeType: string): "image" | "video" | "audio"
   return "document";
 }
 
+/**
+ * Meta's media upload endpoint only accepts a fixed, narrow list of MIME
+ * types per category and rejects the whole upload if given anything else —
+ * notably it wants `audio/mp4` for m4a audio, not the `audio/x-m4a` (or
+ * similar OS/browser-specific variant) that voice-memo recordings actually
+ * report. Our own storage bucket accepts the broader real-world set; this
+ * narrows just the value sent to Meta.
+ */
+function normalizeMimeForMeta(mimeType: string): string {
+  const map: Record<string, string> = {
+    "audio/x-m4a":     "audio/mp4",
+    "audio/mp4a-latm": "audio/mp4",
+    "audio/x-caf":     "audio/aac",
+  };
+  return map[mimeType] ?? mimeType;
+}
+
 /** Uploads a file's bytes to Meta and returns the resulting media ID. */
 export async function uploadWhatsAppMedia(
   phoneNumberId: string,
@@ -31,9 +48,10 @@ export async function uploadWhatsAppMedia(
   filename: string,
 ): Promise<string | null> {
   try {
+    const metaMimeType = normalizeMimeForMeta(mimeType);
     const form = new FormData();
     form.append("messaging_product", "whatsapp");
-    form.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+    form.append("file", new Blob([new Uint8Array(buffer)], { type: metaMimeType }), filename);
 
     const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/media`, {
       method:  "POST",
