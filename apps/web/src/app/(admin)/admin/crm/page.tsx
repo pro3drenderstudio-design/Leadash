@@ -494,6 +494,249 @@ function ContactProfilePanel({ contact, conversationId }: { contact: CrmContact;
   );
 }
 
+// ── New Conversation Modal ────────────────────────────────────────────────────
+
+interface ContactResult {
+  id: string; display_name: string | null; email: string | null;
+  whatsapp_number: string | null; phone: string | null; lifecycle_stage: string;
+}
+
+type WaTemplate = { id: string; name: string; status: string; components: Array<{ type: string; text?: string }> };
+
+function NewConversationModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [channel,        setChannel]        = useState<"email"|"whatsapp">("email");
+  const [toInput,        setToInput]        = useState("");
+  const [nameInput,      setNameInput]      = useState("");
+  const [inbox,          setInbox]          = useState<"support"|"marketing"|"academy">("support");
+  const [subject,        setSubject]        = useState("");
+  const [body,           setBody]           = useState("");
+  const [useTemplate,    setUseTemplate]    = useState(false);
+  const [templateName,   setTemplateName]   = useState("");
+  const [templateParams, setTemplateParams] = useState<Record<string,string>>({});
+  const [contacts,       setContacts]       = useState<ContactResult[]>([]);
+  const [showDropdown,   setShowDropdown]   = useState(false);
+  const [waTemplates,    setWaTemplates]    = useState<WaTemplate[]>([]);
+  const [sending,        setSending]        = useState(false);
+  const [error,          setError]          = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (channel === "whatsapp") {
+      fetch("/api/admin/crm-settings/whatsapp-templates")
+        .then(r => r.ok ? r.json() : { templates: [] })
+        .then((d: { templates?: WaTemplate[] }) => {
+          setWaTemplates((d.templates ?? []).filter(t => t.status === "APPROVED"));
+        })
+        .catch(() => {});
+    }
+  }, [channel]);
+
+  function searchContacts(q: string) {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q.trim()) { setContacts([]); setShowDropdown(false); return; }
+    searchTimer.current = setTimeout(async () => {
+      const r = await fetch(`/api/crm/contacts?search=${encodeURIComponent(q)}&limit=8`);
+      const d = await r.json() as { contacts?: ContactResult[] };
+      setContacts(d.contacts ?? []);
+      setShowDropdown(true);
+    }, 250);
+  }
+
+  function pickContact(c: ContactResult) {
+    const val = channel === "whatsapp" ? (c.whatsapp_number ?? c.phone ?? "") : (c.email ?? "");
+    setToInput(val);
+    setNameInput(c.display_name ?? "");
+    setShowDropdown(false);
+    setContacts([]);
+  }
+
+  async function handleSend() {
+    if (!toInput.trim() || !body.trim()) {
+      setError("Recipient and message are required");
+      return;
+    }
+    setSending(true);
+    setError("");
+    const res = await fetch("/api/crm/conversations/new", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel,
+        to:            toInput.trim(),
+        name:          nameInput.trim() || undefined,
+        inbox,
+        subject:       subject.trim() || undefined,
+        body,
+        template_name: useTemplate && templateName ? templateName : undefined,
+        template_vars: useTemplate && templateName ? templateParams : undefined,
+      }),
+    });
+    const d = await res.json() as { conversation_id?: string; error?: string };
+    setSending(false);
+    if (!res.ok) { setError(d.error ?? "Failed to send"); return; }
+    onCreated(d.conversation_id!);
+  }
+
+  const inp  = "w-full px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30";
+  const lbl  = "block text-xs font-semibold text-slate-500 dark:text-white/40 mb-1";
+
+  const tmpl     = waTemplates.find(t => t.name === templateName);
+  const bodyComp = tmpl?.components?.find(c => c.type === "BODY");
+  const bodyText = bodyComp?.text ?? "";
+  const placeholders = [...new Set([...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-md bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white">New Conversation</h2>
+          <button onClick={onClose} className="text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white text-lg leading-none">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Channel selector */}
+          <div>
+            <label className={lbl}>Channel</label>
+            <div className="flex gap-2">
+              {(["email","whatsapp"] as const).map(ch => (
+                <button key={ch} onClick={() => { setChannel(ch); setToInput(""); setContacts([]); setShowDropdown(false); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold border transition-colors ${channel === ch ? "bg-orange-500 border-orange-500 text-white" : "border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 hover:border-orange-300"}`}>
+                  <ChannelIcon channel={ch} />
+                  {ch === "email" ? "Email" : "WhatsApp"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* To field with search dropdown */}
+          <div className="relative">
+            <label className={lbl}>To</label>
+            <input
+              className={inp}
+              placeholder={channel === "whatsapp" ? "+234 8012345678 or search a contact…" : "email@example.com or search a contact…"}
+              value={toInput}
+              onChange={e => { setToInput(e.target.value); searchContacts(e.target.value); }}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+              onFocus={() => { if (contacts.length) setShowDropdown(true); }}
+              autoComplete="off"
+            />
+            {showDropdown && contacts.length > 0 && (
+              <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg overflow-hidden">
+                {contacts.map(c => {
+                  const sub = channel === "whatsapp"
+                    ? (c.whatsapp_number ?? c.phone ?? "no number")
+                    : (c.email ?? "no email");
+                  return (
+                    <button key={c.id} onMouseDown={() => pickContact(c)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-white/5 border-b border-slate-100 dark:border-white/5 last:border-0">
+                      <p className="text-sm text-slate-800 dark:text-white font-medium">{c.display_name ?? sub}</p>
+                      <p className="text-xs text-slate-400 dark:text-white/30">{sub}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Name (only when "to" looks like a new contact) */}
+          <div>
+            <label className={lbl}>Name <span className="font-normal opacity-50">(optional)</span></label>
+            <input className={inp} placeholder="Contact name…" value={nameInput} onChange={e => setNameInput(e.target.value)} />
+          </div>
+
+          {/* Email-specific fields */}
+          {channel === "email" && (
+            <>
+              <div>
+                <label className={lbl}>From inbox</label>
+                <select value={inbox} onChange={e => setInbox(e.target.value as typeof inbox)}
+                  className={inp}>
+                  <option value="support">Support (support@leadash.com)</option>
+                  <option value="marketing">Marketing (temi@leadash.com)</option>
+                  <option value="academy">Academy (academy@leadash.com)</option>
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Subject</label>
+                <input className={inp} placeholder="Subject…" value={subject} onChange={e => setSubject(e.target.value)} />
+              </div>
+            </>
+          )}
+
+          {/* WhatsApp template toggle */}
+          {channel === "whatsapp" && (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setUseTemplate(v => !v)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${useTemplate ? "bg-green-500" : "bg-slate-200 dark:bg-white/10"}`}>
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${useTemplate ? "translate-x-4" : ""}`} />
+              </button>
+              <label className="text-xs text-slate-600 dark:text-white/50">Use approved template</label>
+            </div>
+          )}
+
+          {/* WhatsApp template picker */}
+          {channel === "whatsapp" && useTemplate && (
+            <div className="space-y-2">
+              <select value={templateName} onChange={e => { setTemplateName(e.target.value); setTemplateParams({}); }}
+                className={inp}>
+                <option value="">Choose a template…</option>
+                {waTemplates.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+              {waTemplates.length === 0 && (
+                <p className="text-xs text-slate-400 dark:text-white/30">No approved templates. Add them in CRM Settings → WhatsApp Templates.</p>
+              )}
+              {templateName && bodyText && (
+                <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-slate-500 dark:text-white/40 font-mono leading-relaxed">{bodyText}</div>
+              )}
+              {placeholders.map(n => (
+                <input key={n} placeholder={`Value for {{${n}}}`}
+                  value={templateParams[n] ?? ""}
+                  onChange={e => setTemplateParams(p => ({ ...p, [n]: e.target.value }))}
+                  className={inp} />
+              ))}
+            </div>
+          )}
+
+          {/* Message body */}
+          {!(channel === "whatsapp" && useTemplate && templateName) && (
+            <div>
+              <label className={lbl}>Message</label>
+              <textarea className={`${inp} resize-none`} rows={4}
+                placeholder="Type your message…"
+                value={body}
+                onChange={e => setBody(e.target.value)}
+              />
+            </div>
+          )}
+
+          {channel === "whatsapp" && useTemplate && templateName && (
+            <div>
+              <label className={lbl}>Message preview</label>
+              <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-white/40">
+                {bodyText
+                  ? Object.entries(templateParams).reduce((s, [k, v]) => s.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v || `{{${k}}}`), bodyText)
+                  : <span className="text-white/20">Select a template to preview</span>}
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-400">{error}</p>}
+
+          <button onClick={handleSend}
+            disabled={sending || !toInput.trim() || (channel === "whatsapp" && useTemplate && !templateName)}
+            className="w-full py-2.5 text-sm font-bold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
+            {sending ? "Sending…" : "Send Message"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Bulk action bar ───────────────────────────────────────────────────────────
 
 function BulkActionBar({ selected, total, onResolveAll, onClearSelection }: {
@@ -519,18 +762,19 @@ function CrmInboxContent() {
   const searchParams = useSearchParams();
   const activeId     = searchParams.get("id");
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages,      setMessages]      = useState<CrmMessage[]>([]);
-  const [activeConvo,   setActiveConvo]   = useState<Conversation | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [sending,       setSending]       = useState(false);
-  const [composeText,   setComposeText]   = useState("");
-  const [isNote,        setIsNote]        = useState(false);
-  const [statusFilter,  setStatusFilter]  = useState("open");
-  const [channelFilter, setChannelFilter] = useState("all");
-  const [winOpen,       setWinOpen]       = useState(false);
-  const [error,         setError]         = useState("");
-  const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [conversations,  setConversations]  = useState<Conversation[]>([]);
+  const [messages,       setMessages]       = useState<CrmMessage[]>([]);
+  const [activeConvo,    setActiveConvo]    = useState<Conversation | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [sending,        setSending]        = useState(false);
+  const [composeText,    setComposeText]    = useState("");
+  const [isNote,         setIsNote]         = useState(false);
+  const [statusFilter,   setStatusFilter]   = useState("open");
+  const [channelFilter,  setChannelFilter]  = useState("all");
+  const [winOpen,        setWinOpen]        = useState(false);
+  const [error,          setError]          = useState("");
+  const [selected,       setSelected]       = useState<Set<string>>(new Set());
+  const [newConvoOpen,   setNewConvoOpen]   = useState(false);
   const [templateMode,     setTemplateMode]     = useState(false);
   const [waTemplates,      setWaTemplates]      = useState<Array<{ id: string; name: string; status: string; components: Array<{ type: string; text?: string }> }>>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -712,6 +956,15 @@ function CrmInboxContent() {
 
   return (
     <div className="flex h-full min-h-screen bg-slate-50 dark:bg-[#0f0f0f]">
+      {newConvoOpen && (
+        <NewConversationModal
+          onClose={() => setNewConvoOpen(false)}
+          onCreated={(id) => {
+            setNewConvoOpen(false);
+            loadConvos().then(() => router.push(`/admin/crm?id=${id}`, { scroll: false }));
+          }}
+        />
+      )}
 
       {/* ── Left: conversation list ─────────────────────────────────────── */}
       <div className="w-[300px] flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-slate-200 dark:border-white/10 flex flex-col relative">
@@ -719,7 +972,13 @@ function CrmInboxContent() {
         <div className="p-4 border-b border-slate-100 dark:border-white/10 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-base font-bold text-slate-800 dark:text-white">Inbox</h1>
-            <a href="/admin/crm-settings" className="text-[10px] text-white/30 hover:text-white/60 transition-colors">⚙ Settings</a>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNewConvoOpen(true)}
+                className="text-[10px] font-bold bg-orange-500 hover:bg-orange-400 text-white px-2.5 py-1 rounded-lg transition-colors">
+                + New
+              </button>
+              <a href="/admin/crm-settings" className="text-[10px] text-white/30 hover:text-white/60 transition-colors">⚙</a>
+            </div>
           </div>
           {/* Status filter */}
           <div className="flex gap-1 mb-2">
