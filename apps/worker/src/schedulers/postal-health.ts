@@ -157,7 +157,11 @@ export async function checkPostalHealth(
 // ── Email transport (mirrors apps/web/src/lib/email/alerts.ts) ───────────────
 
 async function sendEmail(opts: { to: string; subject: string; html: string; text: string }): Promise<void> {
-  const from      = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+  // Bare leadash.com is NOT Resend-verified — only the notifications.leadash.com
+  // subdomain is. Falling back to the bare domain causes a silent 403 with no
+  // fallback transport attempted (see the resendKey branch below), which is
+  // exactly what happened when RESEND_FROM_EMAIL was unset on this worker's env.
+  const from      = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
   const resendKey = process.env.RESEND_API_KEY;
 
   if (resendKey) {

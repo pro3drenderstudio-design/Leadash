@@ -2,7 +2,9 @@
  * Alert emails for admin infrastructure notifications.
  * Uses same transport (Postal HTTP API → Resend fallback) as notifications.ts.
  */
-const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
+// Bare leadash.com is NOT Resend-verified — only the notifications.leadash.com
+// subdomain is. Keep this fallback aligned with that, or Resend sends 403.
+const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "no-reply@notifications.leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 async function sendEmail(opts: {

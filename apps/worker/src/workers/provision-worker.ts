@@ -57,7 +57,7 @@ async function sendProvisioningAlert(opts: {
   workspaceEmail: string;
 }): Promise<void> {
   const resendKey = process.env.RESEND_API_KEY;
-  const from      = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+  const from      = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
   const subject   = `[Leadash] New Microsoft Inbox Order — ${opts.domain}`;
 
   const emailList = opts.inboxEmails.map(e => `<li>${e}</li>`).join("");

@@ -16,7 +16,7 @@ import type { Offer, OfferLineItem, GrantedItem } from "@/types/offers";
 
 const APP_URL    = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 const API_KEY    = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 
 interface CheckoutBody {
   session_id?: string;

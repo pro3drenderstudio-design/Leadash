@@ -184,7 +184,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 async function notifyAdmin(opts: { domain: string; statusLabel: string; details: string[]; appUrl: string }) {
   const resendKey = process.env.RESEND_API_KEY;
-  const from      = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+  const from      = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
   const subject   = `[Leadash] M365 Provision Done — ${opts.domain}: ${opts.statusLabel}`;
 
   const html = `

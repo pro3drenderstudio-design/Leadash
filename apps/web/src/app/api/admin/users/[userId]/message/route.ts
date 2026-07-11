@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
-const FROM    = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+const FROM    = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 async function requireAdmin() {

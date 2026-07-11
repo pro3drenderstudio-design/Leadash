@@ -15,7 +15,7 @@ import {
 } from "@/lib/admin/modules";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
-const FROM    = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+const FROM    = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 
 function sanitizeModules(input: unknown): AdminModuleKey[] {
   if (!Array.isArray(input)) return [];

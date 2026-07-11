@@ -3,7 +3,7 @@
  * Primary: Resend API (reliable from Vercel serverless).
  * Fallback: Postal HTTP API on VPS (if POSTAL_HOST + POSTAL_API_KEY are set).
  */
-const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
+const FROM    = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "no-reply@notifications.leadash.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
 // Always CC'd on admin-facing alerts (tickets, provisioning, domain purchase)

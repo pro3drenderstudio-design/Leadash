@@ -5,7 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 const WA_COMMUNITY_MANAGER  = "2349110260332";
 const APP_URL               = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 const RESEND_API_KEY        = process.env.RESEND_API_KEY;
-const RESEND_FROM           = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.com";
+const RESEND_FROM           = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 const PAYSTACK_SECRET_KEY   = process.env.PAYSTACK_SECRET_KEY ?? "";
 
 async function verifyPaystackPayment(reference: string, expectedKobo: number): Promise<boolean> {

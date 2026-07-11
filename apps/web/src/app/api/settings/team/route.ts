@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
 
 const APP_URL  = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
-const FROM     = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "notifications@leadash.com";
+const FROM     = process.env.RESEND_FROM_EMAIL ?? process.env.POSTAL_FROM ?? "no-reply@notifications.leadash.com";
 
 export type InviteEmailResult = {
   status: "sent" | "skipped" | "failed";
