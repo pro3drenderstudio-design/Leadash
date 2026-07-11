@@ -14,6 +14,7 @@ const APP_SECRET      = process.env.WHATSAPP_APP_SECRET  ?? "";
 const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
 const RESEND_API_KEY  = process.env.RESEND_API_KEY        ?? "";
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL     ?? "support@leadash.com";
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL     ?? "no-reply@notifications.leadash.com";
 const APP_URL         = process.env.NEXT_PUBLIC_APP_URL   ?? "https://leadash.com";
 
 function verifySignature(rawBody: string, sig: string): boolean {
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
             method: "POST",
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              from:    `Leadash CRM <${SUPPORT_EMAIL}>`,
+              from:    `Leadash CRM <${RESEND_FROM}>`,
               to:      [notifyEmail],
               subject: `New WhatsApp from ${phone}`,
               html:    `<p><strong>${phone}</strong> sent a WhatsApp message:</p><blockquote style="border-left:3px solid #25d366;padding-left:12px;color:#374151">${msgBody.slice(0, 400).replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,

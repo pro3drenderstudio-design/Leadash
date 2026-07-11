@@ -11,10 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
 
-const SECRET = process.env.POSTAL_WEBHOOK_SECRET;
+const SECRET          = process.env.POSTAL_WEBHOOK_SECRET;
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
 const ACADEMY_EMAIL   = process.env.CRM_ACADEMY_EMAIL   ?? "academy@leadash.com";
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL   ?? "no-reply@notifications.leadash.com";
 const RESEND_API_KEY  = process.env.RESEND_API_KEY ?? "";
 const APP_URL         = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.com";
 
@@ -197,7 +198,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from:     `Leadash CRM <${SUPPORT_EMAIL}>`,
+        from:     `Leadash CRM <${RESEND_FROM}>`,
         to:       [notifyEmail],
         reply_to: [fromEmail],
         subject:  `New email from ${fromName || fromEmail}`,
