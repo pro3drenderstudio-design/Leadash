@@ -7,9 +7,9 @@ import { FunnelIcon, FUNNEL_ICON_LIST } from "./funnel-icons";
 import { CountdownBlock } from "./interactive/CountdownBlock";
 import { ChallengeSignupFormBlock } from "./interactive/ChallengeSignupFormBlock";
 import { StatsBarBlock } from "./interactive/StatsBarBlock";
-import { publishVideoTime } from "./interactive/videoTimeBus";
 import { YouTubePlayer } from "./interactive/YouTubePlayer";
 import { HLSPlayer } from "./interactive/HLSPlayer";
+import { PlainVideoPlayer } from "./interactive/PlainVideoPlayer";
 import { FunnelTracking } from "@/lib/tracking/pixels";
 
 export type RenderMode = "edit" | "live";
@@ -94,19 +94,18 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
       );
   }
   if (url) {
-    return (
-      <video
-        src={url}
-        controls
-        playsInline
-        preload={autoplay ? "auto" : "none"}
-        autoPlay={autoplay && mode === "live"}
-        muted={autoplay}
-        poster={poster || undefined}
-        style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
-        onTimeUpdate={mode === "live" ? e => publishVideoTime(blockId, e.currentTarget.currentTime) : undefined}
-      />
-    );
+    return mode === "live"
+      ? <PlainVideoPlayer blockId={blockId} src={url} poster={poster} autoplay={autoplay} />
+      : (
+        <video
+          src={url}
+          controls
+          playsInline
+          preload="none"
+          poster={poster || undefined}
+          style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
+        />
+      );
   }
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)" }}>

@@ -1,9 +1,13 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { publishVideoTime } from "./videoTimeBus";
+import { VideoPlayOverlay } from "./VideoPlayOverlay";
 
 interface YTPlayerInstance {
   getCurrentTime(): number;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  playVideo(): void;
+  unMute(): void;
   destroy(): void;
 }
 
@@ -40,7 +44,12 @@ function ensureYTApi(cb: () => void) {
   };
 }
 
-function ActivePlayer({ blockId, ytId, muted }: { blockId: string; ytId: string; muted?: boolean }) {
+function ActivePlayer({ blockId, ytId, muted, onReady }: {
+  blockId: string;
+  ytId: string;
+  muted?: boolean;
+  onReady?: (player: YTPlayerInstance) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef    = useRef<YTPlayerInstance | null>(null);
   const timerRef     = useRef<number | null>(null);
@@ -59,6 +68,7 @@ function ActivePlayer({ blockId, ytId, muted }: { blockId: string; ytId: string;
             timerRef.current = window.setInterval(() => {
               publishVideoTime(blockId, target.getCurrentTime());
             }, 1000);
+            onReady?.(target);
           },
         },
       });
@@ -75,49 +85,45 @@ function ActivePlayer({ blockId, ytId, muted }: { blockId: string; ytId: string;
 }
 
 export function YouTubePlayer({ blockId, ytId, autoplay }: { blockId: string; ytId: string; autoplay?: boolean }) {
-  // Autoplay-on-load: browsers only allow unmuted autoplay after a user
-  // gesture, so we mount the player muted and let the visitor unmute via
-  // the native YouTube controls. Without the autoplay flag we keep the
-  // click-to-play thumbnail gate (lighter weight, no muted-autoplay surprise).
+  // Non-autoplay: click-to-play thumbnail gate (lighter weight, no muted-autoplay surprise).
+  // Autoplay: the player mounts and starts playing muted immediately (browsers block
+  // unmuted autoplay), but we keep a dim/blurred "click to watch" overlay on top so the
+  // click affordance still reads normally — clicking restarts from 0 with sound.
   const [active, setActive] = useState(!!autoplay);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const playerRef = useRef<YTPlayerInstance | null>(null);
 
-  if (active) {
-    return <ActivePlayer blockId={blockId} ytId={ytId} muted={autoplay} />;
-  }
+  const handleOverlayPress = useCallback(() => {
+    if (autoplay) {
+      if (!playerRef.current) return; // player not ready yet — keep the overlay up
+      playerRef.current.seekTo(0, true);
+      playerRef.current.unMute();
+      playerRef.current.playVideo();
+    } else {
+      setActive(true);
+    }
+    setShowOverlay(false);
+  }, [autoplay]);
 
   return (
-    <button
-      onClick={() => setActive(true)}
-      aria-label="Play video"
-      style={{
-        position: "relative", width: "100%", height: "100%",
-        border: "none", padding: 0, cursor: "pointer", background: "#000", display: "block",
-      }}
-    >
-      {/* Thumbnail — hqdefault is 480×360, loads fast */}
-      <img
-        src={`https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`}
-        alt=""
-        loading="lazy"
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-      />
-      {/* Play button overlay */}
-      <span style={{
-        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <span style={{
-          width: 72, height: 72, borderRadius: "50%",
-          background: "rgba(0,0,0,0.72)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          backdropFilter: "blur(4px)",
-          transition: "transform 0.15s, background 0.15s",
-        }}>
-          {/* Triangle play icon */}
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-            <polygon points="6,3 20,12 6,21" />
-          </svg>
-        </span>
-      </span>
-    </button>
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      {active ? (
+        <ActivePlayer
+          blockId={blockId}
+          ytId={ytId}
+          muted={autoplay}
+          onReady={p => { playerRef.current = p; }}
+        />
+      ) : (
+        // Thumbnail — hqdefault is 480×360, loads fast
+        <img
+          src={`https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`}
+          alt=""
+          loading="lazy"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      )}
+      {showOverlay && <VideoPlayOverlay onPress={handleOverlayPress} />}
+    </div>
   );
 }
