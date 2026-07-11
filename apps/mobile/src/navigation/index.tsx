@@ -3,6 +3,7 @@ import { NavigationContainer, DarkTheme, NavigationContainerRef, getFocusedRoute
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Pressable, Platform, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import * as Notifications from "expo-notifications";
 import { useQuery } from "@tanstack/react-query";
@@ -89,34 +90,52 @@ const TAB_ICON: Record<keyof TabParams, IconName> = {
   InboxesTab:   "server",
 };
 
-// iOS gets a liquid-glass tab bar: translucent blur floating over content.
-// Android keeps a solid docked bar (Material convention).
-const glassTabBar = Platform.OS === "ios"
-  ? {
-      tabBarStyle: {
-        position: "absolute" as const,
-        backgroundColor: "transparent",
-        borderTopColor: "rgba(255,255,255,0.10)",
-        elevation: 0,
-      },
-      tabBarBackground: () => (
-        <BlurView tint="systemChromeMaterialDark" intensity={80} style={StyleSheet.absoluteFill} />
-      ),
-    }
-  : {
-      tabBarStyle: {
-        backgroundColor: "rgba(14,14,19,0.98)",
-        borderTopColor: C.border,
-      },
-    };
-
 function Tabs() {
+  const insets = useSafeAreaInsets();
   const { data: notifData } = useQuery({
     queryKey: ["notifications", 0],
     queryFn:  () => getNotifications(0),
     refetchInterval: 60_000,
   });
   const unread = notifData?.unread_count ?? 0;
+
+  // iOS gets a WhatsApp-style liquid-glass pill: a floating rounded capsule
+  // inset from the edges, blur background, active tab in its own highlight
+  // capsule. Android keeps the solid docked Material bar.
+  const glassTabBar = Platform.OS === "ios"
+    ? {
+        tabBarStyle: {
+          position: "absolute" as const,
+          left: 16,
+          right: 16,
+          bottom: Math.max(insets.bottom, 16) + 4,
+          height: 64,
+          borderRadius: 32,
+          borderTopWidth: 0,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.12)",
+          backgroundColor: "transparent",
+          overflow: "hidden" as const,
+          elevation: 0,
+          paddingBottom: 0,
+        },
+        tabBarItemStyle: {
+          borderRadius: 24,
+          marginHorizontal: 5,
+          marginVertical: 8,
+          overflow: "hidden" as const,
+        },
+        tabBarActiveBackgroundColor: "rgba(255,255,255,0.10)",
+        tabBarBackground: () => (
+          <BlurView tint="systemChromeMaterialDark" intensity={90} style={StyleSheet.absoluteFill} />
+        ),
+      }
+    : {
+        tabBarStyle: {
+          backgroundColor: "rgba(14,14,19,0.98)",
+          borderTopColor: C.border,
+        },
+      };
 
   return (
     <Tab.Navigator
