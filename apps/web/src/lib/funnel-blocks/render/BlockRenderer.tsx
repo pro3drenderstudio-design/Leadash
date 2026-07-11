@@ -68,14 +68,14 @@ function youtubeId(url: string): string | undefined {
  * so other blocks (e.g. a CTA button) can reveal themselves once playback
  * crosses a threshold, without any shared React context.
  */
-function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholderSize = 60, poster?: string): React.ReactNode {
+function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholderSize = 60, poster?: string, autoplay?: boolean): React.ReactNode {
   const ytId = url ? youtubeId(url) : undefined;
   if (ytId) {
     return mode === "live"
-      ? <YouTubePlayer blockId={blockId} ytId={ytId} />
+      ? <YouTubePlayer blockId={blockId} ytId={ytId} autoplay={autoplay} />
       : (
         <iframe
-          src={`https://www.youtube.com/embed/${ytId}`}
+          src={`https://www.youtube.com/embed/${ytId}${autoplay ? "?autoplay=1&mute=1" : ""}`}
           title="video"
           style={{ width: "100%", height: "100%", border: "none" }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -85,7 +85,7 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
   }
   if (url && url.includes(".m3u8")) {
     return mode === "live"
-      ? <HLSPlayer blockId={blockId} src={url} poster={poster} />
+      ? <HLSPlayer blockId={blockId} src={url} poster={poster} autoplay={autoplay} />
       : (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#000", color: "#fff", fontSize: 13, gap: 8, flexDirection: "column" }}>
           <FunnelIcon name="play" size={32} strokeWidth={0} />
@@ -99,7 +99,9 @@ function renderEmbed(blockId: string, url: string, mode: RenderMode, placeholder
         src={url}
         controls
         playsInline
-        preload="none"
+        preload={autoplay ? "auto" : "none"}
+        autoPlay={autoplay && mode === "live"}
+        muted={autoplay}
         poster={poster || undefined}
         style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
         onTimeUpdate={mode === "live" ? e => publishVideoTime(blockId, e.currentTarget.currentTime) : undefined}
@@ -361,13 +363,14 @@ export function BlockRenderer({ block, ctx }: { block: Block; ctx: BlockRenderCo
     case "video": {
       const url = (p.url as string) || "";
       const poster = (p.poster as string) || "";
+      const autoplay = !!p.autoplay;
       const sizeMap: Record<string, number | string> = { s: 480, m: 680, l: 860, xl: "100%" };
       const sizeProp = (p.size as string) || "m";
       const maxW = sizeMap[sizeProp] ?? 680;
       return (
         <div style={{ padding: "10px 28px" }}>
           <div style={{ maxWidth: maxW === "100%" ? "100%" : maxW, margin: "0 auto", aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "#000", position: "relative" }}>
-            {renderEmbed(block.id, url, ctx.mode, 60, poster)}
+            {renderEmbed(block.id, url, ctx.mode, 60, poster, autoplay)}
           </div>
         </div>
       );

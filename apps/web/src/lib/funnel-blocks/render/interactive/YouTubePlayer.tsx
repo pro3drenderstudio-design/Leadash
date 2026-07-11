@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { publishVideoTime } from "./videoTimeBus";
 
 interface YTPlayerInstance {
@@ -40,7 +40,7 @@ function ensureYTApi(cb: () => void) {
   };
 }
 
-export function YouTubePlayer({ blockId, ytId }: { blockId: string; ytId: string }) {
+function ActivePlayer({ blockId, ytId, muted }: { blockId: string; ytId: string; muted?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef    = useRef<YTPlayerInstance | null>(null);
   const timerRef     = useRef<number | null>(null);
@@ -53,7 +53,7 @@ export function YouTubePlayer({ blockId, ytId }: { blockId: string; ytId: string
       if (!YT) return;
       playerRef.current = new YT.Player(containerRef.current, {
         videoId:    ytId,
-        playerVars: { rel: 0, modestbranding: 1, enablejsapi: 1 },
+        playerVars: { rel: 0, modestbranding: 1, enablejsapi: 1, autoplay: 1, mute: muted ? 1 : 0 },
         events: {
           onReady: ({ target }) => {
             timerRef.current = window.setInterval(() => {
@@ -69,7 +69,55 @@ export function YouTubePlayer({ blockId, ytId }: { blockId: string; ytId: string
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [blockId, ytId]);
+  }, [blockId, ytId, muted]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+}
+
+export function YouTubePlayer({ blockId, ytId, autoplay }: { blockId: string; ytId: string; autoplay?: boolean }) {
+  // Autoplay-on-load: browsers only allow unmuted autoplay after a user
+  // gesture, so we mount the player muted and let the visitor unmute via
+  // the native YouTube controls. Without the autoplay flag we keep the
+  // click-to-play thumbnail gate (lighter weight, no muted-autoplay surprise).
+  const [active, setActive] = useState(!!autoplay);
+
+  if (active) {
+    return <ActivePlayer blockId={blockId} ytId={ytId} muted={autoplay} />;
+  }
+
+  return (
+    <button
+      onClick={() => setActive(true)}
+      aria-label="Play video"
+      style={{
+        position: "relative", width: "100%", height: "100%",
+        border: "none", padding: 0, cursor: "pointer", background: "#000", display: "block",
+      }}
+    >
+      {/* Thumbnail — hqdefault is 480×360, loads fast */}
+      <img
+        src={`https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`}
+        alt=""
+        loading="lazy"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+      {/* Play button overlay */}
+      <span style={{
+        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: "rgba(0,0,0,0.72)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          backdropFilter: "blur(4px)",
+          transition: "transform 0.15s, background 0.15s",
+        }}>
+          {/* Triangle play icon */}
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+            <polygon points="6,3 20,12 6,21" />
+          </svg>
+        </span>
+      </span>
+    </button>
+  );
 }

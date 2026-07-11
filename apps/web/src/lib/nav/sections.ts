@@ -81,7 +81,7 @@ export const SECTIONS: NavSection[] = [
     icon: ICON_ACADEMY,
     href: "/academy",
     badge: "New",
-    external: true,
+    external: false,
     tabs: [],
   },
 ];

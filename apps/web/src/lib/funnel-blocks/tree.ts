@@ -27,15 +27,15 @@ export function defaultProps(type: BlockType): Record<string, unknown> {
     case "icon":           return { icon_type:"star", icon_color:"#f97316", icon_size:48, icon_bg:"rgba(249,115,22,0.12)", icon_bg_shape:"circle", align:"center", bg_color:"transparent" };
     case "icon-box":       return { icon_type:"bolt", icon_color:"#f97316", icon_size:32, icon_position:"top", title:"Feature title", body:"A short description of this feature or benefit.", title_color:"#ffffff", body_color:"#9aa4b2", title_size:18, body_size:15, link_text:"", link_url:"", bg_color:"transparent" };
     case "image":          return { src:"", alt:"", align:"center", width:"100%", bg_color:"transparent" };
-    case "video":          return { url:"", caption:"Watch the 2-minute overview", bg_color:"#0c0c0f" };
+    case "video":          return { url:"", caption:"Watch the 2-minute overview", bg_color:"#0c0c0f", autoplay:false };
     case "hero":           return { eyebrow:"7-Day Job & Client Acquisition Challenge", headline:"Land a Job or High-Paying Client in 7 Days", subtext:"A structured, hands-on challenge that takes you from zero to your first client or job offer — in just one week.", button_text:"Join the Challenge — ₦10,000 →", button_url:"#join-form", button2_text:"See What You'll Learn", button2_url:"#curriculum", accent_color:"#f97316", color:"#111827", subtext_color:"#4b5563", bg_color:"#ffffff" };
     case "countdown-timer":return { label:"Enrollment closes in · Only 50 spots per cohort", accent_color:"#f97316", bg_color:"#111827", evergreen:true, duration_minutes:2880, target_date:"" };
     case "testimonial":    return { quote:"This product completely changed how I approach outreach.", name:"Jane Doe", role:"Founder, AcmeCo", initials:"JD", result:"", card_bg:"rgba(255,255,255,0.03)", card_border:"rgba(255,255,255,0.07)", quote_color:"#e7ecf3", name_color:"#fff", role_color:"#7e8794", bg_color:"#0c0c0f" };
     case "pricing-card":   return { title:"Full Package", price:"₦135,000", period:"one-time", button_text:"Get Access", button_url:"", bg_color:"#0e1017", features:[{text:"Feature one"},{text:"Feature two"},{text:"Feature three"}] };
     case "faq-accordion":  return { bg_color:"#0c0c0f", item_bg:"rgba(255,255,255,0.03)", item_border:"rgba(255,255,255,0.07)", q_color:"#fff", a_color:"#9aa3b0", accent_color:"#f97316", show_number:false, items:[{q:"How does this work?",a:"You sign up and get instant access to everything."},{q:"Is there a guarantee?",a:"Yes — 30-day money back guarantee, no questions asked."}] };
-    case "stats-bar":      return { bg_color:"#111827", value_color:"#ffffff", label_color:"#6b7280", items:[{value:"1,200+",label:"Students"},{value:"4.9★",label:"Avg rating"},{value:"30+",label:"Countries"}] };
+    case "stats-bar":      return { bg_color:"#111827", value_color:"#ffffff", label_color:"#6b7280", accent_color:"", value_size:34, label_size:12, label_uppercase:true, show_icons:false, dividers:false, animate:true, items:[{value:"1,200+",label:"Students",icon:"users"},{value:"4.9★",label:"Avg rating",icon:"star"},{value:"30+",label:"Countries",icon:"globe"}] };
     case "cta-button":     return { text:"Get Started Free", url:"", accent_color:"#f97316", bg_color:"transparent" };
-    case "optin-form":     return { heading:"Join the 7-Day Challenge", subtext:"₦10,000 one-time · Lifetime access to community", section_label:"Secure Your Spot", section_heading:"Join the 7-Day Challenge", section_subtext:"₦10,000 · Spots limited to 50 per cohort", opay_account:"9021060638", opay_name:"Vescrow Solutions", amount_ngn:10000, wa_number:"2349110260332", accent_color:"#f97316", bg_color:"#f9fafb", show_paystack:true, confirmation_note:"Our community manager confirms within 2 hours and adds you to the WhatsApp group." };
+    case "optin-form":     return { heading:"Join the 7-Day Challenge", subtext:"₦10,000 one-time · Lifetime access to community", section_label:"Secure Your Spot", section_heading:"Join the 7-Day Challenge", section_subtext:"₦10,000 · Spots limited to 50 per cohort", opay_account:"9021060638", opay_name:"Vescrow Solutions", amount_ngn:10000, wa_number:"2349110260332", wa_group_link:"", accent_color:"#f97316", bg_color:"#f9fafb", show_paystack:true, confirmation_note:"Our community manager confirms within 2 hours and adds you to the WhatsApp group.", success_headline:"You're registered!", success_message:"Message our community manager on WhatsApp to confirm your payment and get added to the group.", success_button_text:"Message Us on WhatsApp", success_button_icon:"💬", success_group_text:"Or join the group directly:", success_group_label:"Join WhatsApp Group →" };
     case "section":        return { bg_color:"#0c0c0f" };
     case "row":            return { bg_color:"transparent" };
     case "column":         return { bg_color:"transparent" };
@@ -212,6 +212,21 @@ export function removeBlockItem(tree: Block[], id: string, idx: number): Block[]
   if (!current) return tree;
   return mapChildren(tree, current.parentId, children =>
     children.map(b => (b.id === id ? { ...b, props: { ...b.props, items: ((b.props.items as unknown[]) ?? []).filter((_, j) => j !== idx) } } : b)),
+  );
+}
+
+export function reorderBlockItem(tree: Block[], id: string, from: number, to: number): Block[] {
+  const current = locate(tree, id);
+  if (!current) return tree;
+  return mapChildren(tree, current.parentId, children =>
+    children.map(b => {
+      if (b.id !== id) return b;
+      const items = [...((b.props.items as unknown[]) ?? [])];
+      if (from < 0 || from >= items.length || to < 0 || to >= items.length) return b;
+      const [moved] = items.splice(from, 1);
+      items.splice(to, 0, moved);
+      return { ...b, props: { ...b.props, items } };
+    }),
   );
 }
 

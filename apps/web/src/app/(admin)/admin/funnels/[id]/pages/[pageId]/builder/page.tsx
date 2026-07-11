@@ -17,6 +17,7 @@ import {
   updateBlockItem,
   addBlockItem,
   removeBlockItem,
+  reorderBlockItem,
   setColumnPreset,
 } from "@/lib/funnel-blocks/tree";
 import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/icons";
@@ -366,6 +367,10 @@ export default function BuilderPage() {
 
   function removeItem(id: string, idx: number) {
     commitBlocks(removeBlockItem(blocks, id, idx));
+  }
+
+  function reorderItem(id: string, from: number, to: number) {
+    commitBlocks(reorderBlockItem(blocks, id, from, to));
   }
 
   function applyColumnPreset(rowId: string, widths: number[]) {
@@ -745,6 +750,7 @@ export default function BuilderPage() {
               onCommitItem={commitItem}
               onAddItem={addItem}
               onRemoveItem={removeItem}
+              onReorderItem={reorderItem}
               onColumnPreset={applyColumnPreset}
               onSave={() => save()}
               funnelId={funnelId}
@@ -955,6 +961,7 @@ interface RPProps {
   onCommitItem: (id:string, idx:number, field:string|null, val:string)=>void;
   onAddItem: (id:string, item:unknown)=>void;
   onRemoveItem: (id:string, idx:number)=>void;
+  onReorderItem: (id:string, from:number, to:number)=>void;
   onColumnPreset: (rowId:string, widths:number[])=>void;
   onSave: ()=>void;
   videoBlocks: { id:string; label:string }[];
@@ -962,8 +969,10 @@ interface RPProps {
   onSaveFunnelTracking: (tracking: Record<string, string>) => void;
 }
 
-function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onColumnPreset, onSave, videoBlocks, funnelTracking, onSaveFunnelTracking }: RPProps) {
+function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSetProps, onSetLayout, onSetPage, onCommitItem, onAddItem, onRemoveItem, onReorderItem, onColumnPreset, onSave, videoBlocks, funnelTracking, onSaveFunnelTracking }: RPProps) {
   const [rpTab, setRpTab] = useState<"content"|"layout">("content");
+  const [openIconPicker, setOpenIconPicker] = useState<number | null>(null);
+  useEffect(() => { setOpenIconPicker(null); }, [b?.id]);
 
   const Field = RPField;
   const SL    = RPSL;
@@ -1013,9 +1022,28 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
     if (!b) return null;
     const isFallback = isPropFallback(key);
     const v = (getDP(key) as string) ?? "#0c0c0f";
-    const safe = v === "transparent" ? "#0c0c0f" : v;
+    const isTransparent = v === "transparent";
+    const safe = isTransparent ? "#0c0c0f" : v;
     return (
       <div className="flex gap-2 items-center">
+        {/* Checkerboard transparent toggle */}
+        <button
+          onClick={() => setDP(key, isTransparent ? "#0c0c0f" : "transparent")}
+          title={isTransparent ? "Transparent (click to use solid color)" : "Set transparent"}
+          style={{
+            width: 34, height: 34, borderRadius: 8, flexShrink: 0, cursor: "pointer",
+            border: isTransparent ? "2px solid #f97316" : "1px solid rgba(255,255,255,0.12)",
+            backgroundImage: "linear-gradient(45deg,#666 25%,transparent 25%),linear-gradient(-45deg,#666 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#666 75%),linear-gradient(-45deg,transparent 75%,#666 75%)",
+            backgroundSize: "8px 8px",
+            backgroundPosition: "0 0,0 4px,4px -4px,-4px 0px",
+            backgroundColor: "#999",
+            position: "relative", overflow: "hidden",
+          }}>
+          {isTransparent && (
+            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#f97316", textShadow: "0 0 4px rgba(0,0,0,0.8)" }}>✓</span>
+          )}
+        </button>
+        {/* Color swatch */}
         <div className="relative w-[34px] h-[34px] rounded-lg shrink-0"
           style={{ background: safe, border: isFallback ? "1px dashed rgba(255,255,255,0.12)" : "1px solid rgba(255,255,255,0.1)", opacity: isFallback ? 0.6 : 1 }}>
           <input type="color" value={safe} onChange={e => setDP(key, e.target.value)}
@@ -1468,8 +1496,9 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
   function itemsCtl(kind: "stats"|"faq"|"list"|"pricing") {
     if (!b) return null;
     const isIconList = kind === "list" && b.type === "icon-list";
+    const isStats    = kind === "stats";
     const items = (b.props.items as unknown[]) ?? [];
-    const blank = kind === "stats" ? { value: "0", label: "Label" }
+    const blank = kind === "stats" ? { value: "0", label: "Label", icon: "" }
       : kind === "faq" ? { q: "New question?", a: "Answer." }
       : isIconList ? { text: "New item", icon_type: "check" }
       : { text: "New item" };
@@ -1477,35 +1506,131 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
       <div>
         <div className="flex flex-col gap-1.5 mb-2">
           {items.map((it, idx) => (
-            <div key={idx} className="flex items-start gap-2 px-2.5 py-2 bg-white/5 border border-white/[0.07] rounded-lg">
-              {isIconList && (
-                <div className="shrink-0 mt-0.5">
-                  <div className="w-6 h-6 flex items-center justify-center text-orange-400 mb-0.5">
+            <div key={idx}>
+              <div className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 border border-white/[0.07] rounded-lg">
+                {isIconList && (
+                  <button
+                    onClick={() => setOpenIconPicker(openIconPicker === idx ? null : idx)}
+                    title="Change icon"
+                    style={{
+                      width: 26, height: 26, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                      border: openIconPicker === idx ? "1.5px solid #f97316" : "1px solid rgba(255,255,255,0.12)",
+                      background: openIconPicker === idx ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.04)",
+                      color: openIconPicker === idx ? "#f97316" : "rgba(255,255,255,0.55)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
                     <FunnelIcon name={(it as {icon_type?: string}).icon_type ?? "check"} size={13} color="currentColor" strokeWidth={2} />
-                  </div>
-                  <select
-                    value={(it as {icon_type?: string}).icon_type ?? "check"}
-                    onChange={e => {
-                      const updated = (items as Array<Record<string, unknown>>).map((item, i) =>
-                        i === idx ? { ...item, icon_type: e.target.value } : item
+                  </button>
+                )}
+                {isStats && (
+                  <button
+                    onClick={() => setOpenIconPicker(openIconPicker === idx ? null : idx)}
+                    title="Change icon"
+                    style={{
+                      width: 26, height: 26, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                      border: openIconPicker === idx ? "1.5px solid #f97316" : "1px solid rgba(255,255,255,0.12)",
+                      background: openIconPicker === idx ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.04)",
+                      color: openIconPicker === idx ? "#f97316" : "rgba(255,255,255,0.55)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                    {(it as {icon?: string}).icon
+                      ? <FunnelIcon name={(it as {icon?: string}).icon!} size={13} color="currentColor" strokeWidth={2} />
+                      : <Icon paths={["M12 4v16","M4 12h16"]} size={11} sw={2} />}
+                  </button>
+                )}
+                <span className="flex-1 text-xs text-white/45 truncate">
+                  {kind === "stats"
+                    ? `${(it as {value:string;label:string}).value} · ${(it as {value:string;label:string}).label}`
+                    : kind === "faq"
+                    ? (it as {q:string}).q
+                    : (it as {text:string}).text}
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => { if (idx > 0) onReorderItem(b.id, idx, idx - 1); }}
+                    disabled={idx === 0}
+                    style={{ opacity: idx === 0 ? 0.2 : 1 }}
+                    className="border-none bg-transparent text-white/30 cursor-pointer p-0.5 hover:text-white/70">
+                    <Icon paths={["M12 19V5","M6 11l6-6 6 6"]} size={13} sw={2} />
+                  </button>
+                  <button
+                    onClick={() => { if (idx < items.length - 1) onReorderItem(b.id, idx, idx + 1); }}
+                    disabled={idx === items.length - 1}
+                    style={{ opacity: idx === items.length - 1 ? 0.2 : 1 }}
+                    className="border-none bg-transparent text-white/30 cursor-pointer p-0.5 hover:text-white/70">
+                    <Icon paths={["M12 5v14","M6 13l6 6 6-6"]} size={13} sw={2} />
+                  </button>
+                  <button
+                    onClick={() => { onRemoveItem(b.id, idx); if (openIconPicker === idx) setOpenIconPicker(null); }}
+                    className="border-none bg-transparent text-white/25 cursor-pointer p-0.5 hover:text-white/60">
+                    <Icon paths={["M5 12h14"]} size={14} sw={2} />
+                  </button>
+                </div>
+              </div>
+              {isIconList && openIconPicker === idx && (
+                <div className="mt-0.5 p-1.5 bg-[#1a1a1a] border border-orange-500/30 rounded-lg shadow-xl">
+                  <div className="grid grid-cols-7 gap-0.5 max-h-36 overflow-y-auto">
+                    {FUNNEL_ICON_LIST.map(name => {
+                      const cur = (it as {icon_type?: string}).icon_type ?? "check";
+                      return (
+                        <button key={name} title={name}
+                          onClick={() => {
+                            const updated = (items as Array<Record<string, unknown>>).map((item, i) =>
+                              i === idx ? { ...item, icon_type: name } : item
+                            );
+                            onSetProps(b.id, { items: updated });
+                            setOpenIconPicker(null);
+                          }}
+                          style={{ color: "currentColor" }}
+                          className={`flex items-center justify-center h-7 w-full rounded cursor-pointer border transition-colors ${cur === name ? "border-orange-500 bg-orange-500/15 text-orange-400" : "border-transparent bg-transparent text-white/40 hover:text-white/80 hover:bg-white/8"}`}>
+                          <FunnelIcon name={name} size={13} color="currentColor" strokeWidth={1.8} />
+                        </button>
                       );
-                      onSetProps(b.id, { items: updated });
-                    }}
-                    className="text-[9px] bg-white/5 border border-white/10 rounded px-1 py-0.5 text-white/50 focus:outline-none focus:border-orange-500/40 max-w-[64px]">
-                    {FUNNEL_ICON_LIST.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
+                    })}
+                  </div>
+                  <div className="mt-1 px-0.5 text-[9px] text-white/25 font-mono">
+                    {(it as {icon_type?: string}).icon_type ?? "check"}
+                  </div>
                 </div>
               )}
-              <span className="flex-1 text-xs text-white/45 truncate self-center">
-                {kind === "stats"
-                  ? `${(it as {value:string;label:string}).value} · ${(it as {value:string;label:string}).label}`
-                  : kind === "faq"
-                  ? (it as {q:string}).q
-                  : (it as {text:string}).text}
-              </span>
-              <button onClick={() => onRemoveItem(b.id, idx)} className="border-none bg-transparent text-white/25 cursor-pointer p-0.5 hover:text-white/60 self-center">
-                <Icon paths={["M5 12h14"]} size={15} sw={2} />
-              </button>
+              {isStats && openIconPicker === idx && (
+                <div className="mt-0.5 p-1.5 bg-[#1a1a1a] border border-orange-500/30 rounded-lg shadow-xl">
+                  <div className="grid grid-cols-7 gap-0.5 max-h-36 overflow-y-auto">
+                    {FUNNEL_ICON_LIST.map(name => {
+                      const cur = (it as {icon?: string}).icon ?? "";
+                      return (
+                        <button key={name} title={name}
+                          onClick={() => {
+                            const updated = (items as Array<Record<string, unknown>>).map((item, i) =>
+                              i === idx ? { ...item, icon: name } : item
+                            );
+                            onSetProps(b.id, { items: updated });
+                            setOpenIconPicker(null);
+                          }}
+                          style={{ color: "currentColor" }}
+                          className={`flex items-center justify-center h-7 w-full rounded cursor-pointer border transition-colors ${cur === name ? "border-orange-500 bg-orange-500/15 text-orange-400" : "border-transparent bg-transparent text-white/40 hover:text-white/80 hover:bg-white/8"}`}>
+                          <FunnelIcon name={name} size={13} color="currentColor" strokeWidth={1.8} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 px-0.5 flex items-center justify-between">
+                    <span className="text-[9px] text-white/25 font-mono">{(it as {icon?: string}).icon || "none"}</span>
+                    {(it as {icon?: string}).icon && (
+                      <button className="text-[9px] text-white/35 hover:text-white/60 cursor-pointer bg-transparent border-none"
+                        onClick={() => {
+                          const updated = (items as Array<Record<string, unknown>>).map((item, i) =>
+                            i === idx ? { ...item, icon: "" } : item
+                          );
+                          onSetProps(b.id, { items: updated });
+                          setOpenIconPicker(null);
+                        }}>
+                        remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1611,6 +1736,7 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
         {t==="video"&&<>
           <Field label="Video"><VideoUploadField value={b.props.url as string} onChange={url=>onSetProps(b.id,{url})} funnelId={funnelId} /></Field>
           <Field label="Or paste a video / YouTube URL">{textCtl("url")}</Field>
+          <Field label="Poster image URL (thumbnail before play)"><input value={(b.props.poster as string)||""} onChange={e=>onSetProps(b.id,{poster:e.target.value})} placeholder="https://... (leave blank for none)" className={IS} /></Field>
           <Field label="Caption">{textCtl("caption")}</Field>
           <Field label="Size">
             <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
@@ -1625,6 +1751,8 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
             </div>
             <p className="text-[10.5px] text-white/25 mt-1.5">S=480px · M=680px · L=860px · XL=full width</p>
           </Field>
+          <Field label="Autoplay on page load">{toggleCtl("autoplay")}</Field>
+          <p className="text-[10.5px] text-white/25 -mt-2">Plays muted as soon as the visitor lands on the page (browsers block unmuted autoplay) — they can unmute from the player controls.</p>
         </>}
         {t==="optin-form"&&<>
           <SL text="Section header" />
@@ -1640,7 +1768,15 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
           <Field label="Account name">{textCtl("opay_name")}</Field>
           <Field label="Amount (₦)">{textCtl("amount_ngn")}</Field>
           <SL text="WhatsApp" />
-          <Field label="WhatsApp number (intl format, no +)">{textCtl("wa_number")}</Field>
+          <Field label="WhatsApp DM number (intl format, no +)">{textCtl("wa_number")}</Field>
+          <Field label="WhatsApp group link (for success screen)">{textCtl("wa_group_link")}</Field>
+          <SL text="Success screen" />
+          <Field label="Success headline">{textCtl("success_headline")}</Field>
+          <Field label="Success message">{areaCtl("success_message")}</Field>
+          <Field label="Button text">{textCtl("success_button_text")}</Field>
+          <Field label="Button icon (emoji)">{textCtl("success_button_icon")}</Field>
+          <Field label="Group link label">{textCtl("success_group_label")}</Field>
+          <Field label="Group link secondary text">{textCtl("success_group_text")}</Field>
           <SL text="Options" />
           <Field label="Show Paystack option">{toggleCtl("show_paystack")}</Field>
         </>}
@@ -1648,7 +1784,10 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
         {(t==="headline"||t==="body-text")&&<Field label="Text">{areaCtl("text")}</Field>}
         {t==="cta-button"&&<><Field label="Button label">{textCtl("text")}</Field><Field label="Button URL">{textCtl("url")}</Field></>}
         {t==="pricing-card"&&<><Field label="Title">{textCtl("title")}</Field><Field label="Price">{textCtl("price")}</Field><Field label="Period">{textCtl("period")}</Field><Field label="Button label">{textCtl("button_text")}</Field><Field label="Button URL">{textCtl("button_url")}</Field><Field label="Features">{itemsCtl("pricing")}</Field></>}
-        {t==="stats-bar"&&<Field label="Stats">{itemsCtl("stats")}</Field>}
+        {t==="stats-bar"&&<>
+          <Field label="Stats">{itemsCtl("stats")}</Field>
+          <p className="text-[10.5px] text-white/25 leading-relaxed -mt-1">Click the icon button on each item to pick an icon. Toggle "Show icons" in Style to make them visible.</p>
+        </>}
         {t==="faq-accordion"&&<><Field label="Questions">{itemsCtl("faq")}</Field><Field label="Show numbered badges">{toggleCtl("show_number")}</Field></>}
         {t==="list"&&<Field label="Items">{itemsCtl("list")}</Field>}
         {t==="icon-list"&&<Field label="Items">{itemsCtl("list")}</Field>}
@@ -1701,9 +1840,22 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
               {fontCtl("font_family","text_size")}
             </>}
             {t==="cta-button"&&<><Field label="Size">{ctaSizeCtl()}</Field><Field label="Full width">{fullWidthCtl()}</Field><Field label="Text color">{colorCtl("text_color")}</Field></>}
+            {t==="cta-button"&&fontCtl("font_family", null)}
             {(t==="countdown-timer"||t==="cta-button"||t==="pricing-card"||t==="hero"||t==="faq-accordion"||t==="optin-form")&&<Field label="Accent color">{colorCtl("accent_color")}</Field>}
+            {t==="optin-form"&&fontCtl("font_family", null)}
             {t==="hero"&&<><Field label="Headline color">{colorCtl("color")}</Field><Field label="Subtext color">{colorCtl("subtext_color")}</Field></>}
-            {t==="stats-bar"&&<><Field label="Value color">{colorCtl("value_color")}</Field><Field label="Label color">{colorCtl("label_color")}</Field></>}
+            {t==="stats-bar"&&<>
+              <Field label="Accent color (overrides value color)">{colorCtl("accent_color")}</Field>
+              <Field label="Value color">{colorCtl("value_color")}</Field>
+              <Field label="Label color">{colorCtl("label_color")}</Field>
+              <Field label="Value font size">{numCtl("value_size",{min:16,max:96,default:34})}</Field>
+              <Field label="Label font size">{numCtl("label_size",{min:9,max:28,default:12})}</Field>
+              {fontCtl("font_family", null)}
+              <Field label="Uppercase labels">{toggleCtl("label_uppercase")}</Field>
+              <Field label="Show icons">{toggleCtl("show_icons")}</Field>
+              <Field label="Dividers between stats">{toggleCtl("dividers")}</Field>
+              <Field label="Counter animation on scroll">{toggleCtl("animate")}</Field>
+            </>}
             {t==="faq-accordion"&&<><Field label="Item background">{colorCtl("item_bg")}</Field><Field label="Item border">{colorCtl("item_border")}</Field><Field label="Question color">{colorCtl("q_color")}</Field><Field label="Answer color">{colorCtl("a_color")}</Field></>}
             {t==="testimonial"&&<><Field label="Card background">{colorCtl("card_bg")}</Field><Field label="Card border">{colorCtl("card_border")}</Field><Field label="Quote color">{colorCtl("quote_color")}</Field><Field label="Name color">{colorCtl("name_color")}</Field><Field label="Result/role color">{colorCtl("role_color")}</Field></>}
             {t==="info-card"&&<>
@@ -1923,6 +2075,19 @@ function RightPanel({ selectedBlock:b, page, funnelId, device, onDeselect, onSet
         <div className="h-4" />
         <SL text="Visibility" />
         <Field label="Reveal after video reaches…">{revealCtl()}</Field>
+        <div className="h-4" />
+        <SL text="Anchor" />
+        <Field label="Anchor ID">
+          <input
+            value={(b.layout?.anchor_id) ?? ""}
+            placeholder="e.g. join-form"
+            onChange={e => onSetLayout(b.id, { anchor_id: e.target.value || undefined })}
+            className={IS}
+          />
+        </Field>
+        <p className="text-[10.5px] text-white/25 mt-1 leading-relaxed">
+          Link buttons or text to this block using <span className="font-mono">#anchor-id</span> as the URL.
+        </p>
       </div>
     );
   }

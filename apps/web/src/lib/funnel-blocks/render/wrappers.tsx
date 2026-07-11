@@ -228,11 +228,12 @@ export function buildResponsiveSpacingCss(blockId: string, layout: BlockLayout |
   return css;
 }
 
-// Returns horizontal alignment style for a block within its column (for non-container blocks).
+// Returns horizontal alignment style for a block within its column (columns are flex-direction:column).
 export function buildSelfAlignStyle(layout: BlockLayout | undefined): React.CSSProperties {
   if (!layout?.align_h) return {};
-  if (layout.align_h === "center") return { marginLeft: "auto", marginRight: "auto", display: "block" };
-  if (layout.align_h === "right")  return { marginLeft: "auto", marginRight: 0, display: "block" };
+  if (layout.align_h === "left")   return { alignSelf: "flex-start" };
+  if (layout.align_h === "center") return { alignSelf: "center" };
+  if (layout.align_h === "right")  return { alignSelf: "flex-end" };
   return {};
 }
 

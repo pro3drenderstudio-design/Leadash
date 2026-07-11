@@ -95,8 +95,11 @@ function LiveBlockRow({ block, ctx }: { block: Block; ctx: BlockRenderContext })
   const propCss = hasPropOverrides ? buildPropResponsiveCss(block.id, mP, tP) : "";
   const allCss = respCss + propCss;
   const hasResp = !!allCss;
+  // Anchor ID: layout.anchor_id takes precedence; hero blocks also support props.anchor_id
+  const anchorId = block.layout?.anchor_id || (block.props.anchor_id as string | undefined) || undefined;
   return (
     <div
+      id={anchorId || undefined}
       data-blk={hasResp ? block.id : undefined}
       style={{ position: "relative", ...colStyle, ...blockWrapperPadding(block) }}
     >

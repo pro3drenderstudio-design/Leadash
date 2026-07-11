@@ -6,9 +6,10 @@ interface Props {
   blockId: string;
   src: string;
   poster?: string;
+  autoplay?: boolean;
 }
 
-export function HLSPlayer({ blockId, src, poster }: Props) {
+export function HLSPlayer({ blockId, src, poster, autoplay }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -43,7 +44,9 @@ export function HLSPlayer({ blockId, src, poster }: Props) {
       ref={videoRef}
       controls
       playsInline
-      preload="none"
+      preload={autoplay ? "auto" : "none"}
+      autoPlay={autoplay}
+      muted={autoplay}
       poster={poster || undefined}
       style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
       onTimeUpdate={e => publishVideoTime(blockId, e.currentTarget.currentTime)}

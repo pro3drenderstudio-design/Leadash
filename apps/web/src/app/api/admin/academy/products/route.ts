@@ -74,6 +74,30 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ product: data });
 }
 
+export async function DELETE(req: NextRequest) {
+  const db = await requireAdmin(req);
+  if (!db) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Delete in FK-safe order: lesson_progress → lessons → modules → sections → cohorts → enrollments → product
+  // enrollments CASCADE to: certificates, gamification, progress, comments, notes, submissions, challenge_completions
+  const lessonRes = await db.from("academy_lessons").select("id").eq("product_id", id);
+  const lessonIds = (lessonRes.data ?? []).map((l: { id: string }) => l.id);
+  if (lessonIds.length > 0) {
+    await db.from("academy_lesson_progress").delete().in("lesson_id", lessonIds);
+    await db.from("academy_lessons").delete().eq("product_id", id);
+  }
+  await db.from("academy_modules").delete().eq("product_id", id);
+  await db.from("academy_sections").delete().eq("product_id", id);
+  await db.from("academy_cohorts").delete().eq("product_id", id);
+  await db.from("academy_enrollments").delete().eq("product_id", id);
+
+  const { error } = await db.from("academy_products").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 // POST — create a new product (course or challenge). Products are bootstrapped
 // via migration in most cases; this lets an admin add new challenges from the UI.
 export async function POST(req: NextRequest) {

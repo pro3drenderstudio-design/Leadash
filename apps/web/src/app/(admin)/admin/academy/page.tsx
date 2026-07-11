@@ -704,6 +704,37 @@ export default function AdminAcademyPage() {
               creating={creatingChallenge}
               filter={productFilter}
               onFilterChange={setProductFilter}
+              onBulkAction={async (ids, action) => {
+                if (action === "delete") {
+                  const ok = await dialog.askConfirm(
+                    `Delete ${ids.length} ${ids.length === 1 ? "product" : "products"}?`,
+                    { body: "This permanently removes the course/challenge and all its sections and lessons. This cannot be undone.", danger: true }
+                  );
+                  if (!ok) return;
+                  const results = await Promise.all(ids.map(id =>
+                    fetch(`/api/admin/academy/products?id=${id}`, { method: "DELETE" }).then(r => r.json().then(d => ({ id, ok: r.ok, error: d.error })))
+                  ));
+                  const succeeded = results.filter(r => r.ok).map(r => r.id);
+                  const failed    = results.filter(r => !r.ok);
+                  if (succeeded.length) setProducts(prev => prev.filter(p => !succeeded.includes(p.id)));
+                  if (failed.length) notify(`${failed.length} failed to delete: ${failed[0].error}`, false);
+                  else notify(`${succeeded.length} ${succeeded.length === 1 ? "product" : "products"} deleted`);
+                } else {
+                  const is_published = action === "publish";
+                  const results = await Promise.all(ids.map(id =>
+                    fetch("/api/admin/academy/products", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id, is_published }),
+                    }).then(r => r.json().then(d => ({ id, ok: r.ok, error: d.error })))
+                  ));
+                  const succeeded = results.filter(r => r.ok).map(r => r.id);
+                  const failed    = results.filter(r => !r.ok);
+                  if (succeeded.length) setProducts(prev => prev.map(p => succeeded.includes(p.id) ? { ...p, is_published } : p));
+                  if (failed.length) notify(`${failed.length} failed: ${failed[0].error}`, false);
+                  else notify(`${succeeded.length} ${succeeded.length === 1 ? "product" : "products"} ${is_published ? "published" : "unpublished"}`);
+                }
+              }}
             />
           )}
 
@@ -1592,14 +1623,18 @@ export default function AdminAcademyPage() {
 
 // ─── Courses gallery ──────────────────────────────────────────────────────────
 
-function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, onFilterChange }: {
+function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, onFilterChange, onBulkAction }: {
   products: Product[];
   onOpen: (id: string) => void;
   onCreateProduct: (type: "course" | "challenge") => void;
   creating: boolean;
   filter: "all" | "course" | "challenge";
   onFilterChange: (f: "all" | "course" | "challenge") => void;
+  onBulkAction: (ids: string[], action: "publish" | "unpublish" | "delete") => Promise<void>;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [actioning, setActioning] = useState(false);
+
   const filtered = products.filter(p => {
     if (filter === "all") return true;
     if (filter === "challenge") return p.product_type === "challenge";
@@ -1610,6 +1645,33 @@ function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, o
     course:    products.filter(p => (p.product_type ?? "course") === "course").length,
     challenge: products.filter(p => p.product_type === "challenge").length,
   };
+
+  function toggleSelect(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(p => p.id)));
+    }
+  }
+
+  async function runAction(action: "publish" | "unpublish" | "delete") {
+    setActioning(true);
+    try {
+      await onBulkAction(Array.from(selected), action);
+      setSelected(new Set());
+    } finally {
+      setActioning(false);
+    }
+  }
 
   return (
     <div>
@@ -1663,6 +1725,33 @@ function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, o
           </button>
         </div>
       </div>
+
+      {/* Selection action bar */}
+      {selected.size > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          background: "var(--app-surface)", border: "1px solid var(--app-border)",
+          borderRadius: 8, padding: "10px 16px", marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", flex: 1 }}>
+            {selected.size} selected
+          </span>
+          <button onClick={() => runAction("publish")} disabled={actioning} className="app-btn app-btn-ghost" style={{ fontSize: 12 }}>
+            Publish
+          </button>
+          <button onClick={() => runAction("unpublish")} disabled={actioning} className="app-btn app-btn-ghost" style={{ fontSize: 12 }}>
+            Unpublish
+          </button>
+          <button onClick={() => runAction("delete")} disabled={actioning} className="app-btn app-btn-ghost" style={{ fontSize: 12, color: "#f87171" }}>
+            <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+            Delete
+          </button>
+          <button onClick={() => setSelected(new Set())} className="app-btn app-btn-ghost" style={{ fontSize: 12, color: "var(--app-text-muted)" }}>
+            <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={1.8} />
+          </button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="ac-card" style={{ padding: 60, textAlign: "center" }}>
           <p style={{ fontSize: 14, color: "var(--app-text-muted)" }}>
@@ -1675,62 +1764,98 @@ function CoursesGallery({ products, onOpen, onCreateProduct, creating, filter, o
           </p>
         </div>
       ) : (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-          gap: 16,
-        }}>
-          {filtered.map(p => {
-            const isChallenge = p.product_type === "challenge";
-            return (
-              <button
-                key={p.id}
-                onClick={() => onOpen(p.id)}
-                className="ac-card"
-                style={{
-                  textAlign: "left",
-                  padding: 0,
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  transition: "all var(--app-dur) var(--app-ease)",
-                  border: `1px solid ${isChallenge ? "var(--app-accent-line)" : "var(--app-border)"}`,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = isChallenge ? "var(--app-accent-line)" : "var(--app-border)"; e.currentTarget.style.transform = "translateY(0)"; }}
-              >
-                <div style={{
-                  aspectRatio: "16 / 9",
-                  background: isChallenge
-                    ? "linear-gradient(135deg, var(--app-accent-soft), var(--app-surface-strong))"
-                    : "linear-gradient(135deg, rgba(96,165,250,0.12), var(--app-surface-strong))",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: isChallenge ? "var(--app-accent)" : "#60A5FA",
-                  borderBottom: "1px solid var(--app-border)",
-                }}>
-                  <HugeiconsIcon icon={isChallenge ? GitBranchIcon : BookOpen02Icon} size={36} strokeWidth={1.4} />
-                </div>
-                <div style={{ padding: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {p.name}
-                    </h3>
-                    <span className={`ac-chip ${p.is_published ? "success" : ""}`}>{p.is_published ? "Live" : "Draft"}</span>
+        <>
+          {/* Select all row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, paddingLeft: 2 }}>
+            <input
+              type="checkbox"
+              checked={selected.size === filtered.length && filtered.length > 0}
+              ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
+              onChange={toggleAll}
+              style={{ cursor: "pointer", accentColor: "var(--app-accent)" }}
+            />
+            <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>Select all</span>
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: 16,
+          }}>
+            {filtered.map(p => {
+              const isChallenge = p.product_type === "challenge";
+              const isSelected  = selected.has(p.id);
+              return (
+                <div key={p.id} style={{ position: "relative" }}>
+                  {/* Checkbox */}
+                  <div
+                    onClick={e => toggleSelect(p.id, e)}
+                    style={{
+                      position: "absolute", top: 10, left: 10, zIndex: 2,
+                      width: 22, height: 22,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      borderRadius: 6,
+                      background: isSelected ? "var(--app-accent)" : "rgba(0,0,0,0.55)",
+                      border: isSelected ? "2px solid var(--app-accent)" : "2px solid rgba(255,255,255,0.25)",
+                      cursor: "pointer",
+                      backdropFilter: "blur(4px)",
+                    }}
+                  >
+                    {isSelected && (
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
                   </div>
-                  <p style={{ fontSize: 11, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginBottom: 12 }}>
-                    {p.slug} {isChallenge && <span style={{ color: "var(--app-accent)" }}>· Challenge</span>}
-                  </p>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)" }}>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.price_ngn)}</span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--app-accent)" }}>
-                      Open
-                      <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.8} />
-                    </span>
-                  </div>
+                  <button
+                    onClick={() => onOpen(p.id)}
+                    className="ac-card"
+                    style={{
+                      width: "100%", textAlign: "left",
+                      padding: 0, overflow: "hidden",
+                      cursor: "pointer",
+                      transition: "all var(--app-dur) var(--app-ease)",
+                      border: isSelected
+                        ? "2px solid var(--app-accent)"
+                        : `1px solid ${isChallenge ? "var(--app-accent-line)" : "var(--app-border)"}`,
+                    }}
+                    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor = "var(--app-border-strong)"; e.currentTarget.style.transform = "translateY(-2px)"; } }}
+                    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor = isChallenge ? "var(--app-accent-line)" : "var(--app-border)"; e.currentTarget.style.transform = "translateY(0)"; } }}
+                  >
+                    <div style={{
+                      aspectRatio: "16 / 9",
+                      background: isChallenge
+                        ? "linear-gradient(135deg, var(--app-accent-soft), var(--app-surface-strong))"
+                        : "linear-gradient(135deg, rgba(96,165,250,0.12), var(--app-surface-strong))",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: isChallenge ? "var(--app-accent)" : "#60A5FA",
+                      borderBottom: "1px solid var(--app-border)",
+                    }}>
+                      <HugeiconsIcon icon={isChallenge ? GitBranchIcon : BookOpen02Icon} size={36} strokeWidth={1.4} />
+                    </div>
+                    <div style={{ padding: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {p.name}
+                        </h3>
+                        <span className={`ac-chip ${p.is_published ? "success" : ""}`}>{p.is_published ? "Live" : "Draft"}</span>
+                      </div>
+                      <p style={{ fontSize: 11, color: "var(--app-text-quiet)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginBottom: 12 }}>
+                        {p.slug} {isChallenge && <span style={{ color: "var(--app-accent)" }}>· Challenge</span>}
+                      </p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--app-text-muted)" }}>
+                        <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.price_ngn)}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--app-accent)" }}>
+                          Open
+                          <HugeiconsIcon icon={ArrowRight01Icon} size={12} strokeWidth={1.8} />
+                        </span>
+                      </div>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

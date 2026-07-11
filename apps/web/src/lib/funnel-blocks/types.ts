@@ -68,6 +68,8 @@ export interface BlockLayout {
   border_radius?: number;
   reveal_source_block_id?: string;
   reveal_after_seconds?: number;
+  // Anchor ID — sets an HTML id on the wrapper so buttons/links can target it with #anchor-id
+  anchor_id?: string;
   // Per-device prop overrides (font size, color, alignment, etc.)
   props_mobile?: Record<string, unknown>;
   props_tablet?: Record<string, unknown>;
