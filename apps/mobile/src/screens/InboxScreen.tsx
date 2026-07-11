@@ -57,16 +57,17 @@ function ThreadsTab() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 2, paddingBottom: 12, gap: 8, alignItems: "center" }}>
+        style={{ flexGrow: 0, height: 52 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
         {STATUS_FILTERS.map(([k, label]) => {
           const active = status === k;
           return (
             <Pressable key={k} onPress={() => setStatus(k)} style={{
-              paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill,
+              height: 38, paddingHorizontal: 16, borderRadius: R.pill,
+              alignItems: "center", justifyContent: "center",
               borderWidth: 1, borderColor: active ? C.accent : C.border,
               backgroundColor: active ? C.accentSoft : "transparent",
             }}>
-              <Text style={{ fontSize: 13, lineHeight: 18, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted }}>{label}</Text>
+              <Text allowFontScaling={false} style={{ fontSize: 13, fontFamily: FONT.semibold, color: active ? C.accent : C.textMuted }}>{label}</Text>
             </Pressable>
           );
         })}
