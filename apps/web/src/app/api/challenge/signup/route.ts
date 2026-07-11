@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { enqueueAutomation } from "@/lib/queue/client";
+import { normalisePhoneNG } from "@/lib/phone";
 
 export const maxDuration = 30;
 
@@ -58,6 +60,11 @@ export async function POST(req: NextRequest) {
 
   const db = createAdminClient();
   const emailNorm = email.toLowerCase().trim();
+  // Normalise the phone once and use the normalised form for every write
+  // (workspaces.whatsapp_number, challenge_signups.phone, crm_contacts.whatsapp_number).
+  // Keeps every downstream lookup — inbound WhatsApp handler, automation
+  // sendWhatsapp recipient resolver — pointing at the same row.
+  const phoneNorm = normalisePhoneNG(phone) ?? phone;
 
   // Independent of the auth/workspace chain below — kick it off now so it
   // resolves in parallel instead of adding its own round trip later.
@@ -129,7 +136,7 @@ export async function POST(req: NextRequest) {
         plan_id: "free",
         plan_status: "active",
         billing_email: emailNorm,
-        whatsapp_number: phone,
+        whatsapp_number: phoneNorm,
       });
       if (wsEnsureError) console.error("[challenge/signup] workspace ensure error:", wsEnsureError.message);
     }
@@ -176,7 +183,7 @@ export async function POST(req: NextRequest) {
   if (existing?.status === "pending") {
     const { error: updErr } = await db.from("challenge_signups").update({
       full_name:          full_name.trim(),
-      phone,
+      phone:              phoneNorm,
       bank_account_name,
       payment_method,
       paystack_reference: paystack_reference ?? null,
@@ -193,7 +200,7 @@ export async function POST(req: NextRequest) {
     const { error: insErr } = await db.from("challenge_signups").insert({
       full_name:          full_name.trim(),
       email:              emailNorm,
-      phone,
+      phone:              phoneNorm,
       bank_account_name,
       payment_method,
       paystack_reference: paystack_reference ?? null,
@@ -281,6 +288,61 @@ export async function POST(req: NextRequest) {
       }),
     }).catch(e => console.error("[challenge/signup] admin notify error:", e));
   }
+
+  // ── CRM contact upsert + automation trigger ─────────────────────────────
+  // The challenge form is the closest thing we have to a funnel opt-in, so
+  // we treat it as one for CRM purposes:
+  //   1. Upsert crm_contacts on email so the same person signing up twice
+  //      (bank_transfer → paystack retry, or after a form fix) resolves to
+  //      one row.
+  //   2. Fire funnel.form_submitted so the "[Challenge 7-day] Form → CRM
+  //      lead" seeded automation applies the tag + lifecycle stage.
+  // Both are best-effort — a failure here must not block the user's signup.
+  let crmContactId: string | null = null;
+  try {
+    const { data: existingContact } = await db
+      .from("crm_contacts")
+      .select("id")
+      .eq("email", emailNorm)
+      .maybeSingle();
+
+    if (existingContact?.id) {
+      crmContactId = existingContact.id as string;
+      await db.from("crm_contacts").update({
+        display_name:    full_name.trim(),
+        whatsapp_number: phoneNorm,
+        updated_at:      new Date().toISOString(),
+      }).eq("id", crmContactId);
+    } else {
+      const { data: newContact } = await db.from("crm_contacts").insert({
+        email:           emailNorm,
+        display_name:    full_name.trim(),
+        whatsapp_number: phoneNorm,
+        user_id:         userId,
+        status:          "active",
+      }).select("id").single();
+      crmContactId = (newContact?.id as string) ?? null;
+    }
+  } catch (e) {
+    console.error("[challenge/signup] crm upsert error:", e);
+  }
+
+  await enqueueAutomation({
+    event:        "funnel.form_submitted",
+    workspace_id: null,
+    user_id:      userId,
+    payload: {
+      funnel_slug:  "challenge-7day",
+      page_slug:    "main",
+      page_id:      null,
+      contact_id:   crmContactId,
+      name:         full_name.trim(),
+      email:        emailNorm,
+      phone:        phoneNorm,
+      payment_method,
+      form_data:    { full_name: full_name.trim(), email: emailNorm, phone: phoneNorm, bank_account_name, payment_method },
+    },
+  }).catch(err => console.error("[challenge/signup] automation enqueue error:", err));
 
   return NextResponse.json({
     ok:           true,
