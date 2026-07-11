@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { uploadWhatsAppMedia, whatsAppMediaType } from "@/lib/whatsapp/media";
 
 const POSTAL_API_KEY  = process.env.POSTAL_API_KEY ?? "";
 const POSTAL_HOST     = process.env.POSTAL_HOST    ?? "209.145.55.138";
@@ -33,6 +34,13 @@ function getQueue() {
   return new Queue("leadash:whatsapp", { connection });
 }
 
+interface OutgoingAttachment {
+  path:     string; // crm-media storage path, from POST /api/crm/media/upload
+  name:     string;
+  mimeType: string;
+  size:     number;
+}
+
 interface SendBody {
   conversation_id: string;
   body:            string;
@@ -42,6 +50,21 @@ interface SendBody {
   template_name?:  string;
   template_vars?:  Record<string, string>;
   note?:           boolean; // Internal note — not sent to contact
+  attachments?:    OutgoingAttachment[];
+}
+
+/** Re-downloads an already-uploaded composer attachment's bytes from storage —
+ *  never trusts a client-supplied URL for the actual send payload. */
+async function downloadAttachment(db: ReturnType<typeof createAdminClient>, path: string): Promise<Buffer | null> {
+  const { data, error } = await db.storage.from("crm-media").download(path);
+  if (error || !data) { console.error("[crm/send] attachment download failed:", error?.message); return null; }
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** Fresh signed URL for storing/display in crm_messages.attachments. */
+async function signAttachmentUrl(db: ReturnType<typeof createAdminClient>, path: string): Promise<string | null> {
+  const { data } = await db.storage.from("crm-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+  return data?.signedUrl ?? null;
 }
 
 export async function POST(req: NextRequest) {
@@ -54,9 +77,10 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as SendBody;
   const { conversation_id, body: msgBody, note } = body;
+  const attachments = body.attachments ?? [];
 
-  if (!conversation_id || !msgBody?.trim()) {
-    return NextResponse.json({ error: "conversation_id and body are required" }, { status: 400 });
+  if (!conversation_id || (!msgBody?.trim() && !attachments.length)) {
+    return NextResponse.json({ error: "conversation_id and a body or attachment are required" }, { status: 400 });
   }
 
   const db  = adminDb;
@@ -118,6 +142,19 @@ export async function POST(req: NextRequest) {
                       :                        SUPPORT_EMAIL;
     const subject     = body.subject ?? `Re: ${convo.channel_identifier ?? "Your inquiry"}`;
 
+    // Postal wants { name, content_type, data (base64) } per attachment (confirmed
+    // against legacy_api/send_controller.rb) — re-download bytes from our own
+    // storage rather than trusting anything client-supplied.
+    const postalAttachments: { name: string; content_type: string; data: string }[] = [];
+    const storedAttachments: { name: string; mimeType: string; size: number; url: string }[] = [];
+    for (const att of attachments) {
+      const buffer = await downloadAttachment(db, att.path);
+      if (!buffer) continue;
+      postalAttachments.push({ name: att.name, content_type: att.mimeType, data: buffer.toString("base64") });
+      const url = await signAttachmentUrl(db, att.path);
+      if (url) storedAttachments.push({ name: att.name, mimeType: att.mimeType, size: att.size, url });
+    }
+
     const postalRes = await fetch(POSTAL_API_URL, {
       method:  "POST",
       headers: { "X-Server-API-Key": POSTAL_API_KEY, "Content-Type": "application/json" },
@@ -127,6 +164,7 @@ export async function POST(req: NextRequest) {
         subject,
         plain_body: msgBody,
         html_body:  body.html ?? `<p>${msgBody.replace(/\n/g, "<br>")}</p>`,
+        ...(postalAttachments.length ? { attachments: postalAttachments } : {}),
       }),
     });
 
@@ -146,6 +184,7 @@ export async function POST(req: NextRequest) {
       subject,
       body:               msgBody,
       body_html:          body.html ?? null,
+      attachments:        storedAttachments,
       provider_message_id: postalData.data?.message_id ?? null,
       sent_by:            user.id,
       status:             "sent",
@@ -168,6 +207,82 @@ export async function POST(req: NextRequest) {
     // Check 24-hour window
     const lastInbound = convo.last_inbound_at ? new Date(convo.last_inbound_at as string) : null;
     const windowOpen  = lastInbound && (Date.now() - lastInbound.getTime()) < 24 * 60 * 60 * 1000;
+
+    // ── Media attachments — Meta sends one media item per message, so each
+    // attachment becomes its own message (uploaded to Meta up front here,
+    // then referenced by media ID in the enqueued job). Same 24h-window rule
+    // as free-form text — only templates can send outside the window.
+    if (attachments.length) {
+      if (!windowOpen) {
+        return NextResponse.json({
+          error: "24-hour window expired. Attachments can't be sent outside the window (templates only).",
+          requires_template: true,
+        }, { status: 422 });
+      }
+
+      const { data: channelCfg } = await db
+        .from("crm_channel_configs")
+        .select("config, credentials")
+        .eq("channel", "whatsapp")
+        .single();
+      const phoneNumberId = channelCfg?.config?.phone_number_id as string | undefined;
+      const accessToken   = channelCfg?.credentials?.access_token as string | undefined;
+      if (!phoneNumberId || !accessToken) {
+        return NextResponse.json({ error: "WhatsApp not connected — configure it in CRM Settings" }, { status: 400 });
+      }
+
+      const q = getQueue();
+      let sentCount = 0;
+      for (const [i, att] of attachments.entries()) {
+        const buffer = await downloadAttachment(db, att.path);
+        if (!buffer) continue;
+        const mediaId = await uploadWhatsAppMedia(phoneNumberId, accessToken, buffer, att.mimeType, att.name);
+        if (!mediaId) continue;
+
+        const mediaType = whatsAppMediaType(att.mimeType);
+        const caption = i === 0 ? (msgBody || undefined) : undefined;
+
+        const { data: waMsgRecord } = await db.from("whatsapp_messages").insert({
+          phone_number:  waNumber,
+          direction:     "outbound",
+          body:          caption ?? `[${mediaType}]`,
+          status:        "pending",
+          source:        "crm",
+        }).select("id").single();
+
+        await q.add("send", {
+          phone_number: waNumber,
+          message_id:   waMsgRecord?.id,
+          media:        { id: mediaId, type: mediaType, caption, filename: att.name },
+          source:       "crm",
+        }, { attempts: 6 });
+
+        const url = await signAttachmentUrl(db, att.path);
+        await db.from("crm_messages").insert({
+          conversation_id,
+          contact_id:         contact.id,
+          direction:          "outbound",
+          channel:            "whatsapp",
+          body:               caption ?? "",
+          wa_message_type:    mediaType,
+          attachments:        url ? [{ name: att.name, mimeType: att.mimeType, size: att.size, url }] : [],
+          provider_message_id: waMsgRecord?.id ?? null,
+          sent_by:            user.id,
+          status:             "sent",
+        });
+        sentCount++;
+      }
+      await q.close();
+
+      if (!sentCount) return NextResponse.json({ error: "Failed to send attachment(s)" }, { status: 502 });
+
+      await db.from("crm_conversations").update({
+        last_message_at: now,
+        status: (convo.status === "resolved" || convo.status === "closed") ? "open" : convo.status,
+      }).eq("id", conversation_id);
+
+      return NextResponse.json({ ok: true, type: "whatsapp", sent: sentCount });
+    }
 
     let waPayload: Record<string, unknown>;
 

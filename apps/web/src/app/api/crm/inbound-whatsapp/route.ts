@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
+import { fetchWhatsAppMedia, type WhatsAppMediaResult } from "@/lib/whatsapp/media";
 
 const APP_SECRET      = process.env.WHATSAPP_APP_SECRET  ?? "";
 const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -53,6 +54,20 @@ export async function POST(req: NextRequest) {
   const db  = createAdminClient();
   const now = new Date().toISOString();
 
+  // Lazily resolved + memoized for this request — mirrors the outbound worker's
+  // "read fresh from crm_channel_configs so it can be rotated without a redeploy" pattern.
+  let cachedAccessToken: string | null | undefined;
+  async function getWhatsAppAccessToken(): Promise<string | null> {
+    if (cachedAccessToken !== undefined) return cachedAccessToken;
+    const { data: channelCfg } = await db
+      .from("crm_channel_configs")
+      .select("credentials")
+      .eq("channel", "whatsapp")
+      .single();
+    cachedAccessToken = (channelCfg?.credentials?.access_token as string | undefined) ?? null;
+    return cachedAccessToken;
+  }
+
   const entries = (body.entry as Array<Record<string, unknown>>) ?? [];
 
   for (const entry of entries) {
@@ -96,11 +111,37 @@ export async function POST(req: NextRequest) {
         const msgId     = msg.id as string;
         const msgType   = msg.type as string;
         let   msgBody   = "";
+        let   attachments: WhatsAppMediaResult[] = [];
+        let   location: { latitude: number; longitude: number; name?: string; address?: string } | null = null;
+        let   contacts: { name: string; phone: string }[] = [];
 
         if (msgType === "text") {
           msgBody = ((msg.text as Record<string, string>)?.body) ?? "";
         } else if (msgType === "image" || msgType === "document" || msgType === "audio" || msgType === "video") {
-          msgBody = `[${msgType} message]`;
+          const mediaObj = msg[msgType] as { id?: string; caption?: string; filename?: string } | undefined;
+          msgBody = mediaObj?.caption ?? "";
+          if (mediaObj?.id) {
+            const token = await getWhatsAppAccessToken();
+            if (token) {
+              const media = await fetchWhatsAppMedia(mediaObj.id, token, mediaObj.filename);
+              if (media) attachments = [media];
+            }
+          }
+        } else if (msgType === "location") {
+          const loc = msg.location as { latitude?: number; longitude?: number; name?: string; address?: string } | undefined;
+          if (loc?.latitude != null && loc?.longitude != null) {
+            location = { latitude: loc.latitude, longitude: loc.longitude, name: loc.name, address: loc.address };
+          }
+          msgBody = loc?.name ?? "";
+        } else if (msgType === "contacts") {
+          const rawContacts = (msg.contacts as Array<Record<string, unknown>>) ?? [];
+          contacts = rawContacts
+            .map(c => {
+              const nameObj = c.name as { formatted_name?: string } | undefined;
+              const phones  = (c.phones as Array<{ phone?: string }>) ?? [];
+              return { name: nameObj?.formatted_name ?? "Contact", phone: phones[0]?.phone ?? "" };
+            })
+            .filter(c => c.phone);
         } else {
           msgBody = `[${msgType}]`;
         }
@@ -197,10 +238,20 @@ export async function POST(req: NextRequest) {
           provider_message_id: msgId,
           status:             "delivered",
           delivered_at:       now,
+          attachments,
+          location,
+          contacts,
         });
 
-        // Admin notification email — fire and forget
-        if (RESEND_API_KEY && notifyEmail && msgBody) {
+        // Admin notification email — fire and forget. msgBody can legitimately be
+        // empty for media/location/contact messages with no caption, so fall back
+        // to a type-appropriate description rather than requiring body text.
+        const notifyPreview = msgBody
+          || (attachments.length ? `[${msgType} message]` : null)
+          || (location ? "[location shared]" : null)
+          || (contacts.length ? "[contact shared]" : null)
+          || `[${msgType}]`;
+        if (RESEND_API_KEY && notifyEmail) {
           fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -208,7 +259,7 @@ export async function POST(req: NextRequest) {
               from:    `Leadash CRM <${RESEND_FROM}>`,
               to:      [notifyEmail],
               subject: `New WhatsApp from ${phone}`,
-              html:    `<p><strong>${phone}</strong> sent a WhatsApp message:</p><blockquote style="border-left:3px solid #25d366;padding-left:12px;color:#374151">${msgBody.slice(0, 400).replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
+              html:    `<p><strong>${phone}</strong> sent a WhatsApp message:</p><blockquote style="border-left:3px solid #25d366;padding-left:12px;color:#374151">${notifyPreview.slice(0, 400).replace(/\n/g, "<br>")}</blockquote><p><a href="${APP_URL}/admin/crm?id=${conversationId}">View in CRM →</a></p>`,
             }),
           }).catch(() => {});
         }

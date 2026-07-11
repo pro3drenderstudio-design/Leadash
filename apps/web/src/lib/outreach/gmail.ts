@@ -82,6 +82,7 @@ export interface GmailSendOptions {
   replyToThreadId?: string;
   inReplyToMessageId?: string;
   customHeaders?: Record<string, string>;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export interface GmailSendResult {
@@ -99,32 +100,65 @@ export async function sendGmailMessage(
     ? `${opts.fromName} <${inbox.email_address}>`
     : inbox.email_address;
 
-  const boundary = `boundary_${Date.now().toString(36)}`;
-  const rawMessage = [
-    `From: ${from}`,
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    opts.replyTo ? `Reply-To: ${opts.replyTo}` : "",
-    opts.replyToThreadId ? `References: <${opts.replyToThreadId}>` : "",
-    opts.inReplyToMessageId ? `In-Reply-To: <${opts.inReplyToMessageId}>` : "",
-    ...(opts.customHeaders ? Object.entries(opts.customHeaders).map(([k, v]) => `${k}: ${v}`) : []),
-    ``,
-    `--${boundary}`,
+  const altBoundary = `alt_${Date.now().toString(36)}`;
+  const alternativePart = [
+    `--${altBoundary}`,
     `Content-Type: text/plain; charset=UTF-8`,
     ``,
     opts.textBody,
     ``,
-    `--${boundary}`,
+    `--${altBoundary}`,
     `Content-Type: text/html; charset=UTF-8`,
     ``,
     opts.htmlBody,
     ``,
-    `--${boundary}--`,
-  ]
-    .filter((line) => line !== undefined)
-    .join("\r\n");
+    `--${altBoundary}--`,
+  ].join("\r\n");
+
+  const headers = [
+    `From: ${from}`,
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    `MIME-Version: 1.0`,
+    opts.replyTo ? `Reply-To: ${opts.replyTo}` : "",
+    opts.replyToThreadId ? `References: <${opts.replyToThreadId}>` : "",
+    opts.inReplyToMessageId ? `In-Reply-To: <${opts.inReplyToMessageId}>` : "",
+    ...(opts.customHeaders ? Object.entries(opts.customHeaders).map(([k, v]) => `${k}: ${v}`) : []),
+  ].filter((line) => line !== undefined);
+
+  let rawMessage: string;
+  if (opts.attachments?.length) {
+    // multipart/mixed wraps the text+html alternative part, plus one part
+    // per attachment (base64, wrapped at 76 chars per RFC 2045).
+    const mixedBoundary = `mixed_${Date.now().toString(36)}`;
+    const attachmentParts = opts.attachments.map(att => [
+      `--${mixedBoundary}`,
+      `Content-Type: ${att.contentType}; name="${att.filename}"`,
+      `Content-Disposition: attachment; filename="${att.filename}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      att.content.toString("base64").replace(/(.{76})/g, "$1\r\n"),
+    ].join("\r\n")).join("\r\n");
+
+    rawMessage = [
+      ...headers,
+      `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+      ``,
+      `--${mixedBoundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      ``,
+      alternativePart,
+      attachmentParts,
+      `--${mixedBoundary}--`,
+    ].join("\r\n");
+  } else {
+    rawMessage = [
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      ``,
+      alternativePart,
+    ].join("\r\n");
+  }
 
   const encoded = Buffer.from(rawMessage)
     .toString("base64")

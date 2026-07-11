@@ -26,9 +26,46 @@ interface PostalPayload {
   subject?:    string;
   plain_body?: string;
   html_body?:  string;
-  attachments?: Array<{ filename: string; content_type: string; size: number }>;
+  // Postal's Hash-format webhook (confirmed against http_sender.rb): base64 body
+  // content is included per-attachment whenever the HTTP endpoint has
+  // include_attachments enabled (it is, on all our live endpoints).
+  attachments?: Array<{ filename: string; content_type: string; size: number; data?: string }>;
   message_id?: string;
   in_reply_to?: string;
+}
+
+interface StoredAttachment { name: string; mimeType: string; size: number; url: string; }
+
+/** Decode Postal's base64 attachment bodies and persist them to Storage. */
+async function storeEmailAttachments(
+  db: ReturnType<typeof createAdminClient>,
+  messageId: number,
+  attachments: PostalPayload["attachments"],
+): Promise<StoredAttachment[]> {
+  if (!attachments?.length) return [];
+
+  const results: StoredAttachment[] = [];
+  for (const [i, att] of attachments.entries()) {
+    if (!att.data) continue; // no content included — skip rather than store a broken reference
+    try {
+      const buffer = Buffer.from(att.data, "base64");
+      const safeName = att.filename.replace(/[^a-zA-Z0-9._-]/g, "_") || `attachment-${i}`;
+      const path = `email/${messageId}/${i}-${safeName}`;
+
+      const { error: uploadError } = await db.storage
+        .from("crm-media")
+        .upload(path, buffer, { contentType: att.content_type, upsert: true });
+      if (uploadError) { console.error("[inbound-email] attachment upload failed:", uploadError.message); continue; }
+
+      const { data: signed } = await db.storage.from("crm-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (!signed?.signedUrl) continue;
+
+      results.push({ name: att.filename, mimeType: att.content_type, size: att.size, url: signed.signedUrl });
+    } catch (e) {
+      console.error("[inbound-email] attachment processing failed:", e);
+    }
+  }
+  return results;
 }
 
 function verifySignature(rawBody: string, sig: string): boolean {
@@ -174,6 +211,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. Insert message ─────────────────────────────────────────────────────
+  const storedAttachments = await storeEmailAttachments(db, payload.id, payload.attachments);
+
   await db.from("crm_messages").insert({
     conversation_id:    conversationId,
     contact_id:         contactId,
@@ -184,7 +223,7 @@ export async function POST(req: NextRequest) {
     subject:            payload.subject ?? null,
     body:               payload.plain_body ?? null,
     body_html:          payload.html_body  ?? null,
-    attachments:        payload.attachments ?? [],
+    attachments:        storedAttachments,
     provider_message_id: String(payload.id),
     provider_thread_id:  threadId,
     status:             "delivered",

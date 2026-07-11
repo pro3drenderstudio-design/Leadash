@@ -5,6 +5,8 @@ import { sendGmailMessage } from "@/lib/outreach/gmail";
 import { sendMicrosoftMessage } from "@/lib/outreach/microsoft";
 import type { OutreachInbox } from "@/types/outreach";
 
+interface OutgoingAttachment { path: string; name: string; mimeType: string; size: number; }
+
 // POST /api/outreach/crm/[enrollmentId]/reply
 // Sends a manual reply from the CRM inbox view.
 // Uses the inbox that received the original reply (or the campaign's first inbox).
@@ -17,10 +19,13 @@ export async function POST(
   if (!auth.ok) return auth.res;
   const { workspaceId, db } = auth;
 
-  const payload = await req.json() as { body: string; html_body?: string };
+  const payload = await req.json() as { body: string; html_body?: string; attachments?: OutgoingAttachment[] };
   const body = payload.body ?? "";
   const htmlBodyRaw = payload.html_body;
-  if (!body?.trim() && !htmlBodyRaw?.trim()) return NextResponse.json({ error: "body is required" }, { status: 400 });
+  const attachmentRefs = payload.attachments ?? [];
+  if (!body?.trim() && !htmlBodyRaw?.trim() && !attachmentRefs.length) {
+    return NextResponse.json({ error: "body or an attachment is required" }, { status: 400 });
+  }
 
   // Fetch enrollment + lead
   const { data: enrollment } = await db
@@ -82,22 +87,38 @@ export async function POST(
     const htmlBody = htmlBodyRaw?.trim() ? htmlBodyRaw : body.replace(/\n/g, "<br>");
     const textBody = body || (htmlBodyRaw ?? "").replace(/<[^>]+>/g, "");
 
+    // Re-download attachment bytes from storage (never trust client-supplied
+    // content) and build fresh signed URLs for the stored send record.
+    const transportAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
+    const storedAttachments: { name: string; mimeType: string; size: number; url: string }[] = [];
+    for (const att of attachmentRefs) {
+      const { data: file, error: dlErr } = await db.storage.from("crm-media").download(att.path);
+      if (dlErr || !file) { console.error("[crm/reply] attachment download failed:", dlErr?.message); continue; }
+      const buffer = Buffer.from(await file.arrayBuffer());
+      transportAttachments.push({ filename: att.name, content: buffer, contentType: att.mimeType });
+      const { data: signed } = await db.storage.from("crm-media").createSignedUrl(att.path, 60 * 60 * 24 * 365);
+      if (signed?.signedUrl) storedAttachments.push({ name: att.name, mimeType: att.mimeType, size: att.size, url: signed.signedUrl });
+    }
+
     if (inbox.provider === "gmail" && inbox.oauth_refresh_token) {
       const result = await sendGmailMessage(inbox, {
         to: toEmail, subject, htmlBody,
         textBody, fromName, inReplyToMessageId: inReplyToId,
+        attachments: transportAttachments,
       });
       messageId = result.messageId;
     } else if (inbox.provider === "outlook" && inbox.oauth_refresh_token) {
       const result = await sendMicrosoftMessage(inbox, {
         to: toEmail, subject, htmlBody,
         textBody, fromName, inReplyToMessageId: inReplyToId,
+        attachments: transportAttachments,
       });
       messageId = result.messageId;
     } else {
       const result = await sendSmtpMessage(inbox, {
         to: toEmail, subject, htmlBody,
         textBody, fromName, inReplyToMessageId: inReplyToId,
+        attachments: transportAttachments,
       });
       messageId = result.messageId;
     }
@@ -110,6 +131,7 @@ export async function POST(
       to_email:      toEmail,
       subject,
       body:          htmlBodyRaw?.trim() ? htmlBodyRaw : body,
+      attachments:   storedAttachments,
       status:        "sent",
       message_id:    messageId || null,
       sent_at:       new Date().toISOString(),

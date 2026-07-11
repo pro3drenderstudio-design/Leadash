@@ -120,6 +120,7 @@ export interface MsSendOptions {
   inReplyToMessageId?: string;
   replyToThreadId?: string;
   customHeaders?: Record<string, string>;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export async function sendMicrosoftMessage(
@@ -155,6 +156,14 @@ export async function sendMicrosoftMessage(
     ...(opts.fromName ? { from: { emailAddress: { name: opts.fromName, address: inbox.email_address } } } : {}),
     ...(opts.replyTo ? { replyTo: [{ emailAddress: { address: opts.replyTo } }] } : {}),
     ...(internetMessageHeaders.length ? { internetMessageHeaders } : {}),
+    ...(opts.attachments?.length ? {
+      attachments: opts.attachments.map(att => ({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name:          att.filename,
+        contentType:   att.contentType,
+        contentBytes:  att.content.toString("base64"),
+      })),
+    } : {}),
   };
 
   // sendMail and get the sent message ID

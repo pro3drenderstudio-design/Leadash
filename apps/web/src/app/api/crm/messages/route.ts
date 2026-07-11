@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
       delivered_at,
       read_at,
       sent_by,
-      created_at
+      created_at,
+      attachments,
+      location,
+      contacts
     `)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });

@@ -5,13 +5,24 @@ import {
   getCrmThreads, addNote, updateCrmStatus, toggleCrmStar, getCrmLeadProfile, suggestReply,
   getCrmUnmatched, getCrmWarmup, CrmWarmupRow, ignoreCrmUnmatched, matchReply, promoteUnmatched,
   getCrmFilters, createCrmFilter, deleteCrmFilter,
-  triggerSendBatch, sendCrmReply, getConversation,
+  triggerSendBatch, sendCrmReply, getConversation, uploadCrmMedia,
   setReminder, setScheduledReply, updateCrmLabels,
 } from "@/lib/outreach/api";
-import type { ConversationMessage } from "@/lib/outreach/api";
+import type { ConversationMessage, CrmMediaRef } from "@/lib/outreach/api";
 import "@/v2-app/v2-app.css";
 import type { CrmUnmatchedRow } from "@/lib/outreach/api";
 import type { CrmThread, CrmStatus, OutreachCrmFilter, CrmNote } from "@/types/outreach";
+import { Linkify, AttachmentGrid } from "@/components/crm/rich-message";
+import { VoiceRecorderButton } from "@/components/crm/voice-recorder";
+
+interface ComposerAttachment {
+  id: string;
+  name: string;
+  size: number;
+  status: "uploading" | "done" | "error";
+  ref?: CrmMediaRef;
+  error?: string;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -77,28 +88,6 @@ function ToolbarBtn({ children, title, onClick }: { children: React.ReactNode; t
   );
 }
 
-function AttachmentList({ attachments }: { attachments: import("@/types/outreach").ReplyAttachment[] }) {
-  if (!attachments?.length) return null;
-  return (
-    <div className="border-t border-white/10 pt-2.5 mt-2.5 space-y-1">
-      {attachments.map((att, i) => (
-        <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 transition-colors group text-xs"
-          onClick={e => e.stopPropagation()}
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-white/40 flex-shrink-0">
-            <path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/>
-          </svg>
-          <span className="flex-1 truncate text-white/60">{att.name}</span>
-          <span className="text-white/30 text-[10px] flex-shrink-0">
-            {att.size < 1024 ? `${att.size}B` : att.size < 1_048_576 ? `${(att.size/1024).toFixed(0)}KB` : `${(att.size/1_048_576).toFixed(1)}MB`}
-          </span>
-        </a>
-      ))}
-    </div>
-  );
-}
-
 function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: string }) {
   const [collapsed, setCollapsed] = useState(false);
   const rawBody = msg.body ?? "";
@@ -143,6 +132,7 @@ function SentBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: s
                 ) : (
                   <pre className="text-white/50 text-xs whitespace-pre-wrap font-sans leading-relaxed">{rawBody || "(No body stored)"}</pre>
                 )}
+                <AttachmentGrid attachments={msg.attachments ?? []} forceDark />
               </div>
             )}
           </div>
@@ -181,9 +171,9 @@ function ReplyBubble({ msg, leadEmail }: { msg: ConversationMessage; leadEmail: 
             {!collapsed && (
               <div className="px-4 pb-4 border-t border-white/6 pt-3">
                 <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {msg.body_text ?? "(No body captured — reply detected via header matching)"}
+                  {msg.body_text ? <Linkify text={msg.body_text} /> : "(No body captured — reply detected via header matching)"}
                 </pre>
-                <AttachmentList attachments={msg.attachments ?? []} />
+                <AttachmentGrid attachments={msg.attachments ?? []} forceDark />
               </div>
             )}
           </div>
@@ -262,7 +252,7 @@ export default function CrmClient() {
   // Compose rich text
   const composeRef  = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [attachments, setAttachments]   = useState<File[]>([]);
+  const [attachments, setAttachments]   = useState<ComposerAttachment[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showLinkDialog, setShowLinkDialog]   = useState(false);
   const [linkUrl, setLinkUrl]           = useState("");
@@ -551,11 +541,17 @@ export default function CrmClient() {
   async function handleSendReply() {
     const plainText = composeRef.current?.innerText?.trim() ?? composeBody.trim();
     const htmlContent = composeRef.current?.innerHTML ?? "";
-    if (!selected || !plainText) return;
+    const readyAttachments = attachments.filter((a) => a.status === "done").map((a) => a.ref!) ;
+    if (!selected) return;
+    if (!plainText && !readyAttachments.length) return;
+    if (attachments.some((a) => a.status === "uploading")) {
+      setSendError("Attachments are still uploading — wait a moment and try again");
+      return;
+    }
     setSending(true);
     setSendError(null);
     setSendSuccess(false);
-    const result = await sendCrmReply(selected.enrollment_id, plainText, htmlContent);
+    const result = await sendCrmReply(selected.enrollment_id, plainText, htmlContent, readyAttachments);
     if (result.error) {
       setSendError(result.error);
     } else {
@@ -593,10 +589,24 @@ export default function CrmClient() {
     // Keep picker open so user can insert multiple emojis
   }
 
+  function uploadComposerAttachment(file: File | Blob, name: string) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setAttachments((prev) => [...prev, { id, name, size: file.size, status: "uploading" }]);
+    uploadCrmMedia(file, name).then(
+      (ref) => setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "done", ref } : a))),
+      (err) => setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "error", error: err instanceof Error ? err.message : String(err) } : a))),
+    );
+  }
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    setAttachments((prev) => [...prev, ...files]);
+    files.forEach((f) => uploadComposerAttachment(f, f.name));
     e.target.value = "";
+  }
+
+  function handleVoiceNote(blob: Blob, mimeType: string) {
+    const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+    uploadComposerAttachment(blob, `voice-note-${Date.now()}.${ext}`);
   }
 
   async function handleTrigger() {
@@ -1150,6 +1160,7 @@ export default function CrmClient() {
                         <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
                       </ToolbarBtn>
                       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                      <VoiceRecorderButton onRecorded={handleVoiceNote} forceDark />
                       <div className="flex-1" />
                       {/* AI Generate button */}
                       <button
@@ -1196,12 +1207,18 @@ export default function CrmClient() {
                       {/* Attachments */}
                       {attachments.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 border-t border-white/8 pt-2">
-                          {attachments.map((f, i) => (
-                            <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white/8 border border-white/12 rounded-lg text-xs text-white/70">
-                              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white/40"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                          {attachments.map((f) => (
+                            <div key={f.id} className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-lg text-xs ${
+                              f.status === "error" ? "bg-red-500/10 border-red-500/25 text-red-300" : "bg-white/8 border-white/12 text-white/70"
+                            }`}>
+                              {f.status === "uploading" ? (
+                                <svg className="w-3 h-3 animate-spin text-white/40" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                              ) : (
+                                <svg viewBox="0 0 20 20" fill="currentColor" className={`w-3 h-3 ${f.status === "error" ? "text-red-400" : "text-white/40"}`}><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                              )}
                               <span className="max-w-[120px] truncate">{f.name}</span>
-                              <span className="text-white/30 text-[10px]">{f.size < 1_048_576 ? `${(f.size/1024).toFixed(0)}KB` : `${(f.size/1_048_576).toFixed(1)}MB`}</span>
-                              <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))} className="text-white/30 hover:text-red-400 transition-colors ml-0.5">✕</button>
+                              <span className="text-white/30 text-[10px]">{f.status === "error" ? (f.error ?? "Failed") : f.size < 1_048_576 ? `${(f.size/1024).toFixed(0)}KB` : `${(f.size/1_048_576).toFixed(1)}MB`}</span>
+                              <button onClick={() => setAttachments((a) => a.filter((x) => x.id !== f.id))} className="text-white/30 hover:text-red-400 transition-colors ml-0.5">✕</button>
                             </div>
                           ))}
                         </div>
@@ -1213,7 +1230,7 @@ export default function CrmClient() {
                         </div>
                         <button
                           onClick={handleSendReply}
-                          disabled={sending || !composeBody.trim()}
+                          disabled={sending || (!composeBody.trim() && !attachments.some((a) => a.status === "done"))}
                           className="px-4 py-1.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
                         >
                           {sending ? (

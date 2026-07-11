@@ -14,12 +14,21 @@ export interface WhatsappJobData {
   template_name?:  string;
   template_params?: Record<string, string>;
   body?:           string;
+  // Media already uploaded to Meta (see lib/whatsapp/media.ts uploadWhatsAppMedia)
+  // — the worker only ever references the resulting media ID, it never touches
+  // our own storage.
+  media?: {
+    id:        string;
+    type:      "image" | "video" | "audio" | "document";
+    caption?:  string;
+    filename?: string;
+  };
   source:          "automation" | "crm" | "system";
 }
 
 export async function processWhatsapp(job: Job<WhatsappJobData>) {
   const db: DB = createClient(SUPABASE_URL, SUPABASE_KEY);
-  const { message_id, phone_number, template_name, template_params, body } = job.data;
+  const { message_id, phone_number, template_name, template_params, body, media } = job.data;
 
   // Pull Meta credentials from crm_channel_configs (channel='whatsapp') at runtime
   // so they can be rotated in the CRM Settings UI without redeployment.
@@ -58,6 +67,19 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
         components,
       },
     };
+  } else if (media) {
+    // Media message (image/video/audio/document) — media.id was already
+    // uploaded to Meta via uploadWhatsAppMedia before this job was enqueued.
+    payload = {
+      messaging_product: "whatsapp",
+      to:                phone_number,
+      type:              media.type,
+      [media.type]: {
+        id: media.id,
+        ...(media.caption && media.type !== "audio" ? { caption: media.caption } : {}),
+        ...(media.type === "document" && media.filename ? { filename: media.filename } : {}),
+      },
+    };
   } else if (body) {
     // Free-form text message (within 24-hour window)
     payload = {
@@ -67,7 +89,7 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
       text:              { body },
     };
   } else {
-    throw new Error("WhatsApp job missing both template_name and body");
+    throw new Error("WhatsApp job missing template_name, media, and body");
   }
 
   const res = await fetch(

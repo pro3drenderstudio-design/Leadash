@@ -258,8 +258,14 @@ export const updateCrmLabels   = (enrollmentId: string, crm_labels: string[]) =>
 export const suggestReply      = (enrollmentId: string) =>
   post<{ suggestion: string; next_action?: string; action_reason?: string; error?: string }>(`${base}/crm/${enrollmentId}/suggest`, {});
 export const ignoreCrmUnmatched = (replyId: string) => ignoreReply(replyId);
-export const sendCrmReply      = (enrollmentId: string, body: string, html_body?: string) =>
-  post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body, html_body });
+export interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url: string }
+export const sendCrmReply      = (enrollmentId: string, body: string, html_body?: string, attachments?: CrmMediaRef[]) =>
+  post<{ ok: boolean; error?: string }>(`${base}/crm/${enrollmentId}/reply`, { body, html_body, attachments });
+export const uploadCrmMedia    = (file: File | Blob, filename?: string) => {
+  const form = new FormData();
+  form.append("file", file, filename);
+  return wsFetch(`${base}/crm/media/upload`, { method: "POST", body: form }).then(r => json<CrmMediaRef>(r));
+};
 export const getConversation   = (enrollmentId: string) =>
   get<{ messages: ConversationMessage[]; notes: import("@/types/outreach").CrmNote[] }>(`${base}/crm/${enrollmentId}`);
 export const promoteUnmatched  = (replyId: string) =>

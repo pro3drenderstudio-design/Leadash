@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ enro
 
   const [sendsRes, repliesRes, notesRes] = await Promise.all([
     db.from("outreach_sends")
-      .select("id, subject, body, status, sent_at, opened_at, clicked_at, bounced_at, to_email, inbox:outreach_inboxes!inbox_id(email_address, label)")
+      .select("id, subject, body, status, sent_at, opened_at, clicked_at, bounced_at, to_email, attachments, inbox:outreach_inboxes!inbox_id(email_address, label)")
       .eq("enrollment_id", enrollmentId)
       .eq("workspace_id", workspaceId)
       .order("sent_at", { ascending: true }),

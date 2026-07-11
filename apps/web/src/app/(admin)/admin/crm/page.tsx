@@ -2,6 +2,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
+import { Linkify, AttachmentGrid, LocationCard, ContactCard, HtmlBody } from "@/components/crm/rich-message";
+import { VoiceRecorderButton } from "@/components/crm/voice-recorder";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +45,20 @@ interface Conversation {
   latest_message:     LatestMessage | null;
 }
 
+interface CrmAttachment { name: string; mimeType: string; size: number; url: string; }
+interface CrmLocation { latitude: number; longitude: number; name?: string; address?: string; }
+interface WaSharedContact { name: string; phone: string; }
+
+interface CrmMediaRef { path: string; name: string; mimeType: string; size: number; url: string; }
+interface ComposerAttachment {
+  id: string;
+  name: string;
+  size: number;
+  status: "uploading" | "done" | "error";
+  ref?: CrmMediaRef;
+  error?: string;
+}
+
 interface CrmMessage {
   id: string; direction: "inbound"|"outbound"; channel: string;
   body: string|null; body_html: string|null; subject: string|null;
@@ -50,6 +66,7 @@ interface CrmMessage {
   wa_message_type: string|null; status: string;
   delivered_at: string|null; read_at: string|null;
   created_at: string; sent_by: string|null;
+  attachments: CrmAttachment[]; location: CrmLocation|null; contacts: WaSharedContact[];
 }
 
 interface ContactProfile {
@@ -207,10 +224,17 @@ function MessageBubble({ msg }: { msg: CrmMessage }) {
     </div>
   );
 
+  const isEmailHtml = msg.channel === "email" && !!msg.body_html;
+
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"} mb-3`}>
       <div className={`max-w-[70%] rounded-2xl px-3.5 py-2.5 text-sm ${isOutbound ? "bg-orange-500 text-white rounded-br-sm" : "bg-white dark:bg-white/10 border border-slate-100 dark:border-white/10 text-slate-800 dark:text-white rounded-bl-sm"}`}>
-        {msg.body}
+        {isEmailHtml
+          ? <HtmlBody html={msg.body_html!} />
+          : msg.body ? <Linkify text={msg.body} /> : null}
+        <AttachmentGrid attachments={msg.attachments} />
+        <LocationCard location={msg.location} />
+        <ContactCard contacts={msg.contacts} />
         <div className={`text-[10px] mt-1 ${isOutbound ? "text-orange-200" : "text-slate-400 dark:text-white/30"}`}>
           {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           {isOutbound && msg.status === "read"      && " ✓✓"}
@@ -769,6 +793,8 @@ function CrmInboxContent() {
   const [sending,        setSending]        = useState(false);
   const [composeText,    setComposeText]    = useState("");
   const [isNote,         setIsNote]         = useState(false);
+  const [attachments,    setAttachments]    = useState<ComposerAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter,   setStatusFilter]   = useState("open");
   const [channelFilter,  setChannelFilter]  = useState("all");
   const [winOpen,        setWinOpen]        = useState(false);
@@ -899,7 +925,13 @@ function CrmInboxContent() {
       return;
     }
 
-    if (!composeText.trim()) { setSending(false); return; }
+    const readyAttachments = attachments.filter(a => a.status === "done").map(a => a.ref!);
+    if (!composeText.trim() && !readyAttachments.length) { setSending(false); return; }
+    if (attachments.some(a => a.status === "uploading")) {
+      setSending(false);
+      setError("Attachments are still uploading — wait a moment and try again");
+      return;
+    }
     const res = await fetch("/api/crm/send", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -907,6 +939,7 @@ function CrmInboxContent() {
         body:            composeText,
         channel:         activeConvo.channel,
         note:            isNote || undefined,
+        attachments:     isNote ? undefined : readyAttachments,
       }),
     });
     const d = await res.json() as { error?: string; requires_template?: boolean };
@@ -917,8 +950,35 @@ function CrmInboxContent() {
     }
     setComposeText("");
     setIsNote(false);
+    setAttachments([]);
     await loadMessages(activeConvo.id);
     await loadConvos();
+  }
+
+  function uploadComposerAttachment(file: File | Blob, name: string) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setAttachments(prev => [...prev, { id, name, size: file.size, status: "uploading" }]);
+    const form = new FormData();
+    form.append("file", file, name);
+    fetch("/api/crm/media/upload", { method: "POST", body: form })
+      .then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error ?? "Upload failed");
+        return d as CrmMediaRef;
+      })
+      .then(ref => setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "done", ref } : a)))
+      .catch((err: unknown) => setAttachments(prev => prev.map(a => a.id === id ? { ...a, status: "error", error: err instanceof Error ? err.message : String(err) } : a)));
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach(f => uploadComposerAttachment(f, f.name));
+    e.target.value = "";
+  }
+
+  function handleVoiceNote(blob: Blob, mimeType: string) {
+    const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+    uploadComposerAttachment(blob, `voice-note-${Date.now()}.${ext}`);
   }
 
   async function updateStatus(status: string) {
@@ -1125,19 +1185,49 @@ function CrmInboxContent() {
                 </button>
               </div>
             ) : (
-              <div className="flex gap-3 items-end">
-                <textarea
-                  value={composeText}
-                  onChange={e => setComposeText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
-                  placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
-                  rows={3}
-                  className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-                <button onClick={handleSend} disabled={sending || !composeText.trim()}
-                  className="px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
-                  {sending ? "…" : "Send"}
-                </button>
+              <div className="space-y-2">
+                {!isNote && attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {attachments.map(f => (
+                      <div key={f.id} className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-lg text-xs ${
+                        f.status === "error" ? "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/25 text-red-600 dark:text-red-300" : "bg-slate-100 dark:bg-white/8 border-slate-200 dark:border-white/12 text-slate-600 dark:text-white/70"
+                      }`}>
+                        {f.status === "uploading" ? (
+                          <svg className="w-3 h-3 animate-spin text-slate-400 dark:text-white/40" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        ) : (
+                          <svg viewBox="0 0 20 20" fill="currentColor" className={`w-3 h-3 ${f.status === "error" ? "text-red-500 dark:text-red-400" : "text-slate-400 dark:text-white/40"}`}><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                        )}
+                        <span className="max-w-[140px] truncate">{f.name}</span>
+                        <span className="text-slate-400 dark:text-white/30 text-[10px]">{f.status === "error" ? (f.error ?? "Failed") : f.size < 1_048_576 ? `${(f.size/1024).toFixed(0)}KB` : `${(f.size/1_048_576).toFixed(1)}MB`}</span>
+                        <button onClick={() => setAttachments(a => a.filter(x => x.id !== f.id))} className="text-slate-400 dark:text-white/30 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-0.5">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-3 items-end">
+                  <textarea
+                    value={composeText}
+                    onChange={e => setComposeText(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
+                    placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
+                    rows={3}
+                    className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                  {!isNote && (
+                    <div className="flex items-center gap-1 pb-1">
+                      <button onClick={() => fileInputRef.current?.click()} title="Attach file"
+                        className="p-1.5 rounded-md text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
+                      </button>
+                      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                      <VoiceRecorderButton onRecorded={handleVoiceNote} />
+                    </div>
+                  )}
+                  <button onClick={handleSend} disabled={sending || (!composeText.trim() && !attachments.some(a => a.status === "done"))}
+                    className="px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
+                    {sending ? "…" : "Send"}
+                  </button>
+                </div>
               </div>
             )}
           </div>

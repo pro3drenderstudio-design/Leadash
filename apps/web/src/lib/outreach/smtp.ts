@@ -13,6 +13,7 @@ export interface SmtpSendOptions {
   inReplyToMessageId?: string;
   replyToThreadId?: string;
   customHeaders?: Record<string, string>;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export interface SmtpSendResult {
@@ -57,6 +58,7 @@ export async function sendSmtpMessage(
     ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
     ...(opts.inReplyToMessageId ? { inReplyTo: opts.inReplyToMessageId, references: opts.inReplyToMessageId } : {}),
     ...(opts.customHeaders ? { headers: opts.customHeaders } : {}),
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
   });
 
   return { messageId: info.messageId ?? "" };
