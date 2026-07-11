@@ -342,13 +342,13 @@ async function createWorkspaceForBuyer(
     role:         "owner",
   });
   if (memErr) {
-    await db.from("workspaces").delete().eq("id", workspace.id).catch(() => {});
+    await db.from("workspaces").delete().eq("id", workspace.id).then(undefined, () => {});
     await db.auth.admin.deleteUser(userId).catch(() => {});
     console.error("[offers/checkout] workspace_member error:", memErr);
     return null;
   }
 
-  await db.from("workspace_settings").insert({ workspace_id: workspace.id }).catch(() => {});
+  await db.from("workspace_settings").insert({ workspace_id: workspace.id }).then(undefined, () => {});
 
   // ── Send access email — magic link for "create", invite link for "invite" ──
   const linkType = opts.action === "invite" ? "invite" : "magiclink";

@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
           .eq("id", conversationId);
 
         // Increment unread (RPC may not exist yet — fail silently)
-        await db.rpc("increment_unread", { convo_id: conversationId }).catch(() => {});
+        await db.rpc("increment_unread", { convo_id: conversationId }).then(undefined, () => {});
       } else {
         const { data: newConvo } = await db
           .from("crm_conversations")

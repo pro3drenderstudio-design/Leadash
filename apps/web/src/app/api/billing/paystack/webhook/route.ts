@@ -350,7 +350,7 @@ export async function POST(req: NextRequest) {
               amount_kobo:        amountKobo ?? 0,
               paystack_reference: data.reference,
               status:             "paid",
-            }).catch(() => {});
+            }).then(undefined, () => {});
 
             // Fire automation
             await enqueueAutomation({
@@ -418,7 +418,7 @@ export async function POST(req: NextRequest) {
               amount_kobo:        amountKobo ?? 0,
               paystack_reference: data.reference,
               status:             "paid",
-            }).catch(() => {});
+            }).then(undefined, () => {});
 
             // Fire automation
             await enqueueAutomation({

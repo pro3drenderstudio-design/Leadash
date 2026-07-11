@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
 
         if (!dedupErr) {
           if (type === "open") {
-            await db.rpc("track_open", { p_send_id: sendId }).catch(() => {});
+            await db.rpc("track_open", { p_send_id: sendId }).then(undefined, () => {});
           } else if (type === "click" && linkIdx !== null) {
-            await db.rpc("track_click", { p_send_id: sendId, p_link_index: parseInt(linkIdx) }).catch(() => {});
+            await db.rpc("track_click", { p_send_id: sendId, p_link_index: parseInt(linkIdx) }).then(undefined, () => {});
           }
         }
       } catch { /* non-fatal */ }

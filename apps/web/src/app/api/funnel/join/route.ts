@@ -134,14 +134,14 @@ export async function POST(req: NextRequest) {
   });
 
   if (memErr) {
-    await db.from("workspaces").delete().eq("id", workspace.id).catch(() => {});
+    await db.from("workspaces").delete().eq("id", workspace.id).then(undefined, () => {});
     await db.auth.admin.deleteUser(userId).catch(() => {});
     console.error("[funnel/join] workspace_member error:", memErr);
     return NextResponse.json({ error: "Account setup failed. Please try again." }, { status: 500 });
   }
 
   // ── Default workspace settings ────────────────────────────────────────────
-  await db.from("workspace_settings").insert({ workspace_id: workspace.id }).catch(() => {});
+  await db.from("workspace_settings").insert({ workspace_id: workspace.id }).then(undefined, () => {});
 
   // ── funnel_states ─────────────────────────────────────────────────────────
   await db.from("funnel_states").upsert(

@@ -187,7 +187,7 @@ export async function fulfillGrant(
               amount:             product.credits_grant,
               description:        `Academy enrollment — ${product.name}`,
               paystack_reference: `offer:${ctx.reference}:${grant.id}:academy_credits`,
-            }).catch(() => {}); // best-effort — don't fail the grant if this dup-collides
+            }).then(undefined, () => {}); // best-effort — don't fail the grant if this dup-collides
             await db.from("academy_enrollments").update({ credits_granted: true }).eq("id", enrollment.id);
           }
         }
@@ -336,7 +336,7 @@ export async function revokeGrant(
             amount:             -qty,
             description:        "Offer purchase refunded — credits revoked",
             paystack_reference: `${txRef}:revoke`,
-          }).catch(() => {}); // best-effort — ignore dup on repeated refund calls
+          }).then(undefined, () => {}); // best-effort — ignore dup on repeated refund calls
         }
         return;
       }

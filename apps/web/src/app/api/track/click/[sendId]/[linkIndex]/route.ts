@@ -24,7 +24,7 @@ export async function GET(
 
     if (link?.original_url) {
       // Fire-and-forget click recording
-      db.rpc("track_click", { p_send_id: sendId, p_link_index: index }).catch(() => {});
+      db.rpc("track_click", { p_send_id: sendId, p_link_index: index }).then(undefined, () => {});
       return NextResponse.redirect(link.original_url);
     }
   } catch { /* fall through */ }

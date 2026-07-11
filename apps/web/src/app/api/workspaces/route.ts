@@ -111,8 +111,10 @@ export async function POST(req: NextRequest) {
         status:                "lead",
       });
 
-      // Increment signup count atomically
-      await db.rpc("increment_affiliate_signups", { aff_id: affiliate.id }).catch(() =>
+      // Increment signup count atomically. Supabase's query builder only
+      // implements PromiseLike.then() (no .catch()), so fall back via
+      // the rejection handler of .then() instead of .catch().
+      await db.rpc("increment_affiliate_signups", { aff_id: affiliate.id }).then(undefined, () =>
         db.from("affiliates")
           .update({ signups: (affiliate.signups ?? 0) + 1 })
           .eq("id", affiliate.id)

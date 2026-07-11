@@ -144,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (jobErr || !jobRow) {
     // Refund on job creation failure
-    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).catch(() => {});
+    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).then(undefined, () => {});
     return NextResponse.json({ error: "Failed to create verification job" }, { status: 500 });
   }
 
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await adminDb.from("lead_verification_jobs")
       .update({ status: "failed", error: "Queue unavailable — Redis may be down" })
       .eq("id", jobRow.id);
-    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).catch(() => {});
+    await adminDb.rpc("refund_lead_credits", { p_workspace_id: workspaceId, p_amount: totalCost }).then(undefined, () => {});
     return NextResponse.json({ error: "Failed to enqueue job" }, { status: 500 });
   }
 
