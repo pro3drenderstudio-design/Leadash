@@ -1,6 +1,8 @@
 /**
  * Warmup pool runner — workspace-scoped.
- * Steps: A) send warmup emails, B) auto-reply ~40%, C) spam rescue
+ * Steps: A) send warmup emails, B) spam rescue, C) auto-reply — always for
+ * anything just rescued from spam (mirrors real behavior: find it in spam,
+ * move it back, reply), ~40% random chance for everything else.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -156,14 +158,41 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
     }
   }
 
-  // ── Step B: Reply to warmup emails (~40%) ─────────────────────────────────
-  // Query by to_inbox_id so we catch emails sent to our inboxes by other workspaces.
   const since = new Date(Date.now() - 24 * 3_600_000);
+
+  // ── Step B: Spam rescue ───────────────────────────────────────────────────
+  // Runs before the reply step so a rescue this run is visible to it immediately.
+  const { data: recentSends } = await db.from("outreach_warmup_sends")
+    .select("*").in("to_inbox_id", [...localIds]).gte("sent_at", since.toISOString()).eq("rescued_from_spam", false);
+
+  for (const ws of recentSends ?? []) {
+    const inbox = localPool.find((p: OutreachInbox) => p.id === ws.to_inbox_id);
+    if (!inbox) continue;
+
+    try {
+      let rescued = false;
+      if (inbox.provider === "gmail" && inbox.oauth_refresh_token) {
+        rescued = await rescueGmail(inbox as OutreachInbox, ws.id);
+      } else if (inbox.imap_host) {
+        rescued = await rescueSmtp(inbox as OutreachInbox, ws.id);
+      }
+      if (rescued) {
+        await db.from("outreach_warmup_sends").update({ rescued_from_spam: true }).eq("id", ws.id);
+        result.rescued++;
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  // ── Step C: Reply to warmup emails ────────────────────────────────────────
+  // Query by to_inbox_id so we catch emails sent to our inboxes by other workspaces.
+  // Anything just (or previously) rescued from spam always gets a reply — mirrors
+  // real behavior: find it in spam, move it back, then reply. Everything else
+  // keeps the ~40% organic reply rate.
   const { data: pending } = await db.from("outreach_warmup_sends")
     .select("*").in("to_inbox_id", [...localIds]).gte("sent_at", since.toISOString()).is("replied_at", null);
 
   for (const ws of pending ?? []) {
-    if (Math.random() > 0.4) continue;
+    if (!ws.rescued_from_spam && Math.random() > 0.4) continue;
     // recipient must be one of our local inboxes (we have its credentials)
     const recipient = localPool.find((p: OutreachInbox) => p.id === ws.to_inbox_id);
     // sender can be any inbox in the global pool (we only need their email address)
@@ -186,28 +215,6 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
       }
       await db.from("outreach_warmup_sends").update({ replied_at: new Date().toISOString() }).eq("id", ws.id);
       result.replied++;
-    } catch { /* non-fatal */ }
-  }
-
-  // ── Step C: Spam rescue ───────────────────────────────────────────────────
-  const { data: recentSends } = await db.from("outreach_warmup_sends")
-    .select("*").in("to_inbox_id", [...localIds]).gte("sent_at", since.toISOString()).eq("rescued_from_spam", false);
-
-  for (const ws of recentSends ?? []) {
-    const inbox = localPool.find((p: OutreachInbox) => p.id === ws.to_inbox_id);
-    if (!inbox) continue;
-
-    try {
-      let rescued = false;
-      if (inbox.provider === "gmail" && inbox.oauth_refresh_token) {
-        rescued = await rescueGmail(inbox as OutreachInbox, ws.id);
-      } else if (inbox.imap_host) {
-        rescued = await rescueSmtp(inbox as OutreachInbox, ws.id);
-      }
-      if (rescued) {
-        await db.from("outreach_warmup_sends").update({ rescued_from_spam: true }).eq("id", ws.id);
-        result.rescued++;
-      }
     } catch { /* non-fatal */ }
   }
 
