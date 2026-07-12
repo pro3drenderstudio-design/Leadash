@@ -7,6 +7,10 @@ import type {
   OutreachInboxSafe, OutreachCampaign, CrmThread, OutreachReply,
   CampaignAnalytics, ReplyAttachment, CrmNote,
 } from "../types/outreach";
+import type {
+  AcademyProductRow, AcademySectionRow, AcademyEnrollment, AcademyCohort,
+  ChallengePayload, LeaderboardRow, LessonContentBlock, LessonResource,
+} from "../types/academy";
 
 export interface ConversationMessage {
   id: string;
@@ -157,3 +161,30 @@ export const getNotifications = (page = 0) =>
   wsGet<{ notifications: MobileNotification[]; total: number; unread_count: number; page: number; page_size: number }>(`/api/mobile/notifications?page=${page}`);
 export const markNotificationsRead = (opts: { read_all?: boolean; ids?: string[] }) =>
   wsPatch<{ ok: boolean }>("/api/mobile/notifications", opts);
+
+// ─── Academy ──────────────────────────────────────────────────────────────────
+export const getAcademyProducts = () =>
+  wsGet<{ products: AcademyProductRow[] }>("/api/academy/products");
+export const getAcademyLessons = (productId: string) =>
+  wsGet<{ sections: AcademySectionRow[]; enrollment: AcademyEnrollment | null; cohort: AcademyCohort | null }>(`/api/academy/lessons?product_id=${productId}`);
+export const getLessonContent = (lessonId: string) =>
+  wsGet<{ blocks: LessonContentBlock[]; resources: LessonResource[] }>(`/api/academy/lessons/${lessonId}/content`);
+export const getLessonPlaybackToken = (lessonId: string) =>
+  wsGet<{ token: string; playback_id: string }>(`/api/academy/lessons/${lessonId}/token`);
+export const completeLesson = (lessonId: string, productId: string, watchPercent = 100) =>
+  wsPost<{ ok?: boolean; course_completed?: boolean; error?: string }>("/api/academy/progress", {
+    lesson_id: lessonId, product_id: productId, watch_percent: watchPercent,
+  });
+export const getChallenge = (productId: string) =>
+  wsGet<ChallengePayload>(`/api/academy/challenge?product_id=${productId}`);
+export const completeChallengeTask = (opts: {
+  task_id: string;
+  proof_text?: string;
+  proof_files?: Array<{ url: string; name: string; type: string }>;
+  metric_value?: number;
+}) =>
+  wsPost<{ points_awarded: number; day_complete: boolean; streak_days: number; error?: string }>("/api/academy/task-completion", opts);
+export const getAcademyLeaderboard = (productId: string) =>
+  wsGet<{ rows: LeaderboardRow[]; me: LeaderboardRow | null }>(`/api/academy/leaderboard?product_id=${productId}&board=points&scope=all_time`);
+export const enrollFree = (productId: string) =>
+  wsPost<{ status?: string; enrollment_id?: string; error?: string }>("/api/academy/enroll", { product_id: productId });

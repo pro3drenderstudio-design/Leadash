@@ -4,6 +4,7 @@
  */
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 import { R, FONT } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -121,6 +122,29 @@ export function Avatar({ name, size = 36, color }: { name: string; size?: number
       alignItems: "center", justifyContent: "center",
     }}>
       <Text style={{ fontSize: Math.round(size * 0.36), fontFamily: FONT.bold, color: C.bg }}>{initials}</Text>
+    </View>
+  );
+}
+
+/** Circular progress ring with children centered inside (e.g. a % label). */
+export function Ring({ pct, size = 48, stroke = 5, color, children }: {
+  pct: number; size?: number; stroke?: number; color?: string; children?: React.ReactNode;
+}) {
+  const { C } = useTheme();
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const off = circ * (1 - Math.min(Math.max(pct, 0), 100) / 100);
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
+        <Circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.surfaceStrong} strokeWidth={stroke} />
+        <Circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={color ?? C.accent} strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round"
+        />
+      </Svg>
+      {children}
     </View>
   );
 }

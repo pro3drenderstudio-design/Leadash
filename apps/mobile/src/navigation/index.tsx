@@ -11,13 +11,17 @@ import { useQuery } from "@tanstack/react-query";
 import { R, FONT } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeContext";
 import { Icon, IconName } from "../components/Icon";
-import type { TabParams, HomeStackParams, CampaignsStackParams, InboxStackParams, InboxesStackParams } from "./types";
+import type { TabParams, HomeStackParams, AcademyStackParams, CampaignsStackParams, InboxStackParams, InboxesStackParams } from "./types";
 import { pushDataFromResponse, PushData } from "../lib/push";
 import { getNotifications } from "../lib/api";
 
 import HomeScreen from "../screens/HomeScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
 import PrefsScreen from "../screens/PrefsScreen";
+import AcademyScreen from "../screens/AcademyScreen";
+import CourseDetailScreen from "../screens/CourseDetailScreen";
+import LessonPlayerScreen from "../screens/LessonPlayerScreen";
+import ChallengeDayScreen from "../screens/ChallengeDayScreen";
 import CampaignsScreen from "../screens/CampaignsScreen";
 import CampaignDetailScreen from "../screens/CampaignDetailScreen";
 import InboxScreen from "../screens/InboxScreen";
@@ -27,6 +31,7 @@ import InboxDetailScreen from "../screens/InboxDetailScreen";
 
 const Tab = createBottomTabNavigator<TabParams>();
 const HomeStack = createNativeStackNavigator<HomeStackParams>();
+const AcademyStack = createNativeStackNavigator<AcademyStackParams>();
 const CampaignsStack = createNativeStackNavigator<CampaignsStackParams>();
 const InboxStack = createNativeStackNavigator<InboxStackParams>();
 const InboxesStack = createNativeStackNavigator<InboxesStackParams>();
@@ -65,6 +70,18 @@ function HomeStackNav() {
   );
 }
 
+function AcademyStackNav() {
+  const opts = useStackScreenOptions();
+  return (
+    <AcademyStack.Navigator screenOptions={opts}>
+      <AcademyStack.Screen name="Academy" component={AcademyScreen} options={{ headerShown: false }} />
+      <AcademyStack.Screen name="CourseDetail" component={CourseDetailScreen} options={{ title: "Course" }} />
+      <AcademyStack.Screen name="LessonPlayer" component={LessonPlayerScreen} options={{ title: "Lesson" }} />
+      <AcademyStack.Screen name="ChallengeDay" component={ChallengeDayScreen} options={{ title: "Challenge" }} />
+    </AcademyStack.Navigator>
+  );
+}
+
 function CampaignsStackNav() {
   const opts = useStackScreenOptions();
   return (
@@ -97,6 +114,7 @@ function InboxesStackNav() {
 
 const TAB_ICON: Record<keyof TabParams, IconName> = {
   HomeTab:      "home",
+  AcademyTab:   "academy",
   CampaignsTab: "campaign",
   InboxTab:     "inbox",
   InboxesTab:   "server",
@@ -258,6 +276,7 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeStackNav} options={{ title: "Home" }} />
+      <Tab.Screen name="AcademyTab" component={AcademyStackNav} options={{ title: "Academy" }} />
       <Tab.Screen name="CampaignsTab" component={CampaignsStackNav} options={{ title: "Campaigns" }} />
       <Tab.Screen name="InboxTab" component={InboxStackNav} options={({ route }) => ({
         title: "Inbox",

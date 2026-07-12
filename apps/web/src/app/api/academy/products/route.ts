@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createClient } from "@/lib/supabase/server";
 import { isLessonUnlocked } from "@/types/academy";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
 
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
-
-  const { db, workspaceId } = auth;
+  // userId from requireWorkspace resolves BOTH cookie sessions (web) and
+  // Bearer tokens (mobile) — a separate cookie-only getSession() here left
+  // mobile requests with no enrollment/progress state.
+  const { db, workspaceId, userId } = auth;
 
   const [publishedProductsRes, enrollmentsRes, cohortsRes, certificatesRes] = await Promise.all([
     db.from("academy_products").select("*").eq("is_active", true).eq("is_published", true).order("price_ngn"),

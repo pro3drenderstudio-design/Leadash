@@ -6,6 +6,13 @@ export type HomeStackParams = {
   Prefs:         undefined;
 };
 
+export type AcademyStackParams = {
+  Academy:      undefined;
+  CourseDetail: { id: string };
+  LessonPlayer: { productId: string; lessonId: string };
+  ChallengeDay: { id: string };
+};
+
 export type CampaignsStackParams = {
   Campaigns:      undefined;
   CampaignDetail: { id: string };
@@ -23,6 +30,7 @@ export type InboxesStackParams = {
 
 export type TabParams = {
   HomeTab:      NavigatorScreenParams<HomeStackParams>;
+  AcademyTab:   NavigatorScreenParams<AcademyStackParams>;
   CampaignsTab: NavigatorScreenParams<CampaignsStackParams>;
   InboxTab:     NavigatorScreenParams<InboxStackParams>;
   InboxesTab:   NavigatorScreenParams<InboxesStackParams>;

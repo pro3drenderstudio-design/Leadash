@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -9,10 +8,8 @@ export async function GET(req: NextRequest) {
   const productId = req.nextUrl.searchParams.get("product_id");
   if (!productId) return NextResponse.json({ error: "product_id required" }, { status: 400 });
 
-  const { db, workspaceId } = auth;
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
+  // auth.userId works for both cookie sessions (web) and Bearer tokens (mobile)
+  const { db, workspaceId, userId } = auth;
 
   const [modulesRes, enrollmentRes] = await Promise.all([
     db.from("academy_modules")
