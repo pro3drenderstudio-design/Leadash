@@ -45,10 +45,22 @@ interface VerifyResponse {
   status: string;
   reference: string;
   amount: number;
+  fees?: number; // Paystack's transaction fee in kobo
   currency: string;
   authorization: { authorization_code: string; email: string };
   customer: { customer_code: string; email: string };
   metadata: Record<string, unknown>;
+}
+
+/** Safely reads Paystack's transaction fee (kobo) off a raw webhook payload.
+ *  charge.success carries it at `data.fees`; invoice.* events nest it under
+ *  `data.transaction.fees`. Returns null when absent so callers can
+ *  distinguish "no fee data" (backfillable later) from a genuine zero fee. */
+export function paystackFeesKobo(data: unknown): number | null {
+  const d = data as { fees?: unknown; transaction?: { fees?: unknown } } | null | undefined;
+  if (typeof d?.fees === "number") return d.fees;
+  if (typeof d?.transaction?.fees === "number") return d.transaction.fees;
+  return null;
 }
 
 export interface PaystackCheckoutParams {
@@ -84,6 +96,8 @@ export async function verifyPaystackPayment(reference: string): Promise<{
   authorizationCode: string | null;
   customerCode: string | null;
   customerEmail: string | null;
+  amountKobo: number | null;
+  feesKobo: number | null;
 }> {
   const data = await paystackFetch<VerifyResponse>("GET", `/transaction/verify/${encodeURIComponent(reference)}`);
   return {
@@ -92,6 +106,8 @@ export async function verifyPaystackPayment(reference: string): Promise<{
     authorizationCode: data.authorization?.authorization_code ?? null,
     customerCode:      data.customer?.customer_code ?? null,
     customerEmail:     data.customer?.email ?? data.authorization?.email ?? null,
+    amountKobo:        typeof data.amount === "number" ? data.amount : null,
+    feesKobo:          typeof data.fees === "number" ? data.fees : null,
   };
 }
 
@@ -145,8 +161,8 @@ export async function chargePaystackAuthorization(params: {
   amountKobo:        number;
   metadata?:         Record<string, unknown>;
   reference?:        string;
-}): Promise<{ reference: string; status: string }> {
-  const data = await paystackFetch<{ reference: string; status: string }>(
+}): Promise<{ reference: string; status: string; feesKobo: number | null }> {
+  const data = await paystackFetch<{ reference: string; status: string; fees?: number }>(
     "POST", "/transaction/charge_authorization",
     {
       authorization_code: params.authorizationCode,
@@ -156,7 +172,7 @@ export async function chargePaystackAuthorization(params: {
       ...(params.reference ? { reference: params.reference } : {}),
     }
   );
-  return { reference: data.reference, status: data.status };
+  return { reference: data.reference, status: data.status, feesKobo: typeof data.fees === "number" ? data.fees : null };
 }
 
 // ── Refunds ────────────────────────────────────────────────────────────────────

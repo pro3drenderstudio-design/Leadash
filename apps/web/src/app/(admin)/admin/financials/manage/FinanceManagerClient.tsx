@@ -24,6 +24,9 @@ import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import LedgerTab from "./LedgerTab";
+import TaxTab from "./TaxTab";
+import AuditTab from "./AuditTab";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +34,7 @@ type Kind = "recurring" | "oneoff";
 type Category = "infra" | "salaries" | "fees" | "marketing" | "software" | "oneoff" | "refunds";
 type IncomeType = "plan" | "academy" | "offer" | "credits" | "addon" | "external" | "partner" | "consulting" | "grant";
 type Range = "month" | "quarter" | "year";
-type Tab = "overview" | "expenses" | "income" | "reports";
+type Tab = "overview" | "expenses" | "income" | "ledger" | "tax" | "audit" | "reports";
 
 interface Expense {
   id: string;
@@ -167,6 +170,23 @@ export default function FinanceManagerClient() {
 
   const [reservesOpen, setReservesOpen] = useState(false);
   const [reservesDraft, setReservesDraft] = useState<string>("");
+  const [feesNgn, setFeesNgn] = useState(0);
+
+  // Paystack fees for the selected range (from the categorized ledger) — shown
+  // as a "net of fees" note on the Money-in hero card.
+  useEffect(() => {
+    const start = new Date();
+    start.setMonth(start.getMonth() - (rangeMonths(range) - 1));
+    start.setDate(1);
+    fetch(`/api/admin/finance/transactions?type=cogs&start=${start.toISOString().slice(0, 10)}&limit=2000`)
+      .then(r => r.json())
+      .then((d: { transactions?: { category: string; amount_ngn: number }[] }) => {
+        setFeesNgn((d.transactions ?? [])
+          .filter(t => t.category === "cogs.payment_fees")
+          .reduce((sum, t) => sum + t.amount_ngn, 0));
+      })
+      .catch(() => setFeesNgn(0));
+  }, [range]);
 
   const toast = useToast();
 
@@ -577,14 +597,14 @@ export default function FinanceManagerClient() {
 
         {/* Tabs */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid var(--app-border)", overflowX: "auto" }}>
-          {(["overview", "expenses", "income", "reports"] as const).map(t => (
+          {(["overview", "expenses", "income", "ledger", "tax", "audit", "reports"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               position: "relative", height: 40, padding: "0 14px", border: "none", background: "transparent",
               cursor: "pointer", fontSize: 13, whiteSpace: "nowrap",
               color: tab === t ? "var(--app-text)" : "var(--app-text-muted)",
               fontWeight: tab === t ? 600 : 500,
             }}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === "tax" ? "Tax" : t === "audit" ? "Audit & Close" : t.charAt(0).toUpperCase() + t.slice(1)}
               {tab === t && <span style={{ position: "absolute", left: 0, right: 0, bottom: -1, height: 2, background: "var(--app-accent)", borderRadius: 2 }} />}
             </button>
           ))}
@@ -606,6 +626,7 @@ export default function FinanceManagerClient() {
             growth={growth}
             onGrowth={setGrowth}
             onEditReserves={() => { setReservesDraft(String(settings.reserves_ngn)); setReservesOpen(true); }}
+            feesNgn={feesNgn}
           />
         )}
 
@@ -631,6 +652,15 @@ export default function FinanceManagerClient() {
             onAdd={openAddIncome}
           />
         )}
+
+        {/* Tab: LEDGER */}
+        {!loading && !error && tab === "ledger" && <LedgerTab />}
+
+        {/* Tab: TAX */}
+        {!loading && !error && tab === "tax" && <TaxTab />}
+
+        {/* Tab: AUDIT & CLOSE */}
+        {!loading && !error && tab === "audit" && <AuditTab />}
 
         {/* Tab: REPORTS */}
         {!loading && !error && tab === "reports" && (
@@ -694,15 +724,19 @@ interface OverviewProps {
   growth: number;
   onGrowth: (g: number) => void;
   onEditReserves: () => void;
+  feesNgn: number;
 }
 
-function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projection, growth, onGrowth, onEditReserves }: OverviewProps) {
+function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projection, growth, onGrowth, onEditReserves, feesNgn }: OverviewProps) {
   const marginPct = totals.moneyIn > 0 ? Math.round((totals.profit / totals.moneyIn) * 100) : 0;
   const rLabel = rangeLabel(range);
 
   const HERO = [
     {
-      label: "Money in",   value: ngn(totals.moneyIn),  sub: `${rLabel} · after test cleanup`,
+      label: "Money in",   value: ngn(totals.moneyIn),
+      sub: feesNgn > 0
+        ? `${rLabel} · net ${ngn(totals.moneyIn - feesNgn)} after ${ngn(feesNgn)} Paystack fees`
+        : `${rLabel} · after test cleanup`,
       valColor: "var(--app-in)", iconBg: "var(--app-in-soft)", iconFg: "var(--app-in)",
       icon: <><path d="M12 5v14" /><path d="M5 12l7 7 7-7" /></>,
     },

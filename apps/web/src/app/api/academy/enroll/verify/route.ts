@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   if (existing) return NextResponse.json({ status: "already_enrolled", enrollment_id: existing.id });
 
-  const { paid, metadata } = await verifyPaystackPayment(reference);
+  const { paid, metadata, feesKobo } = await verifyPaystackPayment(reference);
   if (!paid) return NextResponse.json({ error: "Payment not confirmed" }, { status: 402 });
 
   const productId  = metadata.product_id  as string | undefined;
@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
     type:               "academy_enrollment",
     description:        `Academy — ${product.name}`,
     amount_kobo:        amountKobo ?? 0,
+    fees_kobo:          feesKobo,
     paystack_reference: reference,
     status:             "paid",
   }).throwOnError().then(() => {}).catch(() => {});

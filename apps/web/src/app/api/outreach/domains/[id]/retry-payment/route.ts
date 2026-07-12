@@ -31,7 +31,7 @@ export async function POST(
   }
 
   try {
-    const { reference, status } = await chargePaystackAuthorization({
+    const { reference, status, feesKobo } = await chargePaystackAuthorization({
       authorizationCode: domain.paystack_auth_code as string,
       email:             domain.paystack_billing_email as string,
       amountKobo:        domain.paystack_inbox_monthly_kobo as number,
@@ -57,6 +57,7 @@ export async function POST(
       type:               "inbox_billing",
       description:        `Inbox domain — ${domain.domain} (retry)`,
       amount_kobo:        domain.paystack_inbox_monthly_kobo as number,
+      fees_kobo:          feesKobo,
       paystack_reference: reference,
       status:             "paid",
     }, { onConflict: "paystack_reference", ignoreDuplicates: true });

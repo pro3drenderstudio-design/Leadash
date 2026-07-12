@@ -88,8 +88,9 @@ export async function GET(req: NextRequest) {
     const renewalRef = `renewal:${purchase.id}:${Date.now()}`;
 
     // Charge the card.
+    let renewalFeesKobo: number | null = null;
     try {
-      await chargePaystackAuthorization({
+      const charge = await chargePaystackAuthorization({
         authorizationCode: authCode,
         email:             purchase.buyer_email,
         amountKobo:        purchase.total_ngn * 100,
@@ -99,6 +100,7 @@ export async function GET(req: NextRequest) {
           offer_name:  purchase.offers.name,
         },
       });
+      renewalFeesKobo = charge.feesKobo;
     } catch (err) {
       console.error(`[offer-renewals] charge failed purchase=${purchase.id}:`, err instanceof Error ? err.message : err);
       // Advance next_renewal_at by 1 day for retry tomorrow; don't re-grant.
@@ -119,9 +121,14 @@ export async function GET(req: NextRequest) {
       }).catch(err => console.error(`[offer-renewals] fulfillAllGrants failed purchase=${purchase.id}:`, err instanceof Error ? err.message : err));
     }
 
-    // Advance the renewal date.
+    // Advance the renewal date (and accumulate the renewal charge's Paystack fee).
     await db.from("offer_purchases")
-      .update({ next_renewal_at: nextRenewalAt })
+      .update({
+        next_renewal_at: nextRenewalAt,
+        ...(renewalFeesKobo != null
+          ? { fees_kobo: ((purchase as { fees_kobo?: number | null }).fees_kobo ?? 0) + renewalFeesKobo }
+          : {}),
+      })
       .eq("id", purchase.id);
 
     charged++;

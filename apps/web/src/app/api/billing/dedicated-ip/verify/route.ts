@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "reference is required" }, { status: 400 });
   }
 
-  const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(reference);
+  const { paid, authorizationCode, customerCode, feesKobo } = await verifyPaystackPayment(reference);
   if (!paid) {
     return NextResponse.json({ error: "Payment not confirmed" }, { status: 402 });
   }
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     type:               "dedicated_ip",
     description:        "Dedicated IP add-on",
     amount_kobo:        priceNgn * 100,
+    fees_kobo:          feesKobo,
     paystack_reference: reference,
     status:             "paid",
   }, { onConflict: "paystack_reference", ignoreDuplicates: true });

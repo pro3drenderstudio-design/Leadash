@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { verifyPaystackSignature, verifyPaystackPayment, disablePaystackSubscription } from "@/lib/billing/paystack";
+import { verifyPaystackSignature, verifyPaystackPayment, disablePaystackSubscription, paystackFeesKobo } from "@/lib/billing/paystack";
 import { logActivity } from "@/lib/activity";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { enqueueProvision } from "@/lib/queue";
@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
             type:               "dedicated_ip",
             description:        "Dedicated IP add-on",
             amount_kobo:        amountKobo ?? (ipPriceNgn * 100),
+            fees_kobo:          paystackFeesKobo(data),
             paystack_reference: data.reference,
             status:             "paid",
           });
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest) {
                   type:               "credit_purchase",
                   description:        `${creditsNum.toLocaleString()} lead credits`,
                   amount_kobo:        amountKobo ?? 0,
+                  fees_kobo:          paystackFeesKobo(data),
                   paystack_reference: data.reference,
                   status:             "paid",
                 });
@@ -163,6 +165,7 @@ export async function POST(req: NextRequest) {
           type:               "inbox_billing",
           description:        `Inbox domain — ${dom?.domain ?? domainId}`,
           amount_kobo:        amountKobo ?? 0,
+          fees_kobo:          paystackFeesKobo(data),
           paystack_reference: data.reference,
           status:             "paid",
         }, { onConflict: "paystack_reference", ignoreDuplicates: true });
@@ -211,6 +214,7 @@ export async function POST(req: NextRequest) {
             type:               "plan_subscription",
             description:        `${plan.name} plan subscription`,
             amount_kobo:        amountKobo ?? (plan.price_ngn * 100),
+            fees_kobo:          paystackFeesKobo(data),
             paystack_reference: data.reference,
             status:             "paid",
           });
@@ -348,6 +352,7 @@ export async function POST(req: NextRequest) {
               type:               "bundle_subscription",
               description:        "Leadash × Learn By Mizark Annual Bundle",
               amount_kobo:        amountKobo ?? 0,
+              fees_kobo:          paystackFeesKobo(data),
               paystack_reference: data.reference,
               status:             "paid",
             }).then(undefined, () => {});
@@ -416,6 +421,7 @@ export async function POST(req: NextRequest) {
               type:               "academy_enrollment",
               description:        "30-Day Outreach Challenge",
               amount_kobo:        amountKobo ?? 0,
+              fees_kobo:          paystackFeesKobo(data),
               paystack_reference: data.reference,
               status:             "paid",
             }).then(undefined, () => {});
@@ -500,6 +506,7 @@ export async function POST(req: NextRequest) {
                 type:               "academy_enrollment",
                 description:        `Academy — ${product.name}`,
                 amount_kobo:        amountKobo ?? 0,
+                fees_kobo:          paystackFeesKobo(data),
                 paystack_reference: data.reference,
                 status:             "paid",
               }).then(() => {}).catch(() => {});
@@ -577,6 +584,7 @@ export async function POST(req: NextRequest) {
                 granted_at:             new Date().toISOString(),
                 granted_items:          grantedItems,
                 paystack_reference:     data.reference,
+                fees_kobo:              paystackFeesKobo(data),
                 authorization_code:     authorizationCode ?? null,
                 paystack_customer_code: customerCode ?? null,
                 next_renewal_at:        nextRenewalAt,
@@ -919,6 +927,7 @@ export async function POST(req: NextRequest) {
             type:               "bundle_renewal",
             description:        "Leadash × Learn By Mizark — annual renewal",
             amount_kobo:        inv.amount ?? 0,
+            fees_kobo:          paystackFeesKobo(inv),
             paystack_reference: renewalRef,
             status:             "paid",
           }, { onConflict: "paystack_reference", ignoreDuplicates: true });
@@ -968,6 +977,7 @@ export async function POST(req: NextRequest) {
           type:               "plan_renewal",
           description:        `${plan.name} plan — monthly renewal`,
           amount_kobo:        inv.amount ?? (plan.price_ngn * 100),
+          fees_kobo:          paystackFeesKobo(inv),
           paystack_reference: renewalRef,
           status:             "paid",
         }, { onConflict: "paystack_reference", ignoreDuplicates: true });

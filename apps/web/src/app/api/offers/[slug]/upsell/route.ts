@@ -76,13 +76,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "No reusable card authorization found for this purchase" }, { status: 400 });
   }
 
+  let upsellFeesKobo: number | null = null;
   try {
-    await chargePaystackAuthorization({
+    const charge = await chargePaystackAuthorization({
       authorizationCode,
       email:      purchase.buyer_email ?? "",
       amountKobo: offerItem.price_ngn * 100,
       metadata:   { type: `offer_${stage}`, purchase_id: purchase.id },
     });
+    upsellFeesKobo = charge.feesKobo;
   } catch (err) {
     console.error(`[offers/${stage}] charge failed:`, err);
     return NextResponse.json(
@@ -116,6 +118,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   await db.from("offer_purchases").update({
     line_items:      updatedLineItems,
     total_ngn:       purchase.total_ngn + offerItem.price_ngn,
+    // Cumulative — the upsell is a second Paystack charge on the same purchase
+    ...(upsellFeesKobo != null
+      ? { fees_kobo: ((purchase as { fees_kobo?: number | null }).fees_kobo ?? 0) + upsellFeesKobo }
+      : {}),
     [statusColumn]:  "accepted",
     granted_items:   grantedItems,
   }).eq("id", purchase.id);

@@ -29,6 +29,7 @@ export async function POST(
   }
 
   let authorizationCode: string | null = null;
+  let feesKobo: number | null = null;
   let billingEmail = domain.paystack_billing_email as string | null;
 
   try {
@@ -37,6 +38,7 @@ export async function POST(
       return NextResponse.json({ error: "Payment was not successful" }, { status: 402 });
     }
     authorizationCode = result.authorizationCode;
+    feesKobo = result.feesKobo;
     // Always use the email Paystack tied to this auth code
     if (result.customerEmail) billingEmail = result.customerEmail;
   } catch (err) {
@@ -63,6 +65,7 @@ export async function POST(
     type:               "inbox_billing",
     description:        `Inbox domain — ${domain.domain} (card update)`,
     amount_kobo:        domain.paystack_inbox_monthly_kobo as number,
+    fees_kobo:          feesKobo,
     paystack_reference: reference,
     status:             "paid",
   });
