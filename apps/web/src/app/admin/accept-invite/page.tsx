@@ -14,24 +14,53 @@ function AcceptInviteInner() {
   useEffect(() => {
     if (!token) { setStatus("error"); setError("No invite token found in URL."); return; }
     setStatus("loading");
-    fetch("/api/admin/team/accept", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ token }),
-    })
-      .then(async r => {
-        const d = await r.json() as { ok?: boolean; error?: string; role?: string };
-        // Not logged in yet — send them to sign in/sign up and bounce right back
-        // here with the token intact so accepting resumes automatically.
-        if (r.status === 401) {
-          const returnTo = `/admin/accept-invite?token=${encodeURIComponent(token)}`;
+    const returnTo = `/admin/accept-invite?token=${encodeURIComponent(token)}`;
+
+    (async () => {
+      try {
+        const r = await fetch("/api/admin/team/accept", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ token }),
+          // If middleware ever redirects this call (regression), we want to
+          // surface a clean sign-in bounce instead of the browser silently
+          // following the redirect and us parsing HTML as JSON.
+          redirect: "manual",
+          credentials: "same-origin",
+        });
+
+        // Not logged in — send to /login and come back with the token intact.
+        // Also covers the middleware-redirect case: `redirect:"manual"` returns
+        // an opaque response whose `type === "opaqueredirect"` and status 0.
+        if (r.type === "opaqueredirect" || r.status === 401) {
           router.replace(`/login?redirect=${encodeURIComponent(returnTo)}`);
           return;
         }
-        if (d.ok) { setRole(d.role ?? ""); setStatus("success"); }
-        else      { setError(d.error ?? "Failed to accept invitation"); setStatus("error"); }
-      })
-      .catch(() => { setError("Network error. Please try again."); setStatus("error"); });
+
+        // Parse defensively — if some future edge case returns HTML we don't
+        // want to blow up with a JSON.parse crash.
+        const raw = await r.text();
+        let d: { ok?: boolean; error?: string; role?: string } = {};
+        try { d = raw ? JSON.parse(raw) : {}; } catch {
+          setError("Unexpected response from the server. Try again in a moment.");
+          setStatus("error");
+          return;
+        }
+
+        if (r.ok && d.ok) { setRole(d.role ?? ""); setStatus("success"); return; }
+
+        // API returns 400 for expired/already-used, 403 for wrong-email,
+        // 404 for missing invite — surface the specific error text.
+        setError(d.error ?? `Failed to accept invitation (HTTP ${r.status}).`);
+        setStatus("error");
+      } catch (e) {
+        // Only genuine network failures (offline, DNS, TLS) land here now.
+        setError(e instanceof Error && e.message
+          ? `Network error: ${e.message}`
+          : "Network error. Please check your connection and try again.");
+        setStatus("error");
+      }
+    })();
   }, [token, router]);
 
   if (status === "loading") {

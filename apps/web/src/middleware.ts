@@ -82,14 +82,23 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── Admin invite accept flow — always public ────────────────────────────────
-  // The page + POST /api/admin/team/accept do their own auth (email of the
-  // signed-in user must match the invite's email). If we ran the /admin guard
-  // below, the invitee — who is not yet in the `admins` table by definition —
-  // would be redirected to /dashboard, dragging their invite token along on
-  // the URL (that was the reported symptom: /dashboard?token=…). Skip the
-  // whole middleware stack for this route so the token survives and the page
-  // can handle unauth via its own /login?redirect=<returnTo> bounce.
-  if (pathname.startsWith("/admin/accept-invite")) {
+  // Both the page AND the endpoint it fetches must be exempt from every
+  // middleware rule:
+  //
+  //   • /admin/accept-invite — if we ran the /admin guard below, an invitee
+  //     (not yet in `admins`) would be redirected to /dashboard with the
+  //     invite token dragged along on the URL (the original reported bug).
+  //
+  //   • /api/admin/team/accept — an UNAUTH'd request would otherwise hit the
+  //     "redirect unauthenticated users away from app routes" block further
+  //     down and get a 307 to /login. The client fetch follows the redirect
+  //     by default, tries res.json() on the returned login HTML, throws, and
+  //     the page shows "Network error. Please try again." — hiding the real
+  //     401 the route handler would have returned. The route handler already
+  //     performs proper auth (401 when signed-out, 403 when the invite's
+  //     email doesn't match the signed-in user, 400 when expired / used), so
+  //     bypassing middleware here doesn't loosen any security.
+  if (pathname.startsWith("/admin/accept-invite") || pathname === "/api/admin/team/accept") {
     return supabaseResponse;
   }
 
