@@ -25,8 +25,11 @@ function safeRedirectParam(value: string | null): string | null {
 function LoginPageInner() {
   const searchParams = useSearchParams();
   const redirectTarget = safeRedirectParam(searchParams.get("redirect"));
+  // Prefill email when arriving from an admin invite flow — the invitee
+  // shouldn't have to retype the email they were invited on.
+  const initialEmail   = (searchParams.get("email") ?? "").trim().toLowerCase();
 
-  const [email, setEmail]                 = useState("");
+  const [email, setEmail]                 = useState(initialEmail);
   const [password, setPassword]           = useState("");
   const [showPassword, setShow]           = useState(false);
   const [error, setError]                 = useState("");

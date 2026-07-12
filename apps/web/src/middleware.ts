@@ -98,7 +98,11 @@ export async function middleware(request: NextRequest) {
   //     performs proper auth (401 when signed-out, 403 when the invite's
   //     email doesn't match the signed-in user, 400 when expired / used), so
   //     bypassing middleware here doesn't loosen any security.
-  if (pathname.startsWith("/admin/accept-invite") || pathname === "/api/admin/team/accept") {
+  if (
+    pathname.startsWith("/admin/accept-invite") ||
+    pathname === "/api/admin/team/accept" ||
+    pathname === "/api/admin/team/invite-check"
+  ) {
     return supabaseResponse;
   }
 

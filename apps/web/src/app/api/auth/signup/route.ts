@@ -23,11 +23,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
-  const { email, password, full_name } = await req.json() as {
-    email?: string;
-    password?: string;
+  const { email, password, full_name, redirect } = await req.json() as {
+    email?:     string;
+    password?:  string;
     full_name?: string;
+    redirect?:  string;   // where to bounce after confirming email (e.g. /admin/accept-invite?token=…)
   };
+
+  // Only accept in-app relative paths — blocks open-redirect abuse via the
+  // confirmation email's ?next= param.
+  const safeRedirect = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : null;
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
@@ -85,7 +90,9 @@ export async function POST(req: NextRequest) {
     password,
     options: {
       data: { full_name: full_name ?? null },
-      redirectTo: `${APP_URL}/api/auth/callback`,
+      redirectTo: safeRedirect
+        ? `${APP_URL}/api/auth/callback?next=${encodeURIComponent(safeRedirect)}`
+        : `${APP_URL}/api/auth/callback`,
     },
   });
 

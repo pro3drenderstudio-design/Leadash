@@ -13,8 +13,9 @@
  * brand panel (AuthShell) does the heavy lifting now.
  */
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AuthShell from "../components/AuthShell";
 import { Button, Input, Field, Icon } from "@/v2-app";
@@ -25,9 +26,19 @@ import {
   Mail01Icon,
 } from "@/v2-app/icons";
 
-export default function SignupPage() {
+// Same shape as /login: only accept in-app relative paths. Blocks external
+// redirects like `//attacker.com/…` which are otherwise valid urls.
+function safeRedirectParam(value: string | null): string | null {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+function SignupPageInner() {
+  const searchParams = useSearchParams();
+  const redirectTarget = safeRedirectParam(searchParams.get("redirect"));
+  const initialEmail   = (searchParams.get("email") ?? "").trim().toLowerCase();
+
   const [name, setName]                   = useState("");
-  const [email, setEmail]                 = useState("");
+  const [email, setEmail]                 = useState(initialEmail);
   const [password, setPassword]           = useState("");
   const [showPassword, setShow]           = useState(false);
   const [error, setError]                 = useState("");
@@ -39,9 +50,12 @@ export default function SignupPage() {
     setGoogleLoading(true);
     setError("");
     const supabase = createClient();
+    // Preserve the returnTo through the OAuth callback so /admin/accept-invite?token=…
+    // resumes automatically after Google sign-in.
+    const next = redirectTarget ? `?next=${encodeURIComponent(redirectTarget)}` : "";
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/api/auth/callback${next}` },
     });
     if (error) { setError(error.message); setGoogleLoading(false); }
   }
@@ -54,11 +68,18 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, full_name: name || undefined }),
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: name || undefined,
+          // Server bakes this into the email confirmation link's ?next= so the
+          // invitee lands back on /admin/accept-invite?token=… after verifying.
+          redirect: redirectTarget ?? undefined,
+        }),
       });
       const d = await res.json() as { error?: string; confirmed?: boolean };
       if (!res.ok) { setError(d.error ?? "Something went wrong. Please try again."); setLoading(false); }
-      else if (d.confirmed) { window.location.href = "/onboarding"; }
+      else if (d.confirmed) { window.location.href = redirectTarget ?? "/onboarding"; }
       else setDone(true);
     } catch {
       setError("Network error. Please try again.");
@@ -247,6 +268,10 @@ function StrengthMeter({ score }: { score: number }) {
       </span>
     </div>
   );
+}
+
+export default function SignupPage() {
+  return <Suspense><SignupPageInner /></Suspense>;
 }
 
 function GoogleMark() {
