@@ -16,6 +16,7 @@ export const TYPES = {
   cogs: "Cost of Sales",
   opex: "Operating Expenses",
   tax: "Tax & Compliance",
+  equity: "Capital & Equity",
 } as const;
 
 export type TxType = keyof typeof TYPES;
@@ -25,6 +26,7 @@ export const CATEGORIES: Record<TxType, Record<string, string>> = {
     "revenue.plan":      "Plan Subscriptions",
     "revenue.credits":   "Lead Credits",
     "revenue.academy":   "Academy Sales",
+    "revenue.challenge": "Challenge Sales",
     "revenue.offer":     "Offer Purchases",
     "revenue.addon":     "Add-ons (Inboxes, IPs, Domains)",
     "revenue.external":  "External / Consulting",
@@ -57,7 +59,32 @@ export const CATEGORIES: Record<TxType, Record<string, string>> = {
     "tax.wht":        "Withholding Tax",
     "tax.paye":       "PAYE",
   },
+  equity: {
+    "equity.investment":      "Principal Investment",
+    "equity.loan_in":         "Shareholder Loan Received",
+    "equity.loan_repayment":  "Loan Repayment",
+    "equity.distribution":    "Profit Distribution",
+    "equity.owner_draw":      "Owner Withdrawal",
+  },
 };
+
+/** Cash direction per category — used for bank-account balance math (Phase
+ *  9). Revenue and capital coming IN are +1; every outflow (costs, tax paid,
+ *  distributions, loan repayments) is -1. Unlisted categories default to the
+ *  sign implied by their type (revenue/equity=+1, cogs/opex/tax=-1) via
+ *  `cashSign()` below — this map only needs to hold the equity exceptions. */
+const EQUITY_CASH_SIGN: Record<string, 1 | -1> = {
+  "equity.investment":     1,
+  "equity.loan_in":        1,
+  "equity.loan_repayment": -1,
+  "equity.distribution":   -1,
+  "equity.owner_draw":     -1,
+};
+
+export function cashSign(type: TxType, category: string): 1 | -1 {
+  if (type === "equity") return EQUITY_CASH_SIGN[category] ?? 1;
+  return type === "revenue" ? 1 : -1;
+}
 
 export const TAX_DISCLAIMER =
   "Estimates for planning only — Leadash Global Limited is not yet FIRS/VAT registered. " +
@@ -69,6 +96,8 @@ export interface FinanceTransaction {
   type: TxType;
   category: string;      // e.g. "revenue.plan"
   amount_ngn: number;    // always positive; type determines sign in P&L
+  principal_id: string | null;
+  bank_account_id: string | null;
   description: string | null;
   reference: string | null;
   is_auto: boolean;
@@ -90,6 +119,7 @@ export interface PeriodSummary {
   cogs: CategoryLine;
   opex: CategoryLine;
   tax: CategoryLine;
+  equity: CategoryLine;
   total_revenue: number;
   total_cogs: number;
   gross_profit: number;
@@ -105,17 +135,22 @@ export interface PeriodSummary {
   vat_net: number;           // vat_output - vat_input (liability)
   total_tax_expense: number; // cit + education + wht + paye (not VAT — pass-through)
   net_profit: number;        // ebitda - total_tax_expense
+  // Capital movements — informational only, never part of P&L/tax above.
+  total_equity_in: number;
+  total_equity_out: number;
+  net_equity: number;
   transaction_count: number;
 }
 
 function emptySummary(): PeriodSummary {
   return {
-    revenue: {}, cogs: {}, opex: {}, tax: {},
+    revenue: {}, cogs: {}, opex: {}, tax: {}, equity: {},
     total_revenue: 0, total_cogs: 0, gross_profit: 0, gross_margin_pct: 0,
     total_opex: 0, ebitda: 0,
     tax_cit: 0, tax_education: 0, tax_wht: 0, tax_paye: 0,
     vat_output: 0, vat_input: 0, vat_net: 0,
     total_tax_expense: 0, net_profit: 0,
+    total_equity_in: 0, total_equity_out: 0, net_equity: 0,
     transaction_count: 0,
   };
 }
@@ -127,6 +162,12 @@ export function computePeriodSummary(transactions: Pick<FinanceTransaction, "typ
     const bucket = s[tx.type] as CategoryLine;
     bucket[tx.category] = (bucket[tx.category] ?? 0) + tx.amount_ngn;
   }
+
+  for (const [category, amount] of Object.entries(s.equity)) {
+    if (cashSign("equity", category) > 0) s.total_equity_in += amount;
+    else s.total_equity_out += amount;
+  }
+  s.net_equity = s.total_equity_in - s.total_equity_out;
 
   s.total_revenue = Object.values(s.revenue).reduce((a, b) => a + b, 0);
   s.total_cogs = Object.values(s.cogs).reduce((a, b) => a + b, 0);

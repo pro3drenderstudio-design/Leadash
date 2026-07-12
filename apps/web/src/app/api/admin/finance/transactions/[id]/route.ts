@@ -40,8 +40,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     isReviewAction = true;
   }
 
+  // Bank account re-tagging — allowed on every row (auto or manual). This is
+  // cash-location bookkeeping, not a P&L edit, so it doesn't require an
+  // adjusting entry the way changing the amount/category would.
+  if (body.bank_account_id !== undefined) {
+    patch.bank_account_id = body.bank_account_id || null;
+  }
+
   // Content fields — manual rows only
-  const contentKeys = ["date", "type", "category", "amount_ngn", "description", "reference"] as const;
+  const contentKeys = ["date", "type", "category", "amount_ngn", "description", "reference", "principal_id"] as const;
   const hasContentEdit = contentKeys.some(k => body[k] !== undefined);
   if (hasContentEdit) {
     if (row.is_auto) {
@@ -67,6 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (body.description !== undefined) patch.description = body.description ? String(body.description).trim() : null;
     if (body.reference   !== undefined) patch.reference   = body.reference ? String(body.reference).trim() : null;
+    if (body.principal_id !== undefined) patch.principal_id = body.principal_id || null;
   }
 
   if (!Object.keys(patch).length) {
@@ -78,9 +86,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   await ctx.db.from("finance_audit_log").insert({
     actor:       ctx.user.id,
-    action:      isReviewAction && !hasContentEdit
-      ? (patch.review_status === "flagged" ? "flag" : "review")
-      : "manual_edit",
+    action:      hasContentEdit
+      ? "manual_edit"
+      : isReviewAction
+        ? (patch.review_status === "flagged" ? "flag" : "review")
+        : "retag_account",
     entity_type: "finance_transactions",
     entity_id:   id,
     detail:      patch,

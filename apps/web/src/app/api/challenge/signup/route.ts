@@ -12,17 +12,18 @@ const RESEND_API_KEY        = process.env.RESEND_API_KEY;
 const RESEND_FROM           = process.env.RESEND_FROM_EMAIL ?? "no-reply@notifications.leadash.com";
 const PAYSTACK_SECRET_KEY   = process.env.PAYSTACK_SECRET_KEY ?? "";
 
-async function verifyPaystackPayment(reference: string, expectedKobo: number): Promise<boolean> {
+async function verifyPaystackPayment(reference: string, expectedKobo: number): Promise<{ paid: boolean; feesKobo: number | null }> {
   try {
     const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return false;
-    const { data } = await res.json() as { data?: { status: string; amount: number; currency: string } };
-    return data?.status === "success" && data.currency === "NGN" && data.amount >= expectedKobo;
+    if (!res.ok) return { paid: false, feesKobo: null };
+    const { data } = await res.json() as { data?: { status: string; amount: number; currency: string; fees?: number } };
+    const paid = data?.status === "success" && data.currency === "NGN" && data.amount >= expectedKobo;
+    return { paid, feesKobo: typeof data?.fees === "number" ? data.fees : null };
   } catch {
-    return false;
+    return { paid: false, feesKobo: null };
   }
 }
 
@@ -169,8 +170,11 @@ export async function POST(req: NextRequest) {
   const amountNgn = typeof priceRow?.value === "number" ? priceRow.value : 10_000;
 
   let paymentConfirmed = false;
+  let feesKobo: number | null = null;
   if (payment_method === "paystack" && paystack_reference) {
-    paymentConfirmed = await verifyPaystackPayment(paystack_reference, amountNgn * 100);
+    const verified = await verifyPaystackPayment(paystack_reference, amountNgn * 100);
+    paymentConfirmed = verified.paid;
+    feesKobo = verified.feesKobo;
     if (!paymentConfirmed) {
       return NextResponse.json(
         { error: "We could not verify your Paystack payment. Please contact support if you were charged." },
@@ -180,6 +184,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Record the signup ─────────────────────────────────────────────────────
+  // amount_ngn is captured at the price in effect right now — protects the
+  // books from later admin_settings.funnel_challenge_price changes silently
+  // rewriting historical revenue.
   if (existing?.status === "pending") {
     const { error: updErr } = await db.from("challenge_signups").update({
       full_name:          full_name.trim(),
@@ -187,6 +194,8 @@ export async function POST(req: NextRequest) {
       bank_account_name,
       payment_method,
       paystack_reference: paystack_reference ?? null,
+      amount_ngn:         amountNgn,
+      fees_kobo:          feesKobo,
       user_id:            userId,
       status:             paymentConfirmed ? "confirmed" : "pending",
       updated_at:         new Date().toISOString(),
@@ -204,6 +213,8 @@ export async function POST(req: NextRequest) {
       bank_account_name,
       payment_method,
       paystack_reference: paystack_reference ?? null,
+      amount_ngn:         amountNgn,
+      fees_kobo:          feesKobo,
       user_id:            userId,
       status:             paymentConfirmed ? "confirmed" : "pending",
     });

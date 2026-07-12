@@ -17,7 +17,11 @@ const TYPE_COLORS: Record<TxType, { fg: string; bg: string }> = {
   cogs:    { fg: "#FDA4AF", bg: "rgba(251,113,133,0.14)" },
   opex:    { fg: "#FCD34D", bg: "rgba(251,191,36,0.14)" },
   tax:     { fg: "#C4B5FD", bg: "rgba(167,139,250,0.14)" },
+  equity:  { fg: "#67E8F9", bg: "rgba(34,211,238,0.14)" },
 };
+
+interface Principal { id: string; name: string; net_contributed_ngn: number }
+interface BankAccountOption { id: string; name: string; is_default: boolean }
 
 const REVIEW_COLORS: Record<string, { fg: string; bg: string }> = {
   unreviewed: { fg: "#94A3B8", bg: "rgba(148,163,184,0.14)" },
@@ -28,10 +32,14 @@ const REVIEW_COLORS: Record<string, { fg: string; bg: string }> = {
 interface TxDraft {
   date: string; type: TxType; category: string; amount: string;
   description: string; reference: string; adjusts_id: string | null;
+  principal_id: string | null; bank_account_id: string | null;
 }
 
-function blankDraft(): TxDraft {
-  return { date: new Date().toISOString().slice(0, 10), type: "opex", category: "opex.other", amount: "", description: "", reference: "", adjusts_id: null };
+function blankDraft(defaultAccountId: string | null = null): TxDraft {
+  return {
+    date: new Date().toISOString().slice(0, 10), type: "opex", category: "opex.other", amount: "",
+    description: "", reference: "", adjusts_id: null, principal_id: null, bank_account_id: defaultAccountId,
+  };
 }
 
 export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
@@ -47,6 +55,40 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [principals, setPrincipals] = useState<Principal[]>([]);
+  const [newPrincipalName, setNewPrincipalName] = useState("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
+
+  const loadPrincipals = useCallback(async () => {
+    const r = await fetch("/api/admin/finance/principals");
+    const d = await r.json();
+    setPrincipals(d.principals ?? []);
+  }, []);
+
+  useEffect(() => { loadPrincipals(); }, [loadPrincipals]);
+
+  useEffect(() => {
+    fetch("/api/admin/finance/bank-accounts?period=day")
+      .then(r => r.json())
+      .then(d => setBankAccounts((d.accounts ?? []).map((a: { id: string; name: string; is_default: boolean }) => ({ id: a.id, name: a.name, is_default: a.is_default }))))
+      .catch(() => setBankAccounts([]));
+  }, []);
+
+  const defaultAccountId = bankAccounts.find(a => a.is_default)?.id ?? null;
+
+  async function addPrincipal() {
+    if (!newPrincipalName.trim()) return;
+    const r = await fetch("/api/admin/finance/principals", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newPrincipalName.trim() }),
+    });
+    const d = await r.json();
+    if (r.ok && d.principal) {
+      await loadPrincipals();
+      setDraft(dr => ({ ...dr, principal_id: d.principal.id }));
+      setNewPrincipalName("");
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,10 +133,21 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
     setActing(null);
   }
 
+  async function retagAccount(tx: FinanceTransaction, bankAccountId: string | null) {
+    setActing(tx.id);
+    const r = await fetch(`/api/admin/finance/transactions/${tx.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bank_account_id: bankAccountId }),
+    });
+    if (!r.ok) setError((await r.json().catch(() => ({}))).error ?? "Action failed");
+    await load();
+    setActing(null);
+  }
+
   function openAdd(adjusts?: FinanceTransaction) {
     setDraft(adjusts
-      ? { ...blankDraft(), adjusts_id: adjusts.id, description: `Adjustment for: ${adjusts.description ?? adjusts.category}` }
-      : blankDraft());
+      ? { ...blankDraft(defaultAccountId), adjusts_id: adjusts.id, description: `Adjustment for: ${adjusts.description ?? adjusts.category}` }
+      : blankDraft(defaultAccountId));
     setEditing(null); setError(""); setModal("add");
   }
 
@@ -102,6 +155,7 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
     setDraft({
       date: tx.date, type: tx.type, category: tx.category, amount: String(tx.amount_ngn),
       description: tx.description ?? "", reference: tx.reference ?? "", adjusts_id: tx.adjusts_id,
+      principal_id: tx.principal_id, bank_account_id: tx.bank_account_id,
     });
     setEditing(tx); setError(""); setModal("edit");
   }
@@ -113,7 +167,9 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
     const payload = {
       date: draft.date, type: draft.type, category: draft.category, amount_ngn: amount,
       description: draft.description || null, reference: draft.reference || null,
+      bank_account_id: draft.bank_account_id || null,
       ...(draft.adjusts_id ? { adjusts_id: draft.adjusts_id } : {}),
+      ...(draft.type === "equity" ? { principal_id: draft.principal_id || null } : {}),
     };
     const r = editing
       ? await fetch(`/api/admin/finance/transactions/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -183,7 +239,7 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
             <table className="fin-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
-                  {["Date", "Type", "Category", "Description", "Amount", "Source", "Review", ""].map(h => <th key={h} style={FIN_TH}>{h}</th>)}
+                  {["Date", "Type", "Category", "Description", "Amount", "Source", "Bank account", "Review", ""].map(h => <th key={h} style={FIN_TH}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -208,6 +264,17 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
                         <span style={{ ...FIN_CHIP, background: "var(--app-surface-strong)", color: "var(--app-text-quiet)" }}>
                           {tx.is_auto ? (tx.kind === "fee" ? "auto · fee" : "auto") : "manual"}
                         </span>
+                      </td>
+                      <td style={FIN_TD}>
+                        <select
+                          value={tx.bank_account_id ?? ""}
+                          onChange={e => retagAccount(tx, e.target.value || null)}
+                          disabled={acting === tx.id}
+                          style={{ background: "transparent", border: "1px solid var(--app-border)", borderRadius: 6, color: "var(--app-text-muted)", fontSize: 11.5, padding: "3px 5px" }}
+                        >
+                          <option value="">— Unassigned —</option>
+                          {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
                       </td>
                       <td style={FIN_TD}><span style={{ ...FIN_CHIP, background: rc.bg, color: rc.fg }}>{tx.review_status}</span></td>
                       <td style={{ ...FIN_TD, whiteSpace: "nowrap", textAlign: "right" }}>
@@ -272,6 +339,19 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
                   </select>
                 </div>
               </div>
+              {draft.type === "equity" && (
+                <div>
+                  <p style={FIN_LABEL}>Principal / Investor</p>
+                  <select className="fin-input" value={draft.principal_id ?? ""} onChange={e => setDraft(d => ({ ...d, principal_id: e.target.value || null }))}>
+                    <option value="">— None —</option>
+                    {principals.map(p => <option key={p.id} value={p.id}>{p.name} ({ngnFull(p.net_contributed_ngn)} contributed)</option>)}
+                  </select>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                    <input className="fin-input" placeholder="Add new principal…" value={newPrincipalName} onChange={e => setNewPrincipalName(e.target.value)} />
+                    <button type="button" onClick={addPrincipal} style={FIN_GHOST_BTN}>+ Add</button>
+                  </div>
+                </div>
+              )}
               <div>
                 <p style={FIN_LABEL}>Description</p>
                 <input className="fin-input" value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder="e.g. October office internet" />
@@ -279,6 +359,13 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
               <div>
                 <p style={FIN_LABEL}>Reference (optional)</p>
                 <input className="fin-input" value={draft.reference} onChange={e => setDraft(d => ({ ...d, reference: e.target.value }))} placeholder="Bank ref, invoice no…" />
+              </div>
+              <div>
+                <p style={FIN_LABEL}>Bank account</p>
+                <select className="fin-input" value={draft.bank_account_id ?? ""} onChange={e => setDraft(d => ({ ...d, bank_account_id: e.target.value || null }))}>
+                  <option value="">— Unassigned —</option>
+                  {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.is_default ? " (default)" : ""}</option>)}
+                </select>
               </div>
               {error && <p style={{ color: "var(--app-out)", fontSize: 12, margin: 0 }}>{error}</p>}
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>

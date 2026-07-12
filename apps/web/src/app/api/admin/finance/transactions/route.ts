@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     date?: string; type?: TxType; category?: string; amount_ngn?: number;
     description?: string; reference?: string; adjusts_id?: string;
+    principal_id?: string; bank_account_id?: string;
   };
 
   if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
@@ -65,7 +66,9 @@ export async function POST(req: NextRequest) {
     amount_ngn:  amount,
     description: body.description?.trim() || null,
     reference:   body.reference?.trim() || null,
-    adjusts_id:  body.adjusts_id || null,
+    adjusts_id:      body.adjusts_id || null,
+    principal_id:    body.principal_id || null,
+    bank_account_id: body.bank_account_id || null,
     is_auto:     false,
     // Manual entries are the accountant's own — born reviewed.
     review_status: "reviewed",

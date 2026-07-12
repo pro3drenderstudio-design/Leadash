@@ -27,6 +27,8 @@ import {
 import LedgerTab from "./LedgerTab";
 import TaxTab from "./TaxTab";
 import AuditTab from "./AuditTab";
+import BankAccountsTab from "./BankAccountsTab";
+import ProjectionsTab from "./ProjectionsTab";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ type Kind = "recurring" | "oneoff";
 type Category = "infra" | "salaries" | "fees" | "marketing" | "software" | "oneoff" | "refunds";
 type IncomeType = "plan" | "academy" | "offer" | "credits" | "addon" | "external" | "partner" | "consulting" | "grant";
 type Range = "month" | "quarter" | "year";
-type Tab = "overview" | "expenses" | "income" | "ledger" | "tax" | "audit" | "reports";
+type Tab = "overview" | "expenses" | "income" | "ledger" | "bank" | "tax" | "projections" | "audit" | "reports";
 
 interface Expense {
   id: string;
@@ -187,6 +189,14 @@ export default function FinanceManagerClient() {
       })
       .catch(() => setFeesNgn(0));
   }, [range]);
+
+  const [totalCashNgn, setTotalCashNgn] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("/api/admin/finance/bank-accounts?period=day")
+      .then(r => r.json())
+      .then((d: { total_current_balance?: number }) => setTotalCashNgn(d.total_current_balance ?? null))
+      .catch(() => setTotalCashNgn(null));
+  }, []);
 
   const toast = useToast();
 
@@ -597,14 +607,14 @@ export default function FinanceManagerClient() {
 
         {/* Tabs */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid var(--app-border)", overflowX: "auto" }}>
-          {(["overview", "expenses", "income", "ledger", "tax", "audit", "reports"] as const).map(t => (
+          {(["overview", "expenses", "income", "ledger", "bank", "tax", "projections", "audit", "reports"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               position: "relative", height: 40, padding: "0 14px", border: "none", background: "transparent",
               cursor: "pointer", fontSize: 13, whiteSpace: "nowrap",
               color: tab === t ? "var(--app-text)" : "var(--app-text-muted)",
               fontWeight: tab === t ? 600 : 500,
             }}>
-              {t === "tax" ? "Tax" : t === "audit" ? "Audit & Close" : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === "tax" ? "Tax" : t === "audit" ? "Audit & Close" : t === "bank" ? "Bank Accounts" : t === "projections" ? "Projections" : t.charAt(0).toUpperCase() + t.slice(1)}
               {tab === t && <span style={{ position: "absolute", left: 0, right: 0, bottom: -1, height: 2, background: "var(--app-accent)", borderRadius: 2 }} />}
             </button>
           ))}
@@ -627,6 +637,7 @@ export default function FinanceManagerClient() {
             onGrowth={setGrowth}
             onEditReserves={() => { setReservesDraft(String(settings.reserves_ngn)); setReservesOpen(true); }}
             feesNgn={feesNgn}
+            totalCashNgn={totalCashNgn}
           />
         )}
 
@@ -656,8 +667,14 @@ export default function FinanceManagerClient() {
         {/* Tab: LEDGER */}
         {!loading && !error && tab === "ledger" && <LedgerTab />}
 
+        {/* Tab: BANK ACCOUNTS */}
+        {!loading && !error && tab === "bank" && <BankAccountsTab />}
+
         {/* Tab: TAX */}
         {!loading && !error && tab === "tax" && <TaxTab />}
+
+        {/* Tab: PROJECTIONS */}
+        {!loading && !error && tab === "projections" && <ProjectionsTab />}
 
         {/* Tab: AUDIT & CLOSE */}
         {!loading && !error && tab === "audit" && <AuditTab />}
@@ -725,9 +742,10 @@ interface OverviewProps {
   onGrowth: (g: number) => void;
   onEditReserves: () => void;
   feesNgn: number;
+  totalCashNgn: number | null;
 }
 
-function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projection, growth, onGrowth, onEditReserves, feesNgn }: OverviewProps) {
+function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projection, growth, onGrowth, onEditReserves, feesNgn, totalCashNgn }: OverviewProps) {
   const marginPct = totals.moneyIn > 0 ? Math.round((totals.profit / totals.moneyIn) * 100) : 0;
   const rLabel = rangeLabel(range);
 
@@ -762,12 +780,19 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
       icon: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
       hasEdit: true,
     },
+    ...(totalCashNgn !== null ? [{
+      label: "Total cash on hand",
+      value: ngn(totalCashNgn), sub: "Across all active bank accounts",
+      valColor: totalCashNgn >= 0 ? "var(--app-in)" : "var(--app-out)",
+      iconBg: "var(--app-cyan-soft)", iconFg: "var(--app-cyan)",
+      icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M2 10h20" /></>,
+    }] : []),
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Hero cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }} className="finance-hero">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }} className="finance-hero">
         {HERO.map(h => (
           <div key={h.label} style={{
             background: "var(--app-bg-elevated)", border: `1px solid ${h.border ?? "var(--app-border)"}`,
