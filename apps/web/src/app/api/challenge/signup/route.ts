@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     email: emailNorm,
     password,
     email_confirm: true,
-    user_metadata: { full_name: full_name.trim(), phone },
+    user_metadata: { full_name: full_name.trim(), phone: phoneNorm },
   });
 
   if (signUpError) {
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
       plan_id:         "free",
       plan_status:     "active",
       billing_email:   emailNorm,
-      whatsapp_number: phone,
+      whatsapp_number: phoneNorm,
     }).select("id").single();
     if (wsError) console.error("[challenge/signup] workspace create error:", wsError.message);
 
