@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
   const assignee = sp.get("assignee") ?? undefined;
   const search   = sp.get("search")  ?? undefined;
   const cursor   = sp.get("cursor")  ?? undefined;
+  const tag      = sp.get("tag")     ?? undefined;
+  const from     = sp.get("from")    ?? undefined; // ISO date/datetime, inclusive lower bound on last_message_at
+  const to       = sp.get("to")      ?? undefined; // ISO date/datetime, inclusive upper bound on last_message_at
   const limit    = Math.min(Number(sp.get("limit") ?? "25"), 100);
 
   let query = db
@@ -45,6 +48,7 @@ export async function GET(req: NextRequest) {
       last_message_at,
       last_inbound_at,
       created_at,
+      tags,
       crm_contacts (
         id,
         display_name,
@@ -68,6 +72,9 @@ export async function GET(req: NextRequest) {
   if (channel) query = query.eq("channel", channel);
   if (assignee) query = query.eq("assigned_to", assignee);
   if (cursor)  query = query.lt("last_message_at", cursor);
+  if (tag)     query = query.contains("tags", [tag]);
+  if (from)    query = query.gte("last_message_at", from);
+  if (to)      query = query.lte("last_message_at", to);
 
   if (search) {
     query = query.or(`subject.ilike.%${search}%,channel_identifier.ilike.%${search}%`);
@@ -112,6 +119,7 @@ export async function PATCH(req: NextRequest) {
   if ("assigned_to"   in body) allowed.assigned_to   = body.assigned_to;
   if ("snooze_until" in body) allowed.snooze_until = body.snooze_until;
   if ("unread_count"  in body) allowed.unread_count  = body.unread_count;
+  if ("tags"          in body) allowed.tags          = body.tags;
 
   if (Object.keys(allowed).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

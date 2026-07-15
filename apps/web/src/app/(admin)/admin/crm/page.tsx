@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { Linkify, AttachmentGrid, LocationCard, ContactCard, HtmlBody } from "@/components/crm/rich-message";
@@ -42,6 +42,7 @@ interface Conversation {
   unread_count:       number;
   last_message_at:    string;
   last_inbound_at:    string | null;
+  tags:               string[];
   crm_contacts:       CrmContact | null;
   latest_message:     LatestMessage | null;
 }
@@ -115,6 +116,62 @@ function timeAgo(iso: string) {
 function windowOpen(lastInbound: string | null) {
   if (!lastInbound) return false;
   return (Date.now() - new Date(lastInbound).getTime()) < 24 * 60 * 60 * 1000;
+}
+
+// ── Tag color ────────────────────────────────────────────────────────────────
+
+const TAG_COLORS = [
+  "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/20",
+  "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/20",
+  "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/20",
+  "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/20",
+  "bg-pink-100 dark:bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-500/20",
+  "bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/20",
+];
+
+function tagColor(tag: string) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xff;
+  return TAG_COLORS[h % TAG_COLORS.length];
+}
+
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [input,  setInput]  = useState("");
+
+  function commit() {
+    const t = input.trim();
+    if (t && !tags.includes(t)) onChange([...tags, t]);
+    setInput("");
+    setAdding(false);
+  }
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1">
+      {tags.map(t => (
+        <span key={t} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${tagColor(t)}`}>
+          {t}
+          <button onClick={() => onChange(tags.filter(x => x !== t))} className="hover:opacity-70">×</button>
+        </span>
+      ))}
+      {adding ? (
+        <input
+          autoFocus
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commit(); }
+            if (e.key === "Escape") { setInput(""); setAdding(false); }
+          }}
+          onBlur={commit}
+          placeholder="tag…"
+          className="w-16 text-[10px] px-1.5 py-0.5 rounded-full border border-slate-200 dark:border-white/10 bg-transparent text-slate-700 dark:text-white placeholder-slate-400 dark:placeholder-white/30 focus:outline-none"
+        />
+      ) : (
+        <button onClick={() => setAdding(true)} className="text-[10px] text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/60 px-1">+ tag</button>
+      )}
+    </div>
+  );
 }
 
 // ── Channel icon ─────────────────────────────────────────────────────────────
@@ -196,6 +253,13 @@ function ConvoItem({ convo, active, selected, onSelect, onClick }: {
             </div>
             {convo.subject && <p className="text-xs text-slate-500 dark:text-white/40 truncate mb-0.5">{convo.subject}</p>}
             {preview && <p className="text-xs text-slate-400 dark:text-white/30 truncate">{preview}</p>}
+            {(convo.tags ?? []).length > 0 && (
+              <div className="flex gap-1 flex-wrap mt-1">
+                {convo.tags.map(t => (
+                  <span key={t} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${tagColor(t)}`}>{t}</span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <span className="text-[10px] text-slate-400 dark:text-white/20 whitespace-nowrap">{timeAgo(convo.last_message_at)}</span>
@@ -965,6 +1029,11 @@ function CrmInboxContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter,   setStatusFilter]   = useState("open");
   const [channelFilter,  setChannelFilter]  = useState("all");
+  const [dateFilter,     setDateFilter]     = useState(""); // "" | "today" | "7d" | "30d"
+  const [tagFilter,      setTagFilter]      = useState<string | null>(null);
+  const [convoCursor,    setConvoCursor]    = useState<string | null>(null);
+  const [hasMoreConvos,  setHasMoreConvos]  = useState(false);
+  const [loadingMoreConvos, setLoadingMoreConvos] = useState(false);
   const [winOpen,        setWinOpen]        = useState(false);
   const [error,          setError]          = useState("");
   const [selected,       setSelected]       = useState<Set<string>>(new Set());
@@ -991,17 +1060,91 @@ function CrmInboxContent() {
   const composeRichRef  = useRef<HTMLDivElement>(null);   // contentEditable, email only
   const composeTextRef  = useRef<HTMLTextAreaElement>(null); // plain textarea, other channels
 
-  const loadConvos = useCallback(async () => {
-    setLoading(true);
+  function dateFilterFrom(preset: string): string | undefined {
+    if (!preset) return undefined;
+    const now = new Date();
+    if (preset === "today") { now.setHours(0, 0, 0, 0); return now.toISOString(); }
+    const days = preset === "7d" ? 7 : 30;
+    now.setDate(now.getDate() - days);
+    return now.toISOString();
+  }
+
+  const convoParams = useCallback(() => {
     const params = new URLSearchParams({ status: statusFilter });
     if (channelFilter !== "all") params.set("channel", channelFilter);
-    const res = await fetch(`/api/crm/conversations?${params}`);
-    const d   = await res.json() as { conversations?: Conversation[] };
+    if (tagFilter) params.set("tag", tagFilter);
+    const from = dateFilterFrom(dateFilter);
+    if (from) params.set("from", from);
+    return params;
+  }, [statusFilter, channelFilter, tagFilter, dateFilter]);
+
+  // Full reset — fetches page 1 and replaces the list. Used on mount and
+  // whenever a filter changes.
+  const loadConvos = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/crm/conversations?${convoParams()}`);
+    const d   = await res.json() as { conversations?: Conversation[]; next_cursor?: string | null; has_more?: boolean };
     setConversations(d.conversations ?? []);
+    setConvoCursor(d.next_cursor ?? null);
+    setHasMoreConvos(!!d.has_more);
     setLoading(false);
-  }, [statusFilter, channelFilter]);
+  }, [convoParams]);
 
   useEffect(() => { loadConvos(); }, [loadConvos]);
+
+  // Infinite scroll — fetches the next older page and appends it.
+  async function loadMoreConvos() {
+    if (loadingMoreConvos || !hasMoreConvos || !convoCursor) return;
+    setLoadingMoreConvos(true);
+    try {
+      const params = convoParams();
+      params.set("cursor", convoCursor);
+      const res = await fetch(`/api/crm/conversations?${params}`);
+      const d = await res.json() as { conversations?: Conversation[]; next_cursor?: string | null; has_more?: boolean };
+      const older = d.conversations ?? [];
+      if (older.length) setConversations(prev => [...prev, ...older]);
+      setConvoCursor(d.next_cursor ?? null);
+      setHasMoreConvos(!!d.has_more);
+    } finally {
+      setLoadingMoreConvos(false);
+    }
+  }
+
+  // Poll-driven refresh — refetches only page 1 and merges it into the
+  // existing list (updates changed rows, prepends brand-new ones) instead of
+  // replacing the whole array, so it doesn't discard pages loaded via
+  // infinite scroll the way a full reset would.
+  const refreshConvosFirstPage = useCallback(async () => {
+    const res = await fetch(`/api/crm/conversations?${convoParams()}`);
+    const d   = await res.json() as { conversations?: Conversation[] };
+    const fresh = d.conversations ?? [];
+    if (!fresh.length) return;
+    setConversations(prev => {
+      const freshIds = new Set(fresh.map(c => c.id));
+      const rest = prev.filter(c => !freshIds.has(c.id));
+      return [...fresh, ...rest];
+    });
+  }, [convoParams]);
+
+  // Distinct tags across currently-loaded conversations, for the filter-by-tag row.
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of conversations) for (const t of c.tags ?? []) set.add(t);
+    return [...set].sort();
+  }, [conversations]);
+
+  function toggleTagFilter(tag: string) {
+    setTagFilter(prev => prev === tag ? null : tag);
+  }
+
+  async function updateConvoTags(convoId: string, tags: string[]) {
+    await fetch(`/api/crm/conversations?id=${convoId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags }),
+    });
+    setConversations(prev => prev.map(c => c.id === convoId ? { ...c, tags } : c));
+    setActiveConvo(prev => prev && prev.id === convoId ? { ...prev, tags } : prev);
+  }
 
   // Poll every 30 s — refreshes the conversation list, and for the open thread
   // fetches only messages newer than the last one we have (via the "after"
@@ -1009,7 +1152,7 @@ function CrmInboxContent() {
   // thread, which would discard any older history loaded via infinite scroll.
   useEffect(() => {
     const id = setInterval(() => {
-      loadConvos();
+      refreshConvosFirstPage();
       const convoId = activeConvo?.id;
       if (convoId && newestCreatedAtRef.current) {
         fetch(`/api/crm/messages?conversation_id=${convoId}&after=${encodeURIComponent(newestCreatedAtRef.current)}`)
@@ -1025,7 +1168,7 @@ function CrmInboxContent() {
       }
     }, 30_000);
     return () => clearInterval(id);
-  }, [loadConvos, activeConvo?.id]);
+  }, [refreshConvosFirstPage, activeConvo?.id]);
 
   // Request browser notification permission on first render
   useEffect(() => {
@@ -1368,7 +1511,7 @@ function CrmInboxContent() {
             ))}
           </div>
           {/* Channel filter */}
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap mb-2">
             {["all","email","whatsapp","instagram","facebook"].map(c => (
               <button key={c} onClick={() => setChannelFilter(c)}
                 className={`flex-1 min-w-[36px] text-[10px] font-semibold py-1 rounded-md transition-colors ${channelFilter === c ? "bg-slate-800 dark:bg-white/20 text-white" : "bg-slate-100 dark:bg-white/10 text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/50"}`}>
@@ -1376,10 +1519,35 @@ function CrmInboxContent() {
               </button>
             ))}
           </div>
+          {/* Date filter */}
+          <select value={dateFilter} onChange={e => setDateFilter(e.target.value)}
+            className="w-full text-[10px] font-semibold px-2 py-1 mb-2 rounded-md bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/40 border-0 focus:outline-none focus:ring-1 focus:ring-orange-500/30">
+            <option value="">All time</option>
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+          {/* Tag filter */}
+          {allTags.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {allTags.map(t => (
+                <button key={t} onClick={() => toggleTagFilter(t)}
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border transition-colors ${tagFilter === t ? "bg-orange-500 border-orange-500 text-white" : tagColor(t)}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto pb-14">
+        <div
+          className="flex-1 overflow-y-auto pb-14"
+          onScroll={e => {
+            const el = e.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) loadMoreConvos();
+          }}
+        >
           {loading && conversations.length === 0 ? (
             <div className="space-y-1 p-3">
               {[1,2,3,4,5].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-white/5 rounded-lg animate-pulse" />)}
@@ -1387,16 +1555,23 @@ function CrmInboxContent() {
           ) : conversations.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-400 dark:text-white/20">No conversations</div>
           ) : (
-            conversations.map(c => (
-              <ConvoItem
-                key={c.id}
-                convo={c}
-                active={c.id === activeId}
-                selected={selected.has(c.id)}
-                onSelect={e => toggleSelect(e, c.id)}
-                onClick={() => router.push(`/admin/crm?id=${c.id}`, { scroll: false })}
-              />
-            ))
+            <>
+              {conversations.map(c => (
+                <ConvoItem
+                  key={c.id}
+                  convo={c}
+                  active={c.id === activeId}
+                  selected={selected.has(c.id)}
+                  onSelect={e => toggleSelect(e, c.id)}
+                  onClick={() => router.push(`/admin/crm?id=${c.id}`, { scroll: false })}
+                />
+              ))}
+              {loadingMoreConvos && (
+                <div className="flex justify-center py-3">
+                  <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 border-t-orange-500 animate-spin" />
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1422,6 +1597,7 @@ function CrmInboxContent() {
                 )}
               </div>
               {activeConvo.subject && <p className="text-xs text-slate-400 dark:text-white/30 truncate">{activeConvo.subject}</p>}
+              <TagEditor tags={activeConvo.tags ?? []} onChange={tags => updateConvoTags(activeConvo.id, tags)} />
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {["open","pending"].includes(activeConvo.status) ? (
