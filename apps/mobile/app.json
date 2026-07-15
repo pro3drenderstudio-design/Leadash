@@ -43,6 +43,12 @@
         }
       ],
       "expo-video"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bb1c8947-0e75-4c11-a46a-943dd01dc0e7"
+      }
+    },
+    "owner": "lajanumba"
   }
 }
