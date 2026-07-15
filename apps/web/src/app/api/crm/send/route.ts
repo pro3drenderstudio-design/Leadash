@@ -24,6 +24,7 @@ import { uploadWhatsAppMedia, whatsAppMediaType } from "@/lib/whatsapp/media";
 const POSTAL_API_KEY  = process.env.POSTAL_API_KEY ?? "";
 const POSTAL_HOST     = process.env.POSTAL_HOST    ?? "209.145.55.138";
 const POSTAL_API_URL  = `http://${POSTAL_HOST}:5000/api/v1/send/message`;
+const GRAPH_API       = "https://graph.facebook.com/v21.0";
 const SUPPORT_EMAIL   = process.env.CRM_SUPPORT_EMAIL   ?? "support@leadash.com";
 const MARKETING_EMAIL = process.env.CRM_MARKETING_EMAIL ?? "temi@leadash.com";
 const ACADEMY_EMAIL   = process.env.CRM_ACADEMY_EMAIL   ?? "academy@leadash.com";
@@ -44,7 +45,7 @@ interface OutgoingAttachment {
 interface SendBody {
   conversation_id: string;
   body:            string;
-  channel?:        "email" | "whatsapp";
+  channel?:        "email" | "whatsapp" | "instagram";
   subject?:        string;
   html?:           string;
   template_name?:  string;
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
     .select(`
       id, channel, inbox_address, channel_identifier, status,
       last_inbound_at,
-      crm_contacts ( id, email, whatsapp_number, display_name )
+      crm_contacts ( id, email, whatsapp_number, instagram_id, display_name )
     `)
     .eq("id", conversation_id)
     .single();
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
 
-  const channel = body.channel ?? (convo.channel as "email" | "whatsapp");
+  const channel = body.channel ?? (convo.channel as "email" | "whatsapp" | "instagram");
   const contact = convo.crm_contacts as Record<string, string | null> | null;
 
   if (!contact) {
@@ -351,6 +352,57 @@ export async function POST(req: NextRequest) {
     }).eq("id", conversation_id);
 
     return NextResponse.json({ ok: true, type: "whatsapp", within_window: windowOpen });
+  }
+
+  // ── Instagram send ───────────────────────────────────────────────────────
+  if (channel === "instagram") {
+    const igsid = contact.instagram_id;
+    if (!igsid) return NextResponse.json({ error: "Contact has no Instagram ID" }, { status: 400 });
+
+    const { data: channelCfg } = await db
+      .from("crm_channel_configs")
+      .select("config, credentials")
+      .eq("channel", "instagram")
+      .single();
+    const pageId      = channelCfg?.config?.page_id as string | undefined;
+    const accessToken = channelCfg?.credentials?.access_token as string | undefined;
+    if (!pageId || !accessToken) {
+      return NextResponse.json({ error: "Instagram not connected — configure it in CRM Settings" }, { status: 400 });
+    }
+
+    const igRes = await fetch(`${GRAPH_API}/${pageId}/messages?access_token=${encodeURIComponent(accessToken)}`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: igsid },
+        message:   { text: msgBody },
+      }),
+    });
+
+    const igData = await igRes.json() as { message_id?: string; error?: { message?: string } };
+    if (!igRes.ok || igData.error) {
+      console.error("[crm/send] Instagram send error:", igData.error ?? igData);
+      return NextResponse.json({ error: igData.error?.message ?? "Instagram send failed" }, { status: 502 });
+    }
+
+    await db.from("crm_messages").insert({
+      conversation_id,
+      contact_id:          contact.id,
+      direction:           "outbound",
+      channel:             "instagram",
+      from_address:        pageId,
+      body:                msgBody,
+      provider_message_id: igData.message_id ?? null,
+      sent_by:             user.id,
+      status:              "sent",
+    });
+
+    await db.from("crm_conversations").update({
+      last_message_at: now,
+      status: (convo.status === "resolved" || convo.status === "closed") ? "open" : convo.status,
+    }).eq("id", conversation_id);
+
+    return NextResponse.json({ ok: true, type: "instagram", provider_id: igData.message_id });
   }
 
   return NextResponse.json({ error: "Unsupported channel" }, { status: 400 });

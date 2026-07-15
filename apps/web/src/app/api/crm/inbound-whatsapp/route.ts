@@ -158,6 +158,8 @@ export async function POST(req: NextRequest) {
           .from("crm_contacts")
           .select("id")
           .eq("whatsapp_number", phone)
+          .order("created_at", { ascending: true })
+          .limit(1)
           .maybeSingle();
 
         if (existingContact) {

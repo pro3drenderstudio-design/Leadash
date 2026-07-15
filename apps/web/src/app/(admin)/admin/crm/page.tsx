@@ -211,6 +211,43 @@ function ConvoItem({ convo, active, selected, onSelect, onClick }: {
   );
 }
 
+// ── Emoji picker + formatting toolbar ───────────────────────────────────────────
+
+const COMMON_EMOJIS = [
+  "😀","😊","😂","🙏","👍","👎","🔥","✅","❌","⚡","🎉","🚀",
+  "💡","💼","📧","📅","💰","🤝","⭐","🌟","✨","💪","🎯","📊",
+  "👋","😅","🤔","😍","🥳","🤩","😎","🙌","💯","❤️","👏","🏆",
+];
+
+function EmojiPicker({ onSelect }: { onSelect: (e: string) => void }) {
+  return (
+    <div className="bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-2.5">
+      <div className="grid grid-cols-8 gap-0.5">
+        {COMMON_EMOJIS.map(e => (
+          <button key={e} onClick={() => onSelect(e)}
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-base transition-colors">
+            {e}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolbarBtn({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={e => { e.preventDefault(); onClick(e); }}
+      onClick={e => e.stopPropagation()}
+      className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-white/50 hover:text-slate-800 dark:hover:text-white/80 text-xs transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── Message bubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: CrmMessage }) {
@@ -939,6 +976,20 @@ function CrmInboxContent() {
   const [templateParams,   setTemplateParams]   = useState<Record<string, string>>({});
   const threadRef        = useRef<HTMLDivElement>(null);
   const prevUnreadRef    = useRef(-1); // -1 = suppress beep on first load
+  const forceScrollRef   = useRef(false); // set true right before loading a (possibly different) conversation's messages
+  const prevMsgCountRef  = useRef(0);
+  const lastLoadedIdRef  = useRef<string | null>(null); // which conversation's messages are currently loaded — guards the full reset to genuine switches only
+  const oldestCreatedAtRef = useRef<string | null>(null); // cursor for loading older pages ("before")
+  const newestCreatedAtRef = useRef<string | null>(null); // cursor for polling new messages ("after")
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlder,    setLoadingOlder]    = useState(false);
+  // Rich text (email only) + emoji picker (all channels)
+  const [composeHtml,     setComposeHtml]     = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showLinkDialog,  setShowLinkDialog]  = useState(false);
+  const [linkUrl,         setLinkUrl]         = useState("");
+  const composeRichRef  = useRef<HTMLDivElement>(null);   // contentEditable, email only
+  const composeTextRef  = useRef<HTMLTextAreaElement>(null); // plain textarea, other channels
 
   const loadConvos = useCallback(async () => {
     setLoading(true);
@@ -952,11 +1003,29 @@ function CrmInboxContent() {
 
   useEffect(() => { loadConvos(); }, [loadConvos]);
 
-  // Poll every 30 s for new messages
+  // Poll every 30 s — refreshes the conversation list, and for the open thread
+  // fetches only messages newer than the last one we have (via the "after"
+  // cursor) and appends them, rather than re-fetching + replacing the whole
+  // thread, which would discard any older history loaded via infinite scroll.
   useEffect(() => {
-    const id = setInterval(loadConvos, 30_000);
+    const id = setInterval(() => {
+      loadConvos();
+      const convoId = activeConvo?.id;
+      if (convoId && newestCreatedAtRef.current) {
+        fetch(`/api/crm/messages?conversation_id=${convoId}&after=${encodeURIComponent(newestCreatedAtRef.current)}`)
+          .then(r => r.json())
+          .then((d: { messages?: CrmMessage[] }) => {
+            const fresh = d.messages ?? [];
+            if (fresh.length) {
+              setMessages(prev => [...prev, ...fresh]);
+              newestCreatedAtRef.current = fresh[fresh.length - 1].created_at;
+            }
+          })
+          .catch(() => {});
+      }
+    }, 30_000);
     return () => clearInterval(id);
-  }, [loadConvos]);
+  }, [loadConvos, activeConvo?.id]);
 
   // Request browser notification permission on first render
   useEffect(() => {
@@ -989,11 +1058,16 @@ function CrmInboxContent() {
   }, [activeId]);
 
   useEffect(() => {
-    if (!activeId) { setActiveConvo(null); setMessages([]); return; }
+    if (!activeId) { setActiveConvo(null); setMessages([]); lastLoadedIdRef.current = null; return; }
     const c = conversations.find(c => c.id === activeId);
-    if (c) {
+    if (!c) return; // conversations hasn't loaded this id yet — effect re-fires once it does
+
+    if (lastLoadedIdRef.current !== activeId) {
+      // Genuine conversation switch (or first load of this id) — full reset.
+      lastLoadedIdRef.current = activeId;
       setActiveConvo(c);
       setWinOpen(windowOpen(c.last_inbound_at));
+      forceScrollRef.current = true;
       loadMessages(c.id);
       if (c.unread_count > 0) {
         fetch(`/api/crm/conversations?id=${c.id}`, {
@@ -1011,18 +1085,65 @@ function CrmInboxContent() {
       } else {
         setWaTemplates([]);
       }
+    } else {
+      // Same conversation — the conversations list just refreshed (poll).
+      // Sync lightweight fields only; do NOT re-fetch/replace the message thread.
+      setActiveConvo(c);
+      setWinOpen(windowOpen(c.last_inbound_at));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, conversations]);
 
   async function loadMessages(id: string) {
-    const res = await fetch(`/api/crm/messages?conversation_id=${id}`);
-    const d = await res.json() as { messages?: CrmMessage[] };
-    setMessages(d.messages ?? []);
+    const res = await fetch(`/api/crm/messages?conversation_id=${id}&limit=50`);
+    const d = await res.json() as { messages?: CrmMessage[]; has_more?: boolean };
+    const msgs = d.messages ?? [];
+    setMessages(msgs);
+    setHasMoreMessages(!!d.has_more);
+    oldestCreatedAtRef.current = msgs[0]?.created_at ?? null;
+    newestCreatedAtRef.current = msgs[msgs.length - 1]?.created_at ?? null;
   }
 
+  async function loadOlderMessages() {
+    const convoId = activeConvo?.id;
+    if (!convoId || loadingOlder || !hasMoreMessages || !oldestCreatedAtRef.current) return;
+    setLoadingOlder(true);
+    const el = threadRef.current;
+    const prevScrollHeight = el?.scrollHeight ?? 0;
+    const prevScrollTop    = el?.scrollTop ?? 0;
+    try {
+      const res = await fetch(`/api/crm/messages?conversation_id=${convoId}&before=${encodeURIComponent(oldestCreatedAtRef.current)}&limit=50`);
+      const d = await res.json() as { messages?: CrmMessage[]; has_more?: boolean };
+      const older = d.messages ?? [];
+      if (older.length) {
+        setMessages(prev => [...older, ...prev]);
+        oldestCreatedAtRef.current = older[0]?.created_at ?? oldestCreatedAtRef.current;
+        // Prepending content shifts everything down — restore the admin's
+        // visual scroll position instead of letting it jump to the new top.
+        requestAnimationFrame(() => {
+          if (el) el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop;
+        });
+      }
+      setHasMoreMessages(!!d.has_more);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  // Only force-scroll to bottom when switching conversations (forceScrollRef,
+  // set just before loadMessages) or when a genuinely new message arrives while
+  // the admin is already near the bottom — not on every 30s poll-triggered
+  // refetch of the same conversation's messages.
   useEffect(() => {
-    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    const el = threadRef.current;
+    if (!el) return;
+    const grew      = messages.length > prevMsgCountRef.current;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (forceScrollRef.current || (grew && nearBottom)) {
+      el.scrollTop = el.scrollHeight;
+      forceScrollRef.current = false;
+    }
+    prevMsgCountRef.current = messages.length;
   }, [messages]);
 
   async function handleSend() {
@@ -1064,11 +1185,13 @@ function CrmInboxContent() {
       setError("Attachments are still uploading — wait a moment and try again");
       return;
     }
+    const isRichEmail = activeConvo.channel === "email" && !isNote;
     const res = await fetch("/api/crm/send", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         conversation_id: activeConvo.id,
         body:            composeText,
+        html:            isRichEmail ? composeHtml : undefined,
         channel:         activeConvo.channel,
         note:            isNote || undefined,
         attachments:     isNote ? undefined : readyAttachments,
@@ -1081,10 +1204,46 @@ function CrmInboxContent() {
       return;
     }
     setComposeText("");
+    setComposeHtml("");
+    if (composeRichRef.current) composeRichRef.current.innerHTML = "";
     setIsNote(false);
     setAttachments([]);
     await loadMessages(activeConvo.id);
     await loadConvos();
+  }
+
+  // Email only — rich text via a contentEditable div, mirroring the outreach
+  // CRM's compose box ((app)/crm/CrmClient.tsx) so both surfaces behave the same.
+  function execFormat(cmd: string, value?: string) {
+    composeRichRef.current?.focus();
+    document.execCommand(cmd, false, value);
+    setComposeHtml(composeRichRef.current?.innerHTML ?? "");
+    setComposeText(composeRichRef.current?.innerText ?? "");
+  }
+
+  function handleInsertLink() {
+    if (!linkUrl.trim()) return;
+    execFormat("createLink", linkUrl.trim());
+    setShowLinkDialog(false);
+    setLinkUrl("");
+  }
+
+  function insertEmoji(emoji: string, isEmailRich: boolean) {
+    if (isEmailRich) {
+      execFormat("insertText", emoji);
+      return;
+    }
+    const el = composeTextRef.current;
+    if (!el) { setComposeText(t => t + emoji); return; }
+    const start = el.selectionStart ?? composeText.length;
+    const end   = el.selectionEnd ?? composeText.length;
+    const next  = composeText.slice(0, start) + emoji + composeText.slice(end);
+    setComposeText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
   }
 
   // Uploads directly to Supabase Storage from the browser — the file bytes
@@ -1278,7 +1437,16 @@ function CrmInboxContent() {
           </div>
 
           {/* Messages */}
-          <div ref={threadRef} className="flex-1 overflow-y-auto px-6 py-4">
+          <div ref={threadRef} onScroll={e => { if (e.currentTarget.scrollTop < 100) loadOlderMessages(); }}
+            className="flex-1 overflow-y-auto px-6 py-4">
+            {loadingOlder && (
+              <div className="flex justify-center py-2">
+                <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 border-t-orange-500 animate-spin" />
+              </div>
+            )}
+            {!loadingOlder && hasMoreMessages && (
+              <div className="text-center text-[11px] text-slate-300 dark:text-white/20 pb-2">Scroll up for older messages</div>
+            )}
             {messages.length === 0 ? (
               <div className="text-center text-xs text-slate-300 dark:text-white/20 mt-20">No messages yet</div>
             ) : (
@@ -1287,7 +1455,8 @@ function CrmInboxContent() {
           </div>
 
           {/* Compose */}
-          <div className="bg-white dark:bg-[#1a1a1a] border-t border-slate-200 dark:border-white/10 p-4 flex-shrink-0">
+          <div className="bg-white dark:bg-[#1a1a1a] border-t border-slate-200 dark:border-white/10 p-4 flex-shrink-0"
+            onClick={() => { setShowEmojiPicker(false); setShowLinkDialog(false); }}>
             {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
             <div className="flex gap-2 mb-2">
               <button onClick={() => { setIsNote(false); setTemplateMode(false); }}
@@ -1363,23 +1532,64 @@ function CrmInboxContent() {
                     ))}
                   </div>
                 )}
+                {(activeConvo.channel === "email" && !isNote && !templateMode) && (
+                  <div className="flex items-center gap-1 relative">
+                    <ToolbarBtn title="Bold" onClick={() => execFormat("bold")}><b>B</b></ToolbarBtn>
+                    <ToolbarBtn title="Italic" onClick={() => execFormat("italic")}><i>I</i></ToolbarBtn>
+                    <ToolbarBtn title="Underline" onClick={() => execFormat("underline")}><u>U</u></ToolbarBtn>
+                    <ToolbarBtn title="Insert link" onClick={e => { e.stopPropagation(); setShowLinkDialog(v => !v); setShowEmojiPicker(false); }}>
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd"/></svg>
+                    </ToolbarBtn>
+                    {showLinkDialog && (
+                      <div onClick={e => e.stopPropagation()}
+                        className="absolute bottom-9 left-0 z-20 flex gap-1.5 bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-2">
+                        <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleInsertLink(); }}
+                          placeholder="https://…" autoFocus
+                          className="px-2 py-1 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 w-48 focus:outline-none" />
+                        <button onClick={handleInsertLink} className="text-xs font-semibold px-2.5 py-1 bg-orange-500 text-white rounded-lg">Add</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-3 items-end">
-                  <textarea
-                    value={composeText}
-                    onChange={e => setComposeText(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
-                    placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
-                    rows={3}
-                    className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
+                  {(activeConvo.channel === "email" && !isNote && !templateMode) ? (
+                    <div
+                      ref={composeRichRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={() => { setComposeHtml(composeRichRef.current?.innerHTML ?? ""); setComposeText(composeRichRef.current?.innerText ?? ""); }}
+                      onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
+                      data-placeholder="Type a message… (Cmd+Enter to send)"
+                      className="flex-1 min-h-[76px] max-h-40 overflow-y-auto px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 dark:empty:before:text-white/20"
+                    />
+                  ) : (
+                    <textarea
+                      ref={composeTextRef}
+                      value={composeText}
+                      onChange={e => setComposeText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
+                      placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
+                      rows={3}
+                      className="flex-1 resize-none px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    />
+                  )}
                   {!isNote && (
-                    <div className="flex items-center gap-1 pb-1">
+                    <div className="flex items-center gap-1 pb-1 relative">
                       <button onClick={() => fileInputRef.current?.click()} title="Attach file"
                         className="p-1.5 rounded-md text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
                         <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" clipRule="evenodd"/></svg>
                       </button>
                       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
                       <VoiceRecorderButton onRecorded={handleVoiceNote} />
+                      <ToolbarBtn title="Emoji" onClick={e => { e.stopPropagation(); setShowEmojiPicker(v => !v); setShowLinkDialog(false); }}>
+                        <span className="text-sm">🙂</span>
+                      </ToolbarBtn>
+                      {showEmojiPicker && (
+                        <div onClick={e => e.stopPropagation()} className="absolute bottom-10 right-0 z-20">
+                          <EmojiPicker onSelect={e => insertEmoji(e, (activeConvo.channel === "email" && !isNote && !templateMode))} />
+                        </div>
+                      )}
                     </div>
                   )}
                   <button onClick={handleSend} disabled={sending || (!composeText.trim() && !attachments.some(a => a.status === "done"))}

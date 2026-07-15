@@ -78,11 +78,13 @@ export async function POST(req: NextRequest) {
   // Dedupe by email first, then WhatsApp number. Whichever hits, we merge onto.
   let existingId: string | null = null;
   if (email) {
-    const { data: e } = await db.from("crm_contacts").select("id").eq("email", email).maybeSingle();
+    const { data: e } = await db.from("crm_contacts").select("id").eq("email", email)
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
     existingId = (e?.id as string) ?? null;
   }
   if (!existingId && whatsapp) {
-    const { data: w } = await db.from("crm_contacts").select("id").eq("whatsapp_number", whatsapp).maybeSingle();
+    const { data: w } = await db.from("crm_contacts").select("id").eq("whatsapp_number", whatsapp)
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
     existingId = (w?.id as string) ?? null;
   }
 

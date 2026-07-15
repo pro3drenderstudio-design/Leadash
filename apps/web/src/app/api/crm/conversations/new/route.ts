@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { normalisePhoneNG } from "@/lib/phone";
 
 const POSTAL_API_KEY  = process.env.POSTAL_API_KEY ?? "";
 const POSTAL_HOST     = process.env.POSTAL_HOST    ?? "209.145.55.138";
@@ -38,13 +39,6 @@ async function requireAdmin() {
   const { data: admin } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
   if (!admin) return null;
   return { user, db };
-}
-
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (digits.startsWith("+")) return digits;
-  if (digits.startsWith("0")) return `+234${digits.slice(1)}`; // default Nigeria prefix
-  return `+${digits}`;
 }
 
 interface NewConvoBody {
@@ -77,13 +71,19 @@ export async function POST(req: NextRequest) {
   const isEmail = channel === "email";
   const to      = isEmail
     ? payload.to.toLowerCase().trim()
-    : normalizePhone(payload.to.trim());
+    : normalisePhoneNG(payload.to.trim());
+
+  if (!to) {
+    return NextResponse.json({ error: "Invalid WhatsApp number" }, { status: 400 });
+  }
 
   // ── 2. Upsert contact ────────────────────────────────────────────────────
   let contactId: string;
   const { data: existing } = isEmail
-    ? await db.from("crm_contacts").select("id").eq("email", to).maybeSingle()
-    : await db.from("crm_contacts").select("id").eq("whatsapp_number", to).maybeSingle();
+    ? await db.from("crm_contacts").select("id").eq("email", to)
+        .order("created_at", { ascending: true }).limit(1).maybeSingle()
+    : await db.from("crm_contacts").select("id").eq("whatsapp_number", to)
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
 
   if (existing) {
     contactId = existing.id as string;

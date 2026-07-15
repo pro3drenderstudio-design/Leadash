@@ -1,11 +1,19 @@
 "use client";
 import { useRef, useState } from "react";
+import Recorder from "opus-recorder";
 
 /**
- * Records a voice note via MediaRecorder and hands the finished Blob back to
- * the caller — the caller is responsible for uploading it (via whichever
- * upload route matches the surface: admin vs outreach CRM) and adding it to
- * the composer's attachment list. Shared between both composers.
+ * Records a voice note and hands the finished Blob back to the caller — the
+ * caller is responsible for uploading it (via whichever upload route matches
+ * the surface: admin vs outreach CRM) and adding it to the composer's
+ * attachment list. Shared between both composers.
+ *
+ * Encodes directly to Ogg/Opus via opus-recorder (WASM) rather than the
+ * browser's native MediaRecorder, which only produces audio/webm on Chrome/
+ * Edge — a container WhatsApp's Cloud API rejects outright (it only accepts
+ * aac/amr/mpeg/mp4/ogg for voice messages). Ogg/Opus is on that accepted
+ * list and plays natively in every browser, so this fixes WhatsApp sends
+ * without needing any server-side transcoding.
  */
 export function VoiceRecorderButton({
   onRecorded,
@@ -18,59 +26,63 @@ export function VoiceRecorderButton({
 }) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<InstanceType<typeof Recorder> | null>(null);
+  const chunksRef = useRef<ArrayBuffer[]>([]);
+  const discardRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const t = forceDark
     ? { idle: "text-white/40 hover:text-white/70 hover:bg-white/5", active: "text-red-400 bg-red-500/10" }
     : { idle: "text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5", active: "text-red-500 dark:text-red-400 bg-red-500/10" };
 
-  function stopStream() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+  function clearTimer() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+
+  function teardown() {
+    recorderRef.current?.close();
+    recorderRef.current = null;
+    clearTimer();
   }
 
   async function startRecording() {
     if (disabled || recording) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const rec = new Recorder({
+        encoderPath:        "/opus-recorder/encoderWorker.min.js",
+        encoderSampleRate:  48000,
+        encoderApplication: 2048, // voice-optimized
+        numberOfChannels:   1,
+        streamPages:        false, // fire ondataavailable once, with the complete file, on stop
+      });
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        stopStream();
-        if (blob.size > 0) onRecorded(blob, mimeType);
+      discardRef.current = false;
+      rec.ondataavailable = (buf: ArrayBuffer) => { chunksRef.current.push(buf); };
+      rec.onstop = () => {
+        teardown();
+        if (discardRef.current) return;
+        const blob = new Blob(chunksRef.current, { type: "audio/ogg" });
+        if (blob.size > 0) onRecorded(blob, "audio/ogg");
       };
-      recorder.start();
-      recorderRef.current = recorder;
+      await rec.start();
+      recorderRef.current = rec;
       setSeconds(0);
       setRecording(true);
-      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     } catch {
-      stopStream();
+      teardown();
       setRecording(false);
     }
   }
 
   function stopRecording() {
     recorderRef.current?.stop();
-    recorderRef.current = null;
     setRecording(false);
   }
 
   function cancelRecording() {
-    if (recorderRef.current) {
-      recorderRef.current.onstop = null;
-      recorderRef.current.stop();
-      recorderRef.current = null;
-    }
-    stopStream();
+    discardRef.current = true;
+    recorderRef.current?.stop();
     setRecording(false);
   }
 

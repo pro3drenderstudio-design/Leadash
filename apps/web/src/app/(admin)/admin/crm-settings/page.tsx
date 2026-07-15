@@ -134,6 +134,8 @@ function InstagramCard({ config, onSave, onDisconnect }: Pick<ChannelCardProps, 
   const [pageId,  setPageId]  = useState(config?.config?.page_id ?? "");
   const [igId,    setIgId]    = useState(config?.config?.ig_user_id ?? "");
   const [saving,  setSaving]  = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
   const save = async () => {
     setSaving(true);
@@ -142,6 +144,20 @@ function InstagramCard({ config, onSave, onDisconnect }: Pick<ChannelCardProps, 
       { page_id: pageId, ig_user_id: igId },
     );
     setSaving(false);
+  };
+
+  const backfillNames = async () => {
+    setBackfilling(true);
+    setBackfillMsg(null);
+    try {
+      const res = await fetch("/api/admin/crm-settings/instagram-backfill-names", { method: "POST" });
+      const d = await res.json() as { updated?: number; checked?: number; error?: string };
+      setBackfillMsg(res.ok ? `Updated ${d.updated} of ${d.checked} contacts` : (d.error ?? "Backfill failed"));
+    } catch {
+      setBackfillMsg("Backfill failed");
+    } finally {
+      setBackfilling(false);
+    }
   };
 
   return (
@@ -170,6 +186,16 @@ function InstagramCard({ config, onSave, onDisconnect }: Pick<ChannelCardProps, 
           </button>
         )}
       </div>
+      {config?.status === "connected" && (
+        <div className="border-t border-white/10 pt-3 space-y-1.5">
+          <button onClick={backfillNames} disabled={backfilling}
+            className="w-full text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 py-2 rounded-lg transition disabled:opacity-40">
+            {backfilling ? "Backfilling…" : "Backfill names for existing contacts"}
+          </button>
+          <p className="text-[11px] text-white/30">Re-fetches real names for contacts stuck on "Instagram User" from before this was connected.</p>
+          {backfillMsg && <p className="text-[11px] text-emerald-400">{backfillMsg}</p>}
+        </div>
+      )}
     </div>
   );
 }
