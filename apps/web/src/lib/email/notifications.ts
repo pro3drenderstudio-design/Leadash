@@ -1157,6 +1157,44 @@ export async function sendOfferSaleAdminNotification(opts: {
   });
 }
 
+// ─── Billing reconciliation ───────────────────────────────────────────────────
+
+export interface BillingDriftFinding {
+  kind:          "dead_subscription_link" | "never_billed_domain" | "expired_beta_trial";
+  workspaceId:   string | null;
+  workspaceName: string | null;
+  detail:        string;
+}
+
+export async function sendBillingReconcileAlert(findings: BillingDriftFinding[]): Promise<void> {
+  if (findings.length === 0) return;
+  const adminUrl = `${APP_URL}/admin`;
+
+  const rows = findings.map(f =>
+    `${f.kind.padEnd(24)} ${(f.workspaceName ?? "—").padEnd(24)} ${f.detail}`,
+  );
+
+  await sendEmail({
+    to: OWNER_EMAIL,
+    subject: `[Billing Reconcile] ${findings.length} workspace(s)/domain(s) drifted`,
+    text: [
+      `The daily billing-reconcile check found ${findings.length} item(s) that look wrong but were NOT changed automatically — review and decide case-by-case.`,
+      ``,
+      ...rows,
+      ``,
+      adminUrl,
+    ].join("\n"),
+    html: `
+      <p style="font-family:sans-serif">The daily billing-reconcile check found <strong>${findings.length}</strong> item(s) that look wrong but were <strong>not changed automatically</strong> — review and decide case-by-case.</p>
+      <table style="border-collapse:collapse;margin:16px 0;font-size:13px;font-family:sans-serif;width:100%">
+        <tr style="color:#6b7280;text-align:left"><th>Kind</th><th>Workspace</th><th>Detail</th></tr>
+        ${findings.map(f => `<tr><td style="padding:4px 16px 4px 0">${f.kind}</td><td style="padding:4px 16px 4px 0">${f.workspaceName ?? "—"}</td><td>${f.detail}</td></tr>`).join("")}
+      </table>
+      <p><a href="${adminUrl}" style="display:inline-block;background:#374151;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:sans-serif;font-size:14px">Open Admin →</a></p>
+    `,
+  });
+}
+
 export async function sendOfferPurchaseReceiptEmail(opts: {
   buyerEmail: string;
   buyerName: string | null;

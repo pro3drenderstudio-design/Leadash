@@ -448,7 +448,7 @@ const INVOICE_TYPE_ICONS: Record<string, string> = {
 
 type SuspendedDomain = { id: string; domain: string; payment_provider: string | null };
 
-function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurchaseSuccess }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string; creditPurchaseSuccess?: boolean }) {
+function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurchaseSuccess, paymentMethodSuccess }: { paymentSuccess?: boolean; paidPlanId?: string; paystackReference?: string; creditPurchaseSuccess?: boolean; paymentMethodSuccess?: boolean }) {
   const [planId, setPlanId]         = useState("free");
   const [planStatus, setPlanStatus] = useState<"active" | "past_due" | "canceled" | "trialing">("active");
   const [graceEndsAt, setGraceEndsAt] = useState<string | null>(null);
@@ -574,6 +574,49 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     }
   }
 
+  async function handleChangePlan(targetPlanId: string) {
+    setUpgrading(targetPlanId);
+    try {
+      const data = await wsPost<{ url?: string }>("/api/billing/change-plan", { plan_id: targetPlanId });
+      if (data.url) window.location.href = data.url;
+      else { alert("Plan change failed"); setUpgrading(null); }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Plan change failed");
+      setUpgrading(null);
+    }
+  }
+
+  const [updatingPaymentMethod, setUpdatingPaymentMethod] = useState(false);
+  const [paymentMethodVerifying, setPaymentMethodVerifying] = useState(paymentMethodSuccess ?? false);
+  const [paymentMethodUpdated,   setPaymentMethodUpdated]   = useState(false);
+
+  async function handleUpdatePaymentMethod() {
+    setUpdatingPaymentMethod(true);
+    try {
+      const data = await wsPost<{ url?: string }>("/api/billing/update-payment-method", {});
+      if (data.url) window.location.href = data.url;
+      else { alert("Could not start payment update"); setUpdatingPaymentMethod(false); }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not start payment update");
+      setUpdatingPaymentMethod(false);
+    }
+  }
+
+  // Verify + persist the new card after redirect back from update-payment-method
+  useEffect(() => {
+    if (!paymentMethodSuccess) return;
+    const ref = new URLSearchParams(window.location.search).get("reference")
+      ?? new URLSearchParams(window.location.search).get("trxref");
+    if (!ref) { setPaymentMethodVerifying(false); return; }
+    wsPost("/api/billing/verify-payment-method", { reference: ref })
+      .then(() => {
+        setPaymentMethodVerifying(false);
+        setPaymentMethodUpdated(true);
+        setPlanStatus("active");
+      })
+      .catch(() => setPaymentMethodVerifying(false));
+  }, [paymentMethodSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleNewPayment(domainId: string) {
     setNewPaymentWorking(domainId);
     try {
@@ -672,6 +715,29 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
           </div>
         </div>
       )}
+      {paymentMethodVerifying && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-amber-400 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <div>
+            <p className="text-amber-300 font-semibold text-sm">Confirming payment…</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">Updating your saved payment method — just a moment.</p>
+          </div>
+        </div>
+      )}
+      {paymentMethodUpdated && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-xl">
+          <svg className="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <div>
+            <p className="text-emerald-300 font-semibold text-sm">Payment method updated!</p>
+            <p className="text-emerald-400/70 text-xs mt-0.5">Your subscription is active and your new card is saved for future billing.</p>
+          </div>
+        </div>
+      )}
 
       {/* Past-due warning */}
       {planStatus === "past_due" && graceEndsAt && (
@@ -755,12 +821,37 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
                     {upgrading === plan.plan_id ? "…" : "Upgrade"}
                   </button>
                 ) : (
-                  <p className="mt-auto text-[10px] text-white/25 text-center">Lower tier</p>
+                  <button
+                    onClick={() => handleChangePlan(plan.plan_id)}
+                    disabled={!!upgrading}
+                    className="mt-auto w-full py-1.5 rounded-lg text-xs font-semibold border border-white/10 text-white/60 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  >
+                    {upgrading === plan.plan_id ? "…" : "Switch to this plan"}
+                  </button>
                 )}
               </div>
             );
           })}
         </div>
+
+        {/* Payment method — shown for any paid plan */}
+        {planId !== "free" && (
+          <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/6">
+            <div>
+              <p className="text-white/50 text-xs">Payment method</p>
+              <p className="text-white/25 text-[11px] mt-0.5">
+                Update the card used for your subscription renewal.
+              </p>
+            </div>
+            <button
+              onClick={handleUpdatePaymentMethod}
+              disabled={updatingPaymentMethod}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold border border-white/15 text-white/70 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {updatingPaymentMethod ? "Redirecting…" : "Update payment method"}
+            </button>
+          </div>
+        )}
 
         {/* Cancel subscription — only shown for paid active/past_due plans */}
         {planId !== "free" && (planStatus === "active" || planStatus === "past_due") && (
@@ -1804,10 +1895,11 @@ function SettingsInner() {
   const [paystackReference]     = useState(() => searchParams.get("reference") ?? searchParams.get("trxref") ?? undefined);
   const [creditPurchaseSuccess] = useState(() => searchParams.get("credit_purchase") === "success");
   const [dedicatedIpSuccess]    = useState(() => searchParams.get("billing") === "dedicated_ip_success");
+  const [paymentMethodSuccess]  = useState(() => searchParams.get("update_payment") === "success");
 
   // Clean up payment params from URL after mounting (keep tab=billing)
   useEffect(() => {
-    if (billingSuccess || creditPurchaseSuccess) {
+    if (billingSuccess || creditPurchaseSuccess || paymentMethodSuccess) {
       router.replace("/settings?tab=billing");
     }
     if (dedicatedIpSuccess) {
@@ -1843,7 +1935,7 @@ function SettingsInner() {
         {active === "profile"        && <ProfileTab />}
         {active === "security"       && <SecurityTab />}
         {active === "team"           && <TeamTab />}
-        {active === "billing"        && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} creditPurchaseSuccess={creditPurchaseSuccess} />}
+        {active === "billing"        && <BillingTab paymentSuccess={billingSuccess} paidPlanId={paidPlanId} paystackReference={paystackReference} creditPurchaseSuccess={creditPurchaseSuccess} paymentMethodSuccess={paymentMethodSuccess} />}
         {active === "outreach"       && <OutreachTab />}
         {active === "infrastructure" && <InfrastructureTab dedicatedIpSuccess={dedicatedIpSuccess} />}
         {active === "api-keys"       && <ApiKeysTab />}

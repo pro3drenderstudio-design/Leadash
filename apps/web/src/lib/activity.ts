@@ -11,7 +11,8 @@ export type ActivityType =
   | "support_ticket"
   | "lead_campaign_created"
   | "lead_campaign_completed"
-  | "warmup_completed";
+  | "warmup_completed"
+  | "billing_drift_detected";
 
 interface LogActivityParams {
   workspace_id?:   string;

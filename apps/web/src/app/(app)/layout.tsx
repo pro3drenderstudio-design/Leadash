@@ -16,6 +16,8 @@ import PastDueBanner from "@/components/PastDueBanner";
 import SubscriptionRenewalBanner from "@/components/SubscriptionRenewalBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
 import { getPlanById } from "@/lib/billing/getActivePlans";
+import { getBillingAccessStatus } from "@/lib/billing/access";
+import BillingPaywall from "@/components/BillingPaywall";
 
 async function claimBetaIfApproved(userId: string, email: string, workspaceId: string) {
   const db = createAdminClient();
@@ -90,6 +92,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // so prices throughout the app render in their local currency. Nigerian visitors get NGN.
   const currencyContext = await getCurrencyContext();
 
+  const billingAccess = getBillingAccessStatus(workspace);
+
   return (
     <WorkspaceProvider workspaceId={ctx.workspaceId}>
     <CurrencyProvider context={currencyContext}>
@@ -130,7 +134,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <SectionTabs />
           </div>
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
-            {children}
+            <BillingPaywall reason={billingAccess.reason}>
+              {children}
+            </BillingPaywall>
           </main>
         </div>
       </div>
