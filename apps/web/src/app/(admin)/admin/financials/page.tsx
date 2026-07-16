@@ -888,8 +888,21 @@ export default function FinancialsPage() {
           </div>
         </div>
 
+        {/* ── SaaS-ops callout: revenue/expenses/cash live in Finance Manager ── */}
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex items-start gap-3">
+          <span className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0" style={{ color: "var(--app-accent)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v20M5 12h14" />
+            </svg>
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white/85">This page shows subscription health only.</p>
+            <p className="text-xs text-white/50 mt-1">Real money in / out, bank balances, refunds, expenses, and the P&amp;L ledger live in <Link href="/admin/financials/manage" className="underline" style={{ color: "var(--app-accent)" }}>Finance Manager</Link>. This page reflects Paystack subscription state (MRR, ARR, plan mix, churn) — it is intentionally blind to manual entries and non-plan revenue.</p>
+          </div>
+        </div>
+
         {/* ── Hero KPIs ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <KpiCard
             label="Monthly Recurring Revenue"
             value={ngn(data.mrr_ngn)}
@@ -898,14 +911,13 @@ export default function FinancialsPage() {
           />
           <KpiCard label="Annual Run Rate" value={ngn(data.arr_ngn)} sub="MRR × 12" />
           <KpiCard
-            label="Revenue This Month"
+            label="This Month · Plan Invoices"
             value={ngn(data.this_month_revenue_ngn)}
             sub={momArrow && data.mom_delta_pct !== null
-              ? `${momArrow} ${Math.abs(data.mom_delta_pct)}% vs last month`
-              : "Cash collected"}
+              ? `${momArrow} ${Math.abs(data.mom_delta_pct)}% vs last month · Paystack only`
+              : "Paystack subscription invoices"}
             subColor={momColor}
           />
-          <KpiCard label="All-Time Revenue" value={ngn(data.all_time_revenue_ngn)} sub="From billing invoices" />
         </div>
 
         {/* ── Secondary KPIs ── */}
@@ -944,7 +956,7 @@ export default function FinancialsPage() {
             sub="Conversion opportunity"
             onClick={() => openDrill("Free Workspaces", `${data.free_count} workspaces on free plan`, "free")}
           />
-          <KpiCard label="Last Month Revenue" value={ngn(data.last_month_revenue_ngn)} sub="Collected" />
+          <KpiCard label="Last Month · Plan Invoices" value={ngn(data.last_month_revenue_ngn)} sub="Paystack only · see Finance Manager for full P&L" />
         </div>
 
         {/* ── Beta Programme ── */}
@@ -984,8 +996,8 @@ export default function FinancialsPage() {
         <div className="bg-white/[0.03] border border-white/8 rounded-xl p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-sm font-bold text-white/80">Revenue — Last 12 Months</h2>
-              <p className="text-[11px] text-white/30 mt-0.5">Stacked by source · NGN</p>
+              <h2 className="text-sm font-bold text-white/80">Paystack Revenue — Last 12 Months</h2>
+              <p className="text-[11px] text-white/30 mt-0.5">Stacked by source · billing_invoices only · NGN</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {[

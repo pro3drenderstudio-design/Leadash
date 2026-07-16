@@ -34,6 +34,7 @@ export const CATEGORIES: Record<TxType, Record<string, string>> = {
   },
   cogs: {
     "cogs.payment_fees":     "Payment Processing Fees",
+    "cogs.refunds":          "Refunds Issued",
     "cogs.infrastructure":   "Cloud Infrastructure",
     "cogs.third_party_apis": "Third-party APIs",
     "cogs.ad_spend":         "Ad Spend",

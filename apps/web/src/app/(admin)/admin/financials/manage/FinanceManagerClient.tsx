@@ -24,7 +24,9 @@ import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { CATEGORIES as LEDGER_CATEGORIES } from "@/lib/finance/tax";
 import LedgerTab from "./LedgerTab";
+import { useConfirmDialog } from "./ConfirmDialog";
 import TaxTab from "./TaxTab";
 import AuditTab from "./AuditTab";
 import BankAccountsTab from "./BankAccountsTab";
@@ -113,6 +115,22 @@ function todayISO() { return new Date().toISOString().slice(0, 10); }
 function rangeMonths(r: Range) { return r === "month" ? 1 : r === "quarter" ? 3 : 12; }
 function rangeLabel(r: Range)  { return r === "month" ? "This month" : r === "quarter" ? "Last 3 months" : "Last 12 months"; }
 
+/** Maps a finance_expenses.category to the finance_transactions.category it
+ *  mirrors to via mig 20260716120000. Keeps recurring cost splits consistent
+ *  with the ledger's taxonomy on Overview. */
+function expenseCategoryToTxCategory(cat: Category): string {
+  switch (cat) {
+    case "infra":     return "cogs.infrastructure";
+    case "salaries":  return "opex.salary";
+    case "fees":      return "cogs.payment_fees";
+    case "marketing": return "cogs.ad_spend";
+    case "software":  return "opex.tools";
+    case "oneoff":    return "opex.other";
+    case "refunds":   return "cogs.refunds";
+    default:          return "opex.other";
+  }
+}
+
 /** Effective amount for a recurring expense N months ago. Walks history. */
 function recAmountAtMonthsAgo(rec: Expense, monthsAgo: number): number {
   const d = new Date(); d.setMonth(d.getMonth() - monthsAgo); d.setDate(1);
@@ -172,23 +190,42 @@ export default function FinanceManagerClient() {
 
   const [reservesOpen, setReservesOpen] = useState(false);
   const [reservesDraft, setReservesDraft] = useState<string>("");
-  const [feesNgn, setFeesNgn] = useState(0);
 
-  // Paystack fees for the selected range (from the categorized ledger) — shown
-  // as a "net of fees" note on the Money-in hero card.
+  // Ledger transactions for the selected range window — the single source of
+  // truth for Overview totals + chart. finance_income and one-off finance_expenses
+  // are mirrored into finance_transactions by DB triggers, so reading ledger
+  // captures manual entries + Paystack auto rows + refund inverses in one query.
+  // Recurring expenses stay in finance_expenses (walked by history) and are
+  // layered on top of the ledger cost total below.
+  type LedgerRow = { id: string; date: string; type: "revenue" | "cogs" | "opex" | "tax" | "equity"; category: string; amount_ngn: number; is_test: boolean; kind: string | null };
+  const [ledgerTxs, setLedgerTxs] = useState<LedgerRow[]>([]);
+  const [ledger12mo, setLedger12mo] = useState<LedgerRow[]>([]);
+
   useEffect(() => {
     const start = new Date();
     start.setMonth(start.getMonth() - (rangeMonths(range) - 1));
     start.setDate(1);
-    fetch(`/api/admin/finance/transactions?type=cogs&start=${start.toISOString().slice(0, 10)}&limit=2000`)
+    fetch(`/api/admin/finance/transactions?start=${start.toISOString().slice(0, 10)}&limit=5000`)
       .then(r => r.json())
-      .then((d: { transactions?: { category: string; amount_ngn: number }[] }) => {
-        setFeesNgn((d.transactions ?? [])
-          .filter(t => t.category === "cogs.payment_fees")
-          .reduce((sum, t) => sum + t.amount_ngn, 0));
-      })
-      .catch(() => setFeesNgn(0));
+      .then((d: { transactions?: LedgerRow[] }) => setLedgerTxs((d.transactions ?? []).filter(t => !t.is_test)))
+      .catch(() => setLedgerTxs([]));
   }, [range]);
+
+  // 12-month ledger for the In-vs-Out chart (independent of the range chip).
+  useEffect(() => {
+    const start = new Date();
+    start.setMonth(start.getMonth() - 11);
+    start.setDate(1);
+    fetch(`/api/admin/finance/transactions?start=${start.toISOString().slice(0, 10)}&limit=10000`)
+      .then(r => r.json())
+      .then((d: { transactions?: LedgerRow[] }) => setLedger12mo((d.transactions ?? []).filter(t => !t.is_test)))
+      .catch(() => setLedger12mo([]));
+  }, []);
+
+  const feesNgn = useMemo(
+    () => ledgerTxs.filter(t => t.category === "cogs.payment_fees").reduce((s, t) => s + t.amount_ngn, 0),
+    [ledgerTxs],
+  );
 
   const [totalCashNgn, setTotalCashNgn] = useState<number | null>(null);
   useEffect(() => {
@@ -199,6 +236,7 @@ export default function FinanceManagerClient() {
   }, []);
 
   const toast = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   // ── Load all data ────────────────────────────────────────────────────────
 
@@ -233,55 +271,60 @@ export default function FinanceManagerClient() {
     const months = rangeMonths(range);
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const winStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
 
-    // Current-month non-test income → the monthly baseline; scale across window.
-    const monthlyBy: Record<string, number> = {};
-    let monthlyIn = 0, testSum = 0, testCount = 0;
-    for (const t of income) {
-      if (t.is_test) { testSum += t.amount_ngn; testCount++; continue; }
-      if (new Date(t.date + "T00:00:00") >= monthStart) {
-        monthlyIn += t.amount_ngn;
-        monthlyBy[t.type] = (monthlyBy[t.type] ?? 0) + t.amount_ngn;
-      }
-    }
+    // Test-flagged rows: still shown in income tab, but excluded from ledger
+    // by the fetch filter above. Show the callout from finance_income directly.
+    let testSum = 0, testCount = 0;
+    for (const t of income) if (t.is_test) { testSum += t.amount_ngn; testCount++; }
+
+    // Ledger drives money in and (most of) money out. Refund inverses live
+    // as cogs.refunds rows, so they naturally subtract from profit.
+    let moneyIn = 0, ledgerOut = 0;
     const incomeBy: Record<string, number> = {};
-    for (const k in monthlyBy) incomeBy[k] = monthlyBy[k] * months;
-    const moneyIn = monthlyIn * months;
-
-    // Recurring expenses summed across window (respects effective-dated history).
-    let recMonthly = 0, moneyOut = 0;
     const expBy: Record<string, number> = {};
+    let monthlyIn = 0;
+    for (const tx of ledgerTxs) {
+      const d = new Date(tx.date + "T00:00:00");
+      if (d < winStart) continue;
+      if (tx.type === "revenue") {
+        moneyIn += tx.amount_ngn;
+        incomeBy[tx.category] = (incomeBy[tx.category] ?? 0) + tx.amount_ngn;
+        if (d >= monthStart) monthlyIn += tx.amount_ngn;
+      } else if (tx.type === "cogs" || tx.type === "opex" || tx.type === "tax") {
+        ledgerOut += tx.amount_ngn;
+        expBy[tx.category] = (expBy[tx.category] ?? 0) + tx.amount_ngn;
+      }
+      // equity is capital in/out; excluded from operating money-in/out totals.
+    }
+
+    // Recurring expenses layer on top of the ledger (they're not mirrored —
+    // finance_expense_history is required for correct per-month accrual).
+    let recMonthly = 0, recSum = 0;
     for (const r of recurring) {
       if (r.status !== "active") continue;
       recMonthly += recAmountAtMonthsAgo(r, 0);
-      let sum = 0;
-      for (let m = 0; m < months; m++) sum += recAmountAtMonthsAgo(r, m);
-      expBy[r.category] = (expBy[r.category] ?? 0) + sum;
-      moneyOut += sum;
-    }
-
-    // One-off within the window (real dated entries).
-    const winStart = new Date(); winStart.setMonth(winStart.getMonth() - (months - 1)); winStart.setDate(1);
-    let oneoffSum = 0;
-    for (const o of oneoff) {
-      if (new Date(o.since + "T00:00:00") >= winStart) {
-        oneoffSum += o.amount_ngn;
-        expBy[o.category] = (expBy[o.category] ?? 0) + o.amount_ngn;
-        moneyOut += o.amount_ngn;
+      for (let m = 0; m < months; m++) {
+        const amt = recAmountAtMonthsAgo(r, m);
+        recSum += amt;
+        // Bucket recurring into the ledger's cost taxonomy for a unified split.
+        const tCat = expenseCategoryToTxCategory(r.category);
+        expBy[tCat] = (expBy[tCat] ?? 0) + amt;
       }
     }
 
-    const profit = moneyIn - moneyOut;
+    const moneyOut = ledgerOut + recSum;
+    const profit   = moneyIn - moneyOut;
 
-    // Payment count this month (used on the Revenue KPI in the financials page,
-    // but we surface it here too for symmetry).
-    const payCount = income.filter(t => !t.is_test && new Date(t.date + "T00:00:00") >= monthStart).length;
+    // Payment count this month — count of ledger revenue rows dated this month.
+    const payCount = ledgerTxs.filter(t => t.type === "revenue" && new Date(t.date + "T00:00:00") >= monthStart).length;
 
-    // Runway: if burning cash, months of cash left at this rate.
+    // Runway: if burning cash, months of cash left at this rate. Uses reserves
+    // as the cushion; Bank Accounts total is shown separately as a hero card.
     const runwayMonths = profit >= 0 ? null : Math.floor(settings.reserves_ngn / (-profit / months));
 
-    return { months, moneyIn, moneyOut, profit, testSum, testCount, incomeBy, expBy, recMonthly, oneoffSum, monthlyIn, payCount, runwayMonths };
-  }, [income, recurring, oneoff, range, settings.reserves_ngn]);
+    return { months, moneyIn, moneyOut, profit, testSum, testCount, incomeBy, expBy, recMonthly, oneoffSum: 0, monthlyIn, payCount, runwayMonths };
+  }, [ledgerTxs, income, recurring, range, settings.reserves_ngn]);
 
   const hasAnyData = totals.moneyIn > 0 || totals.moneyOut > 0;
 
@@ -292,25 +335,29 @@ export default function FinanceManagerClient() {
     const now = new Date();
     const points: { m: string; in: number; out: number }[] = [];
 
-    // For each of the last 12 months, sum recurring by effective-dated history
-    // + one-off actually dated in that month + the SAME monthly income baseline
-    // (we don't have historical income, so it's a straight line at monthlyIn).
+    // Real per-month sums from the ledger (which already includes mirrored
+    // one-off + manual income + auto Paystack + refund inverses) plus the
+    // recurring baseline layered on top per month.
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       const key = d.toLocaleDateString("en-NG", { month: "short" });
-      let out = 0;
+
+      let inSum = 0, outSum = 0;
+      for (const tx of ledger12mo) {
+        const td = new Date(tx.date + "T00:00:00");
+        if (td < d || td >= nextMonth) continue;
+        if (tx.type === "revenue") inSum += tx.amount_ngn;
+        else if (tx.type === "cogs" || tx.type === "opex" || tx.type === "tax") outSum += tx.amount_ngn;
+      }
       for (const r of recurring) {
         if (r.status !== "active") continue;
-        out += recAmountAtMonthsAgo(r, i);
+        outSum += recAmountAtMonthsAgo(r, i);
       }
-      for (const o of oneoff) {
-        const od = new Date(o.since + "T00:00:00");
-        if (od.getFullYear() === d.getFullYear() && od.getMonth() === d.getMonth()) out += o.amount_ngn;
-      }
-      points.push({ m: key, in: totals.monthlyIn, out });
+      points.push({ m: key, in: inSum, out: outSum });
     }
     return points;
-  }, [recurring, oneoff, totals.monthlyIn, hasAnyData]);
+  }, [ledger12mo, recurring, hasAnyData]);
 
   // ── Looking-ahead projection ────────────────────────────────────────────
 
@@ -451,7 +498,13 @@ export default function FinanceManagerClient() {
 
   async function deleteEditing() {
     if (!editingId) return;
-    if (!confirm(modalMode === "income" ? "Delete this income row?" : "Delete this expense?")) return;
+    const ok = await confirm({
+      title: modalMode === "income" ? "Delete this income row?" : "Delete this expense?",
+      body: "This can't be undone.",
+      destructive: true,
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     try {
       if (modalMode === "income") {
         const res = await fetch(`/api/admin/finance/income?id=${editingId}`, { method: "DELETE" }).then(r => r.json());
@@ -721,6 +774,8 @@ export default function FinanceManagerClient() {
           {toast.msg}
         </div>
       )}
+
+      {confirmDialog}
     </div>
   );
 }
@@ -901,8 +956,8 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
             <SplitCard
               title="Where money comes from"
               rows={Object.entries(totals.incomeBy).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({
-                label: INCOME_TYPES[k as IncomeType]?.label ?? k,
-                color: INCOME_TYPES[k as IncomeType]?.fg ?? "var(--app-info)",
+                label: LEDGER_CATEGORIES.revenue[k] ?? k,
+                color: "var(--app-info)",
                 value: v,
                 total: Object.values(totals.incomeBy).reduce((s, x) => s + x, 0) || 1,
               }))}
@@ -910,8 +965,8 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
             <SplitCard
               title="Where money goes"
               rows={Object.entries(totals.expBy).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({
-                label: CATS[k as Category]?.label ?? k,
-                color: CATS[k as Category]?.color ?? "#94A3B8",
+                label: LEDGER_CATEGORIES.cogs[k] ?? LEDGER_CATEGORIES.opex[k] ?? LEDGER_CATEGORIES.tax[k] ?? k,
+                color: k.startsWith("cogs.") ? "var(--app-warning)" : k.startsWith("tax.") ? "var(--app-violet)" : "var(--app-accent)",
                 value: v,
                 total: Object.values(totals.expBy).reduce((s, x) => s + x, 0) || 1,
               }))}

@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { TYPES, CATEGORIES, type TxType, type FinanceTransaction } from "@/lib/finance/tax";
 import { FIN_PRIMARY_BTN, FIN_GHOST_BTN, FIN_TH, FIN_TD, FIN_CARD, FIN_LABEL, ngnFull, monthBounds } from "./finStyles";
+import { useConfirmDialog } from "./ConfirmDialog";
 
 interface Projection {
   id: string; type: TxType; category: string; amount_ngn: number; label: string | null;
@@ -52,6 +53,7 @@ export default function ProjectionsTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState(blankDraft());
   const [saving, setSaving] = useState(false);
+  const { confirm, dialog } = useConfirmDialog();
 
   const loadProjections = useCallback(async () => {
     const r = await fetch("/api/admin/finance/projections");
@@ -163,7 +165,8 @@ export default function ProjectionsTab() {
   }
 
   async function deleteProjection(id: string) {
-    if (!window.confirm("Delete this projection?")) return;
+    const ok = await confirm({ title: "Delete this projection?", body: "This can't be undone.", destructive: true, confirmLabel: "Delete" });
+    if (!ok) return;
     await fetch(`/api/admin/finance/projections/${id}`, { method: "DELETE" });
     await loadProjections();
     if (view === "budget") await loadBudget(); else await loadLongRange();
@@ -357,6 +360,7 @@ export default function ProjectionsTab() {
           </div>
         </div>
       )}
+      {dialog}
     </div>
   );
 }

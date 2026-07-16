@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CATEGORIES, type FinanceTransaction, type TxType } from "@/lib/finance/tax";
 import { FIN_PRIMARY_BTN, FIN_GHOST_BTN, FIN_TH, FIN_TD, FIN_CHIP, FIN_CARD, FIN_LABEL, ngnFull, fmtDate } from "./finStyles";
+import { useConfirmDialog } from "./ConfirmDialog";
 
 interface PeriodRow {
   period_month: string;
@@ -41,6 +42,7 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [backfill, setBackfill] = useState<{ running: boolean; processed: number; remaining: number | null }>({ running: false, processed: 0, remaining: null });
+  const { confirm, prompt, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +63,7 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
   async function review(tx: FinanceTransaction, status: "reviewed" | "flagged") {
     let note: string | null = null;
     if (status === "flagged") {
-      note = window.prompt("Flag note — what needs attention?");
+      note = await prompt({ title: "Flag note", body: "What needs the accountant's attention?", placeholder: "e.g. Duplicate of INV-2934", confirmLabel: "Flag" });
       if (note === null) return;
     }
     setActing(tx.id);
@@ -77,14 +79,25 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
   async function periodAction(month: string, action: "close" | "reopen" | "retry_sync", override = false) {
     let note: string | undefined;
     if (action === "close") {
-      const n = window.prompt(override
-        ? "Override note (required) — why close with unreviewed/flagged items?"
-        : "Sign-off note (optional):");
+      const n = await prompt({
+        title: override ? "Override note" : "Sign-off note",
+        body: override ? "Why close with unreviewed/flagged items?" : "Optional note recorded in the audit log.",
+        placeholder: override ? "e.g. Accepted risk — quarter-end deadline" : "",
+        required: override,
+        confirmLabel: "Close month",
+      });
       if (n === null) return;
-      if (override && !n.trim()) { alert("An override note is required."); return; }
       note = n || undefined;
     }
-    if (action === "reopen" && !window.confirm(`Reopen ${month.slice(0, 7)}? Its figures become editable again and the investor sync is marked stale.`)) return;
+    if (action === "reopen") {
+      const ok = await confirm({
+        title: `Reopen ${month.slice(0, 7)}?`,
+        body: "Its figures become editable again and the investor sync is marked stale.",
+        confirmLabel: "Reopen",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
 
     setActing(month);
     setError("");
@@ -95,9 +108,13 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
     const d = await r.json().catch(() => ({}));
     if (r.status === 409 && d.requires_override) {
       setActing(null);
-      if (window.confirm(`${d.error}\n\nClose anyway with an override note?`)) {
-        await periodAction(month, "close", true);
-      }
+      const ok = await confirm({
+        title: "Cannot close cleanly",
+        body: `${d.error}\n\nClose anyway with an override note?`,
+        confirmLabel: "Continue with override",
+        destructive: true,
+      });
+      if (ok) await periodAction(month, "close", true);
       return;
     }
     if (!r.ok) setError(d.error ?? "Action failed");
@@ -271,6 +288,7 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }

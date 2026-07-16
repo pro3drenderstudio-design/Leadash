@@ -7,6 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json() as {
     name?: string; bank_name?: string; account_number_masked?: string; is_active?: boolean; is_default?: boolean;
+    opening_balance_ngn?: number; opening_balance_date?: string;
   };
 
   const patch: Record<string, unknown> = {};
@@ -15,6 +16,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.account_number_masked !== undefined) patch.account_number_masked = body.account_number_masked ? String(body.account_number_masked).trim() : null;
   if (body.is_active !== undefined) patch.is_active = Boolean(body.is_active);
   if (body.is_default !== undefined) patch.is_default = Boolean(body.is_default);
+  if (body.opening_balance_ngn !== undefined) {
+    const n = Number(body.opening_balance_ngn);
+    if (!Number.isFinite(n)) return NextResponse.json({ error: "opening_balance_ngn must be a number" }, { status: 400 });
+    patch.opening_balance_ngn = n;
+  }
+  if (body.opening_balance_date !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.opening_balance_date)) {
+      return NextResponse.json({ error: "opening_balance_date must be YYYY-MM-DD" }, { status: 400 });
+    }
+    patch.opening_balance_date = body.opening_balance_date;
+  }
 
   if (!Object.keys(patch).length) return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
 

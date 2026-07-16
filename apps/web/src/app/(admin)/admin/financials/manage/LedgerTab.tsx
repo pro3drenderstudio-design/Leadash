@@ -11,6 +11,7 @@ import {
   FIN_PRIMARY_BTN, FIN_GHOST_BTN, FIN_TH, FIN_TD, FIN_CHIP, FIN_CARD, FIN_LABEL,
   ngnFull, fmtDate, monthBounds, currentMonth,
 } from "./finStyles";
+import { useConfirmDialog } from "./ConfirmDialog";
 
 const TYPE_COLORS: Record<TxType, { fg: string; bg: string }> = {
   revenue: { fg: "#6EE7B7", bg: "rgba(52,211,153,0.14)" },
@@ -58,6 +59,7 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
   const [principals, setPrincipals] = useState<Principal[]>([]);
   const [newPrincipalName, setNewPrincipalName] = useState("");
   const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
+  const { confirm, prompt, dialog } = useConfirmDialog();
 
   const loadPrincipals = useCallback(async () => {
     const r = await fetch("/api/admin/finance/principals");
@@ -120,7 +122,7 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
   async function review(tx: FinanceTransaction, status: "reviewed" | "flagged") {
     let note: string | null = null;
     if (status === "flagged") {
-      note = window.prompt("Flag note — what needs the accountant's attention?");
+      note = await prompt({ title: "Flag note", body: "What needs the accountant's attention?", placeholder: "e.g. Duplicate of INV-2934", confirmLabel: "Flag" });
       if (note === null) return;
     }
     setActing(tx.id);
@@ -184,7 +186,9 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
   }
 
   async function remove() {
-    if (!editing || !window.confirm("Delete this manual entry?")) return;
+    if (!editing) return;
+    const ok = await confirm({ title: "Delete this manual entry?", body: "This can't be undone.", destructive: true, confirmLabel: "Delete" });
+    if (!ok) return;
     setSaving(true);
     const r = await fetch(`/api/admin/finance/transactions/${editing.id}`, { method: "DELETE" });
     if (!r.ok) setError((await r.json().catch(() => ({}))).error ?? "Delete failed");
@@ -383,6 +387,7 @@ export default function LedgerTab({ onChanged }: { onChanged?: () => void }) {
           </div>
         </div>
       )}
+      {dialog}
     </div>
   );
 }

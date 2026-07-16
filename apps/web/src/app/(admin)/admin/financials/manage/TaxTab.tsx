@@ -12,6 +12,7 @@ import {
   VAT_REGISTRATION_THRESHOLD_NGN, TAX_DISCLAIMER,
 } from "@/lib/finance/tax";
 import { FIN_TH, FIN_TD, FIN_CARD, FIN_LABEL, FIN_GHOST_BTN, ngnFull, monthBounds, currentMonth } from "./finStyles";
+import { useConfirmDialog } from "./ConfirmDialog";
 
 interface TaxSettings {
   vat_registered: boolean;
@@ -26,6 +27,7 @@ export default function TaxTab() {
   const [settings, setSettings] = useState<TaxSettings>({ vat_registered: false, vat_pricing_mode: "inclusive", firs_tin: null });
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
+  const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,9 +119,17 @@ export default function TaxTab() {
             type="checkbox"
             checked={settings.vat_registered}
             disabled={savingSettings}
-            onChange={e => {
-              if (e.target.checked && !window.confirm("Confirm: the company is now FIRS/VAT registered? Tax panels switch from estimates to liability tracking.")) return;
-              saveSettings({ vat_registered: e.target.checked });
+            onChange={async e => {
+              const checked = e.target.checked;
+              if (checked) {
+                const ok = await confirm({
+                  title: "Mark FIRS/VAT registered?",
+                  body: "Tax panels switch from estimates to liability tracking.",
+                  confirmLabel: "Confirm registration",
+                });
+                if (!ok) return;
+              }
+              saveSettings({ vat_registered: checked });
             }}
           />
           FIRS/VAT registered
@@ -272,6 +282,7 @@ export default function TaxTab() {
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }
