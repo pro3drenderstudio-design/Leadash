@@ -707,14 +707,7 @@ export default function FinanceManagerClient() {
 
         {/* Tab: INCOME */}
         {!loading && !error && tab === "income" && (
-          <IncomeTab
-            income={visibleIncome}
-            showTest={showTest}
-            onToggleShowTest={() => setShowTest(v => !v)}
-            onToggleTest={toggleTest}
-            onEdit={openEditIncome}
-            onAdd={openAddIncome}
-          />
+          <IncomeTab onAdd={openAddIncome} />
         )}
 
         {/* Tab: LEDGER */}
@@ -1174,101 +1167,166 @@ function ExpensesTab({ recurring, oneoff, onEdit, onTogglePause, onAdd }: {
 
 // ─── Income tab ─────────────────────────────────────────────────────────────
 
-function IncomeTab({ income, showTest, onToggleShowTest, onToggleTest, onEdit, onAdd }: {
-  income: Income[]; showTest: boolean;
-  onToggleShowTest: () => void;
-  onToggleTest: (i: Income) => void;
-  onEdit: (i: Income) => void;
-  onAdd: () => void;
-}) {
-  if (income.length === 0) {
+interface LedgerIncomeRow {
+  id: string; date: string; category: string; amount_ngn: number;
+  description: string | null; source_type: string | null; kind: string | null;
+  is_auto: boolean; is_test: boolean; review_status: string;
+}
+
+/**
+ * IncomeTab — every row here is a revenue entry in the ledger. Paystack /
+ * challenge auto-syncs land as `unreviewed` and only appear once an admin
+ * marks them reviewed on the Ledger tab. Manual rows land already reviewed.
+ * Grouped by day with a daily total header so it lines up with the accountant's
+ * bank-statement reconciliation.
+ */
+function IncomeTab({ onAdd }: { onAdd: () => void }) {
+  const [rows, setRows] = useState<LedgerIncomeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showTest, setShowTest] = useState(false);
+  const [showUnreviewed, setShowUnreviewed] = useState(false);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    // Last 12 months of revenue rows; enough for the tab, more than enough for
+    // the daily-grouped view. Bumped from the 500 default cap.
+    const start = new Date(); start.setMonth(start.getMonth() - 11); start.setDate(1);
+    const r = await fetch(`/api/admin/finance/transactions?type=revenue&start=${start.toISOString().slice(0, 10)}&limit=5000`);
+    const d = await r.json();
+    setRows((d.transactions ?? []) as LedgerIncomeRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function toggleTest(row: LedgerIncomeRow) {
+    setActing(row.id);
+    const r = await fetch(`/api/admin/finance/transactions/${row.id}/test`, { method: "POST" });
+    if (r.ok) {
+      const d = await r.json();
+      setRows(prev => prev.map(x => x.id === row.id ? { ...x, is_test: d.transaction.is_test } : x));
+    }
+    setActing(null);
+  }
+
+  const filtered = useMemo(() =>
+    rows.filter(r => (showTest || !r.is_test) && (showUnreviewed || r.review_status === "reviewed")),
+    [rows, showTest, showUnreviewed],
+  );
+
+  // Group by day (newest first). Each bucket carries a total that excludes
+  // is_test rows regardless of the show-test toggle above.
+  const grouped = useMemo(() => {
+    const buckets = new Map<string, { total: number; items: LedgerIncomeRow[] }>();
+    for (const r of filtered) {
+      const b = buckets.get(r.date) ?? { total: 0, items: [] };
+      b.items.push(r);
+      if (!r.is_test) b.total += r.amount_ngn;
+      buckets.set(r.date, b);
+    }
+    return [...buckets.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1);
+  }, [filtered]);
+
+  const testCount = rows.filter(r => r.is_test).length;
+  const unreviewedCount = rows.filter(r => r.review_status !== "reviewed" && !r.is_test).length;
+
+  if (!loading && rows.length === 0) {
     return (
       <EmptyState
         title="No income yet"
-        body="Add plan sales, academy purchases, offers, credits, or external payments. Flag setup / test payments so they stay out of your totals."
+        body="Auto-synced from Paystack (plans, credits, academy, offers, 7-Day Challenge) plus manual rows. New auto rows appear here once you review them on the Ledger tab."
         cta="Add income" onCta={onAdd}
       />
     );
   }
+
   return (
     <div style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border)", borderRadius: 14 }}>
       <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>Payments &amp; income</h2>
-          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", margin: "3px 0 0" }}>Auto-synced from Paystack (plans, credits, academy, offers) plus manual rows for anything outside the platform.</p>
+          <p style={{ fontSize: 12, color: "var(--app-text-quiet)", margin: "3px 0 0" }}>
+            Every reviewed revenue entry, grouped by day. Auto-synced rows show up once you review them on the Ledger tab.
+            {unreviewedCount > 0 && !showUnreviewed && <> · <span style={{ color: "var(--app-warning)" }}>{unreviewedCount} unreviewed hidden</span></>}
+          </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--app-text-muted)" }}>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <span>Show test</span>
-            <button onClick={onToggleShowTest} style={{
-              width: 38, height: 22, borderRadius: 999, border: "none", cursor: "pointer",
-              background: showTest ? "var(--app-accent)" : "var(--app-surface-strong)",
-              position: "relative", transition: "background 160ms",
-            }}>
-              <span style={{
-                position: "absolute", top: 2, left: showTest ? 18 : 2, width: 18, height: 18,
-                borderRadius: "50%", background: "#fff", transition: "left 160ms",
-              }} />
-            </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--app-text-muted)", flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={showUnreviewed} onChange={e => setShowUnreviewed(e.target.checked)} />
+            Show unreviewed
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={showTest} onChange={e => setShowTest(e.target.checked)} />
+            Show test {testCount > 0 && <span style={{ color: "var(--app-text-quiet)" }}>({testCount})</span>}
           </label>
         </div>
       </div>
-      <table className="fin-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr>
-            <th style={FIN_TH}>Source</th>
-            <th style={FIN_TH}>Type</th>
-            <th style={{ ...FIN_TH, textAlign: "right" }}>Amount</th>
-            <th style={FIN_TH}>Date</th>
-            <th style={{ ...FIN_TH, width: 200 }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {income.map(i => (
-            <tr key={i.id} style={{ borderTop: "1px solid var(--app-border)", opacity: i.is_test ? 0.55 : 1 }}>
-              <td style={FIN_TD}>
-                {i.is_manual ? (
-                  <button onClick={() => onEdit(i)} style={{ background: "transparent", border: "none", color: "var(--app-text)", cursor: "pointer", padding: 0, fontSize: 13 }}>
-                    {i.source_label}
-                  </button>
-                ) : (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--app-text)", fontSize: 13 }}>{i.source_label}</span>
-                    <span title="Synced from Paystack — editable via the source, not here" style={{
-                      ...FIN_CHIP,
-                      background: "var(--app-info-soft)", color: "var(--app-info)",
-                      padding: "1px 6px", fontSize: 9,
-                    }}>
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 3 }}>
-                        <path d="M23 4v6h-6" /><path d="M20.49 15A9 9 0 1 1 5.64 5.64L23 10" />
-                      </svg>
-                      Synced
-                    </span>
-                  </span>
-                )}
-              </td>
-              <td style={FIN_TD}>
-                <span style={{ ...FIN_CHIP, background: INCOME_TYPES[i.type].bg, color: INCOME_TYPES[i.type].fg }}>
-                  {INCOME_TYPES[i.type].label}
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--app-text-quiet)", fontSize: 13 }}>Loading…</div>
+      ) : grouped.length === 0 ? (
+        <p style={{ padding: 24, textAlign: "center", color: "var(--app-text-quiet)", fontSize: 13, margin: 0 }}>
+          No rows match the current filters.
+        </p>
+      ) : (
+        <div>
+          {grouped.map(([day, bucket]) => (
+            <div key={day}>
+              <div style={{
+                padding: "10px 20px", background: "var(--app-surface)",
+                borderTop: "1px solid var(--app-border)", borderBottom: "1px solid var(--app-border)",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--app-text)" }}>{fmtDate(day)}</span>
+                <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>
+                  {bucket.items.length} {bucket.items.length === 1 ? "row" : "rows"} · daily total{" "}
+                  <span style={{ color: "var(--app-in, #6EE7B7)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{ngnFull(bucket.total)}</span>
                 </span>
-              </td>
-              <td style={{ ...FIN_TD, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{ngnFull(i.amount_ngn)}</td>
-              <td style={{ ...FIN_TD, color: "var(--app-text-muted)" }}>{fmtDate(i.date)}</td>
-              <td style={{ ...FIN_TD, textAlign: "right", whiteSpace: "nowrap" }}>
-                <button onClick={() => onToggleTest(i)} style={{
-                  height: 26, padding: "0 10px", borderRadius: 6, cursor: "pointer",
-                  fontSize: 11, fontWeight: 500, fontFamily: "inherit", whiteSpace: "nowrap",
-                  background: "transparent",
-                  border: `1px solid ${i.is_test ? "var(--app-in-soft)" : "var(--app-border-strong)"}`,
-                  color: i.is_test ? "var(--app-in)" : "var(--app-text-muted)",
-                }}>
-                  {i.is_test ? "Restore to totals" : "Mark as test"}
-                </button>
-              </td>
-            </tr>
+              </div>
+              <table className="fin-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <tbody>
+                  {bucket.items.map(r => {
+                    const catLabel = LEDGER_CATEGORIES.revenue[r.category] ?? r.category;
+                    const sourceLabel = r.source_type === "billing_invoices" ? "Paystack"
+                      : r.source_type === "offer_purchases" ? "Offer"
+                      : r.source_type === "challenge_signups" ? "Challenge"
+                      : r.source_type === "finance_income" ? "Manual"
+                      : r.source_type === "bank_transfer" ? "Transfer in"
+                      : r.is_auto ? "Auto" : "Manual";
+                    return (
+                      <tr key={r.id} style={{ borderTop: "1px solid var(--app-border)", opacity: r.is_test ? 0.5 : 1 }}>
+                        <td style={{ ...FIN_TD, maxWidth: 340 }}>
+                          <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.description ?? ""}>
+                            {r.description ?? "—"}
+                          </span>
+                          <span style={{ display: "inline-flex", gap: 6, marginTop: 3, fontSize: 10.5, color: "var(--app-text-quiet)" }}>
+                            <span style={{ ...FIN_CHIP, background: "var(--app-info-soft)", color: "var(--app-info)", padding: "1px 6px", fontSize: 9 }}>{sourceLabel}</span>
+                            {r.review_status !== "reviewed" && <span style={{ ...FIN_CHIP, background: "rgba(251,113,133,0.14)", color: "#FDA4AF", padding: "1px 6px", fontSize: 9 }}>{r.review_status}</span>}
+                          </span>
+                        </td>
+                        <td style={{ ...FIN_TD, whiteSpace: "nowrap", color: "var(--app-text-muted)" }}>{catLabel}</td>
+                        <td style={{ ...FIN_TD, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{ngnFull(r.amount_ngn)}</td>
+                        <td style={{ ...FIN_TD, textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button onClick={() => toggleTest(r)} disabled={acting === r.id} style={{
+                            height: 26, padding: "0 10px", borderRadius: 6, cursor: acting === r.id ? "not-allowed" : "pointer",
+                            fontSize: 11, fontWeight: 500, fontFamily: "inherit", whiteSpace: "nowrap",
+                            background: "transparent",
+                            border: `1px solid ${r.is_test ? "var(--app-in-soft)" : "var(--app-border-strong)"}`,
+                            color: r.is_test ? "var(--app-in)" : "var(--app-text-muted)",
+                          }}>
+                            {r.is_test ? "Restore to totals" : "Mark as test"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
     </div>
   );
 }

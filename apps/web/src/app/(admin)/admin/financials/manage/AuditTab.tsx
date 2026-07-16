@@ -34,6 +34,13 @@ interface AuditEntry {
   created_at: string;
 }
 
+interface DailyRow {
+  day: string;
+  revenue: number; cost: number; net: number;
+  count: number; unreviewed: number; flagged: number;
+  closed: boolean; closed_at?: string; close_note?: string | null;
+}
+
 export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
   const [queue, setQueue] = useState<FinanceTransaction[]>([]);
   const [periods, setPeriods] = useState<PeriodRow[]>([]);
@@ -42,21 +49,49 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [backfill, setBackfill] = useState<{ running: boolean; processed: number; remaining: number | null }>({ running: false, processed: 0, remaining: null });
+  const [dailyRows, setDailyRows] = useState<DailyRow[]>([]);
+  const [dailyActing, setDailyActing] = useState<string | null>(null);
   const { confirm, prompt, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [unrev, flagged, periodsRes, logRes] = await Promise.all([
+    const [unrev, flagged, periodsRes, logRes, dailyRes] = await Promise.all([
       fetch("/api/admin/finance/transactions?review_status=unreviewed&limit=200").then(r => r.json()),
       fetch("/api/admin/finance/transactions?review_status=flagged&limit=200").then(r => r.json()),
       fetch("/api/admin/finance/periods").then(r => r.json()),
       fetch("/api/admin/finance/audit-log?limit=60").then(r => r.json()),
+      fetch("/api/admin/finance/daily-close?days=45").then(r => r.json()),
     ]);
     setQueue([...(flagged.transactions ?? []), ...(unrev.transactions ?? [])]);
     setPeriods(periodsRes.periods ?? []);
     setLog(logRes.entries ?? []);
+    setDailyRows(dailyRes.days ?? []);
     setLoading(false);
   }, []);
+
+  async function dailyAction(day: string, action: "close" | "reopen") {
+    if (action === "close") {
+      const note = await prompt({ title: `Close ${day}?`, body: "Ticks the day as reconciled. Doesn't lock the ledger — the monthly close still does that.", placeholder: "Sign-off note (optional)", confirmLabel: "Close day" });
+      if (note === null) return;
+      setDailyActing(day);
+      const r = await fetch("/api/admin/finance/daily-close", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day, action: "close", note: note || undefined }),
+      });
+      if (!r.ok) setError((await r.json().catch(() => ({}))).error ?? "Close failed");
+    } else {
+      const ok = await confirm({ title: `Reopen ${day}?`, body: "Removes the daily sign-off. Ledger is unchanged.", confirmLabel: "Reopen", destructive: true });
+      if (!ok) return;
+      setDailyActing(day);
+      const r = await fetch("/api/admin/finance/daily-close", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day, action: "reopen" }),
+      });
+      if (!r.ok) setError((await r.json().catch(() => ({}))).error ?? "Reopen failed");
+    }
+    setDailyActing(null);
+    await load(); onChanged?.();
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -195,6 +230,52 @@ export default function AuditTab({ onChanged }: { onChanged?: () => void }) {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* Daily reviews */}
+          <div style={FIN_CARD}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <p style={{ ...FIN_LABEL, margin: 0 }}>Daily reviews</p>
+              <span style={{ ...FIN_CHIP, background: "var(--app-surface-strong)", color: "var(--app-text-quiet)" }}>
+                {dailyRows.filter(d => d.closed).length} / {dailyRows.length} days closed
+              </span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 11.5, color: "var(--app-text-quiet)" }}>Tick each day off as the books reconcile against the bank. Doesn't lock the ledger.</span>
+            </div>
+            <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
+              <table className="fin-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead style={{ position: "sticky", top: 0, background: "var(--app-bg-elevated)", zIndex: 1 }}>
+                  <tr>{["Day", "Revenue", "Cost", "Net", "Rows", "Unreviewed", "Status", ""].map(h => <th key={h} style={FIN_TH}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {dailyRows.map(d => (
+                    <tr key={d.day} style={{ borderBottom: "1px solid var(--app-border)", opacity: d.count === 0 && !d.closed ? 0.4 : 1 }}>
+                      <td style={{ ...FIN_TD, whiteSpace: "nowrap", fontWeight: 600 }}>{fmtDate(d.day)}</td>
+                      <td style={{ ...FIN_TD, whiteSpace: "nowrap", color: "var(--app-in, #6EE7B7)" }}>{ngnFull(d.revenue)}</td>
+                      <td style={{ ...FIN_TD, whiteSpace: "nowrap", color: "var(--app-out)" }}>{ngnFull(d.cost)}</td>
+                      <td style={{ ...FIN_TD, whiteSpace: "nowrap", fontWeight: 600, color: d.net >= 0 ? "var(--app-in, #6EE7B7)" : "var(--app-out)" }}>{d.net >= 0 ? "+" : ""}{ngnFull(d.net)}</td>
+                      <td style={{ ...FIN_TD, color: "var(--app-text-muted)" }}>{d.count}</td>
+                      <td style={FIN_TD}>
+                        {d.unreviewed > 0 || d.flagged > 0
+                          ? <span style={{ ...FIN_CHIP, background: "var(--app-warning-soft)", color: "var(--app-warning)" }}>{d.unreviewed + d.flagged} pending</span>
+                          : <span style={{ fontSize: 11.5, color: "var(--app-text-quiet)" }}>—</span>}
+                      </td>
+                      <td style={FIN_TD}>
+                        {d.closed
+                          ? <span style={{ ...FIN_CHIP, background: "rgba(52,211,153,0.14)", color: "#6EE7B7" }}>closed</span>
+                          : <span style={{ ...FIN_CHIP, background: "var(--app-surface-strong)", color: "var(--app-text-quiet)" }}>open</span>}
+                        {d.close_note && <span style={{ display: "block", fontSize: 10.5, color: "var(--app-text-quiet)", marginTop: 3, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.close_note}>“{d.close_note}”</span>}
+                      </td>
+                      <td style={{ ...FIN_TD, textAlign: "right", whiteSpace: "nowrap" }}>
+                        {d.closed
+                          ? <button onClick={() => dailyAction(d.day, "reopen")} disabled={dailyActing === d.day} style={FIN_GHOST_BTN}>Reopen</button>
+                          : <button onClick={() => dailyAction(d.day, "close")} disabled={dailyActing === d.day || d.count === 0} style={FIN_GHOST_BTN}>Close day</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Month close grid */}

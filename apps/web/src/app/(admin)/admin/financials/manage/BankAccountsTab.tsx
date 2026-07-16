@@ -70,6 +70,14 @@ type TransferDraft = {
   note: string;
 };
 
+const ROUTING_SOURCES: { key: string; label: string; hint: string }[] = [
+  { key: "paystack",          label: "Paystack (subscriptions + offers)", hint: "Where Paystack settles payouts" },
+  { key: "challenge_signups", label: "7-Day Challenge signups",           hint: "Where challenge revenue lands" },
+  { key: "manual",            label: "Manual ledger entries",              hint: "Default account for hand-entered rows" },
+];
+
+interface RoutingRow { source_type: string; bank_account_id: string | null }
+
 export default function BankAccountsTab() {
   const [period, setPeriod] = useState<Period>("month");
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -81,18 +89,37 @@ export default function BankAccountsTab() {
   const [movementModal, setMovementModal] = useState<MovementDraft | null>(null);
   const [transferModal, setTransferModal] = useState<TransferDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [routing, setRouting] = useState<Record<string, string | null>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await fetch(`/api/admin/finance/bank-accounts?period=${period}`);
-    const d = await r.json();
-    if (!r.ok) { setError(d.error ?? "Failed to load"); setLoading(false); return; }
-    setAccounts(d.accounts ?? []);
-    setTotalCash(d.total_current_balance ?? 0);
+    const [balRes, routeRes] = await Promise.all([
+      fetch(`/api/admin/finance/bank-accounts?period=${period}`).then(r => r.json()),
+      fetch("/api/admin/finance/source-routing").then(r => r.json()),
+    ]);
+    if (balRes.error) { setError(balRes.error); setLoading(false); return; }
+    setAccounts(balRes.accounts ?? []);
+    setTotalCash(balRes.total_current_balance ?? 0);
+    const map: Record<string, string | null> = {};
+    for (const r of (routeRes.routing ?? []) as RoutingRow[]) map[r.source_type] = r.bank_account_id;
+    setRouting(map);
     setLoading(false);
   }, [period]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function updateRouting(source_type: string, bank_account_id: string | null) {
+    setRouting(r => ({ ...r, [source_type]: bank_account_id }));
+    const res = await fetch("/api/admin/finance/source-routing", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_type, bank_account_id }),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error ?? "Failed to update routing");
+      // roll back optimistic update on error
+      await load();
+    }
+  }
 
   function openAdd() {
     setAccountDraft(blankAccountDraft());
@@ -234,6 +261,34 @@ export default function BankAccountsTab() {
       </div>
 
       {error && <div style={{ padding: 12, borderRadius: 10, background: "var(--app-out-soft)", border: "1px solid var(--app-out)", color: "var(--app-out)", fontSize: 13 }}>{error}</div>}
+
+      {/* Routing: which bank account each auto source lands in */}
+      {!loading && accounts.length > 0 && (
+        <div style={{ ...FIN_CARD, padding: 18 }}>
+          <p style={{ ...FIN_LABEL, marginBottom: 4 }}>Where auto-recorded revenue lands</p>
+          <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)", margin: "0 0 14px" }}>
+            When a Paystack payment or challenge signup lands in the ledger, we tag it to the account you pick here. Existing rows aren't retagged automatically — use the Ledger tab to move an individual row.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+            {ROUTING_SOURCES.map(s => (
+              <div key={s.key} style={{ background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px" }}>
+                <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{s.label}</p>
+                <p style={{ fontSize: 11, color: "var(--app-text-quiet)", margin: "2px 0 8px" }}>{s.hint}</p>
+                <select
+                  className="fin-input"
+                  value={routing[s.key] ?? ""}
+                  onChange={e => updateRouting(s.key, e.target.value || null)}
+                >
+                  <option value="">— Use default account —</option>
+                  {accounts.filter(a => a.is_active).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}{a.is_default ? " (default)" : ""}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--app-text-quiet)", fontSize: 13 }}>Loading…</div>
