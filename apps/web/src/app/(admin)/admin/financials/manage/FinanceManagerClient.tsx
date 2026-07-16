@@ -188,8 +188,6 @@ export default function FinanceManagerClient() {
   const [draftError, setDraftError] = useState<string>("");
   const [saving,     setSaving]     = useState(false);
 
-  const [reservesOpen, setReservesOpen] = useState(false);
-  const [reservesDraft, setReservesDraft] = useState<string>("");
 
   // Ledger transactions for the selected range window — the single source of
   // truth for Overview totals + chart. finance_income and one-off finance_expenses
@@ -319,12 +317,17 @@ export default function FinanceManagerClient() {
     // Payment count this month — count of ledger revenue rows dated this month.
     const payCount = ledgerTxs.filter(t => t.type === "revenue" && new Date(t.date + "T00:00:00") >= monthStart).length;
 
-    // Runway: if burning cash, months of cash left at this rate. Uses reserves
-    // as the cushion; Bank Accounts total is shown separately as a hero card.
-    const runwayMonths = profit >= 0 ? null : Math.floor(settings.reserves_ngn / (-profit / months));
+    // Runway: months of cash left at the current burn rate. The cushion is
+    // the live total across active bank accounts (fetched separately) — not
+    // a manually-maintained reserves figure. Withdrawals shrink cash, which
+    // shrinks runway automatically.
+    const cushion = totalCashNgn ?? 0;
+    const runwayMonths = profit >= 0
+      ? null
+      : (cushion > 0 ? Math.floor(cushion / (-profit / months)) : 0);
 
     return { months, moneyIn, moneyOut, profit, testSum, testCount, incomeBy, expBy, recMonthly, oneoffSum: 0, monthlyIn, payCount, runwayMonths };
-  }, [ledgerTxs, income, recurring, range, settings.reserves_ngn]);
+  }, [ledgerTxs, income, recurring, range, totalCashNgn]);
 
   const hasAnyData = totals.moneyIn > 0 || totals.moneyOut > 0;
 
@@ -546,24 +549,6 @@ export default function FinanceManagerClient() {
     }
   }
 
-  async function saveReserves() {
-    const amt = parseInt(String(reservesDraft).replace(/[^0-9]/g, ""), 10);
-    if (!Number.isFinite(amt) || amt < 0) { toast.show("Enter a non-negative amount"); return; }
-    try {
-      const res = await fetch("/api/admin/finance/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reserves_ngn: amt }),
-      }).then(r => r.json());
-      if (res.error) throw new Error(res.error);
-      setSettings(res.settings);
-      setReservesOpen(false);
-      toast.show("Reserves updated");
-    } catch (e: unknown) {
-      toast.show(e instanceof Error ? e.message : "Failed");
-    }
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   const nonTestIncome = income.filter(i => !i.is_test);
@@ -681,14 +666,12 @@ export default function FinanceManagerClient() {
         {!loading && !error && tab === "overview" && (
           <OverviewTab
             totals={totals}
-            reserves={settings.reserves_ngn}
             range={range}
             hasAnyData={hasAnyData}
             chartData={chartData}
             projection={projection}
             growth={growth}
             onGrowth={setGrowth}
-            onEditReserves={() => { setReservesDraft(String(settings.reserves_ngn)); setReservesOpen(true); }}
             feesNgn={feesNgn}
             totalCashNgn={totalCashNgn}
           />
@@ -746,16 +729,6 @@ export default function FinanceManagerClient() {
         />
       )}
 
-      {/* Reserves modal */}
-      {reservesOpen && (
-        <ReservesModal
-          value={reservesDraft}
-          setValue={setReservesDraft}
-          onCancel={() => setReservesOpen(false)}
-          onSave={saveReserves}
-        />
-      )}
-
       {/* Toast */}
       {toast.msg && (
         <div style={{
@@ -781,19 +754,17 @@ interface OverviewProps {
     monthlyIn: number; recMonthly: number; oneoffSum: number;
     incomeBy: Record<string, number>; expBy: Record<string, number>;
   };
-  reserves: number;
   range: Range;
   hasAnyData: boolean;
   chartData: { m: string; in: number; out: number }[];
   projection: { nextIn: number; nextOut: number; nextProfit: number };
   growth: number;
   onGrowth: (g: number) => void;
-  onEditReserves: () => void;
   feesNgn: number;
   totalCashNgn: number | null;
 }
 
-function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projection, growth, onGrowth, onEditReserves, feesNgn, totalCashNgn }: OverviewProps) {
+function OverviewTab({ totals, range, hasAnyData, chartData, projection, growth, onGrowth, feesNgn, totalCashNgn }: OverviewProps) {
   const marginPct = totals.moneyIn > 0 ? Math.round((totals.profit / totals.moneyIn) * 100) : 0;
   const rLabel = rangeLabel(range);
 
@@ -822,11 +793,12 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
     {
       label: "Runway",
       value: totals.runwayMonths === null ? "Healthy" : `${totals.runwayMonths} mo`,
-      sub: totals.runwayMonths === null ? "Making money — reserves growing" : `Months of cash left at this burn`,
+      sub: totals.runwayMonths === null
+        ? "Making money — cash growing"
+        : `Months of cash left at this burn · uses total bank cash`,
       valColor: totals.runwayMonths === null ? "var(--app-text)" : "var(--app-warning)",
       iconBg: "var(--app-info-soft)", iconFg: "var(--app-info)",
       icon: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
-      hasEdit: true,
     },
     ...(totalCashNgn !== null ? [{
       label: "Total cash on hand",
@@ -851,17 +823,6 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
                 {h.label}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {h.hasEdit && (
-                  <button onClick={onEditReserves} title="Edit reserves" style={{
-                    width: 22, height: 22, borderRadius: 5, border: "1px solid var(--app-border)",
-                    background: "transparent", color: "var(--app-text-muted)", cursor: "pointer",
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-                    </svg>
-                  </button>
-                )}
                 <span style={{
                   width: 26, height: 26, borderRadius: 7, background: h.iconBg,
                   display: "inline-flex", alignItems: "center", justifyContent: "center", color: h.iconFg, flexShrink: 0,
@@ -879,11 +840,6 @@ function OverviewTab({ totals, reserves, range, hasAnyData, chartData, projectio
               {h.value}
             </p>
             <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)", margin: 0 }}>{h.sub}</p>
-            {h.hasEdit && (
-              <p style={{ fontSize: 10.5, color: "var(--app-text-quiet)", margin: 0 }}>
-                Reserves: {ngn(reserves)}
-              </p>
-            )}
           </div>
         ))}
       </div>
