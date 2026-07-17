@@ -14,7 +14,15 @@ interface RegistrantStatus {
 interface DomainResult {
   domain: string;
   available: boolean;
-  price: number;
+  price: number;          // raw Namecheap registration price (USD) — passed to checkout
+  price_display?: number; // raw + admin markup (USD) — what the user is charged/shown
+}
+
+// The price shown to the user = the marked-up price the check API returns; falls
+// back to raw + the default flat service fee if the API didn't include it.
+function displayPrice(d: { price: number; price_display?: number }): number {
+  if (d.price <= 0) return 0;
+  return d.price_display ?? d.price + DOMAIN_SERVICE_FEE_USD;
 }
 
 type Step = "search" | "configure" | "review" | "provisioning";
@@ -86,6 +94,8 @@ export default function BuyDomainPage() {
 
   // ── Registrant check ────────────────────────────────────────────────────────
   const [registrantComplete, setRegistrantComplete] = useState<boolean | null>(null);
+  const [showRegistrantModal, setShowRegistrantModal] = useState(false);
+  const [registrant, setRegistrant] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (step === "provisioning") return; // don't block post-payment
@@ -95,9 +105,47 @@ export default function BuyDomainPage() {
       .then((data: Record<string, string>) => {
         const complete = !!(data.registrant_first_name && data.registrant_email && data.registrant_address);
         setRegistrantComplete(complete);
+        setRegistrant({
+          registrant_first_name: data.registrant_first_name ?? "",
+          registrant_last_name:  data.registrant_last_name  ?? "",
+          registrant_email:      data.registrant_email      ?? "",
+          registrant_phone:      data.registrant_phone      ?? "",
+          registrant_address:    data.registrant_address    ?? "",
+          registrant_city:       data.registrant_city       ?? "",
+          registrant_state:      data.registrant_state      ?? "",
+          registrant_zip:        data.registrant_zip        ?? "",
+          registrant_country:    data.registrant_country    ?? "",
+        });
       })
       .catch(() => setRegistrantComplete(true)); // don't block on error
   }, [step]);
+
+  const [savingRegistrant, setSavingRegistrant] = useState(false);
+  const [registrantError, setRegistrantError]   = useState<string | null>(null);
+  async function saveRegistrant() {
+    // Minimal required fields for ICANN registration.
+    const required = ["registrant_first_name", "registrant_last_name", "registrant_email", "registrant_phone", "registrant_address", "registrant_city", "registrant_country"];
+    for (const k of required) {
+      if (!registrant[k]?.trim()) { setRegistrantError("Please fill in all required fields."); return; }
+    }
+    setSavingRegistrant(true);
+    setRegistrantError(null);
+    try {
+      const wsId = getWorkspaceId() ?? "";
+      const res = await fetch("/api/outreach/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body: JSON.stringify(registrant),
+      });
+      if (!res.ok) throw new Error("Could not save registrant details");
+      setRegistrantComplete(true);
+      setShowRegistrantModal(false);
+    } catch (e) {
+      setRegistrantError(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setSavingRegistrant(false);
+    }
+  }
 
   // ── Step 1: Search ──────────────────────────────────────────────────────────
   const [searchMode, setSearchMode]       = useState<"search" | "bulk">("search");
@@ -321,13 +369,16 @@ export default function BuyDomainPage() {
     if (returnedIdList.length && !provisioning) {
       // Combined checkout: eager-activate the plan immediately on return so the
       // user isn't left paywalled while the webhook catches up. Idempotent.
+      // router.refresh() re-runs the (app) layout so its server-computed paywall
+      // reason clears now that the plan is active — otherwise the blurred overlay
+      // lingers (it was rendered while the workspace was still plan-less).
       if (searchParams.get("combined") === "1" && returnedRef) {
         const wsId = getWorkspaceId() ?? "";
         fetch("/api/billing/combined-verify", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
           body: JSON.stringify({ reference: returnedRef }),
-        }).catch(() => {});
+        }).then(() => router.refresh()).catch(() => {});
       }
       startProvision(returnedIdList, returnedSessionId, returnedRef);
     }
@@ -353,12 +404,14 @@ export default function BuyDomainPage() {
     return () => clearInterval(interval);
   }, [step, domainIds, allActive, anyFailed]);
 
-  // Redirect to /inboxes 2s after all domains go active (Postal only — M365 stays on this page)
+  // Redirect to /inboxes 2s after all domains go active (Postal only — M365 stays on this page).
+  // Full reload (not router.push) so the (app) layout re-runs server-side and the billing
+  // paywall recomputes against the now-active plan — a client nav keeps the stale overlay.
   useEffect(() => {
     if (!allActive || isMicrosoft) return;
-    const t = setTimeout(() => router.push("/inboxes?tab=inboxes"), 2000);
+    const t = setTimeout(() => { window.location.href = "/inboxes?tab=inboxes"; }, 2000);
     return () => clearTimeout(t);
-  }, [allActive, isMicrosoft, router]);
+  }, [allActive, isMicrosoft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -369,7 +422,7 @@ export default function BuyDomainPage() {
   const totalInboxes   = selectedDomains.length * mailboxCount;
   const cap            = domainCapacity(selectedDomains.length, mailboxCount);
 
-  const oneTimeUsd    = selectedDomains.reduce((s, d) => s + (d.price > 0 ? d.price + DOMAIN_SERVICE_FEE_USD : 0), 0);
+  const oneTimeUsd    = selectedDomains.reduce((s, d) => s + displayPrice(d), 0);
   const activeInboxPriceNgn = isMicrosoft ? msInboxPriceNgn : inboxPriceNgn;
   const recurringNgn        = activeInboxPriceNgn * totalInboxes;
   const domainOnlyNgn = Math.round(oneTimeUsd * ngnPerUsd);
@@ -431,12 +484,55 @@ export default function BuyDomainPage() {
               This is required by ICANN and used only once per workspace.
             </p>
           </div>
-          <Link
-            href="/settings?tab=outreach"
+          <button
+            onClick={() => setShowRegistrantModal(true)}
             className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
           >
             Fill in now →
-          </Link>
+          </button>
+        </div>
+      )}
+
+      {/* ── Registrant modal ─────────────────────────────────────────────────── */}
+      {showRegistrantModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowRegistrantModal(false)}>
+          <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-white/10">
+              <h2 className="text-white font-bold text-base">Domain registrant details</h2>
+              <p className="text-white/40 text-xs mt-0.5">Required by ICANN to register a domain. Saved once per workspace.</p>
+            </div>
+            <div className="p-5 grid grid-cols-2 gap-3">
+              {([
+                ["registrant_first_name", "First name", true],
+                ["registrant_last_name",  "Last name", true],
+                ["registrant_email",      "Email", true],
+                ["registrant_phone",      "Phone (e.g. +2348012345678)", true],
+                ["registrant_address",    "Address", true],
+                ["registrant_city",       "City", true],
+                ["registrant_state",      "State / Region", false],
+                ["registrant_zip",        "ZIP / Postal code", false],
+                ["registrant_country",    "Country (2-letter, e.g. NG)", true],
+              ] as [string, string, boolean][]).map(([key, label, req], i) => (
+                <div key={key} className={key === "registrant_address" ? "col-span-2" : ""}>
+                  <label className="block text-[11px] text-white/50 mb-1">{label}{req && <span className="text-orange-400"> *</span>}</label>
+                  <input
+                    value={registrant[key] ?? ""}
+                    onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                    autoFocus={i === 0}
+                  />
+                </div>
+              ))}
+            </div>
+            {registrantError && <p className="px-5 text-xs text-red-400 -mt-1 mb-2">{registrantError}</p>}
+            <div className="p-5 pt-2 flex justify-end gap-2">
+              <button onClick={() => setShowRegistrantModal(false)} className="px-4 py-2 text-sm text-white/50 hover:text-white/80">Cancel</button>
+              <button onClick={saveRegistrant} disabled={savingRegistrant}
+                className="px-5 py-2 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-lg transition-colors">
+                {savingRegistrant ? "Saving…" : "Save details"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -579,7 +675,7 @@ export default function BuyDomainPage() {
                             </span>
                           )}
                         </div>
-                        <span className="text-white/50 text-sm">${r.price.toFixed(2)}/yr</span>
+                        <span className="text-white/50 text-sm">${displayPrice(r).toFixed(2)}/yr</span>
                       </div>
                     );
                   })}
@@ -795,7 +891,7 @@ export default function BuyDomainPage() {
           {/* Summary card */}
           <div className="border border-white/8 rounded-xl p-5 mb-6 space-y-3">
             {selectedDomains.map(d => (
-              <Row key={d.domain} label={d.domain} value={`$${(d.price + DOMAIN_SERVICE_FEE_USD).toFixed(2)}/yr`} mono />
+              <Row key={d.domain} label={d.domain} value={`$${displayPrice(d).toFixed(2)}/yr`} mono />
             ))}
             <div className="border-t border-white/8 pt-3 mt-1 space-y-1">
               <Row label="Inboxes per domain" value={`${mailboxCount} (${activePrefixes.join(", ")})`} mono />

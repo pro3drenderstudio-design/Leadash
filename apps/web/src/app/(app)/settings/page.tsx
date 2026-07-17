@@ -794,6 +794,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
             plans={plans}
             ngnPerUsd={ngnPerUsd}
             busy={!!upgrading}
+            currentPlanId={planStatus === "active" && planId !== "free" ? planId : undefined}
             checkoutLabel="Continue to checkout"
             onCheckout={(sel: SliderSelection) => {
               // Already actively subscribed to exactly this plan? Don't re-charge/re-subscribe.

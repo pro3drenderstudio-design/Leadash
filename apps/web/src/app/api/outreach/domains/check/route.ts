@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { checkDomains } from "@/lib/outreach/namecheap";
+import { getDomainMarkup, priceWithMarkup } from "@/lib/outreach/domainMarkup";
 
 /**
  * GET /api/outreach/domains/check?domains=example.com,example.io
@@ -23,8 +24,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const results = await checkDomains(names);
-    return NextResponse.json(results);
+    const [results, markup] = await Promise.all([checkDomains(names), getDomainMarkup()]);
+    // Expose the marked-up price (what the user is actually charged) alongside
+    // the raw registration price. The UI shows price_display; checkout keeps
+    // receiving the raw `price` and applies the same markup server-side.
+    const withMarkup = (results as Array<{ domain: string; available: boolean; price: number }>).map(r => ({
+      ...r,
+      price_display: r.price > 0 ? Math.ceil(priceWithMarkup(r.price, markup) * 100) / 100 : 0,
+    }));
+    return NextResponse.json(withMarkup);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Domain check failed" },
