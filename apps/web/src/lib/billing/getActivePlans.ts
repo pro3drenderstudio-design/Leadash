@@ -16,6 +16,7 @@ export interface PlanConfig {
   price_ngn:               number;
   price_usd:               number;
   paystack_plan_code:      string | null;
+  paystack_plan_code_annual: string | null;
   stripe_price_id:         string | null;
   max_inboxes:             number;   // -1 = unlimited
   max_monthly_sends:       number;   // -1 = unlimited
@@ -24,6 +25,7 @@ export interface PlanConfig {
   included_credits:        number;
   trial_days:              number;
   inbox_monthly_price_ngn: number;
+  ms_inbox_monthly_price_ngn: number;
   can_scrape_leads:        boolean;
   can_run_campaigns:       boolean;
   feat_warmup:             boolean;
@@ -39,7 +41,7 @@ export interface PlanConfig {
 const FALLBACK_PLANS: PlanConfig[] = [
   {
     plan_id: "free", name: "Free Trial", sort_order: 0,
-    price_ngn: 0, price_usd: 0, paystack_plan_code: null, stripe_price_id: null,
+    price_ngn: 0, price_usd: 0, paystack_plan_code: null, paystack_plan_code_annual: null, stripe_price_id: null, ms_inbox_monthly_price_ngn: 4200,
     max_inboxes: 5, max_monthly_sends: 0, max_seats: 1,
     max_leads_pool: 0, included_credits: 0, trial_days: 14,
     inbox_monthly_price_ngn: 0,
@@ -50,7 +52,7 @@ const FALLBACK_PLANS: PlanConfig[] = [
   },
   {
     plan_id: "starter", name: "Starter", sort_order: 1,
-    price_ngn: 15000, price_usd: 10, paystack_plan_code: null, stripe_price_id: null,
+    price_ngn: 15000, price_usd: 10, paystack_plan_code: null, paystack_plan_code_annual: null, stripe_price_id: null, ms_inbox_monthly_price_ngn: 4200,
     max_inboxes: -1, max_monthly_sends: -1, max_seats: 3,
     max_leads_pool: 1000, included_credits: 2000, trial_days: 0,
     inbox_monthly_price_ngn: 2500,
@@ -61,7 +63,7 @@ const FALLBACK_PLANS: PlanConfig[] = [
   },
   {
     plan_id: "growth", name: "Growth", sort_order: 2,
-    price_ngn: 45000, price_usd: 28, paystack_plan_code: null, stripe_price_id: null,
+    price_ngn: 45000, price_usd: 28, paystack_plan_code: null, paystack_plan_code_annual: null, stripe_price_id: null, ms_inbox_monthly_price_ngn: 4200,
     max_inboxes: -1, max_monthly_sends: -1, max_seats: 10,
     max_leads_pool: 10000, included_credits: 20000, trial_days: 0,
     inbox_monthly_price_ngn: 2500,
@@ -72,7 +74,7 @@ const FALLBACK_PLANS: PlanConfig[] = [
   },
   {
     plan_id: "scale", name: "Scale", sort_order: 3,
-    price_ngn: 95000, price_usd: 59, paystack_plan_code: null, stripe_price_id: null,
+    price_ngn: 95000, price_usd: 59, paystack_plan_code: null, paystack_plan_code_annual: null, stripe_price_id: null, ms_inbox_monthly_price_ngn: 4200,
     max_inboxes: -1, max_monthly_sends: -1, max_seats: 999999,
     max_leads_pool: 35000, included_credits: 70000, trial_days: 0,
     inbox_monthly_price_ngn: 2500,
@@ -83,7 +85,7 @@ const FALLBACK_PLANS: PlanConfig[] = [
   },
   {
     plan_id: "enterprise", name: "Enterprise", sort_order: 4,
-    price_ngn: 250000, price_usd: 156, paystack_plan_code: null, stripe_price_id: null,
+    price_ngn: 250000, price_usd: 156, paystack_plan_code: null, paystack_plan_code_annual: null, stripe_price_id: null, ms_inbox_monthly_price_ngn: 4200,
     max_inboxes: -1, max_monthly_sends: -1, max_seats: 999999,
     max_leads_pool: 150000, included_credits: 300000, trial_days: 0,
     inbox_monthly_price_ngn: 2500,

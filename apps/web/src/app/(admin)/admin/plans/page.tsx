@@ -8,6 +8,7 @@ interface PlanConfig {
   price_ngn:               number;
   price_usd:               number;
   paystack_plan_code:      string | null;
+  paystack_plan_code_annual: string | null;
   stripe_price_id:         string | null;
   max_inboxes:             number;
   max_monthly_sends:       number;
@@ -92,6 +93,22 @@ function PlanCard({
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [creatingAnnual, setCreatingAnnual] = useState(false);
+
+  async function handleCreateAnnual() {
+    setCreatingAnnual(true);
+    setWarning(null);
+    try {
+      const res = await fetch(`/api/admin/plans/${plan.plan_id}/create-annual`, { method: "POST" });
+      const data = await res.json() as { plan_code?: string; error?: string };
+      if (!res.ok || !data.plan_code) throw new Error(data.error ?? "Failed to create annual plan");
+      set("paystack_plan_code_annual", data.plan_code);
+    } catch (e) {
+      setWarning(e instanceof Error ? e.message : "Failed to create annual plan");
+    } finally {
+      setCreatingAnnual(false);
+    }
+  }
 
   const merged = { ...plan, ...edits } as PlanConfig;
 
@@ -212,12 +229,33 @@ function PlanCard({
           <p className="text-xs font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-3">Payment Integration</p>
           <div className="space-y-2">
             <div>
-              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Paystack Plan Code</label>
+              <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Paystack Plan Code (Monthly)</label>
               <TextInput
                 value={merged.paystack_plan_code ?? ""}
                 onChange={v => set("paystack_plan_code", v || null)}
                 placeholder="PLN_xxxxxxxxxxxx"
               />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-slate-500 dark:text-white/50">Paystack Plan Code (Annual · 2 mo free)</label>
+                {plan.plan_id !== "free" && (
+                  <button
+                    onClick={handleCreateAnnual}
+                    disabled={creatingAnnual}
+                    className="text-[11px] font-semibold text-orange-500 hover:text-orange-400 disabled:opacity-40"
+                    title="Creates an annual Paystack plan at 10× the monthly price and fills in the code"
+                  >
+                    {creatingAnnual ? "Creating…" : "Auto-create in Paystack"}
+                  </button>
+                )}
+              </div>
+              <TextInput
+                value={merged.paystack_plan_code_annual ?? ""}
+                onChange={v => set("paystack_plan_code_annual", v || null)}
+                placeholder="PLN_xxxxxxxxxxxx"
+              />
+              <p className="text-[10px] text-slate-400 dark:text-white/30 mt-1">Annual price = monthly × 10. Save the monthly price first, then auto-create.</p>
             </div>
             <div>
               <label className="block text-xs text-slate-500 dark:text-white/50 mb-1">Stripe Price ID</label>

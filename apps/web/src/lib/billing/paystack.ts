@@ -141,6 +141,22 @@ export async function disablePaystackSubscription(params: {
 
 // ── Plans (for admin plan management) ─────────────────────────────────────────
 
+/** Creates a Paystack plan and returns its plan code. Used to auto-provision
+ *  the annual (2-months-free) plans from the admin plan configurator. */
+export async function createPaystackPlan(params: {
+  name:       string;
+  amountKobo: number;
+  interval:   "monthly" | "annually" | "weekly" | "biannually";
+}): Promise<{ planCode: string }> {
+  const data = await paystackFetch<{ plan_code: string }>("POST", "/plan", {
+    name:     params.name,
+    amount:   params.amountKobo,
+    interval: params.interval,
+    currency: "NGN",
+  });
+  return { planCode: data.plan_code };
+}
+
 export async function updatePaystackPlan(planCode: string, updates: {
   name?:     string;
   amountKobo?: number;

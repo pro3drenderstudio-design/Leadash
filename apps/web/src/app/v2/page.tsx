@@ -34,6 +34,7 @@ import Faq from "./components/Faq";
 import Footer from "./components/Footer";
 import { getActivePlans } from "@/lib/billing/getActivePlans";
 import { getCurrencyContext } from "@/lib/currency/server";
+import { getUsdToNgn } from "@/lib/billing/exchangeRate";
 
 const SITE = "https://www.leadash.com";
 
@@ -96,9 +97,10 @@ const JSON_LD = {
 };
 
 export default async function LandingV2Page() {
-  const [plans, currencyContext] = await Promise.all([
+  const [plans, currencyContext, ngnPerUsd] = await Promise.all([
     getActivePlans(),
     getCurrencyContext(),
+    getUsdToNgn(),
   ]);
 
   return (
@@ -118,7 +120,7 @@ export default async function LandingV2Page() {
         <StackReplacement />
         <Comparison />
         <Quotes />
-        <Pricing plans={plans} currencyContext={currencyContext} />
+        <Pricing plans={plans} currencyContext={currencyContext} ngnPerUsd={ngnPerUsd} />
         <Faq />
       </main>
       <Footer />

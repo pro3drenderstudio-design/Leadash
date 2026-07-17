@@ -18,6 +18,7 @@ const EDITABLE_FIELDS = new Set([
   "price_ngn",
   "price_usd",
   "paystack_plan_code",
+  "paystack_plan_code_annual",
   "stripe_price_id",
   "max_inboxes",
   "max_monthly_sends",

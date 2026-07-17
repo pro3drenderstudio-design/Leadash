@@ -15,22 +15,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
-  const { plan_id } = await req.json();
+  const { plan_id, interval } = await req.json() as { plan_id: string; interval?: "monthly" | "annual" };
   const plan = await getPlanById(plan_id);
 
   if (!plan || plan.plan_id === "free") {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
   }
-  if (!plan.paystack_plan_code) {
+
+  const isAnnual = interval === "annual";
+  const baseCode = isAnnual ? plan.paystack_plan_code_annual : plan.paystack_plan_code;
+  if (!baseCode) {
     return NextResponse.json(
-      { error: "This plan has no payment integration configured yet. Contact support." },
+      { error: isAnnual
+          ? "Annual billing isn't configured for this plan yet. Contact support."
+          : "This plan has no payment integration configured yet. Contact support." },
       { status: 400 }
     );
   }
 
   // Allow env var override of plan codes for local dev with test Paystack keys
-  const planCodeEnvKey = `PAYSTACK_PLAN_CODE_${plan.plan_id.toUpperCase().replace(/-/g, "_")}`;
-  const planCode = process.env[planCodeEnvKey] ?? plan.paystack_plan_code;
+  const planCodeEnvKey = `PAYSTACK_PLAN_CODE_${plan.plan_id.toUpperCase().replace(/-/g, "_")}${isAnnual ? "_ANNUAL" : ""}`;
+  const planCode = process.env[planCodeEnvKey] ?? baseCode;
+  const amountKobo = (isAnnual ? plan.price_ngn * 10 : plan.price_ngn) * 100;
 
   const { data: workspace } = await db
     .from("workspaces")
@@ -51,12 +57,13 @@ export async function POST(req: NextRequest) {
   try {
     const result = await createPaystackCheckout({
       email:       workspace.billing_email ?? `ws-${workspaceId}@leadash.app`,
-      amountKobo:  plan.price_ngn * 100,
+      amountKobo:  amountKobo,
       planCode:    planCode,
       callbackUrl: `${origin}/settings?tab=billing&billing=success&plan=${plan.plan_id}`,
       metadata: {
         workspace_id: workspaceId,
         plan_id:      plan.plan_id,
+        interval:     isAnnual ? "annual" : "monthly",
         type:         "plan_subscription",
       },
     });

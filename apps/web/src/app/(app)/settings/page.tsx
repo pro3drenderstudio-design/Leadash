@@ -7,6 +7,7 @@ import "@/v2-app/v2-app.css";
 import { sanitizeName, sanitizeLettersOnly, sanitizeCountryCode, sanitizeZip } from "@/lib/registrant-validators";
 import { CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
 import type { PlanConfig } from "@/lib/billing/getActivePlans";
+import PricingSlider, { type SliderSelection } from "@/components/pricing/PricingSlider";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -467,6 +468,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
   const [invoices, setInvoices]               = useState<Invoice[]>([]);
   const [suspendedDomains, setSuspendedDomains] = useState<SuspendedDomain[]>([]);
   const [newPaymentWorking, setNewPaymentWorking] = useState<string | null>(null);
+  const [ngnPerUsd, setNgnPerUsd]             = useState(1600);
+  const [usage, setUsage] = useState<{ sends_used: number; sends_cap: number; pct: number; resets_at: string } | null>(null);
   // formatPrice converts NGN → local currency (display only — Paystack still charges NGN).
   const { formatPrice } = useCurrency();
 
@@ -474,7 +477,7 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     Promise.all([
       wsGet<{ plan_id: string }>("/api/settings/profile"),
       wsGet<{ balance: number; transactions: Transaction[] }>("/api/lead-campaigns/credits"),
-      fetch("/api/billing/plans").then(r => r.json()) as Promise<{ plans: PlanConfig[] }>,
+      fetch("/api/billing/plans").then(r => r.json()) as Promise<{ plans: PlanConfig[]; ngn_per_usd?: number }>,
       wsGet<Invoice[]>("/api/billing/invoices").catch(() => [] as Invoice[]),
       wsGet<Array<{ id: string; domain: string; status: string; payment_provider: string | null }>>("/api/outreach/domains").catch(() => []),
     ]).then(([profile, credits, plansData, invData, domainsData]) => {
@@ -484,10 +487,13 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
       setBalance(credits.balance ?? 0);
       setTx(credits.transactions ?? []);
       setPlans(plansData.plans ?? []);
+      if (plansData.ngn_per_usd) setNgnPerUsd(plansData.ngn_per_usd);
       setInvoices(invData ?? []);
       setSuspendedDomains((domainsData ?? []).filter(d => d.status === "payment_failed"));
       setLoading(false);
     }).catch(() => setLoading(false));
+    wsGet<{ sends_used: number; sends_cap: number; pct: number; resets_at: string }>("/api/billing/usage")
+      .then(setUsage).catch(() => {});
   }, []);
 
   // Verify payment + upgrade plan immediately on redirect, then reload credits
@@ -574,10 +580,10 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     }
   }
 
-  async function handleChangePlan(targetPlanId: string) {
+  async function handleChangePlan(targetPlanId: string, interval: "monthly" | "annual" = "monthly") {
     setUpgrading(targetPlanId);
     try {
-      const data = await wsPost<{ url?: string }>("/api/billing/change-plan", { plan_id: targetPlanId });
+      const data = await wsPost<{ url?: string }>("/api/billing/change-plan", { plan_id: targetPlanId, interval });
       if (data.url) window.location.href = data.url;
       else { alert("Plan change failed"); setUpgrading(null); }
     } catch (e) {
@@ -756,8 +762,60 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
         </div>
       )}
 
+      {/* ── Monthly send usage meter ── */}
+      {usage && usage.sends_cap > 0 && planId !== "free" && (
+        <Section title="Monthly sends">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-white/70">
+              <span className="font-semibold text-white">{usage.sends_used.toLocaleString()}</span>
+              <span className="text-white/40"> / {usage.sends_cap.toLocaleString()} sends this month</span>
+            </p>
+            <p className="text-xs text-white/40">
+              Resets {new Date(usage.resets_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            </p>
+          </div>
+          <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${usage.pct >= 100 ? "bg-red-500" : usage.pct >= 80 ? "bg-amber-500" : "bg-orange-500"}`}
+              style={{ width: `${Math.max(2, usage.pct)}%` }}
+            />
+          </div>
+          {usage.pct >= 100 && (
+            <p className="text-xs text-red-400 mt-2">You&apos;ve hit your monthly send cap — sending is paused until reset. Upgrade for a higher cap.</p>
+          )}
+          <p className="text-[11px] text-white/35 mt-2">Warm-up emails don&apos;t count toward this cap.</p>
+        </Section>
+      )}
+
+      {/* ── Volume-based plan picker ── */}
+      {plans.length > 0 && (
+        <Section title="Choose your plan">
+          <PricingSlider
+            plans={plans}
+            ngnPerUsd={ngnPerUsd}
+            busy={!!upgrading}
+            checkoutLabel="Continue to checkout"
+            onCheckout={(sel: SliderSelection) => {
+              // Already actively subscribed to exactly this plan? Don't re-charge/re-subscribe.
+              const alreadyOnThisPlan = planStatus === "active" && planId === sel.plan_id;
+              if (sel.inbox_toggle && sel.inbox_count > 0) {
+                const q = new URLSearchParams({ inboxes: String(sel.inbox_count) });
+                // Bundle the plan into the single payment only when they're NOT already on it —
+                // otherwise this is just an inbox purchase on their existing plan.
+                if (!alreadyOnThisPlan) { q.set("plan", sel.plan_id); q.set("interval", sel.billing_interval); }
+                window.location.href = `/inboxes/new/domain?${q.toString()}`;
+              } else if (!alreadyOnThisPlan) {
+                handleChangePlan(sel.plan_id, sel.billing_interval);
+              } else {
+                alert("You're already on this plan.");
+              }
+            }}
+          />
+        </Section>
+      )}
+
       {/* ── Plan selection — full width ── */}
-      <Section title="Plans">
+      <Section title="All plans">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {plans.map(plan => {
             const isCurrent = plan.plan_id === planId;

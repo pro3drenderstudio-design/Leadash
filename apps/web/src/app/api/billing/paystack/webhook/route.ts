@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPaystackSignature, verifyPaystackPayment, disablePaystackSubscription, paystackFeesKobo } from "@/lib/billing/paystack";
+import { activateCombinedCheckout } from "@/lib/billing/combined";
 import { logActivity } from "@/lib/activity";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { enqueueProvision } from "@/lib/queue";
@@ -191,7 +192,9 @@ export async function POST(req: NextRequest) {
         const { paid, authorizationCode, customerCode } = await verifyPaystackPayment(data.reference);
         if (paid) {
           const plan = await getPlanById(planId);
-          const subRenewsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          const isAnnual = (meta.interval as string | undefined) === "annual";
+          const renewDays = isAnnual ? 365 : 30;
+          const subRenewsAt = new Date(Date.now() + renewDays * 24 * 60 * 60 * 1000).toISOString();
           await db
             .from("workspaces")
             .update({
@@ -273,6 +276,29 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── Combined checkout: plan + managed inboxes in one payment ─────────────
+    // One-off charge covered month-1 (plan) + month-1 inbox hosting + domain
+    // registration. Here we activate the plan, attach a NATIVE subscription
+    // deferred to the next cycle (so renewals ride the normal path + capture
+    // paystack_sub_code), and hand each domain to the saved-auth-code inbox
+    // cron. Provisioning itself is driven by the client callback (/inboxes/new
+    // /domain → /api/outreach/domains/provision per record).
+    if (type === "combined_checkout" && workspaceId) {
+      const planId    = meta.plan_id as string | undefined;
+      const isAnnual  = (meta.interval as string | undefined) === "annual";
+      const domainIds = String(meta.domain_record_ids ?? "").split(",").filter(Boolean);
+      if (!planId) return NextResponse.json({ received: true });
+
+      const { paid, authorizationCode, customerCode, customerEmail, amountKobo, feesKobo } = await verifyPaystackPayment(data.reference);
+      if (!paid) return NextResponse.json({ received: true });
+
+      await activateCombinedCheckout(db, {
+        reference: data.reference, workspaceId, planId, isAnnual, domainIds,
+        authorizationCode, customerCode, customerEmail, amountKobo, feesKobo,
+      });
       return NextResponse.json({ received: true });
     }
 

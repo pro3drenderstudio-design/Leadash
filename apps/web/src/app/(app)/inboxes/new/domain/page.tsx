@@ -75,6 +75,13 @@ export default function BuyDomainPage() {
   const inboxProvider = (searchParams.get("provider") === "microsoft365" ? "microsoft365" : "postal") as "postal" | "microsoft365";
   const isMicrosoft   = inboxProvider === "microsoft365";
 
+  // Combined-checkout mode: the pricing slider sends the user here with a plan
+  // attached (?plan=growth&interval=monthly), so the domain purchase is paid for
+  // together with the plan subscription in one Paystack transaction.
+  const attachedPlan     = searchParams.get("plan");
+  const attachedInterval = (searchParams.get("interval") === "annual" ? "annual" : "monthly") as "monthly" | "annual";
+  const attachedInboxes  = Number(searchParams.get("inboxes")) || 0;
+
   const [step, setStep]   = useState<Step>(returnedIdList.length > 0 ? "provisioning" : "search");
 
   // ── Registrant check ────────────────────────────────────────────────────────
@@ -174,6 +181,8 @@ export default function BuyDomainPage() {
   const [inboxPriceNgn,   setInboxPriceNgn]   = useState(2500);
   const [msInboxPriceNgn, setMsInboxPriceNgn] = useState(4200);
   const [ngnPerUsd, setNgnPerUsd]             = useState(1700);
+  // Attached-plan config (combined checkout) — name + monthly price for the review line.
+  const [attachedPlanCfg, setAttachedPlanCfg] = useState<{ name: string; price_ngn: number } | null>(null);
 
   useEffect(() => {
     const wsId = getWorkspaceId() ?? "";
@@ -187,6 +196,17 @@ export default function BuyDomainPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!attachedPlan) return;
+    fetch("/api/billing/plans")
+      .then(r => r.json())
+      .then((d: { plans?: Array<{ plan_id: string; name: string; price_ngn: number }> }) => {
+        const p = (d.plans ?? []).find(x => x.plan_id === attachedPlan);
+        if (p) setAttachedPlanCfg({ name: p.name, price_ngn: p.price_ngn });
+      })
+      .catch(() => {});
+  }, [attachedPlan]);
 
   // ── Step 4: Provisioning ────────────────────────────────────────────────────
   // Track per-domain provision status: { [id]: status }
@@ -236,19 +256,34 @@ export default function BuyDomainPage() {
     setPayError(null);
     try {
       const wsId = getWorkspaceId() ?? "";
-      const res = await fetch("/api/outreach/domains/checkout", {
+      // With a plan attached (from the pricing slider) → combined checkout: one
+      // Paystack payment for plan + inboxes + domain registration.
+      const endpoint = attachedPlan ? "/api/billing/combined-checkout" : "/api/outreach/domains/checkout";
+      const payload = attachedPlan
+        ? {
+            plan_id:          attachedPlan,
+            interval:         attachedInterval,
+            domains:          selectedDomains.map(d => ({ domain: d.domain, price: d.price })),
+            mailbox_prefixes: prefixes,
+            first_name:       firstName       || undefined,
+            last_name:        lastName        || undefined,
+            redirect_url:     redirectUrl     || undefined,
+            reply_forward_to: replyForwardTo  || undefined,
+          }
+        : {
+            domains:          selectedDomains.map(d => ({ domain: d.domain, price: d.price })),
+            mailbox_prefixes: prefixes,
+            first_name:       firstName       || undefined,
+            last_name:        lastName        || undefined,
+            redirect_url:     redirectUrl     || undefined,
+            reply_forward_to: replyForwardTo  || undefined,
+            payment_provider: currency,
+            inbox_provider:   inboxProvider,
+          };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
-        body: JSON.stringify({
-          domains:          selectedDomains.map(d => ({ domain: d.domain, price: d.price })),
-          mailbox_prefixes: prefixes,
-          first_name:       firstName       || undefined,
-          last_name:        lastName        || undefined,
-          redirect_url:     redirectUrl     || undefined,
-          reply_forward_to: replyForwardTo  || undefined,
-          payment_provider: currency,
-          inbox_provider:   inboxProvider,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Checkout failed");
@@ -284,6 +319,16 @@ export default function BuyDomainPage() {
   // Kick off provision on mount when returning from payment
   useEffect(() => {
     if (returnedIdList.length && !provisioning) {
+      // Combined checkout: eager-activate the plan immediately on return so the
+      // user isn't left paywalled while the webhook catches up. Idempotent.
+      if (searchParams.get("combined") === "1" && returnedRef) {
+        const wsId = getWorkspaceId() ?? "";
+        fetch("/api/billing/combined-verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+          body: JSON.stringify({ reference: returnedRef }),
+        }).catch(() => {});
+      }
       startProvision(returnedIdList, returnedSessionId, returnedRef);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -328,7 +373,10 @@ export default function BuyDomainPage() {
   const activeInboxPriceNgn = isMicrosoft ? msInboxPriceNgn : inboxPriceNgn;
   const recurringNgn        = activeInboxPriceNgn * totalInboxes;
   const domainOnlyNgn = Math.round(oneTimeUsd * ngnPerUsd);
-  const totalNgn      = domainOnlyNgn + recurringNgn;
+  // When a plan is attached (combined checkout), month-1/year-1 of the plan is
+  // part of the single charge shown here.
+  const planNgn       = attachedPlanCfg ? (attachedInterval === "annual" ? attachedPlanCfg.price_ngn * 10 : attachedPlanCfg.price_ngn) : 0;
+  const totalNgn      = domainOnlyNgn + recurringNgn + planNgn;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
@@ -340,6 +388,18 @@ export default function BuyDomainPage() {
         <span className="text-white/20">/</span>
         <span className="text-white/60 text-sm">Buy a Domain</span>
       </div>
+
+      {/* Combined-checkout banner — plan attached from the pricing slider */}
+      {attachedPlan && step !== "provisioning" && (
+        <div className="mb-6 px-4 py-3 bg-orange-500/10 border border-orange-500/25 rounded-xl">
+          <p className="text-sm text-orange-200 font-semibold">Setting up your {attachedPlanCfg?.name ?? attachedPlan} plan + inboxes</p>
+          <p className="text-xs text-orange-200/60 mt-0.5">
+            {attachedInboxes > 0
+              ? `Pick about ${Math.ceil(attachedInboxes / MAX_INBOXES_PER_DOMAIN)} domain${Math.ceil(attachedInboxes / MAX_INBOXES_PER_DOMAIN) > 1 ? "s" : ""} for your ${attachedInboxes} inboxes — plan and inboxes are paid together in one payment.`
+              : "Your plan and inboxes are paid together in one payment."}
+          </p>
+        </div>
+      )}
 
       {/* Step indicator */}
       {step !== "provisioning" && (
@@ -751,8 +811,14 @@ export default function BuyDomainPage() {
                 <div key={l}><p className="text-white font-semibold text-sm">{v}</p><p className="text-white/30 text-xs">{l}</p></div>
               ))}
             </div>
+            {attachedPlanCfg && (
+              <div className="border-t border-white/8 pt-3">
+                <Row label={`${attachedPlanCfg.name} plan (${attachedInterval})`} value={`${formatPrice(planNgn)}${attachedInterval === "annual" ? "/yr" : "/mo"}`} highlight />
+                <p className="text-white/30 text-xs mt-1">{attachedInterval === "annual" ? "Billed annually · 2 months free" : "Billed monthly"} · included in this payment</p>
+              </div>
+            )}
             <div className="border-t border-white/8 pt-3">
-              <Row label="Monthly subscription" value={`${formatPrice(recurringNgn)}/mo`} highlight />
+              <Row label="Inbox hosting" value={`${formatPrice(recurringNgn)}/mo`} highlight />
               <p className="text-white/30 text-xs mt-1">{formatPrice(activeInboxPriceNgn)}/inbox × {totalInboxes} inboxes</p>
             </div>
             {(redirectUrl || replyForwardTo) && (
@@ -771,7 +837,9 @@ export default function BuyDomainPage() {
                 {formatPrice(totalNgn)} charged now
               </p>
               <p className="text-white/35 text-xs mt-0.5">
-                {formatPrice(domainOnlyNgn)} domain + {formatPrice(recurringNgn)} 1st month · then {formatPrice(recurringNgn)}/mo
+                {attachedPlanCfg
+                  ? `${formatPrice(planNgn)} plan + ${formatPrice(domainOnlyNgn)} domain + ${formatPrice(recurringNgn)} 1st month inboxes`
+                  : `${formatPrice(domainOnlyNgn)} domain + ${formatPrice(recurringNgn)} 1st month · then ${formatPrice(recurringNgn)}/mo`}
               </p>
             </div>
           </div>

@@ -31,9 +31,13 @@ export default function BillingPaywall({ reason, children }: { reason: AccessBlo
 
   // Academy has its own independent "coming soon" gate (apps/web/src/app/(app)/academy/layout.tsx)
   // that's unrelated to billing — never cover it. /settings must stay reachable too: the paywall's
-  // own CTA links there ("Pick a plan"/"Pay invoice") — without this exemption a blocked user could
-  // never reach the plan picker or payment-method form to resolve their own block.
-  const exempt = pathname?.startsWith("/academy") || pathname?.startsWith("/settings");
+  // own CTA links there ("Pick a plan"/"Pay invoice"). /inboxes/new is the purchase/checkout
+  // surface — the combined "plan + inboxes" flow lands there BEFORE the plan is active, and the
+  // post-payment provisioning callback returns there too, so it must stay reachable for a blocked
+  // (no-plan) user or they could never complete the very purchase that unblocks them.
+  const exempt = pathname?.startsWith("/academy")
+    || pathname?.startsWith("/settings")
+    || pathname?.startsWith("/inboxes/new");
 
   if (exempt || !reason) return <>{children}</>;
 
