@@ -35,22 +35,23 @@ export function getBillingAccessStatus(ws: BillingWorkspace): BillingAccessStatu
     return { allowed: false, reason: "canceled" };
   }
 
-  // A beta enrollment grants plan_id "starter" + a 30-day trial_ends_at with no
-  // subscription_renews_at (see claimBetaIfApproved in (app)/layout.tsx). A
-  // starter user who actually paid always has subscription_renews_at set from
-  // the real checkout — that's what distinguishes "still on the beta perk"
-  // from "legitimately subscribed to Starter."
-  const isUnconvertedBetaTrial = ws.plan_id === "starter" && !ws.subscription_renews_at && !!ws.trial_ends_at;
-  if (isUnconvertedBetaTrial) {
-    if (new Date(ws.trial_ends_at as string) < new Date()) {
-      return { allowed: false, reason: "trial_expired" };
-    }
-    return { allowed: true, reason: null }; // still within the 30-day beta window
-  }
-
   // No free plan — must be on a real paid plan.
   if (ws.plan_id === "free") {
     return { allowed: false, reason: "no_plan" };
+  }
+
+  // A beta enrollment grants plan_id "starter" + a 30-day trial_ends_at with no
+  // subscription_renews_at (see claimBetaIfApproved in (app)/layout.tsx). A
+  // workspace that actually paid always has subscription_renews_at set from
+  // the real checkout — that's what distinguishes "still on a granted trial"
+  // from "legitimately subscribed." Checked on any non-free plan_id, not just
+  // "starter" — the same ungated-grant pattern can end up on any tier.
+  const isUnconvertedTrial = !ws.subscription_renews_at && !!ws.trial_ends_at;
+  if (isUnconvertedTrial) {
+    if (new Date(ws.trial_ends_at as string) < new Date()) {
+      return { allowed: false, reason: "trial_expired" };
+    }
+    return { allowed: true, reason: null }; // still within the granted trial window
   }
 
   return { allowed: true, reason: null };

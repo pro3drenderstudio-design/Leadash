@@ -78,13 +78,14 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // C. Expired, unconverted beta trial — same disambiguation as getBillingAccessStatus,
-  //    and deliberately NOT filtered on plan_status so this stays in sync with exactly
-  //    what the paywall itself blocks (a beta workspace can be "active" or "trialing").
+  // C. Expired, unconverted trial — same disambiguation as getBillingAccessStatus,
+  //    checked on any non-free plan_id (not just "starter" — the same ungated-grant
+  //    pattern can end up on any tier) and deliberately NOT filtered on plan_status
+  //    so this stays in sync with exactly what the paywall itself blocks.
   const { data: expiredBeta } = await db
     .from("workspaces")
-    .select("id, name, trial_ends_at")
-    .eq("plan_id", "starter")
+    .select("id, name, plan_id, trial_ends_at")
+    .neq("plan_id", "free")
     .is("subscription_renews_at", null)
     .not("trial_ends_at", "is", null)
     .lt("trial_ends_at", now);
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
       kind:          "expired_beta_trial",
       workspaceId:   ws.id,
       workspaceName: ws.name,
-      detail:        `beta trial ended ${ws.trial_ends_at}, never converted to a paid plan`,
+      detail:        `${ws.plan_id} trial ended ${ws.trial_ends_at}, never converted to a paid plan`,
     });
   }
 

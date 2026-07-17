@@ -200,50 +200,51 @@ export async function runSendBatch(
 ): Promise<SendRunResult> {
   const db = supabase();
 
-  // ── Plan gate: block sends for free-plan or expired-trial workspaces ─────────
+  // ── Plan gate: block sends for any workspace not on a real active paid plan ──
+  // Single source of truth shared with the UI paywall (lib/billing/access.ts) —
+  // no free plan, no bypassing via a stale plan_status left over from a lapsed
+  // subscription (that exact drift is what let Tosin's workspace keep sending).
   const { data: wsRow } = await db
     .from("workspaces")
-    .select("plan_id, plan_status, trial_ends_at, max_monthly_sends")
+    .select("plan_id, plan_status, trial_ends_at, grace_ends_at, subscription_renews_at, max_monthly_sends")
     .eq("id", workspaceId)
     .single();
 
-  // plan_status is authoritative — if active/trialing, always allow sends
-  const planStatus = wsRow?.plan_status as string | null | undefined;
-  const isPaidActive = planStatus === "active" || planStatus === "trialing";
+  const { getBillingAccessStatus } = await import("@/lib/billing/access");
+  const access = getBillingAccessStatus({
+    plan_id:                wsRow?.plan_id ?? "free",
+    plan_status:            wsRow?.plan_status ?? "active",
+    trial_ends_at:          wsRow?.trial_ends_at ?? null,
+    grace_ends_at:          wsRow?.grace_ends_at ?? null,
+    subscription_renews_at: wsRow?.subscription_renews_at ?? null,
+  });
 
-  const trialExpired = !isPaidActive && wsRow?.plan_id === "free" && wsRow?.trial_ends_at && new Date(wsRow.trial_ends_at) < new Date();
-  if (trialExpired) {
+  if (!access.allowed) {
+    const pauseReason = access.reason === "past_due"      ? "Payment failed — update your card to resume"
+                      : access.reason === "trial_expired" ? "Trial expired — upgrade to resume"
+                      : access.reason === "canceled"       ? "Subscription ended — upgrade to resume"
+                      :                                       "No active plan — upgrade to run campaigns";
     await db.from("outreach_campaigns")
-      .update({ status: "paused", pause_reason: "Trial expired — upgrade to resume", updated_at: new Date().toISOString() })
+      .update({ status: "paused", pause_reason: pauseReason, updated_at: new Date().toISOString() })
       .eq("workspace_id", workspaceId)
       .eq("status", "active");
-    console.log(`[send-runner] ws=${workspaceId} trial expired — sends blocked, campaigns paused`);
+    console.log(`[send-runner] ws=${workspaceId} blocked (${access.reason}) — sends blocked, campaigns paused`);
     return { processed: 0, sent: 0, skipped: 0, errors: 0 };
   }
 
-  const planId = wsRow?.plan_id ?? "free";
-  if (isPaidActive || planId !== "free") {
-    // Paid/trialing plan — check can_run_campaigns from DB config (skip check for active paid plans to avoid false-blocking)
-    if (planId !== "free" && !isPaidActive) {
-      const { getPlanById } = await import("@/lib/billing/getActivePlans");
-      const plan = await getPlanById(planId);
-      if (!plan.can_run_campaigns) {
-        await db.from("outreach_campaigns")
-          .update({ status: "paused", pause_reason: "Plan does not include campaigns — upgrade to resume", updated_at: new Date().toISOString() })
-          .eq("workspace_id", workspaceId)
-          .eq("status", "active");
-        console.log(`[send-runner] ws=${workspaceId} plan=${planId} cannot run campaigns — blocked`);
-        return { processed: 0, sent: 0, skipped: 0, errors: 0 };
-      }
+  // Even on an allowed plan, a paid tier could theoretically not include
+  // campaigns (not true of any current plan, but kept for forward-compat).
+  {
+    const { getPlanById } = await import("@/lib/billing/getActivePlans");
+    const plan = await getPlanById(wsRow?.plan_id ?? "free");
+    if (!plan.can_run_campaigns) {
+      await db.from("outreach_campaigns")
+        .update({ status: "paused", pause_reason: "Plan does not include campaigns — upgrade to resume", updated_at: new Date().toISOString() })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active");
+      console.log(`[send-runner] ws=${workspaceId} plan=${wsRow?.plan_id} cannot run campaigns — blocked`);
+      return { processed: 0, sent: 0, skipped: 0, errors: 0 };
     }
-  } else {
-    // Free plan with no active subscription — block
-    await db.from("outreach_campaigns")
-      .update({ status: "paused", pause_reason: "Free plan — upgrade to run campaigns", updated_at: new Date().toISOString() })
-      .eq("workspace_id", workspaceId)
-      .eq("status", "active");
-    console.log(`[send-runner] ws=${workspaceId} free plan — sends blocked, campaigns paused`);
-    return { processed: 0, sent: 0, skipped: 0, errors: 0 };
   }
   // ─────────────────────────────────────────────────────────────────────────────
 

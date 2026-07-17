@@ -30,27 +30,35 @@ export async function runWarmupPool(workspaceId: string): Promise<WarmupResult> 
   const result: WarmupResult = { sent: 0, replied: 0, rescued: 0 };
 
   // ── Billing guard ────────────────────────────────────────────────────────────
-  // Mirrors send-runner's isPaidActive check: a lapsed/canceled/free-plan
-  // workspace shouldn't keep consuming warmup send capacity, and its inboxes
-  // shouldn't keep occupying slots in every other workspace's recipient pool.
-  // Disabling warmup_enabled here is self-healing — once set, this workspace's
-  // inboxes drop out of the global-pool query below on this and future runs,
-  // and the hourly warmup cron stops selecting this workspace at all once none
-  // of its inboxes are still warmup_enabled.
+  // Shares getBillingAccessStatus with the UI paywall and send-runner — no free
+  // plan, no bypassing via a stale plan_status left over from a lapsed
+  // subscription. A blocked workspace shouldn't keep consuming warmup send
+  // capacity, and its inboxes shouldn't keep occupying slots in every other
+  // workspace's recipient pool. Disabling warmup_enabled here is self-healing —
+  // once set, this workspace's inboxes drop out of the global-pool query below
+  // on this and future runs, and the hourly warmup cron stops selecting this
+  // workspace at all once none of its inboxes are still warmup_enabled.
   const { data: ws } = await db
     .from("workspaces")
-    .select("plan_id, plan_status, trial_ends_at")
+    .select("plan_id, plan_status, trial_ends_at, grace_ends_at, subscription_renews_at")
     .eq("id", workspaceId)
     .single();
 
-  const isPaidActive = ws?.plan_status === "active" || ws?.plan_status === "trialing";
-  if (!isPaidActive) {
+  const { getBillingAccessStatus } = await import("@/lib/billing/access");
+  const access = getBillingAccessStatus({
+    plan_id:                ws?.plan_id ?? "free",
+    plan_status:            ws?.plan_status ?? "active",
+    trial_ends_at:          ws?.trial_ends_at ?? null,
+    grace_ends_at:          ws?.grace_ends_at ?? null,
+    subscription_renews_at: ws?.subscription_renews_at ?? null,
+  });
+  if (!access.allowed) {
     await db
       .from("outreach_inboxes")
       .update({ warmup_enabled: false })
       .eq("workspace_id", workspaceId)
       .eq("warmup_enabled", true);
-    console.log(`[warmup] ws=${workspaceId} plan_status=${ws?.plan_status ?? "unknown"} — warmup disabled`);
+    console.log(`[warmup] ws=${workspaceId} blocked (${access.reason}) — warmup disabled`);
     return result;
   }
   // ───────────────────────────────────────────────────────────────────────────
@@ -279,9 +287,20 @@ export async function runWarmupRamp(workspaceId: string): Promise<void> {
 
   // Same billing guard as runWarmupPool — no point ramping send capacity for
   // a workspace that's about to have warmup disabled anyway.
-  const { data: ws } = await db.from("workspaces").select("plan_status").eq("id", workspaceId).single();
-  const isPaidActive = ws?.plan_status === "active" || ws?.plan_status === "trialing";
-  if (!isPaidActive) return;
+  const { data: ws } = await db
+    .from("workspaces")
+    .select("plan_id, plan_status, trial_ends_at, grace_ends_at, subscription_renews_at")
+    .eq("id", workspaceId)
+    .single();
+  const { getBillingAccessStatus } = await import("@/lib/billing/access");
+  const access = getBillingAccessStatus({
+    plan_id:                ws?.plan_id ?? "free",
+    plan_status:            ws?.plan_status ?? "active",
+    trial_ends_at:          ws?.trial_ends_at ?? null,
+    grace_ends_at:          ws?.grace_ends_at ?? null,
+    subscription_renews_at: ws?.subscription_renews_at ?? null,
+  });
+  if (!access.allowed) return;
 
   const { data: inboxes } = await db.from("outreach_inboxes")
     .select("id, warmup_current_daily, warmup_target_daily, warmup_ends_at")
