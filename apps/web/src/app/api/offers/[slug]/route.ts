@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { DEFAULT_CHECKOUT_CONFIG, type Offer } from "@/types/offers";
+import { hasActiveOfferTarget, resolveUserWorkspaceId } from "@/lib/offers/targeting";
 
 /** GET /api/offers/[slug] — public. Powers the standalone /o/[slug] checkout page. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -25,6 +26,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       }
     }
     if (!isAdmin) return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+  }
+
+  // Targeted offers are only visible to workspaces with an active target.
+  if ((typedOffer as unknown as { is_targeted?: boolean }).is_targeted) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    let allowed = false;
+    if (user) {
+      const wsId = await resolveUserWorkspaceId(db, user.id);
+      allowed = await hasActiveOfferTarget(db, typedOffer.id, wsId);
+    }
+    if (!allowed) return NextResponse.json({ error: "This offer isn't available.", targeted: true }, { status: 404 });
   }
 
   const closed = typedOffer.expires_at ? new Date(typedOffer.expires_at) < new Date() : false;

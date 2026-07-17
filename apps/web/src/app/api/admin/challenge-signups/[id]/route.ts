@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { enqueueAutomation } from "@/lib/queue/client";
 import { normalisePhoneNG } from "@/lib/phone";
+import { applyChallengeConfirmation } from "@/lib/challenge/confirm";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -39,38 +40,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Already confirmed" }, { status: 400 });
     }
 
-    // Enroll in 7-day challenge
-    if (signup.workspace_id || signup.user_id) {
-      const workspaceId = signup.workspace_id as string | null ?? signup.user_id as string;
-
-      // Find the challenge-7day product
-      const { data: product } = await db
-        .from("academy_products")
-        .select("id")
-        .eq("slug", "challenge-7day")
-        .single();
-
-      if (product) {
-        // Find or create active cohort
-        const { data: cohort } = await db
-          .from("academy_cohorts")
-          .select("id")
-          .eq("product_id", product.id)
-          .eq("is_default", true)
-          .maybeSingle();
-
-        const { error: enrollError } = await db.from("academy_enrollments").upsert({
-          workspace_id: workspaceId,
-          product_id:   product.id,
-          cohort_id:    cohort?.id ?? null,
-          access_type:  "admin_granted",
-          status:       "active",
-          enrolled_at:  new Date().toISOString(),
-        }, { onConflict: "workspace_id,product_id" });
-
-        if (enrollError) console.error("[challenge-signups/confirm] enroll error:", enrollError.message);
-      }
-    }
+    // Enroll into the current cohort + set up the dormant-until-go-live
+    // sponsored offer (shared with the Paystack auto-confirm path).
+    await applyChallengeConfirmation(db, {
+      signup: { user_id: signup.user_id as string | null, workspace_id: signup.workspace_id as string | null },
+      createdBy: userId,
+      productSlug: "challenge-7day",
+    });
 
     await db.from("challenge_signups").update({
       status:       "confirmed",

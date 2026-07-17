@@ -92,7 +92,7 @@ export default function LeaderboardPage() {
     async function load() {
       setLoading(true);
       try {
-        const d = await wsGet<LeaderboardResponse>(`/api/academy/leaderboard?product_id=${productId}&board=${board}&scope=${scope}`);
+        const d = await wsGet<LeaderboardResponse>(`/api/academy/leaderboard?product_id=${productId}&board=${board}&scope=${scope}&mine=1`);
         if (!cancelled) setData(d);
       } finally {
         if (!cancelled) setLoading(false);
@@ -249,7 +249,7 @@ export default function LeaderboardPage() {
         <div style={{ background: "linear-gradient(135deg, rgba(251,191,36,0.14), rgba(14,14,19,0.5))", border: "1px solid rgba(251,191,36,0.28)", borderRadius: "var(--app-radius-lg)", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 24, flexShrink: 0 }}>🏆</span>
           <p style={{ fontSize: 13, color: "var(--app-warning)", lineHeight: 1.5 }}>
-            <strong>1st place</strong> wins a free Academy Package · ₦250,000 value · awarded at graduation
+            <strong>1st place in this cohort</strong> wins the <strong>$10k Academy</strong> + <strong>₦50,000 cash</strong> · awarded when the cohort ends
           </p>
         </div>
       </div>

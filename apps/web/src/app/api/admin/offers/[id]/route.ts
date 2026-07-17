@@ -22,7 +22,7 @@ const PATCHABLE_FIELDS = new Set<string>([
   "expires_at", "on_expire", "stock_limit", "recover_abandoned",
   "auto_grant", "manual_approval", "no_workspace_action", "after_purchase", "custom_url",
   "send_receipt", "send_whatsapp", "notify_admin", "refund_window_days",
-  "funnel_ids",
+  "funnel_ids", "is_targeted", "sales_page",
 ]);
 
 // Nested jsonb fields that should be shallow-merged with the existing value

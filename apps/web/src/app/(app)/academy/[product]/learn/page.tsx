@@ -198,6 +198,38 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   const weekStart = (weekNum - 1) * 7 + 1;
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart + i).filter(d => d <= totalDays);
 
+  // ── Pre-live cohort gate ──────────────────────────────────────────────────
+  // Cohort-based challenges are locked until their cohort goes live. Show a
+  // "your cohort starts on <date>" holding screen instead of an empty grid.
+  const cohortStart = state.cohort?.starts_at ? new Date(state.cohort.starts_at) : null;
+  if (cohortStart && cohortStart.getTime() > Date.now()) {
+    const goLive = cohortStart.toLocaleString("en-US", {
+      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+      timeZone: "Africa/Lagos", timeZoneName: "short",
+    });
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)", padding: "24px 22px 90px" }}>
+        <div style={{ maxWidth: 620, margin: "48px auto 0", textAlign: "center" }}>
+          <div style={{ fontSize: 52, marginBottom: 18 }}>🚀</div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--app-text)", marginBottom: 10 }}>
+            You&apos;re in! Your cohort starts soon
+          </h1>
+          <p style={{ fontSize: 15, color: "var(--app-text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+            {state.cohort?.name ? `${state.cohort.name} · ` : ""}Day&nbsp;1 unlocks <strong style={{ color: "var(--app-text)" }}>{goLive}</strong>. We&apos;ll open the challenge live then — make sure you&apos;ve joined the WhatsApp group so you don&apos;t miss the kickoff.
+          </p>
+          <div style={{ background: "linear-gradient(135deg, rgba(249,115,22,0.16), rgba(14,14,19,0.4))", border: "1px solid rgba(249,115,22,0.28)", borderRadius: "var(--app-radius-lg)", padding: "22px 20px", textAlign: "left" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--app-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>While you wait</p>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, color: "var(--app-text)", lineHeight: 1.9 }}>
+              <li>Set up your Leadash workspace — connect an inbox and build your first sequence.</li>
+              <li>Every action you take now counts toward the cohort leaderboard once it goes live.</li>
+              <li>The winner gets the $10k Academy + ₦50,000 cash. Come ready.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", padding: "24px 22px 90px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>

@@ -15,6 +15,7 @@ import BetaBanner from "@/components/BetaBanner";
 import PastDueBanner from "@/components/PastDueBanner";
 import SubscriptionRenewalBanner from "@/components/SubscriptionRenewalBanner";
 import { SidebarProvider } from "@/components/SidebarContext";
+import ChallengeHeartbeat from "@/components/ChallengeHeartbeat";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { getBillingAccessStatus } from "@/lib/billing/access";
 import BillingPaywall from "@/components/BillingPaywall";
@@ -103,6 +104,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
     <SidebarProvider>
       <CommandPaletteMount />
+      <ChallengeHeartbeat />
       <div className="v2-app v2-legacy-bridge flex h-screen overflow-hidden" style={{ background: "var(--app-bg)" }}>
         <Sidebar
           workspaceName={workspace.name}

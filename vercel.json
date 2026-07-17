@@ -22,6 +22,7 @@
     { "path": "/api/cron/domains",           "schedule": "0 5 * * *"    },
     { "path": "/api/cron/cleanup",           "schedule": "0 0 * * 0"    },
     { "path": "/api/cron/offer-renewals",   "schedule": "0 6 * * *"    },
-    { "path": "/api/cron/billing-reconcile", "schedule": "0 7 * * *"   }
+    { "path": "/api/cron/billing-reconcile", "schedule": "0 7 * * *"   },
+    { "path": "/api/cron/academy-cohorts",   "schedule": "0 * * * *"   }
   ]
 }

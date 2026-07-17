@@ -9,6 +9,7 @@ import { renderEmail, generateUnsubscribeToken } from "@/lib/outreach/template";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
 import { sendMicrosoftMessage } from "@/lib/outreach/microsoft";
 import { sendSmtpMessage } from "@/lib/outreach/smtp";
+import { awardChallengePoints } from "@/lib/academy/points";
 import type { OutreachInbox, OutreachSequenceStep, OutreachCampaign } from "@/types/outreach";
 
 const BOUNCE_PATTERN     = /5\d\d|user unknown|mailbox not found|no such user|does not exist|invalid.*address|recipient.*rejected/i;
@@ -277,6 +278,15 @@ export async function runSendBatch(
   const result: SendRunResult = { processed: due.length, sent: 0, skipped: 0, errors: 0 };
   if (!due.length) return result;
 
+  // Cheap coarse guard: only bother scoring challenge points if this workspace
+  // has an academy enrollment at all (the RPC does precise live-cohort gating).
+  const { count: academyCount } = await db
+    .from("academy_enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .eq("status", "active");
+  const maybeChallenge = (academyCount ?? 0) > 0;
+
   // Load workspace settings once
   const { data: wsSettings } = await db.from("workspace_settings").select("*").eq("workspace_id", workspaceId).single();
   const footerEnabled = wsSettings?.footer_enabled !== false && wsSettings?.footer_enabled !== "false";
@@ -538,6 +548,9 @@ export async function runSendBatch(
         }).eq("id", sendRecord.id);
 
         result.sent++;
+        if (maybeChallenge) {
+          await awardChallengePoints(db, { workspaceId, action: "message_sent", ref: `send:${sendRecord.id}` });
+        }
       } catch (err) {
         const errMsg = String(err);
         if (BOUNCE_PATTERN.test(errMsg)) {

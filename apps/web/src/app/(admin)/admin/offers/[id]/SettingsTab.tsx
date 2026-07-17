@@ -88,6 +88,15 @@ export default function SettingsTab({ offerId, offer, onUpdate, showToast }: Pro
             </div>
             <Toggle on={offer.manual_approval} onChange={v => onUpdate({ manual_approval: v })} />
           </div>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>Targeted offer</p>
+              <p style={{ fontSize: 11.5, color: "var(--app-text-quiet)", marginTop: 2 }}>
+                Only workspaces you activate (Targeting tab) can see or buy this offer. Off = public.
+              </p>
+            </div>
+            <Toggle on={Boolean((offer as unknown as { is_targeted?: boolean }).is_targeted)} onChange={v => onUpdate({ is_targeted: v } as Partial<Offer>)} />
+          </div>
           <div>
             <label style={labelStyle}>When buyer has no workspace</label>
             <select

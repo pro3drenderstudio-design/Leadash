@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { sendSmtpMessage } from "@/lib/outreach/smtp";
 import { sendGmailMessage } from "@/lib/outreach/gmail";
 import { sendMicrosoftMessage } from "@/lib/outreach/microsoft";
+import { awardChallengePoints } from "@/lib/academy/points";
 import type { OutreachInbox } from "@/types/outreach";
 
 interface OutgoingAttachment { path: string; name: string; mimeType: string; size: number; }
@@ -144,6 +145,9 @@ export async function POST(
       .update({ status: "replied" })
       .eq("id", enrollmentId)
       .eq("workspace_id", workspaceId);
+
+    // Score the reply (capped/day; unique per send so retries don't double-count).
+    await awardChallengePoints(db, { workspaceId, action: "reply_sent", ref: messageId ? `reply:${messageId}` : null });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

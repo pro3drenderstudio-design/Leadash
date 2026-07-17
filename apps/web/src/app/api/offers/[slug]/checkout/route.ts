@@ -11,6 +11,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { createPaystackCheckout } from "@/lib/billing/paystack";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { fulfillAllGrants } from "@/lib/offers/granters";
+import { hasActiveOfferTarget } from "@/lib/offers/targeting";
 import { enqueueAutomation } from "@/lib/queue/client";
 import type { Offer, OfferLineItem, GrantedItem } from "@/types/offers";
 
@@ -184,6 +185,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       userId = created.userId;
       workspaceId = created.workspaceId;
     }
+  }
+
+  // Targeted offers require an active target for the resolved workspace.
+  if ((offer as unknown as { is_targeted?: boolean }).is_targeted) {
+    const ok = await hasActiveOfferTarget(db, offer.id, workspaceId);
+    if (!ok) return NextResponse.json({ error: "This offer isn't available for your account." }, { status: 403 });
   }
 
   // Link any anonymous CRM contact (e.g. a funnel opt-in lead) created under

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { enqueueAutomation } from "@/lib/queue/client";
 import { normalisePhoneNG } from "@/lib/phone";
+import { applyChallengeConfirmation } from "@/lib/challenge/confirm";
 
 export const maxDuration = 30;
 
@@ -354,6 +355,36 @@ export async function POST(req: NextRequest) {
       form_data:    { full_name: full_name.trim(), email: emailNorm, phone: phoneNorm, bank_account_name, payment_method },
     },
   }).catch(err => console.error("[challenge/signup] automation enqueue error:", err));
+
+  // ── Paystack auto-confirm parity ──────────────────────────────────────────
+  // A verified Paystack signup is set to "confirmed" above but, unlike the admin
+  // confirm route, never got the enrollment + sponsored offer. Grant them here
+  // so both payment paths behave identically.
+  if (paymentConfirmed) {
+    try {
+      await applyChallengeConfirmation(db, {
+        signup: { user_id: userId, workspace_id: null },
+        createdBy: null,
+        productSlug: "challenge-7day",
+      });
+      await enqueueAutomation({
+        event:        "academy.enrollment_created",
+        workspace_id: null,
+        user_id:      userId,
+        payload: {
+          product_slug:   "challenge-7day",
+          product_name:   "7-Day Job & Client Acquisition Challenge",
+          full_name:      full_name.trim(),
+          email:          emailNorm,
+          phone:          phoneNorm,
+          contact_id:     crmContactId,
+          payment_method,
+        },
+      });
+    } catch (e) {
+      console.error("[challenge/signup] auto-confirm grant error:", e);
+    }
+  }
 
   return NextResponse.json({
     ok:           true,

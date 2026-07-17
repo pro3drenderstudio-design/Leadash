@@ -168,6 +168,9 @@ export interface Offer {
 
   funnel_ids: string[];
 
+  is_targeted?: boolean;
+  sales_page?: Record<string, unknown> | null;
+
   views_count: number;
   created_by: string | null;
   created_at: string;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { isLessonUnlocked } from "@/types/academy";
 import { enqueueAutomation } from "@/lib/queue/client";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 const POINTS_PER_LESSON = 10;
 const POINTS_PER_COURSE = 200;
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     user_id:      userId,
     payload:      { product_id, lesson_id, enrollment_id: enrollment.id },
   }).catch(() => {});
+
+  // Score watching a lesson to completion (once per lesson).
+  await awardChallengePoints(db, { userId, workspaceId, action: "lesson_watched", ref: `lesson:${lesson_id}` });
 
   // Check overall course completion
   const [allLessonsRes, allProgressRes] = await Promise.all([

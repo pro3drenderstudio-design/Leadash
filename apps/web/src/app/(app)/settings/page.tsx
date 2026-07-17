@@ -470,6 +470,8 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
   const [newPaymentWorking, setNewPaymentWorking] = useState<string | null>(null);
   const [ngnPerUsd, setNgnPerUsd]             = useState(1600);
   const [usage, setUsage] = useState<{ sends_used: number; sends_cap: number; pct: number; resets_at: string } | null>(null);
+  const [sponsoredOffers, setSponsoredOffers] = useState<Array<{ slug: string; name: string; price_ngn: number; compare_at_ngn: number | null; starts_at: string | null; expires_at: string | null }>>([]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   // formatPrice converts NGN → local currency (display only — Paystack still charges NGN).
   const { formatPrice } = useCurrency();
 
@@ -494,7 +496,16 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
     }).catch(() => setLoading(false));
     wsGet<{ sends_used: number; sends_cap: number; pct: number; resets_at: string }>("/api/billing/usage")
       .then(setUsage).catch(() => {});
+    wsGet<{ offers: Array<{ slug: string; name: string; price_ngn: number; compare_at_ngn: number | null; starts_at: string | null; expires_at: string | null }> }>("/api/billing/offers")
+      .then(d => setSponsoredOffers(d.offers ?? [])).catch(() => {});
   }, []);
+
+  // Tick for the offer countdown.
+  useEffect(() => {
+    if (sponsoredOffers.length === 0) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [sponsoredOffers.length]);
 
   // Verify payment + upgrade plan immediately on redirect, then reload credits
   useEffect(() => {
@@ -761,6 +772,55 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
           </div>
         </div>
       )}
+
+      {/* ── Sponsored / targeted offer banner (with countdown) ── */}
+      {sponsoredOffers.map(o => {
+        // Dormant until go-live (cohort start): show an "unlocks" teaser, no live countdown yet.
+        const startMs = o.starts_at ? new Date(o.starts_at).getTime() - nowTick : null;
+        const pending = startMs !== null && startMs > 0;
+
+        const ms = o.expires_at ? new Date(o.expires_at).getTime() - nowTick : null;
+        if (!pending && ms !== null && ms <= 0) return null;
+        const d = ms !== null ? Math.floor(ms / 86400000) : null;
+        const h = ms !== null ? Math.floor((ms % 86400000) / 3600000) : null;
+        const m = ms !== null ? Math.floor((ms % 3600000) / 60000) : null;
+        const s = ms !== null ? Math.floor((ms % 60000) / 1000) : null;
+        const unlockLabel = o.starts_at
+          ? new Date(o.starts_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+          : null;
+        return (
+          <a key={o.slug} href={pending ? undefined : `/offer/${o.slug}`}
+            className={`block rounded-2xl border border-orange-500/30 bg-gradient-to-r from-orange-500/15 to-amber-500/10 p-5 transition-colors ${pending ? "cursor-default opacity-90" : "hover:from-orange-500/20"}`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-orange-200 font-bold text-sm">🎓 {o.name}</p>
+                <p className="text-white/60 text-xs mt-0.5">
+                  {o.compare_at_ngn && o.compare_at_ngn > o.price_ngn && (
+                    <span className="line-through text-white/30 mr-1">₦{o.compare_at_ngn.toLocaleString()}</span>
+                  )}
+                  <span className="font-semibold text-white">₦{o.price_ngn.toLocaleString()}</span> — sponsored by Leadash
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {pending ? (
+                  <span className="text-xs font-semibold bg-black/30 border border-orange-500/25 rounded-lg px-3 py-1.5 text-orange-200 whitespace-nowrap">
+                    🔒 Unlocks {unlockLabel}
+                  </span>
+                ) : (
+                  <>
+                    {ms !== null && (
+                      <span className="font-mono text-xs font-bold tabular-nums bg-black/30 border border-orange-500/25 rounded-lg px-2.5 py-1 text-orange-200">
+                        {d}d {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
+                      </span>
+                    )}
+                    <span className="text-xs font-bold bg-orange-500 text-white px-4 py-2 rounded-xl whitespace-nowrap">View offer →</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </a>
+        );
+      })}
 
       {/* ── Monthly send usage meter ── */}
       {usage && usage.sends_cap > 0 && planId !== "free" && (

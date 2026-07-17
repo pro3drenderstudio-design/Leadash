@@ -17,6 +17,7 @@ const LINK_COLUMNS = [
       { label: "How it works", href: "/#how" },
       { label: "For freelancers", href: "/#personas" },
       { label: "Pricing", href: "/#pricing" },
+      { label: "The $10k Academy", href: "/offer/10k-academy" },
       { label: "Browser extension", href: "/extension" },
     ],
   },

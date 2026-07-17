@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { awardChallengePoints } from "@/lib/academy/points";
+
+// Positive CRM outcomes worth challenge points (marking a lead interested / booked).
+const POSITIVE_CRM_STATUSES = new Set(["interested", "meeting_booked", "booked", "positive"]);
 
 // GET /api/outreach/crm/[enrollmentId]
 // Returns the full conversation: all sends + replies merged chronologically, plus notes.
@@ -83,5 +87,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Score marking a lead interested / booked — the real outcome (once per enrollment).
+  if (typeof body.crm_status === "string" && POSITIVE_CRM_STATUSES.has(body.crm_status)) {
+    await awardChallengePoints(db, { workspaceId, action: "interested_reply", ref: `interested:${enrollmentId}` });
+  }
+
   return NextResponse.json(data);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { enqueueSend } from "@/lib/queue/client";
 import { getPoolQuotaStatus } from "@/lib/billing/pool-quota";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkspace(req);
@@ -122,6 +123,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Kick off sends when campaign becomes active
   if (update.status === "active" && before?.status !== "active") {
     await enqueueSend(workspaceId, 200).catch(() => {});
+    // Score the launch once per campaign (dedup by id — pause/reactivate can't farm).
+    await awardChallengePoints(db, { workspaceId, action: "campaign_launched", ref: `launch:${id}` });
   }
 
   return NextResponse.json(data);

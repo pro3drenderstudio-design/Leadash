@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import leadsDb from "@/lib/postgres/leads-db";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 import { getCreditRates } from "@/lib/lead-campaigns/credit-rates";
 
@@ -111,6 +112,21 @@ export async function POST(req: NextRequest) {
           description:  `Discover reveal — ${newIds.length} lead${newIds.length !== 1 ? "s" : ""} (${rateDiscover} credits each)`,
         }),
       ]);
+    }
+  }
+
+  // Score newly-revealed leads for challenge participants (1 pt each, capped/day,
+  // deduped per lead). Coarse guard first so non-participants don't loop the RPC.
+  if (newIds.length > 0) {
+    const { count: academyCount } = await db
+      .from("academy_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active");
+    if ((academyCount ?? 0) > 0) {
+      for (const pid of newIds.slice(0, 50)) {
+        await awardChallengePoints(db, { workspaceId, action: "lead_added", ref: `lead:${pid}` });
+      }
     }
   }
 

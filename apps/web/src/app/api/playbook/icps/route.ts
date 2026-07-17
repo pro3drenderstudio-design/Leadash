@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
@@ -31,5 +32,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await awardChallengePoints(db, { workspaceId, action: "icp_created", ref: `icp:${data.id}` });
   return NextResponse.json({ icp: data }, { status: 201 });
 }

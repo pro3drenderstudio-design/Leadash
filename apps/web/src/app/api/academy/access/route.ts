@@ -23,7 +23,11 @@ export async function GET() {
   // Coming soon is off → everyone can access
   if (!enabled) return NextResponse.json({ accessible: true });
 
-  // Coming soon is on → check if the user has any workspace in the beta list
+  // Coming soon is on → allow the user in if they're a beta workspace OR they
+  // have bought into the academy (any active enrollment). Buyers of the $10k
+  // academy / sponsored bundle get in; everyone else still sees "coming soon",
+  // and per-product pages remain enrollment-gated so buyers only enter what
+  // they own.
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -33,9 +37,17 @@ export async function GET() {
     .from("workspace_members")
     .select("workspace_id")
     .eq("user_id", user.id);
-
   const userWorkspaceIds = (memberships ?? []).map((m: { workspace_id: string }) => m.workspace_id);
-  const accessible = userWorkspaceIds.some((id: string) => betaList.includes(id));
 
-  return NextResponse.json({ accessible });
+  if (userWorkspaceIds.some((id: string) => betaList.includes(id))) {
+    return NextResponse.json({ accessible: true });
+  }
+
+  const { count: enrollmentCount } = await db
+    .from("academy_enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .neq("status", "cancelled");
+
+  return NextResponse.json({ accessible: (enrollmentCount ?? 0) > 0 });
 }

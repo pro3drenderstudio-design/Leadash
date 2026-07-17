@@ -24,9 +24,10 @@ import BumpsTab from "./BumpsTab";
 import PromotionTab from "./PromotionTab";
 import SharingTab from "./SharingTab";
 import SettingsTab from "./SettingsTab";
+import TargetingTab from "./TargetingTab";
 import { btnPrimary, btnGhost } from "./shared";
 
-type BuilderTab = "grants" | "pricing" | "checkout" | "bumps" | "promotion" | "sharing" | "settings";
+type BuilderTab = "grants" | "pricing" | "checkout" | "bumps" | "promotion" | "sharing" | "targeting" | "settings";
 
 const TABS: { key: BuilderTab; label: string; icon: typeof ShoppingBag01Icon }[] = [
   { key: "grants", label: "What's included", icon: ShoppingBag01Icon },
@@ -35,6 +36,7 @@ const TABS: { key: BuilderTab; label: string; icon: typeof ShoppingBag01Icon }[]
   { key: "bumps", label: "Bumps & Upsells", icon: Megaphone01Icon },
   { key: "promotion", label: "Promotion", icon: GitBranchIcon },
   { key: "sharing", label: "Sharing & Funnel", icon: Share08Icon },
+  { key: "targeting", label: "Targeting", icon: Megaphone01Icon },
   { key: "settings", label: "Settings", icon: Settings02Icon },
 ];
 
@@ -47,7 +49,7 @@ const SAVE_FIELDS: (keyof Offer)[] = [
   "expires_at", "on_expire", "stock_limit", "recover_abandoned",
   "auto_grant", "manual_approval", "no_workspace_action", "after_purchase", "custom_url",
   "send_receipt", "send_whatsapp", "notify_admin", "refund_window_days",
-  "funnel_ids", "slug",
+  "funnel_ids", "slug", "is_targeted", "sales_page",
 ];
 
 export default function OfferBuilderPage() {
@@ -261,6 +263,9 @@ export default function OfferBuilderPage() {
               )}
               {tab === "sharing" && (
                 <SharingTab offer={offer} onUpdate={updateOffer} showToast={showToast} />
+              )}
+              {tab === "targeting" && (
+                <TargetingTab offerId={offerId} isTargeted={!!(offer as unknown as { is_targeted?: boolean }).is_targeted} />
               )}
               {tab === "settings" && (
                 <SettingsTab offerId={offerId} offer={offer} onUpdate={updateOffer} showToast={showToast} />

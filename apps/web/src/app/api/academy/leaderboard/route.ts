@@ -39,6 +39,8 @@ export async function GET(req: NextRequest) {
 
   const board = (req.nextUrl.searchParams.get("board") ?? "points") as BoardType;
   const scope = (req.nextUrl.searchParams.get("scope") ?? "all_time") as ScopeType;
+  let cohortId = req.nextUrl.searchParams.get("cohort_id");  // optional — scope to one cohort
+  const mine = req.nextUrl.searchParams.get("mine") === "1"; // scope to the caller's own cohort
 
   if (!["points", "earnings"].includes(board))
     return NextResponse.json({ error: "board must be 'points' or 'earnings'" }, { status: 400 });
@@ -47,6 +49,32 @@ export async function GET(req: NextRequest) {
 
   // Workspace for current user (to identify "me" in the leaderboard)
   const myWorkspaceId = workspaceId;
+
+  // Resolve the caller's own cohort when mine=1 (no client-side cohort id needed).
+  if (mine && !cohortId) {
+    const { data: myEnr } = await db
+      .from("academy_enrollments")
+      .select("cohort_id")
+      .eq("workspace_id", workspaceId)
+      .eq("product_id", productId)
+      .neq("status", "cancelled")
+      .maybeSingle();
+    cohortId = (myEnr?.cohort_id as string | null) ?? null;
+  }
+
+  // Cohort scoping: restrict to enrollments in the given cohort.
+  let cohortEnrollmentIds: string[] | null = null;
+  if (cohortId) {
+    const { data: cohortEnrollments } = await db
+      .from("academy_enrollments")
+      .select("id")
+      .eq("product_id", productId)
+      .eq("cohort_id", cohortId);
+    cohortEnrollmentIds = ((cohortEnrollments ?? []) as { id: string }[]).map(e => e.id);
+    if (cohortEnrollmentIds.length === 0) {
+      return NextResponse.json({ board, scope, cohort_id: cohortId, rows: [], me: null });
+    }
+  }
 
   // Fetch product challenge_config (for earnings_require_proof setting)
   const { data: product } = await db
@@ -63,6 +91,8 @@ export async function GET(req: NextRequest) {
     .from("academy_gamification")
     .select("enrollment_id, points, streak_days, last_active_date, reported_earnings_cents, earnings_verified")
     .eq("product_id", productId);
+
+  if (cohortEnrollmentIds) gamQuery = gamQuery.in("enrollment_id", cohortEnrollmentIds);
 
   // For week scope, filter by last_active_date within the past 7 days
   if (scope === "week") {
@@ -170,11 +200,13 @@ export async function GET(req: NextRequest) {
         const scoreField = board === "points" ? "points" : "reported_earnings_cents";
         const myScore = board === "points" ? myGamRow.points : myGamRow.reported_earnings_cents;
 
-        const { count: higherCount } = await db
+        let higherQuery = db
           .from("academy_gamification")
           .select("*", { count: "exact", head: true })
           .eq("product_id", productId)
           .gt(scoreField, myScore);
+        if (cohortEnrollmentIds) higherQuery = higherQuery.in("enrollment_id", cohortEnrollmentIds);
+        const { count: higherCount } = await higherQuery;
 
         me = {
           rank: (higherCount ?? 0) + 1,
