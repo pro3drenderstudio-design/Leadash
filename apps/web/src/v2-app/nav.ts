@@ -73,7 +73,7 @@ export const APP_NAV: NavGroup[] = [
         href: "/discover", label: "Leadgen", icon: UserSearch01Icon,
         children: [
           { href: "/discover",              label: "Discover",       badge: "New" },
-          { href: "/discover/ai-search",    label: "AI Search",      badge: "New" },
+          // AI Search temporarily disabled — { href: "/discover/ai-search", label: "AI Search", badge: "New" },
           { href: "/lead-campaigns/verify", label: "Verify Email" },
           { href: "/lead-campaigns/enrich", label: "AI Enrichment" },
         ],

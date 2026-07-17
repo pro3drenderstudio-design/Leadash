@@ -69,7 +69,7 @@ export const SECTIONS: NavSection[] = [
     href: "/discover",
     tabs: [
       { href: "/discover",              label: "Discover", badge: "New" },
-      { href: "/discover/ai-search",   label: "AI Search", badge: "New" },
+      // AI Search temporarily disabled — { href: "/discover/ai-search", label: "AI Search", badge: "New" },
       { href: "/lead-campaigns",        label: "Lead Campaigns" },
       { href: "/lead-campaigns/verify", label: "Verify Email" },
       { href: "/lead-campaigns/enrich", label: "AI Enrichment" },
