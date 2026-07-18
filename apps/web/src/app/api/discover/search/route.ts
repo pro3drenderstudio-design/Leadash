@@ -276,14 +276,6 @@ export async function GET(req: NextRequest) {
     // company-side (industry / company keywords) and location filters. Plain
     // seniority/country searches keep recency ordering — their compound index
     // provides both the filter and the sort.
-    const dropOrder = !!keyword
-      || titleIncludes.length > 0
-      || companyIncludes.length > 0
-      || industryIncludes.length > 0
-      || companyKeywordIncludes.length > 0
-      || locationIncludes.length > 0;
-    const forceFlat = dropOrder;
-
     // Use INNER JOIN when filtering on company attributes — lets the planner start
     // from the much smaller discover_companies table (industry GIN, size btree) and
     // then join to discover_people, instead of scanning all 559M people rows first.
@@ -291,6 +283,22 @@ export async function GET(req: NextRequest) {
       || companySizes.length > 0
       || companyKeywordIncludes.length > 0 || companyKeywordExcludes.length > 0;
     const joinType = hasCompanyFilter ? "INNER JOIN" : "LEFT JOIN";
+
+    // Drop created_at ordering whenever the query is NOT a plain people-side
+    // structured search — i.e. any company-side filter (INNER JOIN, include OR
+    // exclude) or any people-side text/location INCLUDE. Those either make the
+    // result sparse among recent rows or add per-row join work, so keeping the
+    // ordering traps the planner into a full recency scan → statement_timeout.
+    // Plain seniority/country/department searches (and people-side EXCLUDEs with
+    // no join, which barely reduce the set) keep recency ordering — fast via the
+    // compound index or a cheap post-filter.
+    const dropOrder = hasCompanyFilter
+      || !!keyword
+      || titleIncludes.length > 0
+      || companyIncludes.length > 0
+      || departments.length > 0
+      || locationIncludes.length > 0;
+    const forceFlat = dropOrder;
 
     // When multiple seniority values are selected the planner ignores the seniority
     // composite index and falls back to a full country-scan (or created_at scan) that
