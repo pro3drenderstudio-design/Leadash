@@ -269,12 +269,20 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Any free-text filter (keyword box, or title/company includes) drives the
-    // query off the FTS GIN index and must NOT be ordered by created_at — that
-    // traps the planner into a full recency scan. Route through the flat path
-    // (seniority/country folded into ANY) and drop the ordering.
-    const hasTextFilter = !!keyword || titleIncludes.length > 0 || companyIncludes.length > 0;
-    const forceFlat     = hasTextFilter;
+    // Drop the created_at ordering (and route through the flat path) for any
+    // filter that can make the result sparse among recent rows — otherwise the
+    // planner walks the created_at index and post-filters row by row until it
+    // hits statement_timeout. Covers FTS text (keyword/title/company) plus the
+    // company-side (industry / company keywords) and location filters. Plain
+    // seniority/country searches keep recency ordering — their compound index
+    // provides both the filter and the sort.
+    const dropOrder = !!keyword
+      || titleIncludes.length > 0
+      || companyIncludes.length > 0
+      || industryIncludes.length > 0
+      || companyKeywordIncludes.length > 0
+      || locationIncludes.length > 0;
+    const forceFlat = dropOrder;
 
     // Use INNER JOIN when filtering on company attributes — lets the planner start
     // from the much smaller discover_companies table (industry GIN, size btree) and
@@ -358,7 +366,7 @@ export async function GET(req: NextRequest) {
         FROM discover_people p
         ${joinType} discover_companies c ON c.id = p.company_id
         ${whereForSimplePaths}
-        ${hasTextFilter ? "" : "ORDER BY p.created_at DESC NULLS LAST"}
+        ${dropOrder ? "" : "ORDER BY p.created_at DESC NULLS LAST"}
         LIMIT $${i + simpleExtraParams}
       `;
       const idRows = await leadsDb.unsafe<{ id: string }[]>(
@@ -441,7 +449,7 @@ export async function GET(req: NextRequest) {
           FROM discover_people p
           ${joinType} discover_companies c ON c.id = p.company_id
           ${flatWhere}
-          ${hasTextFilter ? "" : `ORDER BY ${sortCol} ${sortDir} NULLS LAST`}
+          ${dropOrder ? "" : `ORDER BY ${sortCol} ${sortDir} NULLS LAST`}
           LIMIT $${i + flatExtra} OFFSET $${i + flatExtra + 1}
         `, [...flatParams, limit, offset] as never[]);
     }
