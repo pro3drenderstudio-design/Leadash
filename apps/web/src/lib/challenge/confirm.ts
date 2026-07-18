@@ -23,7 +23,7 @@ interface ConfirmSignup {
 export async function applyChallengeConfirmation(
   db: SupabaseClient,
   opts: { signup: ConfirmSignup; createdBy?: string | null; productSlug?: string },
-): Promise<{ workspaceId: string | null; cohortId: string | null; offerTargeted: boolean }> {
+): Promise<{ workspaceId: string | null; cohortId: string | null; cohortStartsAt: string | null; offerTargeted: boolean }> {
   const productSlug = opts.productSlug ?? "challenge-7day";
   const signupUserId = opts.signup.user_id;
 
@@ -41,7 +41,7 @@ export async function applyChallengeConfirmation(
     wsId = (ws?.id as string) ?? null;
   }
 
-  if (!signupUserId || !wsId) return { workspaceId: wsId, cohortId: null, offerTargeted: false };
+  if (!signupUserId || !wsId) return { workspaceId: wsId, cohortId: null, cohortStartsAt: null, offerTargeted: false };
 
   // Resolve the product + its currently-open cohort.
   const { data: product } = await db
@@ -49,7 +49,7 @@ export async function applyChallengeConfirmation(
     .select("id")
     .eq("slug", productSlug)
     .single();
-  if (!product) return { workspaceId: wsId, cohortId: null, offerTargeted: false };
+  if (!product) return { workspaceId: wsId, cohortId: null, cohortStartsAt: null, offerTargeted: false };
 
   const { data: cohort } = await db
     .from("academy_cohorts")
@@ -106,5 +106,5 @@ export async function applyChallengeConfirmation(
     console.error("[challenge/confirm] sponsored target error:", e instanceof Error ? e.message : e);
   }
 
-  return { workspaceId: wsId, cohortId, offerTargeted };
+  return { workspaceId: wsId, cohortId, cohortStartsAt: cohortStartsAt, offerTargeted };
 }

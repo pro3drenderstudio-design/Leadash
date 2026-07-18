@@ -245,40 +245,32 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         from:    `Leadash Academy <${RESEND_FROM}>`,
         to:      [emailNorm],
-        subject: "You're in! Join the WhatsApp group to get started 🎉",
+        subject: "One step left — confirm your payment to lock in your spot",
         html: `
 <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;color:#374151">
   <div style="background:#111827;padding:24px 32px;border-radius:12px 12px 0 0;text-align:center">
     <p style="margin:0;font-size:20px;font-weight:800;color:#fff">Leadash Academy</p>
   </div>
   <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:36px 32px">
-    <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111827">You're registered, ${firstName}! 🎉</h2>
+    <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111827">Thanks, ${firstName} — we've got your details</h2>
     <p style="color:#6b7280;font-size:15px;line-height:1.6;margin-bottom:20px">
-      We received your signup for the <strong>7-Day Job &amp; Client Acquisition Challenge</strong>.
-      Your payment is being confirmed — here's what to do next.
+      We received your registration for the <strong>7-Day Job &amp; Client Acquisition Challenge</strong>.
+      <strong style="color:#92400e">Your payment is being verified</strong> — your spot isn't locked in just yet.
     </p>
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:18px 20px;margin-bottom:24px">
-      <p style="font-size:13px;font-weight:700;color:#92400e;margin:0 0 10px">Next steps:</p>
-      <ol style="font-size:13px;color:#78350f;line-height:1.8;margin:0;padding-left:18px">
-        <li>Join the WhatsApp group using the button below</li>
-        <li>Your payment will be confirmed within 2 hours</li>
-        <li>Challenge starts next Monday at 9PM WAT</li>
-      </ol>
+      <p style="font-size:14px;color:#78350f;line-height:1.6;margin:0">
+        <strong>One thing to do:</strong> if you haven't already, message our team on WhatsApp to confirm your payment.
+        We'll verify it and lock in your spot.
+      </p>
     </div>
-    <p style="text-align:center;margin:0 0 24px">
-      <a href="${APP_URL}/go/7-days-challenge"
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${waEmailUrl}"
          style="display:inline-block;background:#25d366;color:#fff;padding:13px 28px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">
-        💬 Join WhatsApp Group
+        💬 Confirm my payment on WhatsApp
       </a>
     </p>
-    <p style="font-size:14px;color:#374151;margin-bottom:6px">Your login details:</p>
-    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;font-size:13px;color:#374151;margin-bottom:24px">
-      <strong>Email:</strong> ${emailNorm}<br />
-      <strong>Password:</strong> the one you set during signup<br />
-      <strong>Login:</strong> <a href="${loginUrl}" style="color:#f97316">${loginUrl}</a>
-    </div>
-    <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:24px">
-      If you didn't sign up, you can safely ignore this email. Questions? Reply here.
+    <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:28px">
+      Once your payment is confirmed we'll email you your access details. If you didn't sign up, you can safely ignore this email. Questions? Reply here.
     </p>
   </div>
 </div>`,

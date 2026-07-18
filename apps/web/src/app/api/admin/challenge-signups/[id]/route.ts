@@ -42,11 +42,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Enroll into the current cohort + set up the dormant-until-go-live
     // sponsored offer (shared with the Paystack auto-confirm path).
-    await applyChallengeConfirmation(db, {
+    const confirmResult = await applyChallengeConfirmation(db, {
       signup: { user_id: signup.user_id as string | null, workspace_id: signup.workspace_id as string | null },
       createdBy: userId,
       productSlug: "challenge-7day",
     });
+    // Exact cohort go-live in WAT for the confirmation email (e.g. "Monday, July 20 at 9:00 PM WAT").
+    const cohortWhen = confirmResult.cohortStartsAt
+      ? new Date(confirmResult.cohortStartsAt).toLocaleString("en-US", {
+          weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos",
+        }) + " WAT"
+      : null;
 
     await db.from("challenge_signups").update({
       status:       "confirmed",
@@ -97,31 +103,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const resendKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? "academy@leadash.com";
     if (resendKey && signup.email) {
-      const waLink = `https://wa.me/2349110260332?text=${encodeURIComponent(`Hi! I just got confirmed for the 7-Day Challenge. My name is ${signup.full_name}.`)}`;
-      const loginLink = "https://leadash.com/login";
+      const groupLink = "https://leadash.com/go/7-days-challenge";
+      const dashboardLink = "https://leadash.com/academy";
+      const cohortLine = cohortWhen
+        ? `Your cohort goes live <strong>${cohortWhen}</strong> — that's when Day 1 unlocks. See you there!`
+        : `We'll let you know the moment your cohort's start date is set — that's when Day 1 unlocks.`;
       fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: `Leadash Academy <${fromEmail}>`,
           to: [signup.email as string],
-          subject: "You're in! 🎉 7-Day Challenge starts now",
+          subject: "Payment confirmed 🎉 — you're in the 7-Day Challenge",
           html: `
 <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;color:#374151">
   <img src="https://leadash.com/Logo_Icon_Colored.svg" alt="Leadash" style="width:32px;height:32px;margin-bottom:24px" />
   <h1 style="font-size:24px;font-weight:800;color:#111827;margin-bottom:8px">You're confirmed, ${(signup.full_name as string).split(" ")[0]}! 🎉</h1>
-  <p style="font-size:15px;line-height:1.7;margin-bottom:20px">Your spot in the <strong>7-Day Job & Client Acquisition Challenge</strong> has been confirmed. Here's everything you need to know:</p>
+  <p style="font-size:15px;line-height:1.7;margin-bottom:20px">Your payment has been verified and your spot in the <strong>7-Day Job &amp; Client Acquisition Challenge</strong> is secured. Here's everything you need:</p>
   <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:20px 24px;margin-bottom:24px">
-    <p style="font-size:14px;font-weight:700;color:#92400e;margin-bottom:12px">Next steps:</p>
+    <p style="font-size:14px;font-weight:700;color:#92400e;margin-bottom:12px">What to do next:</p>
     <ol style="font-size:14px;color:#78350f;line-height:1.8;margin:0;padding-left:20px">
-      <li>Message us on WhatsApp so we can add you to the private group</li>
-      <li>Log in to your Leadash account to access your dashboard</li>
-      <li>Day 1 lesson drops tomorrow morning at 8am WAT</li>
+      <li>Join the WhatsApp group (if you haven't already) so you don't miss the kickoff</li>
+      <li>Log in to your Leadash Academy dashboard</li>
+      <li>${cohortLine}</li>
     </ol>
   </div>
-  <a href="${waLink}" style="display:inline-block;background:#25d366;color:#fff;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none;margin-bottom:12px">💬 Join the WhatsApp Group</a>
+  <a href="${groupLink}" style="display:inline-block;background:#25d366;color:#fff;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none;margin-bottom:12px">💬 Join the WhatsApp Group</a>
   <br />
-  <a href="${loginLink}" style="display:inline-block;background:#f97316;color:#fff;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none;margin-bottom:24px">Access Your Dashboard →</a>
+  <a href="${dashboardLink}" style="display:inline-block;background:#f97316;color:#fff;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none;margin-bottom:24px">Open Your Academy Dashboard →</a>
   <p style="font-size:12px;color:#9ca3af;margin-top:24px;border-top:1px solid #e5e7eb;padding-top:16px">You're receiving this because you enrolled in the Leadash 7-Day Challenge. Questions? Reply to this email.</p>
 </div>`,
         }),

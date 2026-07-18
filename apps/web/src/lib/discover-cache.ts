@@ -20,11 +20,13 @@ function getRedis(): IORedis | null {
 // Cache TTL: 2 hours. Search results don't change that frequently.
 const CACHE_TTL_SECS = 7_200;
 
-// Build a stable cache key from search params, excluding pagination (page/limit)
-// and workspace-specific params (net_new, ids_only).
+// Build a stable cache key from search params. `page`/`limit` MUST be part of
+// the key — otherwise every page of the same search collides on one entry and
+// pages 2+ return the cached page-1 results. Only truly page-invariant knobs
+// (skip_count) and workspace-specific params (net_new, ids_only) are excluded.
 export function searchCacheKey(params: URLSearchParams): string {
   const stable = [...params.entries()]
-    .filter(([k]) => !["page", "limit", "skip_count", "net_new", "ids_only"].includes(k))
+    .filter(([k]) => !["skip_count", "net_new", "ids_only"].includes(k))
     .sort(([a], [b]) => a.localeCompare(b));
   const hash = createHash("sha256")
     .update(new URLSearchParams(stable).toString())
