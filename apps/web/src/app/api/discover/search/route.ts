@@ -174,11 +174,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (keyword) {
-      // first_name/last_name excluded until discover_people_first_name_trgm and
-      // discover_people_last_name_trgm GIN indexes finish building (559M rows, ~4h).
-      // title and company_name both have GIN trigram indexes (fast).
-      conditions.push(`(p.title ILIKE $${i} OR p.company_name ILIKE $${i})`);
-      params.push(`%${keyword}%`); i++;
+      // Full-text search over title + company_name (matches the expression on
+      // discover_people_fts_idx exactly). Word-based FTS scales on 559M rows
+      // where trigram ILIKE '%term%' timed out for common terms. NOTE: keyword
+      // searches drop the created_at ordering below so the GIN bitmap can
+      // stop-early instead of the planner walking the created_at index and
+      // applying the text predicate as a (catastrophic) filter.
+      conditions.push(`to_tsvector('english', coalesce(p.title,'') || ' ' || coalesce(p.company_name,'')) @@ plainto_tsquery('english', $${i})`);
+      params.push(keyword); i++;
     }
     addOr("p.title",      titleIncludes,   true);
     addNone("p.title",    titleExcludes,   true);
@@ -335,7 +338,7 @@ export async function GET(req: NextRequest) {
         FROM discover_people p
         ${joinType} discover_companies c ON c.id = p.company_id
         ${whereForSimplePaths}
-        ORDER BY p.created_at DESC NULLS LAST
+        ${keyword ? "" : "ORDER BY p.created_at DESC NULLS LAST"}
         LIMIT $${i + simpleExtraParams}
       `;
       const idRows = await leadsDb.unsafe<{ id: string }[]>(
@@ -373,9 +376,14 @@ export async function GET(req: NextRequest) {
     // random I/O cost. Instead, fall back to a flat query: the GIN index drives a single
     // bitmap scan, then ANY() conditions apply seniority/country on the small result set.
     const useGinPath = titleIncludes.length > 0 && multiSen !== null;
+    // A free-text keyword drives the query off the FTS GIN index and must NOT be
+    // ordered by created_at (that traps the planner into a full recency scan).
+    // Route it through the flat path with seniority/country folded into ANY().
+    const hasKeyword = !!keyword;
+    const forceFlat  = useGinPath || hasKeyword;
 
     let dataPromise: Promise<Record<string, unknown>[]>;
-    if (multiSen && !useGinPath) {
+    if (multiSen && !forceFlat) {
       const neededEach = offset + limit;
       let unionDataParams: unknown[];
       let limitIdx: number;
@@ -406,9 +414,9 @@ export async function GET(req: NextRequest) {
     } else {
       // Flat query path: single seniority, OR GIN-path (title filters present with multi-sen).
       // Uses whereForSimplePaths which folds seniority/country into ANY() clauses.
-      const flatWhere  = (multiSen && useGinPath) ? whereForSimplePaths : where;
-      const flatParams = (multiSen && useGinPath) ? paramsForSimplePaths : params;
-      const flatExtra  = (multiSen && useGinPath) ? simpleExtraParams : 0;
+      const flatWhere  = (multiSen && forceFlat) ? whereForSimplePaths : where;
+      const flatParams = (multiSen && forceFlat) ? paramsForSimplePaths : params;
+      const flatExtra  = (multiSen && forceFlat) ? simpleExtraParams : 0;
       dataPromise = leadsDb.unsafe<Record<string, unknown>[]>(`
           SELECT
             p.id, p.first_name, p.last_name, p.title, p.seniority, p.department,
@@ -420,7 +428,7 @@ export async function GET(req: NextRequest) {
           FROM discover_people p
           ${joinType} discover_companies c ON c.id = p.company_id
           ${flatWhere}
-          ORDER BY ${sortCol} ${sortDir} NULLS LAST
+          ${hasKeyword ? "" : `ORDER BY ${sortCol} ${sortDir} NULLS LAST`}
           LIMIT $${i + flatExtra} OFFSET $${i + flatExtra + 1}
         `, [...flatParams, limit, offset] as never[]);
     }
