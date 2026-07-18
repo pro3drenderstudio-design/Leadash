@@ -218,11 +218,13 @@ function ChallengeDashboard({ slug }: { slug: string }) {
             {state.cohort?.name ? `${state.cohort.name} · ` : ""}Day&nbsp;1 unlocks <strong style={{ color: "var(--app-text)" }}>{goLive}</strong>. We&apos;ll open the challenge live then — make sure you&apos;ve joined the WhatsApp group so you don&apos;t miss the kickoff.
           </p>
           <div style={{ background: "linear-gradient(135deg, rgba(249,115,22,0.16), rgba(14,14,19,0.4))", border: "1px solid rgba(249,115,22,0.28)", borderRadius: "var(--app-radius-lg)", padding: "22px 20px", textAlign: "left" }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--app-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>While you wait</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--app-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Get your mind right</p>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, color: "var(--app-text)", lineHeight: 1.9 }}>
-              <li>Set up your Leadash workspace — connect an inbox and build your first sequence.</li>
-              <li>Every action you take now counts toward the cohort leaderboard once it goes live.</li>
-              <li>The winner gets the $10k Academy + ₦50,000 cash. Come ready.</li>
+              <li>Decide right now that you&apos;ll finish all 7 days. Most people quit by day 2 — you won&apos;t.</li>
+              <li>Write down <em>why</em> you started. Read it on the days it feels hard.</li>
+              <li>Block a fixed 30–60 minutes a day and protect it like a paid appointment.</li>
+              <li>Silence the noise — mute distracting chats during your challenge time.</li>
+              <li>Tell one person you&apos;re doing this. Accountability beats motivation.</li>
             </ul>
           </div>
         </div>

@@ -1,155 +1,200 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { wsGet } from "@/lib/workspace/client";
 import type { ProductWithEnrollment } from "@/types/academy";
 import { formatNgn } from "@/types/academy";
 import "@/v2-app/v2-app.css";
 
-// Gradient placeholder thumbnails so every card always has a visual
-const THUMBNAILS = [
-  "from-orange-900 via-orange-800 to-yellow-900",
-  "from-indigo-900 via-purple-900 to-blue-900",
-  "from-emerald-900 via-teal-900 to-cyan-900",
-  "from-rose-900 via-pink-900 to-orange-900",
+// Per-card accent — drives the thumbnail tint, play button, and progress ring.
+const ACCENTS = [
+  { c: "#60A5FA" }, // blue
+  { c: "#F97316" }, // orange
+  { c: "#A78BFA" }, // purple
+  { c: "#34D399" }, // green
+  { c: "#22D3EE" }, // teal
+  { c: "#F472B6" }, // pink
 ];
+const accentFor = (i: number) => ACCENTS[i % ACCENTS.length].c;
 
-function CourseThumbnail({ url, name, index, height = "h-44" }: { url: string | null; name: string; index: number; height?: string }) {
-  const gradient = THUMBNAILS[index % THUMBNAILS.length];
+// ─── Challenge / course progress helpers ─────────────────────────────────────
+
+function challengeState(p: ProductWithEnrollment) {
+  const duration = p.challenge_config?.duration_days ?? 7;
+  const start = p.cohort?.starts_at ? new Date(p.cohort.starts_at).getTime() : null;
+  if (!start || start > Date.now()) {
+    return { started: false, day: 0, duration, startsAt: p.cohort?.starts_at ?? null };
+  }
+  const day = Math.min(duration, Math.floor((Date.now() - start) / 86_400_000) + 1);
+  return { started: true, day, duration, startsAt: p.cohort?.starts_at ?? null };
+}
+
+function progressPct(p: ProductWithEnrollment): number {
+  if (p.product_type === "challenge") {
+    const s = challengeState(p);
+    return s.started ? Math.round((s.day / s.duration) * 100) : 0;
+  }
+  return p.total_lessons > 0 ? Math.round((p.completed_count / p.total_lessons) * 100) : 0;
+}
+
+function statusLine(p: ProductWithEnrollment): string {
+  if (p.product_type === "challenge") {
+    const s = challengeState(p);
+    if (!s.started) {
+      return s.startsAt
+        ? `Starts ${new Date(s.startsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+        : "Challenge";
+    }
+    return `Day ${s.day} of ${s.duration}`;
+  }
+  const pct = progressPct(p);
+  return pct >= 100 ? "Completed" : "Course in progress";
+}
+
+// ─── Progress ring ───────────────────────────────────────────────────────────
+
+function Ring({ pct, color, size = 56 }: { pct: number; color: string; size?: number }) {
+  const stroke = 5;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const off = circ * (1 - Math.max(0, Math.min(1, pct / 100)));
   return (
-    <div className={`w-full ${height} rounded-xl overflow-hidden bg-gray-900 flex-shrink-0 relative`}>
-      {url ? (
-        <img src={url} alt={name} className="w-full h-full object-cover" />
-      ) : (
-        <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-          <span className="text-4xl opacity-30">🎓</span>
-        </div>
-      )}
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={off} style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>
+        {pct}%
+      </div>
     </div>
   );
 }
 
-function ProgressBar({ value, total }: { value: number; total: number }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+function PlayIcon({ color, size = 22 }: { color: string; size?: number }) {
   return (
-    <div>
-      <div className="flex items-center justify-between text-xs text-white/40 mb-1.5">
-        <span>{value} of {total} lessons complete</span>
-        <span className="font-medium text-white/60">{pct}%</span>
-      </div>
-      <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
-        <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ marginLeft: 2 }}>
+      <path d="M8 5v14l11-7z" />
+    </svg>
   );
 }
 
-function EnrolledCard({ p, index }: { p: ProductWithEnrollment; index: number }) {
-  const completed = p.enrollment?.status === "completed";
+// ─── Continue-learning card (progress ring, horizontal) ──────────────────────
+
+function ContinueCard({ p, accent }: { p: ProductWithEnrollment; accent: string }) {
   return (
     <Link href={`/academy/${p.slug}/learn`}
-      className="block bg-white/[0.03] border border-white/8 hover:border-orange-500/30 rounded-2xl overflow-hidden transition-all group">
-      <CourseThumbnail url={p.thumbnail_url} name={p.name} index={index} />
-      <div className="p-5">
-        <div className="flex items-center gap-2 mb-2">
-          {completed
-            ? <span className="badge-emerald">Completed</span>
-            : <span className="badge-orange">In Progress</span>}
-        </div>
-        <h3 className="text-white font-semibold text-base leading-snug mb-1 group-hover:text-orange-100 transition-colors">{p.name}</h3>
-        {p.description && <p className="text-white/40 text-sm mb-3 line-clamp-2 leading-relaxed">{p.description}</p>}
-        <ProgressBar value={p.completed_count} total={p.total_lessons} />
-        {p.cohort && (
-          <p className="text-white/25 text-xs mt-2">
-            Cohort: {p.cohort.name} · {new Date(p.cohort.starts_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </p>
+      className="group flex items-center gap-4 rounded-2xl border border-white/8 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.05] transition-all p-4">
+      <Ring pct={progressPct(p)} color={accent} />
+      <div className="min-w-0 flex-1">
+        <h3 className="text-white font-semibold text-sm leading-snug truncate">{p.name}</h3>
+        <p className="text-white/40 text-xs mt-0.5">{statusLine(p)}</p>
+      </div>
+      <svg className="w-4 h-4 text-white/30 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </Link>
+  );
+}
+
+// ─── Browse card ─────────────────────────────────────────────────────────────
+
+function Badge({ children, tone }: { children: React.ReactNode; tone: "neutral" | "green" | "orange" | "purple" }) {
+  const cls = {
+    neutral: "bg-black/40 text-white/70 border-white/15",
+    green:   "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    orange:  "bg-orange-500/15 text-orange-300 border-orange-500/30",
+    purple:  "bg-purple-500/15 text-purple-300 border-purple-500/30",
+  }[tone];
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border backdrop-blur-sm ${cls}`}>
+      {children}
+    </span>
+  );
+}
+
+function BrowseCard({ p, index, isFlagship }: { p: ProductWithEnrollment; index: number; isFlagship: boolean }) {
+  const accent = accentFor(index);
+  const enrolled = !!p.enrollment;
+  const isChallenge = p.product_type === "challenge";
+  const isFree = p.pricing_type === "free" || p.price_ngn === 0;
+  const href = enrolled ? `/academy/${p.slug}/learn` : `/academy/enroll/${p.slug}`;
+
+  return (
+    <Link href={href}
+      className="group flex flex-col rounded-2xl border border-white/8 bg-white/[0.03] hover:border-white/15 overflow-hidden transition-all">
+      {/* Thumbnail */}
+      <div className="relative h-40 flex items-center justify-center overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${accent}22, #0B0B10 70%)` }}>
+        {p.thumbnail_url && (
+          <img src={p.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-70" />
         )}
+        <div className="relative w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105"
+          style={{ background: `${accent}26`, border: `1px solid ${accent}55` }}>
+          <PlayIcon color={accent} />
+        </div>
+        {/* Top-left badges */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5">
+          {isFree && <Badge tone="neutral">Free</Badge>}
+          {isChallenge && <Badge tone="orange">🔥 Live Cohort</Badge>}
+          {isFlagship && <Badge tone="purple">Flagship</Badge>}
+        </div>
+        {/* Top-right badge */}
+        {enrolled && (
+          <div className="absolute top-3 right-3">
+            <Badge tone="green">Enrolled</Badge>
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-col flex-1 p-4">
+        <h3 className="text-white font-semibold text-sm leading-snug mb-1">{p.name}</h3>
+        {p.description && <p className="text-white/40 text-xs leading-relaxed line-clamp-2 mb-3">{p.description}</p>}
+
+        <div className="mt-auto pt-1">
+          {enrolled ? (
+            <>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-white/40">
+                  {isChallenge ? statusLine(p) : `${progressPct(p)}% complete`}
+                </span>
+                <span className="font-semibold" style={{ color: accent }}>Continue</span>
+              </div>
+              <div className="h-1 rounded-full bg-white/8 overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${progressPct(p)}%`, background: accent }} />
+              </div>
+            </>
+          ) : (
+            <div className="flex items-end justify-between">
+              <div>
+                {p.compare_price_ngn && p.compare_price_ngn > p.price_ngn && (
+                  <p className="text-[11px] text-white/25 line-through leading-none mb-0.5">{formatNgn(p.compare_price_ngn)}</p>
+                )}
+                <p className="text-base font-bold text-white leading-none">{isFree ? "Free" : formatNgn(p.price_ngn)}</p>
+              </div>
+              <span className="text-[11px] text-white/35">
+                {isChallenge
+                  ? `${p.challenge_config?.duration_days ?? 7} days`
+                  : `${p.total_lessons} lesson${p.total_lessons === 1 ? "" : "s"}`}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </Link>
   );
 }
 
-function AvailableCard({ p, index }: { p: ProductWithEnrollment; index: number }) {
-  return (
-    <div className="bg-white/[0.03] border border-white/8 hover:border-orange-500/20 rounded-2xl overflow-hidden transition-all">
-      <CourseThumbnail url={p.thumbnail_url} name={p.name} index={index} />
-      <div className="p-5">
-        <h3 className="text-white font-semibold text-base leading-snug mb-1">{p.name}</h3>
-        {p.description && <p className="text-white/50 text-sm mb-3 line-clamp-2 leading-relaxed">{p.description}</p>}
+// ─── Page ────────────────────────────────────────────────────────────────────
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-white/35">
-          <span>📹 {p.total_lessons} lessons</span>
-          <span>🎓 Certificate</span>
-          <span>💳 {p.credits_grant.toLocaleString()} credits</span>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div>
-            {p.compare_price_ngn && (
-              <p className="text-xs text-white/30 line-through">{formatNgn(p.compare_price_ngn)}</p>
-            )}
-            <p className="text-xl font-bold text-white">{formatNgn(p.price_ngn)}</p>
-          </div>
-          <Link href={`/academy/enroll/${p.slug}`}
-            className="bg-orange-500 hover:bg-orange-400 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">
-            Enroll
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Hero section — shows the academy intro video or a static placeholder
-function AcademyHero({ featuredProduct }: { featuredProduct: ProductWithEnrollment | null }) {
-  return (
-    <div className="relative w-full rounded-2xl overflow-hidden mb-10 border border-white/8" style={{ minHeight: 320 }}>
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-[#0c0c0f] to-indigo-950" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(249,115,22,0.12),transparent_60%)]" />
-
-      <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8 p-8 lg:p-10">
-        {/* Text */}
-        <div className="flex-1">
-          <p className="text-xs font-bold uppercase tracking-widest text-orange-400/80 mb-3">Leadash Academy</p>
-          <h2 className="text-2xl lg:text-3xl font-bold text-white leading-tight mb-3">
-            Land foreign clients.<br />Build your outreach machine.
-          </h2>
-          <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-md">
-            Step-by-step courses and live challenges designed for Nigerian professionals ready to earn in dollars.
-            Start with the free 5-day challenge, then unlock the full $10k Academy.
-          </p>
-          {featuredProduct && !featuredProduct.enrollment && (
-            <Link href={`/academy/enroll/${featuredProduct.slug}`}
-              className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-semibold px-6 py-3 rounded-xl text-sm transition-colors">
-              Start with the Challenge · {formatNgn(featuredProduct.price_ngn)}
-            </Link>
-          )}
-        </div>
-
-        {/* Video placeholder */}
-        <div className="w-full lg:w-80 xl:w-96 flex-shrink-0">
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/10">
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-900/30 via-transparent to-indigo-900/30" />
-            {/* Play button placeholder */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <div className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm hover:bg-white/15 transition-colors cursor-pointer">
-                <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-              <p className="text-white/40 text-xs">Academy intro video</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+type Tab = "all" | "courses" | "challenges";
 
 export default function AcademyPage() {
   const [products, setProducts] = useState<ProductWithEnrollment[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [tab,      setTab]      = useState<Tab>("all");
 
   useEffect(() => {
     wsGet<{ products: ProductWithEnrollment[] }>("/api/academy/products")
@@ -157,11 +202,23 @@ export default function AcademyPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const enrolled  = products.filter(p => p.enrollment);
-  const available = products.filter(p => !p.enrollment);
+  const inProgress = useMemo(
+    () => products.filter(p => p.enrollment && (p.enrollment.status ?? "active") !== "cancelled"),
+    [products],
+  );
 
-  // Use cheapest non-enrolled product as the featured "start here" CTA
-  const featured = available.sort((a, b) => a.price_ngn - b.price_ngn)[0] ?? null;
+  // Flagship = the priciest paid product (matches the "Full Stack" package in the design).
+  const flagshipId = useMemo(() => {
+    const paid = products.filter(p => p.price_ngn > 0);
+    if (!paid.length) return null;
+    return paid.reduce((a, b) => (b.price_ngn > a.price_ngn ? b : a)).id;
+  }, [products]);
+
+  const browse = useMemo(() => {
+    if (tab === "courses")    return products.filter(p => p.product_type === "course");
+    if (tab === "challenges") return products.filter(p => p.product_type === "challenge");
+    return products;
+  }, [products, tab]);
 
   if (loading) {
     return (
@@ -173,41 +230,48 @@ export default function AcademyPage() {
 
   return (
     <div className="v2-app" style={{ minHeight: "100%", background: "var(--app-bg)" }}>
-    <div className="px-6 py-8 max-w-5xl mx-auto">
-      {/* Hero */}
-      <AcademyHero featuredProduct={featured} />
+      <div className="px-6 py-8 max-w-6xl mx-auto">
 
-      {/* Enrolled courses */}
-      {enrolled.length > 0 && (
-        <section className="mb-10">
-          <h2 className="app-eyebrow" style={{ marginBottom: 14 }}>Your courses</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {enrolled.map((p, i) => <EnrolledCard key={p.id} p={p} index={i} />)}
-          </div>
-        </section>
-      )}
+        {/* Continue learning */}
+        {inProgress.length > 0 && (
+          <section className="mb-10">
+            <h1 className="text-white text-2xl font-bold tracking-tight">Continue learning</h1>
+            <p className="text-white/40 text-sm mt-1 mb-5">Pick up where you left off, or explore what&apos;s next.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {inProgress.map((p) => (
+                <ContinueCard key={p.id} p={p} accent={accentFor(products.indexOf(p))} />
+              ))}
+            </div>
+          </section>
+        )}
 
-      {/* Available courses */}
-      {available.length > 0 && (
+        {/* Browse everything */}
         <section>
-          <h2 className="app-eyebrow" style={{ marginBottom: 14 }}>
-            {enrolled.length > 0 ? "Also available" : "Available courses"}
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {available.map((p, i) => <AvailableCard key={p.id} p={p} index={enrolled.length + i} />)}
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-5 pt-4 border-t border-white/6">
+            <h2 className="text-white text-lg font-bold">Browse everything</h2>
+            <div className="inline-flex items-center gap-1 rounded-lg bg-white/[0.04] border border-white/8 p-1">
+              {([["all", "All"], ["courses", "Courses"], ["challenges", "Challenges"]] as [Tab, string][]).map(([key, label]) => (
+                <button key={key} onClick={() => setTab(key)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    tab === key ? "bg-white/10 text-white" : "text-white/45 hover:text-white/75"
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {browse.length === 0 ? (
+            <div className="text-center py-16 text-white/25 text-sm">Nothing here yet.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {browse.map((p) => (
+                <BrowseCard key={p.id} p={p} index={products.indexOf(p)} isFlagship={p.id === flagshipId} />
+              ))}
+            </div>
+          )}
         </section>
-      )}
-
-      {products.length === 0 && (
-        <div className="text-center py-20 text-white/25 text-sm">No courses available yet.</div>
-      )}
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        .badge-emerald { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(52,211,153,0.1); color:#34d399; border:1px solid rgba(52,211,153,0.2); }
-        .badge-orange  { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 8px; border-radius:9999px; background:rgba(249,115,22,0.1); color:#fb923c; border:1px solid rgba(249,115,22,0.2); }
-      ` }} />
-    </div>
+      </div>
     </div>
   );
 }
