@@ -150,7 +150,7 @@ export default function V2Nav() {
           >
             Sign in
           </Link>
-          <Link href="/signup" className="v2-btn v2-btn-primary">Start free</Link>
+          <Link href="/signup" className="v2-btn v2-btn-primary">Get Started</Link>
         </div>
       </div>
     </header>

@@ -161,7 +161,7 @@ function LoginPageInner() {
       <p style={{ marginTop: 22, fontSize: 12, color: "var(--app-text-quiet)", textAlign: "center" }}>
         Don&apos;t have an account?{" "}
         <Link href="/signup" style={{ color: "var(--app-accent)", fontWeight: 500 }}>
-          Start free
+          Get Started
         </Link>
       </p>
     </AuthShell>
