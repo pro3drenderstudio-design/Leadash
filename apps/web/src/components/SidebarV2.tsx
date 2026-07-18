@@ -190,35 +190,29 @@ export default function SidebarV2({ workspaceName, plan }: Props) {
           <Link
             href="/dashboard"
             onClick={close}
+            title={workspaceName || "Leadash"}
             style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}
           >
+            {/* Leadash wordmark (white, for the dark sidebar) */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/Logo_Icon_Colored.svg" alt="" width={20} height={20} />
-            <span
-              className="app-sidebar-brand-name"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}
-            >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {workspaceName || "Leadash"}
+            <img src="/logo.svg" alt="Leadash" height={22} style={{ height: 22, width: "auto", flexShrink: 0 }} />
+            {plan && (
+              <span
+                style={{
+                  fontSize: 9,
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  background: "var(--app-surface)",
+                  color: "var(--app-text-quiet)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                  flexShrink: 0,
+                }}
+              >
+                {plan}
               </span>
-              {plan && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    padding: "1px 5px",
-                    borderRadius: 4,
-                    background: "var(--app-surface)",
-                    color: "var(--app-text-quiet)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    fontWeight: 500,
-                    flexShrink: 0,
-                  }}
-                >
-                  {plan}
-                </span>
-              )}
-            </span>
+            )}
           </Link>
           {/* Close — mobile only */}
           <button

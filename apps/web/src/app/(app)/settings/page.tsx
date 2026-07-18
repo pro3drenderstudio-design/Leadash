@@ -4,7 +4,15 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { wsGet, wsPost, wsPatch, wsDelete, wsFetch } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
 import "@/v2-app/v2-app.css";
-import { sanitizeName, sanitizeLettersOnly, sanitizeCountryCode, sanitizeZip } from "@/lib/registrant-validators";
+import { sanitizeName, sanitizeLettersOnly, sanitizeZip } from "@/lib/registrant-validators";
+import { countryOptions } from "@/lib/countries";
+
+// Static option lists (computed once). Timezones from the runtime's IANA set.
+const TIMEZONES: string[] = (() => {
+  try { return (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone"); }
+  catch { return ["UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Africa/Lagos"]; }
+})();
+const COUNTRY_OPTIONS = countryOptions();
 import { CREDIT_PACKS as CREDIT_PACKS_CONFIG, CREDIT_COSTS } from "@/lib/billing/plans";
 import type { PlanConfig } from "@/lib/billing/getActivePlans";
 import PricingSlider, { type SliderSelection } from "@/components/pricing/PricingSlider";
@@ -40,6 +48,18 @@ function Input({ className = "", ...props }: React.InputHTMLAttributes<HTMLInput
       {...props}
       className={`w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50 disabled:opacity-40 ${className}`}
     />
+  );
+}
+
+function Select({ className = "", children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      style={{ colorScheme: "dark", ...(props.style ?? {}) }}
+      className={`w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50 disabled:opacity-40 ${className}`}
+    >
+      {children}
+    </select>
   );
 }
 
@@ -1216,8 +1236,12 @@ function OutreachTab() {
   const [imageSaved, setImageSaved]             = useState(false);
   useEffect(() => {
     wsGet<Partial<OutreachSettings> & { default_inbox_profile_image_url?: string | null }>("/api/outreach/settings").then(data => {
-      setSettings(prev => ({ ...prev, ...data }));
-      if (data.default_inbox_profile_image_url) setDefaultImage(data.default_inbox_profile_image_url);
+      // Keep the profile image OUT of the settings state — it's managed by its own
+      // upload/delete endpoint. Spreading it in meant a later Save (timezone etc.)
+      // PATCHed a stale/null URL back and wiped the freshly-uploaded image.
+      const { default_inbox_profile_image_url, ...rest } = data;
+      setSettings(prev => ({ ...prev, ...rest }));
+      if (default_inbox_profile_image_url) setDefaultImage(default_inbox_profile_image_url);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -1325,7 +1349,9 @@ function OutreachTab() {
             <Input type="number" min="1" max="500" value={settings.default_daily_limit} onChange={e => set("default_daily_limit", e.target.value)} />
           </Field>
           <Field label="Timezone">
-            <Input value={settings.default_timezone} onChange={e => set("default_timezone", e.target.value)} placeholder="America/New_York" />
+            <Select value={settings.default_timezone} onChange={e => set("default_timezone", e.target.value)}>
+              {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </Select>
           </Field>
           <Field label="Send window start">
             <Input type="time" value={settings.default_send_start} onChange={e => set("default_send_start", e.target.value)} className="text-white/70" />
@@ -1416,8 +1442,11 @@ function OutreachTab() {
             <Input value={settings.registrant_zip} onChange={e => set("registrant_zip", sanitizeZip(e.target.value))} placeholder="10001" maxLength={10} />
           </Field>
         </div>
-        <Field label="Country (2-letter code)">
-          <Input value={settings.registrant_country} onChange={e => set("registrant_country", sanitizeCountryCode(e.target.value))} placeholder="US" className="max-w-[80px]" />
+        <Field label="Country">
+          <Select value={settings.registrant_country} onChange={e => set("registrant_country", e.target.value)}>
+            <option value="">Select a country…</option>
+            {COUNTRY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
+          </Select>
         </Field>
         <p className="text-white/25 text-xs">
           This information is required by ICANN for domain registration. It appears in public WHOIS records unless domain privacy is enabled.
