@@ -32,7 +32,8 @@ const SELECT = `
   created_at,
   attachments,
   location,
-  contacts
+  contacts,
+  ai_suggested
 `;
 
 export async function GET(req: NextRequest) {

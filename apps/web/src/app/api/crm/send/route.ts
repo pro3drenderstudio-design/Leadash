@@ -52,6 +52,7 @@ interface SendBody {
   template_vars?:  Record<string, string>;
   note?:           boolean; // Internal note — not sent to contact
   attachments?:    OutgoingAttachment[];
+  ai_suggested?:   boolean;  // Originated from the AI suggest-mode agent
 }
 
 /** Re-downloads an already-uploaded composer attachment's bytes from storage —
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as SendBody;
   const { conversation_id, body: msgBody, note } = body;
   const attachments = body.attachments ?? [];
+  const aiSuggested = body.ai_suggested === true && !note;
 
   if (!conversation_id || (!msgBody?.trim() && !attachments.length)) {
     return NextResponse.json({ error: "conversation_id and a body or attachment are required" }, { status: 400 });
@@ -189,6 +191,7 @@ export async function POST(req: NextRequest) {
       provider_message_id: postalData.data?.message_id ?? null,
       sent_by:            user.id,
       status:             "sent",
+      ai_suggested:       aiSuggested,
     });
 
     // Update conversation
@@ -342,6 +345,7 @@ export async function POST(req: NextRequest) {
       provider_message_id: waMsgRecord?.id ?? null,
       sent_by:            user.id,
       status:             "sent",
+      ai_suggested:       aiSuggested,
     });
     if (crmMsgErr) console.error("[crm/send] failed to insert crm_messages:", crmMsgErr.message);
 
@@ -395,6 +399,7 @@ export async function POST(req: NextRequest) {
       provider_message_id: igData.message_id ?? null,
       sent_by:             user.id,
       status:              "sent",
+      ai_suggested:        aiSuggested,
     });
 
     await db.from("crm_conversations").update({

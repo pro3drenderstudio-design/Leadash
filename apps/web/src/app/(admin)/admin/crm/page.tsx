@@ -69,6 +69,7 @@ interface CrmMessage {
   delivered_at: string|null; read_at: string|null;
   created_at: string; sent_by: string|null;
   attachments: CrmAttachment[]; location: CrmLocation|null; contacts: WaSharedContact[];
+  ai_suggested?: boolean;
 }
 
 interface ContactProfile {
@@ -337,11 +338,16 @@ function MessageBubble({ msg }: { msg: CrmMessage }) {
         <AttachmentGrid attachments={msg.attachments} />
         <LocationCard location={msg.location} />
         <ContactCard contacts={msg.contacts} />
-        <div className={`text-[10px] mt-1 ${isOutbound ? "text-orange-200" : "text-slate-400 dark:text-white/30"}`}>
-          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          {isOutbound && msg.status === "read"      && " ✓✓"}
-          {isOutbound && msg.status === "delivered" && " ✓✓"}
-          {isOutbound && msg.status === "sent"      && " ✓"}
+        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOutbound ? "justify-end text-orange-200" : "text-slate-400 dark:text-white/30"}`}>
+          {isOutbound && msg.ai_suggested && (
+            <span className="inline-flex items-center gap-0.5 px-1 py-px rounded bg-white/20 text-white text-[9px] font-bold uppercase tracking-wide" title="Drafted by the AI agent">✨ AI</span>
+          )}
+          <span>
+            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {isOutbound && msg.status === "read"      && " ✓✓"}
+            {isOutbound && msg.status === "delivered" && " ✓✓"}
+            {isOutbound && msg.status === "sent"      && " ✓"}
+          </span>
         </div>
       </div>
     </div>
@@ -1025,6 +1031,9 @@ function CrmInboxContent() {
   const [sending,        setSending]        = useState(false);
   const [composeText,    setComposeText]    = useState("");
   const [isNote,         setIsNote]         = useState(false);
+  const [aiLoading,      setAiLoading]      = useState(false);
+  const [aiDraft,        setAiDraft]        = useState(false);        // composeText currently came from the AI agent
+  const [aiNote,         setAiNote]         = useState<string | null>(null); // escalation reason to surface to the admin
   const [attachments,    setAttachments]    = useState<ComposerAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter,   setStatusFilter]   = useState("open");
@@ -1338,6 +1347,7 @@ function CrmInboxContent() {
         channel:         activeConvo.channel,
         note:            isNote || undefined,
         attachments:     isNote ? undefined : readyAttachments,
+        ai_suggested:    aiDraft && !isNote,
       }),
     });
     const d = await res.json() as { error?: string; requires_template?: boolean };
@@ -1350,9 +1360,40 @@ function CrmInboxContent() {
     setComposeHtml("");
     if (composeRichRef.current) composeRichRef.current.innerHTML = "";
     setIsNote(false);
+    setAiDraft(false);
+    setAiNote(null);
     setAttachments([]);
     await loadMessages(activeConvo.id);
     await loadConvos();
+  }
+
+  // Suggest-mode agent: fetch an AI-drafted reply into the composer for review.
+  async function handleAiSuggest() {
+    if (!activeConvo || aiLoading) return;
+    setAiLoading(true);
+    setAiNote(null);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/crm/ai-suggest", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: activeConvo.id }),
+      });
+      const d = await res.json() as { suggestion?: string; escalate?: boolean; reason?: string; error?: string };
+      if (!res.ok) { setError(d.error ?? "AI suggestion failed"); return; }
+      if (d.escalate) {
+        setAiNote(`AI recommends a human handle this${d.reason ? ` — ${d.reason}` : ""}.`);
+        return;
+      }
+      if (d.suggestion) {
+        setComposeText(d.suggestion);
+        setAiDraft(true);
+        composeTextRef.current?.focus();
+      }
+    } catch {
+      setError("AI suggestion failed");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   // Email only — rich text via a contentEditable div, mirroring the outreach
@@ -1728,6 +1769,18 @@ function CrmInboxContent() {
                     )}
                   </div>
                 )}
+                {aiNote && (
+                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-300">
+                    <span>🤝 {aiNote}</span>
+                    <button onClick={() => setAiNote(null)} className="opacity-60 hover:opacity-100">✕</button>
+                  </div>
+                )}
+                {aiDraft && composeText.trim() && (
+                  <div className="mb-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-[11px] text-violet-600 dark:text-violet-300">
+                    <span className="font-bold">✨ AI draft</span>
+                    <span className="opacity-80">— review and edit before sending. It won&apos;t send until you click Send.</span>
+                  </div>
+                )}
                 <div className="flex gap-3 items-end">
                   {(activeConvo.channel === "email" && !isNote && !templateMode) ? (
                     <div
@@ -1743,7 +1796,7 @@ function CrmInboxContent() {
                     <textarea
                       ref={composeTextRef}
                       value={composeText}
-                      onChange={e => setComposeText(e.target.value)}
+                      onChange={e => { setComposeText(e.target.value); if (!e.target.value.trim()) setAiDraft(false); }}
                       onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
                       placeholder={isNote ? "Add an internal note…" : "Type a message… (Cmd+Enter to send)"}
                       rows={3}
@@ -1767,6 +1820,12 @@ function CrmInboxContent() {
                         </div>
                       )}
                     </div>
+                  )}
+                  {activeConvo.channel !== "email" && !isNote && !templateMode && (
+                    <button onClick={handleAiSuggest} disabled={aiLoading} title="Draft a reply with the AI agent"
+                      className="px-3 py-2.5 text-sm font-semibold bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/40 text-violet-600 dark:text-violet-300 disabled:opacity-40 rounded-xl transition-colors whitespace-nowrap">
+                      {aiLoading ? "…" : "✨ Suggest"}
+                    </button>
                   )}
                   <button onClick={handleSend} disabled={sending || (!composeText.trim() && !attachments.some(a => a.status === "done"))}
                     className="px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white rounded-xl transition-colors">
