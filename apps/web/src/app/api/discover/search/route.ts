@@ -15,6 +15,13 @@ const DEFAULT_LIMIT    = 25;
 const MAX_LIMIT        = 100;
 const IDS_ONLY_MAX     = 50_000;
 
+// Full-text expression matching the GIN index discover_people_fts_idx on the
+// leads DB. Word-based FTS replaced trigram ILIKE for free-text on the 559M-row
+// table — it scales AND lets the planner BitmapAnd it with the seniority/country
+// index for multi-filter searches. NOTE: FTS covers title + company_name
+// together, so title/company "include" filters match either field.
+const FTS_EXPR = `to_tsvector('english', coalesce(p.title,'') || ' ' || coalesce(p.company_name,''))`;
+
 function maskEmail(email: string | null): string | null {
   if (!email) return null;
   const [local, domain] = email.split("@");
@@ -173,17 +180,23 @@ export async function GET(req: NextRequest) {
       i += values.length;
     }
 
-    if (keyword) {
-      // Full-text search over title + company_name (matches the expression on
-      // discover_people_fts_idx exactly). Word-based FTS scales on 559M rows
-      // where trigram ILIKE '%term%' timed out for common terms. NOTE: keyword
-      // searches drop the created_at ordering below so the GIN bitmap can
-      // stop-early instead of the planner walking the created_at index and
-      // applying the text predicate as a (catastrophic) filter.
-      conditions.push(`to_tsvector('english', coalesce(p.title,'') || ' ' || coalesce(p.company_name,'')) @@ plainto_tsquery('english', $${i})`);
-      params.push(keyword); i++;
+    // OR of full-text matches (one plainto_tsquery per value) against FTS_EXPR —
+    // each drives the FTS GIN index, BitmapOr'd together.
+    function addFtsOr(values: string[]) {
+      if (!values.length) return;
+      const clauses = values.map((_, j) => `${FTS_EXPR} @@ plainto_tsquery('english', $${i + j})`).join(" OR ");
+      conditions.push(`(${clauses})`);
+      params.push(...values);
+      i += values.length;
     }
-    addOr("p.title",      titleIncludes,   true);
+
+    // Keyword box + title/company "include" filters all go through FTS (see
+    // FTS_EXPR). These free-text filters on the 559M-row table drop the
+    // created_at ordering below so the FTS GIN bitmap can stop-early instead of
+    // the planner walking the created_at index and applying the text predicate
+    // as a (catastrophic) filter.
+    if (keyword) addFtsOr([keyword]);
+    addFtsOr(titleIncludes);
     addNone("p.title",    titleExcludes,   true);
     // Multi-value seniority is handled via UNION ALL (one subquery per value) so each
     // sub-query drives seniority_created_idx directly. Single value goes into conditions
@@ -203,7 +216,7 @@ export async function GET(req: NextRequest) {
     addNoneLower("p.country", countryExcludes);
     addLocationOr(locationIncludes);
     addLocationNone(locationExcludes);
-    addOr("p.company_name",  companyIncludes,  true);
+    addFtsOr(companyIncludes);
     addNone("p.company_name", companyExcludes, true);
     addOr("c.industry",      industryIncludes, true);
     addNone("c.industry",    industryExcludes, true);
@@ -255,6 +268,13 @@ export async function GET(req: NextRequest) {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    // Any free-text filter (keyword box, or title/company includes) drives the
+    // query off the FTS GIN index and must NOT be ordered by created_at — that
+    // traps the planner into a full recency scan. Route through the flat path
+    // (seniority/country folded into ANY) and drop the ordering.
+    const hasTextFilter = !!keyword || titleIncludes.length > 0 || companyIncludes.length > 0;
+    const forceFlat     = hasTextFilter;
 
     // Use INNER JOIN when filtering on company attributes — lets the planner start
     // from the much smaller discover_companies table (industry GIN, size btree) and
@@ -338,7 +358,7 @@ export async function GET(req: NextRequest) {
         FROM discover_people p
         ${joinType} discover_companies c ON c.id = p.company_id
         ${whereForSimplePaths}
-        ${keyword ? "" : "ORDER BY p.created_at DESC NULLS LAST"}
+        ${hasTextFilter ? "" : "ORDER BY p.created_at DESC NULLS LAST"}
         LIMIT $${i + simpleExtraParams}
       `;
       const idRows = await leadsDb.unsafe<{ id: string }[]>(
@@ -375,13 +395,6 @@ export async function GET(req: NextRequest) {
     // seniority × country pair), each fetching ~30k scattered rows, which multiplies the
     // random I/O cost. Instead, fall back to a flat query: the GIN index drives a single
     // bitmap scan, then ANY() conditions apply seniority/country on the small result set.
-    const useGinPath = titleIncludes.length > 0 && multiSen !== null;
-    // A free-text keyword drives the query off the FTS GIN index and must NOT be
-    // ordered by created_at (that traps the planner into a full recency scan).
-    // Route it through the flat path with seniority/country folded into ANY().
-    const hasKeyword = !!keyword;
-    const forceFlat  = useGinPath || hasKeyword;
-
     let dataPromise: Promise<Record<string, unknown>[]>;
     if (multiSen && !forceFlat) {
       const neededEach = offset + limit;
@@ -428,7 +441,7 @@ export async function GET(req: NextRequest) {
           FROM discover_people p
           ${joinType} discover_companies c ON c.id = p.company_id
           ${flatWhere}
-          ${hasKeyword ? "" : `ORDER BY ${sortCol} ${sortDir} NULLS LAST`}
+          ${hasTextFilter ? "" : `ORDER BY ${sortCol} ${sortDir} NULLS LAST`}
           LIMIT $${i + flatExtra} OFFSET $${i + flatExtra + 1}
         `, [...flatParams, limit, offset] as never[]);
     }
