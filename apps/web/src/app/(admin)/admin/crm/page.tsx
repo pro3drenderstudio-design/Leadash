@@ -70,6 +70,7 @@ interface CrmMessage {
   created_at: string; sent_by: string|null;
   attachments: CrmAttachment[]; location: CrmLocation|null; contacts: WaSharedContact[];
   ai_suggested?: boolean;
+  reaction?: string | null;
 }
 
 interface ContactProfile {
@@ -290,7 +291,8 @@ function EmojiPicker({ onSelect }: { onSelect: (e: string) => void }) {
       <div className="grid grid-cols-8 gap-0.5">
         {COMMON_EMOJIS.map(e => (
           <button key={e} onClick={() => onSelect(e)}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-base transition-colors">
+            style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif' }}
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-lg leading-none transition-colors">
             {e}
           </button>
         ))}
@@ -331,7 +333,7 @@ function MessageBubble({ msg }: { msg: CrmMessage }) {
 
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"} mb-3`}>
-      <div className={`max-w-[70%] rounded-2xl px-3.5 py-2.5 text-sm ${isOutbound ? "bg-orange-500 text-white rounded-br-sm" : "bg-white dark:bg-white/10 border border-slate-100 dark:border-white/10 text-slate-800 dark:text-white rounded-bl-sm"}`}>
+      <div className={`relative ${msg.reaction ? "mb-2" : ""} max-w-[70%] rounded-2xl px-3.5 py-2.5 text-sm ${isOutbound ? "bg-orange-500 text-white rounded-br-sm" : "bg-white dark:bg-white/10 border border-slate-100 dark:border-white/10 text-slate-800 dark:text-white rounded-bl-sm"}`}>
         {isEmailHtml
           ? <HtmlBody html={msg.body_html!} />
           : msg.body ? <Linkify text={msg.body} /> : null}
@@ -349,6 +351,15 @@ function MessageBubble({ msg }: { msg: CrmMessage }) {
             {isOutbound && msg.status === "sent"      && " ✓"}
           </span>
         </div>
+        {msg.reaction && (
+          <span
+            style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }}
+            className={`absolute -bottom-3 ${isOutbound ? "left-2" : "right-2"} px-1 py-px rounded-full text-xs bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-white/15 shadow-sm`}
+            title="Reaction"
+          >
+            {msg.reaction}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1057,6 +1068,7 @@ function CrmInboxContent() {
   const forceScrollRef   = useRef(false); // set true right before loading a (possibly different) conversation's messages
   const prevMsgCountRef  = useRef(0);
   const lastLoadedIdRef  = useRef<string | null>(null); // which conversation's messages are currently loaded — guards the full reset to genuine switches only
+  const autoSuggestedRef = useRef<string | null>(null); // conversation we've already auto-drafted for (guards re-trigger on polls)
   const oldestCreatedAtRef = useRef<string | null>(null); // cursor for loading older pages ("before")
   const newestCreatedAtRef = useRef<string | null>(null); // cursor for polling new messages ("after")
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -1395,6 +1407,20 @@ function CrmInboxContent() {
       setAiLoading(false);
     }
   }
+
+  // Auto-draft: when a WhatsApp/Instagram conversation whose latest message is
+  // inbound (needs a reply) is opened, generate a suggestion automatically —
+  // once per conversation, and only if the admin hasn't started typing.
+  useEffect(() => {
+    if (!activeConvo || activeConvo.channel === "email") return;
+    if (isNote || templateMode || aiLoading || composeText.trim()) return;
+    if (messages.length === 0) return;
+    if (messages[messages.length - 1].direction !== "inbound") return;
+    if (autoSuggestedRef.current === activeConvo.id) return;
+    autoSuggestedRef.current = activeConvo.id;
+    void handleAiSuggest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvo?.id, messages]);
 
   // Email only — rich text via a contentEditable div, mirroring the outreach
   // CRM's compose box ((app)/crm/CrmClient.tsx) so both surfaces behave the same.

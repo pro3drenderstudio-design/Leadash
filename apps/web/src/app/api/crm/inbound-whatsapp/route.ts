@@ -116,6 +116,30 @@ export async function POST(req: NextRequest) {
         const phone     = normalisePhoneNG(rawFrom) ?? rawFrom.replace(/^\+/, "");
         const msgId     = msg.id as string;
         const msgType   = msg.type as string;
+
+        // ── Reactions ──────────────────────────────────────────────────────
+        // A reaction targets an existing message by its Meta wamid (empty emoji
+        // = reaction removed). Stamp it on the matching crm_messages row instead
+        // of creating a new message. Inbound messages store the wamid directly;
+        // our outbound messages link via whatsapp_messages.provider_message_id.
+        if (msgType === "reaction") {
+          const reaction    = msg.reaction as { message_id?: string; emoji?: string } | undefined;
+          const targetWamid = reaction?.message_id;
+          const emoji       = (reaction?.emoji ?? "").trim() || null;
+          if (targetWamid) {
+            const { data: direct } = await db
+              .from("crm_messages").update({ reaction: emoji })
+              .eq("provider_message_id", targetWamid).select("id");
+            if (!direct?.length) {
+              const { data: wa } = await db
+                .from("whatsapp_messages").select("id")
+                .eq("provider_message_id", targetWamid).maybeSingle();
+              if (wa?.id) await db.from("crm_messages").update({ reaction: emoji }).eq("provider_message_id", wa.id);
+            }
+          }
+          continue;
+        }
+
         let   msgBody   = "";
         let   attachments: WhatsAppMediaResult[] = [];
         let   location: { latitude: number; longitude: number; name?: string; address?: string } | null = null;

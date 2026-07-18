@@ -17,7 +17,9 @@ import { normalisePhoneNG } from "@/lib/phone";
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-5";
+// Proven-working model in this project (see api/extension/ai-comment). Capable
+// enough for support drafting; can be upgraded to a Sonnet id once confirmed.
+const MODEL = "claude-haiku-4-5-20251001";
 
 interface AdminAuth { db: ReturnType<typeof createAdminClient>; }
 
@@ -188,6 +190,6 @@ Draft the single next message we should send to ${firstName}.`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[crm/ai-suggest]", msg);
-    return NextResponse.json({ error: "AI suggestion failed. Try again." }, { status: 500 });
+    return NextResponse.json({ error: `AI failed: ${msg}` }, { status: 500 });
   }
 }
