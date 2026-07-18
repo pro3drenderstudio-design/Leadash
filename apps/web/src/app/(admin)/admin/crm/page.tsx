@@ -287,12 +287,11 @@ const COMMON_EMOJIS = [
 
 function EmojiPicker({ onSelect }: { onSelect: (e: string) => void }) {
   return (
-    <div className="bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-2.5">
-      <div className="grid grid-cols-8 gap-0.5">
+    <div style={{ width: 304 }} className="bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-2">
+      <div className="grid grid-cols-8 gap-1.5">
         {COMMON_EMOJIS.map(e => (
           <button key={e} onClick={() => onSelect(e)}
-            style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif' }}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-lg leading-none transition-colors">
+            className="h-8 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/10 text-xl leading-none transition-colors">
             {e}
           </button>
         ))}
@@ -1231,6 +1230,11 @@ function CrmInboxContent() {
       lastLoadedIdRef.current = activeId;
       setActiveConvo(c);
       setWinOpen(windowOpen(c.last_inbound_at));
+      // Reset the composer so a draft never leaks between conversations — and so
+      // leftover text can't block the auto-suggest below.
+      setComposeText(""); setComposeHtml(""); setIsNote(false);
+      setAiDraft(false); setAiNote(null); setAttachments([]);
+      if (composeRichRef.current) composeRichRef.current.innerHTML = "";
       forceScrollRef.current = true;
       loadMessages(c.id);
       if (c.unread_count > 0) {
