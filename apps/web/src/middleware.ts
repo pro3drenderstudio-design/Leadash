@@ -50,7 +50,18 @@ function isPublic(path: string) {
   return PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/")) ||
     path.startsWith("/invite/") ||
     path.startsWith("/_next/") ||
-    path.startsWith("/favicon");
+    path.startsWith("/favicon") ||
+    // Crawler-facing artefacts. Google Search Console fetches /sitemap.xml
+    // and /robots.txt without cookies; if the auth guard redirects them to
+    // /login, GSC reports "Sitemap is HTML" and drops indexing. Also expose
+    // Apple/Android app-association files that OAuth/deep-link handshakes
+    // rely on being served unauthenticated at the root.
+    path === "/sitemap.xml" ||
+    path === "/robots.txt" ||
+    path === "/manifest.webmanifest" ||
+    path === "/manifest.json" ||
+    path === "/.well-known/apple-app-site-association" ||
+    path.startsWith("/.well-known/");
 }
 
 export async function middleware(request: NextRequest) {
