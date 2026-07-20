@@ -51,6 +51,12 @@ export async function applyChallengeConfirmation(
     .single();
   if (!product) return { workspaceId: wsId, cohortId: null, cohortStartsAt: null, offerTargeted: false };
 
+  // Self-heal the cohort schedule before enrolling — ensures the current
+  // enrolling (is_default) cohort exists even if the hourly cron lagged, so a
+  // confirmation always lands in the right cohort. Idempotent + advisory-locked.
+  try { await db.rpc("run_cohort_scheduler"); }
+  catch (e) { console.error("[challenge/confirm] scheduler self-heal error:", e instanceof Error ? e.message : e); }
+
   const { data: cohort } = await db
     .from("academy_cohorts")
     .select("id, starts_at")

@@ -91,6 +91,12 @@ export async function GET(req: NextRequest) {
   let sent = 0;
   let skipped = 0;
 
+  // Redundant cohort-scheduler tick — the dedicated /api/cron/academy-cohorts
+  // runs this too, but this second hourly trigger makes weekly cohort creation /
+  // go-live transitions / winner selection resilient if one cron misfires.
+  // Idempotent + advisory-locked.
+  await db.rpc("run_cohort_scheduler").then(() => {}, () => {});
+
   const { data: products } = await db
     .from("academy_products")
     .select("id, name, challenge_config")

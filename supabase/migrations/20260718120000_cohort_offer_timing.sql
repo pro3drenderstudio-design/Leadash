@@ -39,6 +39,9 @@ DECLARE
   c              record;
   win            record;
 BEGIN
+  -- Serialize concurrent runs (hourly cron + self-heal calls from confirms).
+  PERFORM pg_advisory_xact_lock(hashtext('academy_cohort_scheduler'));
+
   FOR p IN
     SELECT id, slug,
            COALESCE((challenge_config->'cohort_cadence'->>'golive_hour_wat')::int, 21) AS gh,
