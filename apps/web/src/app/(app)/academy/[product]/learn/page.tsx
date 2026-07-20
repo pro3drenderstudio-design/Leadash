@@ -12,6 +12,17 @@ import { lessonDuration } from "@/types/academy";
 interface ChallengeConfig {
   duration_days?: number;
   week_titles?: string[];
+  // Admin-controlled kickoff overlay. Holds the challenge behind a "starts <date>"
+  // screen until `live_at`, then reveals a "Welcome to Day 1 — join the live
+  // session" modal. Independent of the cohort go-live so the kickoff can be
+  // timed to a live call.
+  launch?: {
+    enabled?: boolean;
+    live_at?: string;   // ISO instant the overlay reveals
+    join_url?: string;  // live session link
+    title?: string;
+    body?: string;
+  };
   auto_advance_offer?: {
     enabled?: boolean;
     trigger?: string;
@@ -152,6 +163,7 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   const [state, setState] = useState<ChallengeState | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRevenueModal, setShowRevenueModal] = useState(false);
+  const [launchDismissed, setLaunchDismissed] = useState(false);
 
   const load = useCallback(() => {
     wsGet<ChallengeState>(`/api/academy/challenge?product_slug=${slug}`)
@@ -160,6 +172,22 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   }, [slug]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Remember a dismissed launch welcome (per kickoff) so it doesn't nag on every load.
+  const launchCfg = state?.product?.challenge_config?.launch;
+  useEffect(() => {
+    if (launchCfg?.enabled && launchCfg?.live_at) {
+      const key = `challenge_launch_${slug}_${launchCfg.live_at}`;
+      if (typeof window !== "undefined" && window.localStorage.getItem(key) === "1") setLaunchDismissed(true);
+    }
+  }, [slug, launchCfg?.enabled, launchCfg?.live_at]);
+
+  function dismissLaunch() {
+    if (launchCfg?.live_at && typeof window !== "undefined") {
+      window.localStorage.setItem(`challenge_launch_${slug}_${launchCfg.live_at}`, "1");
+    }
+    setLaunchDismissed(true);
+  }
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -198,15 +226,55 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   const weekStart = (weekNum - 1) * 7 + 1;
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart + i).filter(d => d <= totalDays);
 
+  const watDateTime = (d: Date) => d.toLocaleString("en-US", {
+    weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+    timeZone: "Africa/Lagos", timeZoneName: "short",
+  });
+
+  const cohortStart = state.cohort?.starts_at ? new Date(state.cohort.starts_at) : null;
+
+  // ── Launch overlay (admin-controlled kickoff) ─────────────────────────────
+  // Governs ONLY the cohort it kicks off (the one that starts at/before the
+  // launch instant) — a future cohort keeps its own "starts <date>" gate, so a
+  // Day-1 kickoff doesn't unlock a cohort that hasn't opened yet. For its
+  // cohort: before `live_at` the challenge is held behind a countdown; at/after
+  // it a "Welcome to Day 1 — join the live session" modal reveals.
+  const launch = cfg?.launch?.enabled ? cfg.launch : null;
+  const launchAt = launch?.live_at ? new Date(launch.live_at) : null;
+  const useLaunch = !!launch && !!launchAt && (!cohortStart || cohortStart.getTime() <= launchAt.getTime());
+  if (useLaunch && launchAt && Date.now() < launchAt.getTime()) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)", padding: "24px 22px 90px" }}>
+        <div style={{ maxWidth: 620, margin: "48px auto 0", textAlign: "center" }}>
+          <div style={{ fontSize: 52, marginBottom: 18 }}>🚀</div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--app-text)", marginBottom: 10 }}>
+            You&apos;re in! The challenge kicks off soon
+          </h1>
+          <p style={{ fontSize: 15, color: "var(--app-text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+            Day&nbsp;1 opens live on <strong style={{ color: "var(--app-text)" }}>{watDateTime(launchAt)}</strong>. We&apos;ll kick off with a live session — make sure you&apos;ve joined the WhatsApp group so you don&apos;t miss it.
+          </p>
+          <div style={{ background: "linear-gradient(135deg, rgba(249,115,22,0.16), rgba(14,14,19,0.4))", border: "1px solid rgba(249,115,22,0.28)", borderRadius: "var(--app-radius-lg)", padding: "22px 20px", textAlign: "left" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--app-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Get your mind right</p>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, color: "var(--app-text)", lineHeight: 1.9 }}>
+              <li>Decide right now that you&apos;ll finish all 7 days. Most people quit by day 2 — you won&apos;t.</li>
+              <li>Write down <em>why</em> you started. Read it on the days it feels hard.</li>
+              <li>Block a fixed 30–60 minutes a day and protect it like a paid appointment.</li>
+              <li>Silence the noise — mute distracting chats during your challenge time.</li>
+              <li>Tell one person you&apos;re doing this. Accountability beats motivation.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const showLaunchWelcome = useLaunch && !!launchAt && Date.now() >= launchAt.getTime() && !launchDismissed;
+
   // ── Pre-live cohort gate ──────────────────────────────────────────────────
   // Cohort-based challenges are locked until their cohort goes live. Show a
   // "your cohort starts on <date>" holding screen instead of an empty grid.
-  const cohortStart = state.cohort?.starts_at ? new Date(state.cohort.starts_at) : null;
-  if (cohortStart && cohortStart.getTime() > Date.now()) {
-    const goLive = cohortStart.toLocaleString("en-US", {
-      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
-      timeZone: "Africa/Lagos", timeZoneName: "short",
-    });
+  // Skipped for the cohort the launch overlay governs (it owns that pre-live UX).
+  if (!useLaunch && cohortStart && cohortStart.getTime() > Date.now()) {
+    const goLive = watDateTime(cohortStart);
     return (
       <div style={{ minHeight: "100vh", background: "var(--app-bg)", padding: "24px 22px 90px" }}>
         <div style={{ maxWidth: 620, margin: "48px auto 0", textAlign: "center" }}>
@@ -408,6 +476,31 @@ function ChallengeDashboard({ slug }: { slug: string }) {
             });
           }}
         />
+      )}
+
+      {/* Launch welcome — Day 1 kickoff / live session */}
+      {showLaunchWelcome && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(7,7,10,0.86)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
+          <div style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border-strong)", borderRadius: "var(--app-radius-lg)", padding: "34px 30px", width: "100%", maxWidth: 460, textAlign: "center", boxShadow: "0 24px 70px -20px rgba(0,0,0,0.7)" }}>
+            <div style={{ fontSize: 54, marginBottom: 14 }}>🎉</div>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--app-text)", marginBottom: 10 }}>
+              {launch?.title ?? "Welcome to Day 1 of the challenge!"}
+            </h2>
+            <p style={{ fontSize: 14.5, color: "var(--app-text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+              {launch?.body ?? "The live kickoff is happening now. Join the session to get started — this is where it all begins."}
+            </p>
+            {launch?.join_url && (
+              <a href={launch.join_url} target="_blank" rel="noreferrer noopener"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", boxSizing: "border-box", background: "var(--app-accent)", color: "#fff", fontWeight: 700, fontSize: 15, padding: "13px 22px", borderRadius: "var(--app-radius)", textDecoration: "none", boxShadow: "0 8px 20px -8px var(--app-accent)" }}>
+                📡 Join the live session →
+              </a>
+            )}
+            <button onClick={dismissLaunch}
+              style={{ marginTop: 14, background: "none", border: "none", color: "var(--app-text-muted)", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+              Enter the challenge
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

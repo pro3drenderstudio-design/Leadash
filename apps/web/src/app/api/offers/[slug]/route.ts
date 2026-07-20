@@ -14,27 +14,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 
   const typedOffer = offer as Offer;
 
-  if (typedOffer.status === "draft") {
-    const isPreview = req.nextUrl.searchParams.get("preview") === "1";
-    let isAdmin = false;
-    if (isPreview) {
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: admin } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
-        isAdmin = !!admin;
-      }
-    }
-    if (!isAdmin) return NextResponse.json({ error: "Offer not found" }, { status: 404 });
-  }
-
-  // Targeted offers are only visible to workspaces with an active target.
-  if ((typedOffer as unknown as { is_targeted?: boolean }).is_targeted) {
+  // Resolve the viewer once — admins previewing (?preview=1) can see offers that
+  // are otherwise gated (draft, or targeted-and-not-yet-granted to them), so the
+  // "Preview checkout" button works for sponsored/targeted offers too.
+  const isPreview = req.nextUrl.searchParams.get("preview") === "1";
+  let currentUserId: string | null = null;
+  let isAdmin = false;
+  {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    let allowed = false;
+    currentUserId = user?.id ?? null;
     if (user) {
-      const wsId = await resolveUserWorkspaceId(db, user.id);
+      const { data: admin } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
+      isAdmin = !!admin;
+    }
+  }
+  const isAdminPreview = isPreview && isAdmin;
+
+  if (typedOffer.status === "draft" && !isAdminPreview) {
+    return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+  }
+
+  // Targeted offers are only visible to workspaces with an active target
+  // (admins previewing bypass this).
+  if ((typedOffer as unknown as { is_targeted?: boolean }).is_targeted && !isAdminPreview) {
+    let allowed = false;
+    if (currentUserId) {
+      const wsId = await resolveUserWorkspaceId(db, currentUserId);
       allowed = await hasActiveOfferTarget(db, typedOffer.id, wsId);
     }
     if (!allowed) return NextResponse.json({ error: "This offer isn't available.", targeted: true }, { status: 404 });

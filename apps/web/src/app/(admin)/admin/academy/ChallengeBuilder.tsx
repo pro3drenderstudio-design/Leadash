@@ -461,8 +461,8 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
       const selfCheckTask = dayTasks.find(t => t.task_type === "self_check");
       setDaySelfCheckConfig(selfCheckTask?.self_check_config ?? DEFAULT_SELF_CHECK_CONFIG);
     } else {
-      // Use seed data
-      const seed = SEED_DAYS[selectedDay - 1];
+      // Use seed data (only for the legacy 30-day challenge)
+      const seed = (config.duration_days ?? 30) >= 30 ? SEED_DAYS[selectedDay - 1] : undefined;
       setDayProofConfig(DEFAULT_PROOF_CONFIG);
       setDayMetricConfig(DEFAULT_METRIC_CONFIG);
       setDayLiveSessionId("");
@@ -728,7 +728,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   async function addDay() {
     const maxDay = tasks.length > 0 ? Math.max(...tasks.map(t => t.day)) : 0;
     const nextDay = maxDay + 1;
-    const seed = SEED_DAYS[nextDay - 1];
+    const seed = (config.duration_days ?? 30) >= 30 ? SEED_DAYS[nextDay - 1] : undefined;
     const res = await fetch("/api/admin/academy/challenge-tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -749,16 +749,23 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
   }
 
-  // Derive unique days
+  // Always show every day of the challenge (1..duration_days) so days without
+  // tasks yet still appear as empty "Draft" days to fill in — plus any task days
+  // beyond that. The 30-day $0→$2.5k SEED_DAYS content only makes sense for the
+  // legacy 30-day challenge, so it's suppressed for shorter challenges.
+  const durationDays = config.duration_days ?? 30;
+  const useSeed = durationDays >= 30;
   const uniqueDays = loadingTasks
-    ? Array.from({ length: 30 }, (_, i) => i + 1)
-    : tasks.length > 0
-      ? [...new Set(tasks.map(t => t.day))].sort((a, b) => a - b)
-      : Array.from({ length: 30 }, (_, i) => i + 1);
+    ? Array.from({ length: durationDays }, (_, i) => i + 1)
+    : (() => {
+        const s = new Set<number>(tasks.map(t => t.day));
+        for (let d = 1; d <= durationDays; d++) s.add(d);
+        return [...s].sort((a, b) => a - b);
+      })();
 
-  const totalTasks = tasks.length || uniqueDays.length;
-  const totalPoints = tasks.reduce((s, t) => s + t.points, 0) || SEED_DAYS.reduce((s, d) => s + d.pts, 0);
-  const liveSessions = tasks.filter(t => t.task_type === "live").length || SEED_DAYS.filter(d => d.types.includes("live")).length;
+  const totalTasks = tasks.length || (useSeed ? uniqueDays.length : 0);
+  const totalPoints = tasks.reduce((s, t) => s + t.points, 0) || (useSeed ? SEED_DAYS.reduce((s, d) => s + d.pts, 0) : 0);
+  const liveSessions = tasks.filter(t => t.task_type === "live").length || (useSeed ? SEED_DAYS.filter(d => d.types.includes("live")).length : 0);
 
   // ── Tab definitions ────────────────────────────────────────────────────────
   const TABS: { key: ChallengeTab; label: string; icon: typeof Settings02Icon }[] = [
@@ -971,7 +978,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                         </div>
                         {days.map(d => {
                           const dayTasks = tasks.filter(t => t.day === d);
-                          const seed = SEED_DAYS[d - 1];
+                          const seed = useSeed ? SEED_DAYS[d - 1] : undefined;
                           const types = dayTasks.length > 0 ? dayTasks.map(t => t.task_type) : (seed?.types ?? ["lesson"]);
                           const pts = dayTasks.reduce((s, t) => s + t.points, 0) || seed?.pts || 0;
                           const isSelected = selectedDay === d;

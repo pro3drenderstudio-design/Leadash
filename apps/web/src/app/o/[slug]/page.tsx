@@ -162,7 +162,13 @@ export default function OfferCheckoutPage() {
 
     async function load() {
       const stored = sessionStorage.getItem(sessionKey(slug));
-      const qs = stored ? `?s=${encodeURIComponent(stored)}` : "";
+      const params = new URLSearchParams();
+      if (stored) params.set("s", stored);
+      // Forward ?preview=1 so admins can preview draft / targeted (sponsored)
+      // offers that would otherwise 404 for a viewer without an active grant.
+      const preview = new URLSearchParams(window.location.search).get("preview");
+      if (preview) params.set("preview", preview);
+      const qs = params.toString() ? `?${params.toString()}` : "";
       try {
         const res = await fetch(`/api/offers/${slug}${qs}`);
         if (!res.ok) {
