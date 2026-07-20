@@ -8,6 +8,7 @@ import { useAcademyDialog } from "./AcademyDialog";
 import ChallengeBuilder from "./ChallengeBuilder";
 import ChallengeFunnelMap from "./ChallengeFunnelMap";
 import ChallengeAnalytics from "./ChallengeAnalytics";
+import CohortAutomation from "./CohortAutomation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft01Icon,
@@ -749,6 +750,7 @@ export default function AdminAcademyPage() {
           {/* ── COHORTS ───────────────────────────────────────────────────── */}
           {!openProduct && top === "cohorts" && (
             <div style={{ display: "grid", gap: 24, maxWidth: 960 }}>
+              <CohortAutomation />
               <form onSubmit={createCohort} className="ac-card" style={{ padding: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Create cohort</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
