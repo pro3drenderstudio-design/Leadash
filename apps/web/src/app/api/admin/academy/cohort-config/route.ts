@@ -65,7 +65,21 @@ export async function PUT(req: NextRequest) {
   const { error } = await db.from("admin_settings")
     .upsert({ key: KEY, value: JSON.stringify(value), updated_at: new Date().toISOString() }, { onConflict: "key" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, ...value });
+
+  // Keep the live redirect in sync with the CURRENT cohort's group right away —
+  // otherwise a fixed/added URL wouldn't take effect until the next weekly roll.
+  const { data: prod } = await db.from("academy_products").select("id").eq("slug", "challenge-7day").maybeSingle();
+  const { data: current } = prod
+    ? await db.from("academy_cohorts").select("cohort_number").eq("product_id", prod.id).eq("is_default", true).maybeSingle()
+    : { data: null };
+  const curNum = current?.cohort_number as number | null;
+  const curUrl = curNum ? groups[String(curNum)] : undefined;
+  let synced = false;
+  if (curUrl) {
+    const { error: linkErr } = await db.from("tracked_links").update({ destination_url: curUrl, updated_at: new Date().toISOString() }).eq("slug", value.active_link_slug);
+    synced = !linkErr;
+  }
+  return NextResponse.json({ ok: true, synced, current_cohort_number: curNum, ...value });
 }
 
 /** POST — manually run the cohort scheduler ("Launch next challenge cohort"). */
