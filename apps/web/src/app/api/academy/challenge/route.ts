@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
+import { finalizeTaskCompletion } from "@/lib/academy/complete-task";
+import { getAutoMetricValue, isAutoMetricSource, defaultCtaFor, type MetricConfigLike } from "@/lib/academy/auto-detect";
 
 interface ChallengeConfig {
   duration_days?: number;
@@ -41,6 +43,7 @@ interface EnrollmentRow {
 
 interface TaskRow {
   id: string;
+  product_id: string;
   day: number;
   position: number;
   task_type: string;
@@ -48,6 +51,7 @@ interface TaskRow {
   points: number;
   lesson_id: string | null;
   is_published: boolean;
+  metric_config: MetricConfigLike | null;
   [key: string]: unknown;
 }
 
@@ -152,18 +156,59 @@ export async function GET(req: NextRequest) {
     gamification = data ?? null;
   }
 
+  const challengeConfig = product.challenge_config as ChallengeConfig | null;
+
   // Fetch completions if enrolled
   const completionMap = new Map<string, CompletionRow>();
   const daysCompleted: number[] = [];
-  if (enrollment) {
-    const { data: completions } = await db
-      .from("academy_challenge_completions")
-      .select("task_id, day, status, points_awarded, completed_at, proof_files, proof_text, metric_value")
-      .eq("enrollment_id", enrollment.id);
+  // Live values for auto-detected metric tasks (has_inbox / has_plan), keyed by
+  // task id — used both to auto-complete and to show progress in the UI.
+  const autoMetricValue = new Map<string, number>();
 
-    for (const c of (completions ?? []) as CompletionRow[]) {
-      completionMap.set(c.task_id, c);
+  if (enrollment) {
+    const loadCompletions = async () => {
+      const { data: completions } = await db
+        .from("academy_challenge_completions")
+        .select("task_id, day, status, points_awarded, completed_at, proof_files, proof_text, metric_value")
+        .eq("enrollment_id", enrollment.id);
+      completionMap.clear();
+      for (const c of (completions ?? []) as CompletionRow[]) completionMap.set(c.task_id, c);
+    };
+    await loadCompletions();
+
+    // Auto-detect: complete any unlocked metric task whose live workspace metric
+    // (inbox connected / plan chosen) now meets its target. finalizeTaskCompletion
+    // re-awards points on a later day if a done task is re-finalized, so only run
+    // it for tasks that are unlocked AND not already completed. Never let a
+    // detection failure break the read.
+    let didAutoComplete = false;
+    for (const task of tasks) {
+      if (task.task_type !== "metric") continue;
+      const source = task.metric_config?.source;
+      if (!isAutoMetricSource(source)) continue;
+      if (!isDayUnlocked(task.day, enrollment, cohort, challengeConfig)) continue;
+
+      const value = await getAutoMetricValue(db, workspaceId, source);
+      autoMetricValue.set(task.id, value);
+      if (completionMap.has(task.id)) continue;
+
+      const target = task.metric_config?.target ?? 1;
+      if (value < target) continue;
+      try {
+        await finalizeTaskCompletion(db, {
+          taskRow: { id: task.id, product_id: resolvedProductId, day: task.day, points: task.points },
+          enrollmentRow: { id: enrollment.id, workspace_id: enrollment.workspace_id, product_id: resolvedProductId },
+          userId: auth.userId,
+          challengeConfig,
+          completionThresholdPct: (product.completion_threshold_pct as number | undefined) ?? 100,
+          metricValue: value,
+        });
+        didAutoComplete = true;
+      } catch (e) {
+        console.error("[challenge] auto-complete failed:", e instanceof Error ? e.message : e);
+      }
     }
+    if (didAutoComplete) await loadCompletions();
 
     // Determine which days are fully complete (all published tasks done)
     const tasksByDay = new Map<number, TaskRow[]>();
@@ -180,14 +225,31 @@ export async function GET(req: NextRequest) {
   }
 
   // Annotate tasks with completion state and unlock state
-  const challengeConfig = product.challenge_config as ChallengeConfig | null;
   const tasksWithState = tasks.map((task) => {
     const completion = completionMap.get(task.id) ?? null;
     const unlocked = enrollment
       ? isDayUnlocked(task.day, enrollment, cohort, challengeConfig)
       : false;
+
+    // Flatten metric config so the day UI can render progress + a CTA without
+    // re-parsing metric_config. Auto sources carry a live current value.
+    let metricFields: Record<string, unknown> = {};
+    if (task.task_type === "metric" && task.metric_config) {
+      const mc = task.metric_config;
+      const auto = isAutoMetricSource(mc.source);
+      const cta = auto ? defaultCtaFor(mc.source as "has_inbox" | "has_plan") : null;
+      metricFields = {
+        metric_source: mc.source ?? null,
+        metric_target: mc.target ?? 1,
+        metric_current: auto ? (autoMetricValue.get(task.id) ?? 0) : (task.metric_current ?? null),
+        cta_label: mc.cta_label || cta?.label || null,
+        cta_url: mc.cta_url || cta?.url || null,
+      };
+    }
+
     return {
       ...task,
+      ...metricFields,
       unlocked,
       completed: !!completion,
       completion,

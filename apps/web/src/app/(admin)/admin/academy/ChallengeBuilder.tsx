@@ -68,9 +68,13 @@ interface ProofConfig {
 }
 
 interface MetricConfig {
-  source: "leadash_outbox" | "manual";
+  // has_inbox / has_plan are auto-detected by Leadash (completes when the
+  // workspace has a connected inbox / is on a paid plan).
+  source: "leadash_outbox" | "manual" | "has_inbox" | "has_plan";
   metric: string;
   target: number;
+  cta_label?: string;
+  cta_url?: string;
 }
 
 interface QuizConfig {
@@ -1259,6 +1263,8 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                           onChange={e => setDayMetricConfig(prev => ({ ...prev, source: e.target.value as MetricConfig["source"] }))}
                         >
                           <option value="leadash_outbox">Leadash outbox (auto)</option>
+                          <option value="has_inbox">Inbox connected (auto)</option>
+                          <option value="has_plan">Plan selected (auto)</option>
                           <option value="manual">Manual self-report</option>
                         </select>
                       </div>

@@ -31,6 +31,9 @@ interface ChallengeTask {
   } | null;
   metric_target?: number | null;
   metric_current?: number | null;
+  metric_source?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
   video_playback_id?: string | null;
   quiz_question_count?: number | null;
 }
@@ -208,19 +211,29 @@ function MetricCard({ task, done }: { task: ChallengeTask; done: boolean }) {
   const target = task.metric_target ?? 20;
   const pct = Math.min(current / target, 1);
   const remaining = Math.max(0, target - current);
+  // has_inbox / has_plan complete automatically the moment the action is done
+  // in Leadash — show a direct link to do it rather than a progress-farming bar.
+  const isAuto = task.metric_source === "has_inbox" || task.metric_source === "has_plan";
+  const trackLabel = isAuto ? "Detected automatically by Leadash" : "Auto-tracked from Leadash outbox";
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>Auto-tracked from Leadash outbox</span>
+        <span style={{ fontSize: 13, color: "var(--app-text-muted)" }}>{trackLabel}</span>
         <span style={{ fontSize: 20, fontWeight: 800, color: done ? "#34D399" : color }}>{current}<span style={{ fontSize: 13, fontWeight: 400, color: "var(--app-text-muted)" }}>/{target}</span></span>
       </div>
       <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 999, overflow: "hidden", marginBottom: 8 }}>
         <div style={{ height: "100%", width: `${pct * 100}%`, background: done ? "#34D399" : color, borderRadius: 999, transition: "width 0.5s ease" }} />
       </div>
-      <p style={{ fontSize: 12, color: done ? "#34D399" : "var(--app-text-muted)" }}>
-        {done ? "✅ Target reached!" : `${remaining} more to complete`}
+      <p style={{ fontSize: 12, color: done ? "#34D399" : "var(--app-text-muted)", marginBottom: isAuto && !done ? 12 : 0 }}>
+        {done ? "✅ Done — nice work!" : isAuto ? "Do this in Leadash and it checks off on its own." : `${remaining} more to complete`}
       </p>
+      {isAuto && !done && task.cta_url && (
+        <Link href={task.cta_url}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: color, color: "#07070A", fontWeight: 700, fontSize: 13, padding: "9px 16px", borderRadius: "var(--app-radius)", textDecoration: "none" }}>
+          {task.cta_label ?? "Do it now"} →
+        </Link>
+      )}
     </div>
   );
 }

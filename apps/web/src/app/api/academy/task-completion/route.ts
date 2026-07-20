@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { enqueueAutomation } from "@/lib/queue/client";
+import { finalizeTaskCompletion } from "@/lib/academy/complete-task";
+import { getAutoMetricValue, isAutoMetricSource, type MetricConfigLike } from "@/lib/academy/auto-detect";
 
 interface ChallengeConfig {
   duration_days?: number;
@@ -18,6 +19,7 @@ interface TaskRow {
   title: string;
   points: number;
   is_published: boolean;
+  metric_config: MetricConfigLike | null;
 }
 
 interface EnrollmentRow {
@@ -32,18 +34,6 @@ interface EnrollmentRow {
 interface CohortRow {
   id: string;
   starts_at: string;
-}
-
-interface GamificationRow {
-  id: string;
-  enrollment_id: string;
-  user_id: string;
-  product_id: string;
-  points: number;
-  streak_days: number;
-  last_active_date: string | null;
-  reported_earnings_cents: number;
-  grace_days_used: number;
 }
 
 /** Compute whether a challenge day is unlocked. */
@@ -61,8 +51,6 @@ function isDayUnlocked(
   const unlockTime = startDate.getTime() + (day - 1) * 86_400_000;
   return Date.now() >= unlockTime;
 }
-
-const STREAK_BONUS_POINTS = 10;
 
 /** POST /api/academy/task-completion
  *  Body: { task_id, proof_text?, proof_files?, metric_value? }
@@ -136,209 +124,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Day not yet unlocked" }, { status: 403 });
   }
 
-  // Insert completion (ignore if already exists due to UNIQUE constraint)
-  const { data: completion, error: completionError } = await db
-    .from("academy_challenge_completions")
-    .upsert(
-      {
-        enrollment_id: enrollmentRow.id,
-        task_id,
-        product_id: taskRow.product_id,
-        day: taskRow.day,
-        status: "completed",
-        proof_text: proof_text ?? null,
-        proof_files: proof_files ?? null,
-        metric_value: metric_value ?? null,
-        points_awarded: 0, // will update below after streak calc
-        completed_at: new Date().toISOString(),
-      },
-      { onConflict: "enrollment_id,task_id", ignoreDuplicates: true }
-    )
-    .select()
-    .single();
-
-  if (completionError) return NextResponse.json({ error: completionError.message }, { status: 500 });
-
-  // Check if all tasks for this day are now complete
-  const { data: dayTasks } = await db
-    .from("academy_challenge_tasks")
-    .select("id")
-    .eq("product_id", taskRow.product_id)
-    .eq("day", taskRow.day)
-    .eq("is_published", true);
-
-  const dayTaskIds = ((dayTasks ?? []) as { id: string }[]).map((t) => t.id);
-
-  const { data: dayCompletions } = await db
-    .from("academy_challenge_completions")
-    .select("task_id")
-    .eq("enrollment_id", enrollmentRow.id)
-    .in("task_id", dayTaskIds);
-
-  const completedTaskIds = new Set(
-    ((dayCompletions ?? []) as { task_id: string }[]).map((c) => c.task_id)
-  );
-  const dayComplete = dayTaskIds.every((id) => completedTaskIds.has(id));
-
-  // Update gamification if the day is now complete
-  let gamification: GamificationRow | null = null;
-  let pointsAwarded = 0;
-  let newStreakDays = 0;
-
-  if (dayComplete) {
-    // Fetch or create gamification row
-    const { data: existingGam } = await db
-      .from("academy_gamification")
-      .select("*")
-      .eq("enrollment_id", enrollmentRow.id)
-      .maybeSingle();
-
-    const todayStr = new Date().toISOString().split("T")[0];
-    const graceDays = challengeConfig?.grace_days ?? 0;
-
-    if (!existingGam) {
-      // First day complete — create gamification record
-      pointsAwarded = taskRow.points;
-      newStreakDays = 1;
-
-      const { data: newGam } = await db
-        .from("academy_gamification")
-        .insert({
-          enrollment_id: enrollmentRow.id,
-          user_id: userId,
-          product_id: taskRow.product_id,
-          points: pointsAwarded,
-          streak_days: 1,
-          last_active_date: todayStr,
-          reported_earnings_cents: 0,
-          grace_days_used: 0,
-        })
-        .select()
-        .single();
-      gamification = newGam as GamificationRow | null;
-    } else {
-      const gam = existingGam as GamificationRow;
-      const lastActiveDate = gam.last_active_date;
-
-      // Streak logic
-      if (lastActiveDate === todayStr) {
-        // Already recorded today — no streak change
-        newStreakDays = gam.streak_days;
-        pointsAwarded = 0; // don't double-award
-      } else if (lastActiveDate) {
-        const lastDate = new Date(lastActiveDate);
-        const today = new Date(todayStr);
-        const diffDays = Math.round(
-          (today.getTime() - lastDate.getTime()) / 86_400_000
-        );
-
-        if (diffDays === 1) {
-          // Consecutive day — increment streak
-          newStreakDays = gam.streak_days + 1;
-        } else if (graceDays > 0 && diffDays <= graceDays + 1) {
-          // Within grace period — maintain streak
-          newStreakDays = gam.streak_days + 1;
-        } else {
-          // Gap too large — reset streak
-          newStreakDays = 1;
-        }
-
-        // Points = task points + streak bonus (10 per day if streak > 1)
-        pointsAwarded = taskRow.points + (newStreakDays > 1 ? STREAK_BONUS_POINTS : 0);
-      } else {
-        newStreakDays = 1;
-        pointsAwarded = taskRow.points;
-      }
-
-      const newPoints = gam.points + pointsAwarded;
-
-      const { data: updatedGam } = await db
-        .from("academy_gamification")
-        .update({
-          points: newPoints,
-          streak_days: newStreakDays,
-          last_active_date: todayStr,
-        })
-        .eq("id", gam.id)
-        .select()
-        .single();
-      gamification = updatedGam as GamificationRow | null;
-    }
-
-    // Update points_awarded on the completion record
-    if (pointsAwarded > 0) {
-      await db
-        .from("academy_challenge_completions")
-        .update({ points_awarded: pointsAwarded })
-        .eq("enrollment_id", enrollmentRow.id)
-        .eq("task_id", task_id);
-    }
-
-    // Check if the challenge is complete per its completion threshold (e.g. 80% of days)
-    const totalDurationDays = challengeConfig?.duration_days ?? 30;
-    const requiredDays = Math.ceil(totalDurationDays * (completionThresholdPct / 100));
-    const { data: allCompletions } = await db
-      .from("academy_challenge_completions")
-      .select("day")
-      .eq("enrollment_id", enrollmentRow.id);
-
-    const completedDays = new Set(
-      ((allCompletions ?? []) as { day: number }[]).map((c) => c.day)
-    );
-    if (completedDays.size >= requiredDays) {
-      await db
-        .from("academy_enrollments")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", enrollmentRow.id);
-    }
-
-    // Fire generalized day-completion event for all products and all days
-    enqueueAutomation({
-      event:        "academy.challenge_day_completed",
-      workspace_id: enrollmentRow.workspace_id,
-      user_id:      userId,
-      payload:      {
-        product_id:     taskRow.product_id,
-        day:            taskRow.day,
-        points_awarded: pointsAwarded,
-        streak_days:    newStreakDays || (gamification?.streak_days ?? 0),
-        enrollment_id:  enrollmentRow.id,
-      },
-    }).catch(() => {});
-
-    // Legacy funnel compat: the 30-Day Challenge's Day-1 completion drives the
-    // Mizark bundle-upsell automation via funnel_states, predating challenge_config.
-    if (taskRow.product_id === "challenge-30" && taskRow.day === 1) {
-      const { data: fs } = await db
-        .from("funnel_states")
-        .select("day1_completed_at, bundle_offer_expires_at")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (!fs?.day1_completed_at) {
-        const completedAt = new Date().toISOString();
-        await db.from("funnel_states").upsert(
-          { user_id: userId, day1_completed_at: completedAt },
-          { onConflict: "user_id" }
-        );
-        await enqueueAutomation({
-          event: "user.day1_completed",
-          workspace_id: enrollmentRow.workspace_id,
-          user_id: userId,
-          payload: {
-            completed_at: completedAt,
-            bundle_offer_expires_at: fs?.bundle_offer_expires_at ?? null,
-          },
-        }).catch((err) => console.error("[task-completion] automation enqueue:", err));
-      }
+  // Auto-detected metric tasks (inbox / plan) are completed by Leadash itself,
+  // never self-reported — reject a manual completion until the condition holds
+  // so the "Mark day complete" button can't skip the actual work.
+  if (taskRow.task_type === "metric" && isAutoMetricSource(taskRow.metric_config?.source)) {
+    const target = taskRow.metric_config?.target ?? 1;
+    const value = await getAutoMetricValue(db, workspaceId, taskRow.metric_config!.source as "has_inbox" | "has_plan");
+    if (value < target) {
+      return NextResponse.json(
+        { error: "This task completes automatically once you've done it — nothing to submit yet." },
+        { status: 403 },
+      );
     }
   }
 
+  let result;
+  try {
+    result = await finalizeTaskCompletion(db, {
+      taskRow,
+      enrollmentRow,
+      userId,
+      challengeConfig,
+      completionThresholdPct,
+      proofText: proof_text,
+      proofFiles: proof_files,
+      metricValue: metric_value,
+    });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to complete task" }, { status: 500 });
+  }
+
   return NextResponse.json({
-    completion,
-    gamification,
-    day_complete: dayComplete,
-    points_awarded: pointsAwarded,
-    streak_days: newStreakDays || (gamification?.streak_days ?? 0),
+    completion: result.completion,
+    gamification: result.gamification,
+    day_complete: result.dayComplete,
+    points_awarded: result.pointsAwarded,
+    streak_days: result.streakDays,
   });
 }
