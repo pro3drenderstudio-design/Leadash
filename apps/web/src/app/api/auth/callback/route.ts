@@ -82,14 +82,16 @@ async function resolveRedirectTarget(
     return explicitNext;
   }
 
-  // 1. Returning user — has at least one workspace already
-  const { data: membership } = await db
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  if (membership) return "/dashboard";
+  // 1. Returning user — has at least one workspace already. Check BOTH
+  //    workspace_members and workspaces.owner_id: some older accounts own
+  //    a workspace without ever getting a membership row, and treating them
+  //    as "new" here is what sent existing users into onboarding to create
+  //    a duplicate workspace.
+  const [{ data: membership }, { data: ownedWs }] = await Promise.all([
+    db.from("workspace_members").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle(),
+    db.from("workspaces").select("id").eq("owner_id", user.id).limit(1).maybeSingle(),
+  ]);
+  if (membership || ownedWs) return "/dashboard";
 
   // 2. New Google identity for an existing email/password user — link them
   //    into the existing user's workspaces so they don't start fresh.
@@ -100,15 +102,24 @@ async function resolveRedirectTarget(
         (u: { id: string; email?: string }) => u.email === user.email && u.id !== user.id,
       );
       if (duplicate) {
-        const { data: existingMemberships } = await db
-          .from("workspace_members")
-          .select("workspace_id, role")
-          .eq("user_id", duplicate.id);
-        if (existingMemberships?.length) {
+        // Union of membership rows + workspaces the duplicate OWNS without a
+        // membership row (legacy accounts) — owners get role 'owner'.
+        const [{ data: existingMemberships }, { data: dupOwned }] = await Promise.all([
+          db.from("workspace_members").select("workspace_id, role").eq("user_id", duplicate.id),
+          db.from("workspaces").select("id").eq("owner_id", duplicate.id),
+        ]);
+        const rows = new Map<string, { workspace_id: string; role: string }>();
+        for (const m of (existingMemberships ?? []) as { workspace_id: string; role: string }[]) {
+          rows.set(m.workspace_id, { workspace_id: m.workspace_id, role: m.role });
+        }
+        for (const w of (dupOwned ?? []) as { id: string }[]) {
+          if (!rows.has(w.id)) rows.set(w.id, { workspace_id: w.id, role: "owner" });
+        }
+        if (rows.size > 0) {
           // Correct supabase-js upsert syntax (the previous .onConflict(...).ignore()
           // chain was invalid and threw at runtime, breaking this whole path).
           await db.from("workspace_members").upsert(
-            existingMemberships.map((m: { workspace_id: string; role: string }) => ({
+            [...rows.values()].map(m => ({
               workspace_id: m.workspace_id,
               user_id:      user.id,
               role:         m.role,

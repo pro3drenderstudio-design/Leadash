@@ -297,6 +297,21 @@ export interface ProductWithEnrollment extends AcademyProduct {
 
 // ─── Unlock logic (pure — runs on server and client) ─────────────────────────
 
+// WAT (Africa/Lagos) is UTC+1 with no DST — a fixed offset is safe.
+const WAT_OFFSET_MS = 60 * 60 * 1000;
+
+/** Midnight WAT on the calendar day that is `days` days after `start`.
+ *  Cohorts launch in the evening (e.g. 9 PM WAT), but participants expect
+ *  "Day N" content to be available ON day N — not at 9 PM of day N. So the
+ *  unlock threshold for day offsets is the start of the target WAT day,
+ *  not start-time + 24h multiples. */
+function watMidnightAfterDays(start: string, days: number): number {
+  const t = new Date(start).getTime() + days * 86_400_000;
+  const wat = t + WAT_OFFSET_MS;
+  const midnightWat = Math.floor(wat / 86_400_000) * 86_400_000;
+  return midnightWat - WAT_OFFSET_MS;
+}
+
 export function isLessonUnlocked(
   lesson: AcademyLesson,
   enrollment: AcademyEnrollment,
@@ -314,7 +329,10 @@ export function isLessonUnlocked(
     case "days_after_cohort_start": {
       if (!cohort) return true;
       const days = lesson.drip_value ?? 0;
-      return now >= new Date(cohort.starts_at).getTime() + days * 86_400_000;
+      // Day 0 (launch day) keeps the exact start time — Day 1 content goes
+      // live AT the launch event, not at midnight before it.
+      if (days === 0) return now >= new Date(cohort.starts_at).getTime();
+      return now >= watMidnightAfterDays(cohort.starts_at, days);
     }
     case "on_date":
       return lesson.drip_date ? now >= new Date(lesson.drip_date).getTime() : false;

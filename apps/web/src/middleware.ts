@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   "/api/outreach/unsubscribe",
   "/api/outreach/inbound",
   "/api/auth/callback",
+  "/api/auth/confirm",
   "/api/auth/forgot-password",
   "/api/auth/signup",
   "/api/cron",

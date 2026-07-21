@@ -44,17 +44,21 @@ export async function POST(req: NextRequest) {
     const { data, error } = await admin.auth.admin.generateLink({
       type: "recovery",
       email,
-      options: {
-        redirectTo: `${APP_URL}/api/auth/callback?next=/reset-password`,
-      },
     });
 
-    if (error || !data?.properties?.action_link) {
+    if (error || !data?.properties?.hashed_token) {
       // User not found — don't leak existence, just return ok silently
       return ok;
     }
 
-    const resetLink = data.properties.action_link;
+    // Build our own confirm link from the hashed token instead of using
+    // data.properties.action_link. The action_link routes through Supabase's
+    // /auth/v1/verify which hands back a PKCE code our server callback can't
+    // exchange (no code-verifier exists for admin-generated links) — users
+    // ended up on /login instead of the reset page. /api/auth/confirm
+    // verifies the token hash directly and drops the user on /reset-password
+    // with a live session.
+    const resetLink = `${APP_URL}/api/auth/confirm?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=recovery&next=${encodeURIComponent("/reset-password")}`;
 
     const html = `
       <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
