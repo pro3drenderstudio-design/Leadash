@@ -16,6 +16,7 @@ import { processAutomation } from "./workers/automation-worker";
 import { processPush } from "./workers/push-worker";
 import { startSchedulers } from "./schedulers";
 import { startHttpServer } from "./server";
+import { adminClient } from "./lib/supabase";
 
 console.log("[Leadash Worker] Starting...");
 
@@ -52,7 +53,24 @@ new Worker("leadash:webhook",        processWebhook,        { connection, concur
 new Worker("leadash:lead-campaign",  processLeadCampaign,   { connection, concurrency: 2 });
 new Worker("leadash:verify-bulk",    processVerifyBulk,     { connection, concurrency: 3 });
 new Worker("leadash:enrich-bulk",    processEnrichBulk,     { connection, concurrency: 3 });
-new Worker("leadash:provision",      processProvision,      { connection, concurrency: 3 });
+const provisionWorker = new Worker("leadash:provision", processProvision, { connection, concurrency: 3 });
+// Surface provisioning failures on the domain record — otherwise a failed job
+// leaves it stuck at "purchasing" with no reason (registrar rejections,
+// restricted-phrase domain names, etc. were invisible to admins).
+provisionWorker.on("failed", (job, err) => {
+  if (!job?.data?.domain_record_id) return;
+  const finalAttempt = (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 1);
+  const message = (err?.message || "Provisioning failed").slice(0, 500);
+  adminClient()
+    .from("outreach_domains")
+    .update({
+      ...(finalAttempt ? { status: "failed" } : {}),
+      error_message: message,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", job.data.domain_record_id)
+    .then(() => {}, (e: unknown) => console.error("[provision] failed-handler:", e));
+});
 new Worker("leadash:ai-prospect-enrich", processAiProspect, { connection, concurrency: 3 });
 new Worker("leadash:whatsapp",           processWhatsapp,   { connection, concurrency: 10 });
 new Worker("leadash:automation",         processAutomation, { connection, concurrency: 5 });

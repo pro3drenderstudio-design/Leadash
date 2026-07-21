@@ -4,6 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
+import { countryOptions } from "@/lib/countries";
+
+const COUNTRY_OPTIONS = countryOptions();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -511,16 +514,31 @@ export default function BuyDomainPage() {
                 ["registrant_city",       "City", true],
                 ["registrant_state",      "State / Region", false],
                 ["registrant_zip",        "ZIP / Postal code", false],
-                ["registrant_country",    "Country (2-letter, e.g. NG)", true],
+                ["registrant_country",    "Country", true],
               ] as [string, string, boolean][]).map(([key, label, req], i) => (
                 <div key={key} className={key === "registrant_address" ? "col-span-2" : ""}>
                   <label className="block text-[11px] text-white/50 mb-1">{label}{req && <span className="text-orange-400"> *</span>}</label>
-                  <input
-                    value={registrant[key] ?? ""}
-                    onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
-                    autoFocus={i === 0}
-                  />
+                  {key === "registrant_country" ? (
+                    // Store the ISO 3166-1 alpha-2 code — registrars reject full
+                    // country names (e.g. "Nigeria" → must be "NG").
+                    <select
+                      value={registrant[key] ?? ""}
+                      onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-orange-500/50"
+                    >
+                      <option value="">Select country…</option>
+                      {COUNTRY_OPTIONS.map(o => (
+                        <option key={o.code} value={o.code}>{o.name} ({o.code})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={registrant[key] ?? ""}
+                      onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
+                      autoFocus={i === 0}
+                    />
+                  )}
                 </div>
               ))}
             </div>
