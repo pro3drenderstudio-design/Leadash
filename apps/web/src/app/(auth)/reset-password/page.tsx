@@ -59,21 +59,25 @@ function ResetPasswordInner() {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setError(error.message); setLoading(false); return; }
 
-    // Clear the must_change_password flag so middleware stops gating.
-    // Failure here isn't fatal — the flag will simply re-appear on the next
-    // request and the user will land back on this page. Report but proceed
-    // to the success state either way.
+    // Clear the must_change_password flag on the server so future logins
+    // don't get gated. Failures here aren't fatal — worst case the user
+    // resets a second time.
     try {
       await fetch("/api/auth/clear-must-reset", { method: "POST" });
     } catch (e) {
       console.error("[reset-password] clear-must-reset failed:", e);
     }
 
+    // Sign out and route to /login. Reasons:
+    //  1. matches what customers expect ("send me back to sign in").
+    //  2. avoids a stale-JWT loop — the cookie the browser holds still says
+    //     must_change_password=true even though the DB has been updated;
+    //     middleware would bounce them right back to /reset-password if we
+    //     tried to redirect to /dashboard without a fresh session.
+    //  3. security: forces the user to prove the new password actually works.
+    await supabase.auth.signOut();
     setDone(true);
-    if (isFirstLogin) {
-      // For forced flow, drop into the app now that the gate is released.
-      setTimeout(() => router.replace("/dashboard"), 900);
-    }
+    setTimeout(() => router.replace("/login?reset=1"), 900);
   }
 
   if (done) {
@@ -93,16 +97,14 @@ function ResetPasswordInner() {
           </div>
           <h1 className="app-h1" style={{ marginBottom: 6 }}>Password updated</h1>
           <p style={{ color: "var(--app-text-muted)", fontSize: 14 }}>
-            {isFirstLogin ? "Taking you to your dashboard…" : "You can sign in with your new password."}
+            Taking you to sign in with your new password…
           </p>
-          {!isFirstLogin && (
-            <Link
-              href="/login"
-              style={{ display: "inline-block", marginTop: 28, fontSize: 13, color: "var(--app-accent)" }}
-            >
-              Go to sign in →
-            </Link>
-          )}
+          <Link
+            href="/login?reset=1"
+            style={{ display: "inline-block", marginTop: 28, fontSize: 13, color: "var(--app-accent)" }}
+          >
+            Go to sign in →
+          </Link>
         </div>
       </AuthShell>
     );
