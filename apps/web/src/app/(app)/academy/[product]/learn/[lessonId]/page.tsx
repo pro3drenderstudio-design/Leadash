@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { wsGet, wsPost } from "@/lib/workspace/client";
 import type { SectionWithLessons, LessonWithState, AcademyComment, AcademyNote, AcademyEnrollment } from "@/types/academy";
 import { lessonDuration } from "@/types/academy";
-import MuxPlayer from "@mux/mux-player-react";
+import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft01Icon,
@@ -534,15 +534,9 @@ export default function LessonViewer() {
           <div className="max-w-3xl mx-auto">
             {lesson.lesson_type === "video" && playbackId && token && (
               <div style={{ width: "100%", aspectRatio: "16 / 9", background: "#000" }}>
-                <MuxPlayer
-                  playbackId={playbackId}
-                  tokens={{ playback: token }}
-                  streamType="on-demand"
-                  style={{ width: "100%", height: "100%" }}
-                  onTimeUpdate={(e: Event) => {
-                    const v = e.target as HTMLVideoElement;
-                    if (v && v.duration) onVideoProgress((v.currentTime / v.duration) * 100);
-                  }}
+                <AdaptiveVideo
+                  src={`https://stream.mux.com/${playbackId}.m3u8?token=${token}`}
+                  onProgress={onVideoProgress}
                 />
               </div>
             )}
