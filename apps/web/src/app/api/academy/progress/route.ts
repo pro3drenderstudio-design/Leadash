@@ -19,12 +19,16 @@ export async function POST(req: NextRequest) {
   const { lesson_id, product_id, watch_percent = 100 } = body;
   if (!lesson_id || !product_id) return NextResponse.json({ error: "lesson_id and product_id required" }, { status: 400 });
 
+  // The client sends the product SLUG; rows key on the product's id. Resolve either.
+  const { data: prodRow } = await db.from("academy_products").select("id").or(`id.eq.${product_id},slug.eq.${product_id}`).maybeSingle();
+  const resolvedProductId = (prodRow?.id as string | undefined) ?? product_id;
+
   const [enrollmentRes, lessonRes] = await Promise.all([
     db.from("academy_enrollments")
       .select("*, academy_cohorts(*)")
       .eq("user_id", userId)
       .eq("workspace_id", workspaceId)
-      .eq("product_id", product_id)
+      .eq("product_id", resolvedProductId)
       .in("status", ["active", "completed"])
       .maybeSingle(),
     db.from("academy_lessons").select("*").eq("id", lesson_id).single(),
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
 
   // Check overall course completion
   const [allLessonsRes, allProgressRes] = await Promise.all([
-    db.from("academy_lessons").select("id").eq("product_id", product_id).eq("is_published", true),
+    db.from("academy_lessons").select("id").eq("product_id", resolvedProductId).eq("is_published", true),
     db.from("academy_lesson_progress").select("lesson_id").eq("enrollment_id", enrollment.id).eq("status", "completed"),
   ]);
 
@@ -79,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const { data: product } = await db.from("academy_products")
     .select("completion_threshold_pct, certificate_enabled")
-    .eq("id", product_id).single();
+    .eq("id", resolvedProductId).single();
   const threshold = product?.completion_threshold_pct ?? 80;
 
   let certificate = null;

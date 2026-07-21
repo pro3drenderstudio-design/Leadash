@@ -15,15 +15,25 @@ export async function GET(req: NextRequest) {
   // auth.userId works for both cookie sessions (web) and Bearer tokens (mobile)
   const { db, workspaceId, userId } = auth;
 
+  // The URL passes the product SLUG (e.g. "challenge-7day"), but sections/
+  // lessons/enrollments key on the product's id (which may be a different
+  // value). Resolve either form to the real id before querying.
+  const { data: product } = await db
+    .from("academy_products")
+    .select("id")
+    .or(`id.eq.${productId},slug.eq.${productId}`)
+    .maybeSingle();
+  const resolvedId = (product?.id as string | undefined) ?? productId;
+
   const [sectionsRes, lessonsRes, enrollmentRes] = await Promise.all([
-    db.from("academy_sections").select("*").eq("product_id", productId).eq("is_published", true).order("position"),
-    db.from("academy_lessons").select("*").eq("product_id", productId).eq("is_published", true).order("position"),
+    db.from("academy_sections").select("*").eq("product_id", resolvedId).eq("is_published", true).order("position"),
+    db.from("academy_lessons").select("*").eq("product_id", resolvedId).eq("is_published", true).order("position"),
     userId
       ? db.from("academy_enrollments")
           .select("*")
           .eq("user_id", userId)
           .eq("workspace_id", workspaceId)
-          .eq("product_id", productId)
+          .eq("product_id", resolvedId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
