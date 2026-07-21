@@ -829,11 +829,11 @@ function BillingTab({ paymentSuccess, paidPlanId, paystackReference, creditPurch
                 ) : (
                   <>
                     {ms !== null && (
-                      <span className="font-mono text-xs font-bold tabular-nums bg-black/30 border border-orange-500/25 rounded-lg px-2.5 py-1 text-orange-200">
+                      <span className="font-mono text-lg sm:text-xl font-bold tabular-nums bg-black/40 border border-orange-500/30 rounded-xl px-4 py-2 text-orange-200 whitespace-nowrap">
                         {d}d {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
                       </span>
                     )}
-                    <span className="text-xs font-bold bg-orange-500 text-white px-4 py-2 rounded-xl whitespace-nowrap">View offer →</span>
+                    <span className="text-sm font-bold bg-orange-500 text-white px-4 py-2.5 rounded-xl whitespace-nowrap">View offer →</span>
                   </>
                 )}
               </div>

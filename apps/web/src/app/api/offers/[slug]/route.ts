@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { DEFAULT_CHECKOUT_CONFIG, type Offer } from "@/types/offers";
-import { hasActiveOfferTarget, resolveUserWorkspaceId } from "@/lib/offers/targeting";
+import { hasActiveOfferTargetForUser } from "@/lib/offers/targeting";
 
 /** GET /api/offers/[slug] — public. Powers the standalone /o/[slug] checkout page. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -38,11 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   // Targeted offers are only visible to workspaces with an active target
   // (admins previewing bypass this).
   if ((typedOffer as unknown as { is_targeted?: boolean }).is_targeted && !isAdminPreview) {
-    let allowed = false;
-    if (currentUserId) {
-      const wsId = await resolveUserWorkspaceId(db, currentUserId);
-      allowed = await hasActiveOfferTarget(db, typedOffer.id, wsId);
-    }
+    const allowed = currentUserId ? await hasActiveOfferTargetForUser(db, typedOffer.id, currentUserId) : false;
     if (!allowed) return NextResponse.json({ error: "This offer isn't available.", targeted: true }, { status: 404 });
   }
 

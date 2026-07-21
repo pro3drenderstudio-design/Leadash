@@ -562,14 +562,207 @@ function AnalyticsTab({ funnel }: { funnel: Funnel }) {
 
 // ── A/B Tests Tab ─────────────────────────────────────────────────────────────
 
-function ABTestsTab({ funnel }: { funnel: Funnel }) {
+interface ABVariant {
+  id: string;
+  page_id: string;
+  page_name: string;
+  traffic_pct: number;
+  views: number;
+  conversions: number;
+  conversion_rate: number;
+}
+interface ABTest {
+  id: string;
+  name: string;
+  status: "running" | "paused" | "completed";
+  control_page_id: string;
+  winner_page_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  variants: ABVariant[];
+}
+
+function ABTestsTab({ funnel, pages }: { funnel: Funnel; pages: FunnelPage[] }) {
+  const [tests, setTests]     = useState<ABTest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [err, setErr]         = useState("");
+
+  // Create-form state
+  const [name, setName]       = useState("");
+  const [controlId, setControlId] = useState("");
+  const [variantIds, setVariantIds] = useState<string[]>([]);
+
+  const publishedPages = pages.filter(p => p.status === "published");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/admin/funnels/${funnel.id}/ab-tests`);
+    const d = await res.json() as { tests?: ABTest[] };
+    setTests(d.tests ?? []);
+    setLoading(false);
+  }, [funnel.id]);
+  useEffect(() => { load(); }, [load]);
+
+  function toggleVariant(id: string) {
+    setVariantIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function createTest() {
+    setErr("");
+    const chosen = Array.from(new Set([controlId, ...variantIds])).filter(Boolean);
+    if (!name.trim() || !controlId) { setErr("Name and a control page are required."); return; }
+    if (chosen.length < 2) { setErr("Pick at least one more page to test against the control."); return; }
+    const split = Math.floor(100 / chosen.length);
+    const variants = chosen.map((page_id, i) => ({ page_id, traffic_pct: i === 0 ? 100 - split * (chosen.length - 1) : split }));
+    setCreating(true);
+    const res = await fetch(`/api/admin/funnels/${funnel.id}/ab-tests`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), control_page_id: controlId, variants }),
+    });
+    setCreating(false);
+    if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to create test"); return; }
+    setName(""); setControlId(""); setVariantIds([]);
+    load();
+  }
+
+  async function patchTest(testId: string, body: Record<string, unknown>) {
+    await fetch(`/api/admin/funnels/${funnel.id}/ab-tests/${testId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    load();
+  }
+  async function setSplit(testId: string, variants: ABVariant[]) {
+    await patchTest(testId, { variants: variants.map(v => ({ id: v.id, traffic_pct: v.traffic_pct })) });
+  }
+  async function deleteTest(testId: string) {
+    if (!confirm("Delete this A/B test? Its stats will be removed.")) return;
+    await fetch(`/api/admin/funnels/${funnel.id}/ab-tests/${testId}`, { method: "DELETE" });
+    load();
+  }
+
   return (
-    <div className="text-center py-12 border border-dashed border-white/10 rounded-xl">
-      <svg className="w-8 h-8 text-white/20 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-      <p className="text-white/30 text-sm">A/B testing coming soon</p>
-      <p className="text-white/20 text-xs mt-1">Create variants and split traffic between pages</p>
+    <div className="space-y-6">
+      {/* Create form */}
+      <div className="border border-white/10 rounded-xl p-4">
+        <p className="text-white font-semibold text-sm mb-3">New A/B test</p>
+        {publishedPages.length < 2 ? (
+          <p className="text-white/40 text-xs">Publish at least two pages in this funnel to run a split test.</p>
+        ) : (
+          <div className="space-y-3">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Test name (e.g. Headline test)"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30" />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-white/40 uppercase tracking-wide">Control (original)</label>
+                <select value={controlId} onChange={e => setControlId(e.target.value)}
+                  className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="">Select control page…</option>
+                  {publishedPages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-white/40 uppercase tracking-wide">Variant page(s)</label>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {publishedPages.filter(p => p.id !== controlId).map(p => (
+                    <button key={p.id} onClick={() => toggleVariant(p.id)}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg border ${variantIds.includes(p.id) ? "bg-orange-500/20 border-orange-500/40 text-orange-200" : "bg-white/5 border-white/10 text-white/60"}`}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {err && <p className="text-red-400 text-xs">{err}</p>}
+            <button onClick={createTest} disabled={creating}
+              className="bg-orange-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-60">
+              {creating ? "Starting…" : "Start test"}
+            </button>
+            <p className="text-white/25 text-[11px]">Traffic is split evenly to start — adjust the % per variant once it&apos;s running.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Tests list */}
+      {loading ? (
+        <p className="text-white/30 text-sm">Loading…</p>
+      ) : tests.length === 0 ? (
+        <p className="text-white/30 text-sm text-center py-6">No tests yet.</p>
+      ) : (
+        tests.map(t => {
+          const totalConv = t.variants.reduce((s, v) => s + v.conversions, 0);
+          const best = t.variants.reduce<ABVariant | null>((b, v) => (!b || v.conversion_rate > b.conversion_rate ? v : b), null);
+          return (
+            <div key={t.id} className="border border-white/10 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <div>
+                  <p className="text-white font-semibold text-sm">{t.name}</p>
+                  <p className="text-white/35 text-xs">
+                    {totalConv} signups · {t.status === "running" ? "Running" : t.status === "paused" ? "Paused" : "Completed"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {t.status === "running" && <button onClick={() => patchTest(t.id, { status: "paused" })} className="text-xs px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60">Pause</button>}
+                  {t.status === "paused" && <button onClick={() => patchTest(t.id, { status: "running" })} className="text-xs px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60">Resume</button>}
+                  <button onClick={() => deleteTest(t.id)} className="text-xs px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300">Delete</button>
+                </div>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left">
+                    <th className="pb-2 text-xs text-white/30 font-semibold">Variant</th>
+                    <th className="pb-2 text-xs text-white/30 font-semibold text-right">Traffic %</th>
+                    <th className="pb-2 text-xs text-white/30 font-semibold text-right">Views</th>
+                    <th className="pb-2 text-xs text-white/30 font-semibold text-right">Signups</th>
+                    <th className="pb-2 text-xs text-white/30 font-semibold text-right">Rate</th>
+                    <th className="pb-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.variants.map(v => {
+                    const isWinner = t.winner_page_id === v.page_id;
+                    const isControl = t.control_page_id === v.page_id;
+                    const isBest = best?.id === v.id && v.views > 0;
+                    return (
+                      <tr key={v.id} className="border-b border-white/5">
+                        <td className="py-2.5 text-white">
+                          {v.page_name}
+                          {isControl && <span className="ml-2 text-[10px] text-white/30 uppercase">control</span>}
+                          {isWinner && <span className="ml-2 text-[10px] text-emerald-400 uppercase">winner</span>}
+                          {!isWinner && isBest && t.status !== "completed" && <span className="ml-2 text-[10px] text-orange-300 uppercase">leading</span>}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          {t.status === "completed" ? (
+                            <span className="text-white/50">{v.traffic_pct}%</span>
+                          ) : (
+                            <input type="number" min={0} max={100} defaultValue={v.traffic_pct}
+                              onBlur={e => {
+                                const pct = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                                setSplit(t.id, t.variants.map(x => x.id === v.id ? { ...x, traffic_pct: pct } : x));
+                              }}
+                              className="w-16 bg-white/5 border border-white/10 rounded px-2 py-1 text-right text-white text-xs" />
+                          )}
+                        </td>
+                        <td className="py-2.5 text-white/60 text-right">{v.views}</td>
+                        <td className="py-2.5 text-white/60 text-right">{v.conversions}</td>
+                        <td className="py-2.5 text-white/60 text-right">{(v.conversion_rate * 100).toFixed(1)}%</td>
+                        <td className="py-2.5 text-right">
+                          {t.status !== "completed" && (
+                            <button onClick={() => { if (confirm(`Declare "${v.page_name}" the winner and end the test?`)) patchTest(t.id, { winner_page_id: v.page_id }); }}
+                              className="text-[11px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                              Declare winner
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -732,7 +925,7 @@ export default function FunnelDetailPage() {
           onUpdate={updated => setFunnel(prev => prev ? { ...prev, ...updated } : prev)}
         />
       )}
-      {tab === "abtests" && <ABTestsTab funnel={funnel} />}
+      {tab === "abtests" && <ABTestsTab funnel={funnel} pages={pages} />}
     </div>
   );
 }

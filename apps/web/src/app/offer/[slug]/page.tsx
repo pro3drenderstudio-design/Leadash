@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { resolveUserWorkspaceId } from "@/lib/offers/targeting";
+import { activeTargetForUser } from "@/lib/offers/targeting";
 import OfferSalesClient, { type SalesOffer } from "./OfferSalesClient";
 
 export const dynamic = "force-dynamic";
@@ -22,16 +22,8 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ slu
   if (o.is_targeted) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    let target: { expires_at: string | null } | null = null;
-    if (user) {
-      const wsId = await resolveUserWorkspaceId(db, user.id);
-      if (wsId) {
-        const { data } = await db.from("offer_targets").select("expires_at").eq("offer_id", o.id).eq("workspace_id", wsId).maybeSingle();
-        target = (data as { expires_at: string | null } | null) ?? null;
-      }
-    }
-    const active = target ? (!target.expires_at || new Date(target.expires_at) > new Date()) : false;
-    blocked = !active;
+    const target = user ? await activeTargetForUser(db, o.id, user.id) : null;
+    blocked = !target;
     expiresAt = target?.expires_at ?? null;
   }
 

@@ -12,10 +12,48 @@ export async function resolveUserWorkspaceId(db: SupabaseClient, userId: string)
     .from("workspace_members")
     .select("workspace_id")
     .eq("user_id", userId)
-    .order("created_at", { ascending: true })
+    .order("joined_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   return (data?.workspace_id as string | undefined) ?? null;
+}
+
+/** Every workspace the user belongs to. */
+export async function userWorkspaceIds(db: SupabaseClient, userId: string): Promise<string[]> {
+  const { data } = await db.from("workspace_members").select("workspace_id").eq("user_id", userId);
+  return ((data ?? []) as { workspace_id: string }[]).map((r) => r.workspace_id);
+}
+
+/**
+ * The active target row for this offer across ANY of the user's workspaces, or
+ * null. Checking every workspace (not just the "first" one) is what makes a
+ * sponsored offer reachable regardless of which workspace the user is currently
+ * in — the offer_target is attached to their challenge workspace, which may not
+ * be their first membership.
+ */
+export async function activeTargetForUser(
+  db: SupabaseClient,
+  offerId: string,
+  userId: string,
+): Promise<{ starts_at: string | null; expires_at: string | null } | null> {
+  const wsIds = await userWorkspaceIds(db, userId);
+  if (wsIds.length === 0) return null;
+  const nowIso = new Date().toISOString();
+  const { data } = await db
+    .from("offer_targets")
+    .select("starts_at, expires_at")
+    .eq("offer_id", offerId)
+    .in("workspace_id", wsIds)
+    .or(`starts_at.is.null,starts_at.lte.${nowIso}`)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order("expires_at", { ascending: false, nullsFirst: true })
+    .limit(1);
+  return (data?.[0] as { starts_at: string | null; expires_at: string | null } | undefined) ?? null;
+}
+
+/** True when any of the user's workspaces has an active target for the offer. */
+export async function hasActiveOfferTargetForUser(db: SupabaseClient, offerId: string, userId: string): Promise<boolean> {
+  return (await activeTargetForUser(db, offerId, userId)) !== null;
 }
 
 /**
