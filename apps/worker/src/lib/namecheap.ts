@@ -76,6 +76,34 @@ async function callApi(command: string, extra: Record<string, string> = {}): Pro
  * e.g. "+234 801 234 5678" → "+234.8012345678"
  *      "08012345678" (NG)  → "+234.8012345678"
  */
+/**
+ * Namecheap's contact API requires an ISO 3166-1 alpha-2 country code (e.g.
+ * "NG"). Registrant info is sometimes stored as a full country name
+ * ("Nigeria"), which the API rejects — and the resulting failure isn't
+ * surfaced, leaving the domain stuck at "purchasing". Normalise to the code.
+ */
+let _nameToIso: Map<string, string> | null = null;
+function toIso2Country(country: string): string {
+  const c = (country || "").trim();
+  if (!c) return "US";
+  if (/^[A-Za-z]{2}$/.test(c)) return c.toUpperCase();
+  if (!_nameToIso) {
+    _nameToIso = new Map();
+    try {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      for (let a = 65; a <= 90; a++) {
+        for (let b = 65; b <= 90; b++) {
+          const code = String.fromCharCode(a) + String.fromCharCode(b);
+          let name: string | undefined;
+          try { name = dn.of(code); } catch { continue; }
+          if (name && name !== code) _nameToIso.set(name.toLowerCase(), code);
+        }
+      }
+    } catch { /* Intl unavailable — fall back to raw below */ }
+  }
+  return _nameToIso.get(c.toLowerCase()) ?? c;
+}
+
 function formatPhone(raw: string, country: string): string {
   if (!raw) return "";
   const stripped = raw.replace(/[\s\-\(\)\.]/g, "");
@@ -133,16 +161,17 @@ export async function purchaseDomain(domain: string, registrant: RegistrantConta
   const [sld, ...tldParts] = domain.split(".");
   const tld = tldParts.join(".");
 
+  const isoCountry = toIso2Country(registrant.country);
   const contact = {
     FirstName:     registrant.first_name,
     LastName:      registrant.last_name,
     EmailAddress:  registrant.email,
-    Phone:         formatPhone(registrant.phone, registrant.country),
+    Phone:         formatPhone(registrant.phone, isoCountry),
     Address1:      registrant.address,
     City:          registrant.city,
     StateProvince: registrant.state,
     PostalCode:    registrant.zip,
-    Country:       registrant.country,
+    Country:       isoCountry,
   };
 
   const extra: Record<string, string> = {
