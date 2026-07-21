@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
 
   const [enrollmentRes, lessonRes] = await Promise.all([
     db.from("academy_enrollments")
-      .select("*, academy_cohorts(*)")
+      // The FK hint is required: academy_cohorts.winner_enrollment_id (added
+      // by mig 20260720020000) created a SECOND relationship between these
+      // tables, making a bare academy_cohorts(*) embed ambiguous. PostgREST
+      // rejects ambiguous embeds (PGRST201), the query errors, enrollment
+      // reads as null, and every progress POST 403'd with "Not enrolled" —
+      // the stuck "Marking…" button.
+      .select("*, academy_cohorts!academy_enrollments_cohort_id_fkey(*)")
       .eq("user_id", userId)
       .eq("workspace_id", workspaceId)
       .eq("product_id", resolvedProductId)

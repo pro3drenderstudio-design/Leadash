@@ -321,6 +321,7 @@ export default function LessonViewer() {
   const [playbackId,  setPlaybackId]  = useState<string | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [completing,  setCompleting]  = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
   const [navOpen,     setNavOpen]     = useState(false);
   const [rightTab,    setRightTab]    = useState<"notes" | "discussion">("notes");
   const [blocks,      setBlocks]      = useState<LessonBlock[]>([]);
@@ -361,28 +362,42 @@ export default function LessonViewer() {
   async function markComplete() {
     if (!lesson || !enrollment || completing) return;
     setCompleting(true);
-    await wsPost("/api/academy/progress", {
-      lesson_id:    lesson.id,
-      product_id:   slug,
-      watch_percent: 100,
-    });
-    setLesson(l => l ? { ...l, completed: true } : l);
-    setSections(ss => ss.map(s => ({
-      ...s,
-      lessons: s.lessons.map(l => l.id === lessonId ? { ...l, completed: true } : l),
-    })));
-    setCompleting(false);
+    setCompleteError(null);
+    // try/finally so a server error can never strand the button on
+    // "Marking…" — that exact hang shipped once (the ambiguous-embed 403)
+    // and the missing finally turned a backend bug into a frozen UI.
+    try {
+      await wsPost("/api/academy/progress", {
+        lesson_id:    lesson.id,
+        product_id:   slug,
+        watch_percent: 100,
+      });
+      setLesson(l => l ? { ...l, completed: true } : l);
+      setSections(ss => ss.map(s => ({
+        ...s,
+        lessons: s.lessons.map(l => l.id === lessonId ? { ...l, completed: true } : l),
+      })));
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : "Could not mark complete — try again");
+    } finally {
+      setCompleting(false);
+    }
   }
 
   async function onVideoProgress(pct: number) {
     if (!lesson || pct < 85) return;
     if (lesson.completed) return;
-    await wsPost("/api/academy/progress", {
-      lesson_id:    lesson.id,
-      product_id:   slug,
-      watch_percent: Math.round(pct),
-    });
-    setLesson(l => l ? { ...l, completed: true } : l);
+    try {
+      await wsPost("/api/academy/progress", {
+        lesson_id:    lesson.id,
+        product_id:   slug,
+        watch_percent: Math.round(pct),
+      });
+      setLesson(l => l ? { ...l, completed: true } : l);
+    } catch (e) {
+      // Watch-progress is best-effort — swallow, the manual button remains.
+      console.error("[lesson] auto-progress failed:", e);
+    }
   }
 
   if (loading) return (
@@ -601,6 +616,9 @@ export default function LessonViewer() {
                     <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={2} />
                     Completed
                   </div>
+                )}
+                {completeError && (
+                  <span style={{ fontSize: 12, color: "var(--app-danger, #f87171)" }}>{completeError}</span>
                 )}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
                   {prevLesson?.unlocked && (

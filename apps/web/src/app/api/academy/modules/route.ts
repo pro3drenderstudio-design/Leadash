@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
       .order("day_number"),
     userId
       ? db.from("academy_enrollments")
-          .select("*, academy_cohorts(*)")
+          // FK hint required — see progress/route.ts: winner_enrollment_id
+          // makes a bare academy_cohorts embed ambiguous (PGRST201).
+          .select("*, academy_cohorts!academy_enrollments_cohort_id_fkey(*)")
           .eq("user_id", userId)
           .eq("workspace_id", workspaceId)
           .eq("product_id", productId)

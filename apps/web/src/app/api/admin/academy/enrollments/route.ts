@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
   const status    = req.nextUrl.searchParams.get("status");
 
   let query = db.from("academy_enrollments")
-    .select("*, workspaces(name), academy_cohorts(name)")
+    // FK hint required — see api/academy/progress/route.ts: winner_enrollment_id
+    // makes a bare academy_cohorts embed ambiguous (PGRST201).
+    .select("*, workspaces(name), academy_cohorts!academy_enrollments_cohort_id_fkey(name)")
     .order("enrolled_at", { ascending: false })
     .limit(200);
 
