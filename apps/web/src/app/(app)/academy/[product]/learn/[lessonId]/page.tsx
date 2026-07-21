@@ -482,7 +482,13 @@ export default function LessonViewer() {
                 const lockedSt = !l.unlocked && !l.is_free_preview;
                 return (
                   <Link key={l.id} href={`/academy/${slug}/learn/${l.id}`}
-                    onClick={() => setNavOpen(false)}
+                    aria-disabled={lockedSt}
+                    onClick={e => {
+                      // Locked future lessons: do nothing (don't navigate — otherwise
+                      // the viewer's unlock guard bounces the user to the dashboard).
+                      if (lockedSt) { e.preventDefault(); return; }
+                      setNavOpen(false);
+                    }}
                     style={{
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "9px 16px",
