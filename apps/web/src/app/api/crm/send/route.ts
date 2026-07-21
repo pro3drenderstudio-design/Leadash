@@ -111,26 +111,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   }
 
-  // Internal notes — stored as outbound with a note flag in crm_conversation_notes
+  // Internal notes live in crm_messages with is_internal_note=true (mig
+  // 20260722100000). One table, one query, shared timeline. The
+  // last-message trigger deliberately skips notes so they don't clobber
+  // the customer-facing snippet in the conversation list.
   if (note) {
-    await db.from("crm_conversation_notes").insert({
+    const { error: noteErr } = await db.from("crm_messages").insert({
       conversation_id,
-      body:    msgBody,
-      sent_by: user.id,
-    }).then(() => {}).catch(async () => {
-      // Fallback: table may not exist yet — store as outbound with [NOTE] prefix
-      await db.from("crm_messages").insert({
-        conversation_id,
-        contact_id:   contact.id,
-        direction:    "outbound",
-        channel:      channel === "whatsapp" ? "whatsapp" : "email",
-        body:         `[NOTE] ${msgBody}`,
-        sent_by:      user.id,
-        status:       "delivered",
-        delivered_at: now,
-      });
+      contact_id:       contact.id,
+      direction:        "outbound",
+      channel:          channel === "whatsapp" ? "whatsapp" : "email",
+      body:             msgBody,
+      sent_by:          user.id,
+      status:           "sent",
+      is_internal_note: true,
     });
-    await db.from("crm_conversations").update({ last_message_at: now }).eq("id", conversation_id);
+    if (noteErr) {
+      console.error("[crm/send] note insert error:", noteErr);
+      return NextResponse.json({ error: "Failed to save note" }, { status: 500 });
+    }
     return NextResponse.json({ ok: true, type: "note" });
   }
 

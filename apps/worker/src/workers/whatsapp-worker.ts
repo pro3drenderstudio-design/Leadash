@@ -30,6 +30,33 @@ export async function processWhatsapp(job: Job<WhatsappJobData>) {
   const db: DB = createClient(SUPABASE_URL, SUPABASE_KEY);
   const { message_id, phone_number, template_name, template_params, body, media } = job.data;
 
+  // ── Idempotency guard: never send a message twice ────────────────────────
+  // Two failure modes were causing duplicate deliveries:
+  //   1. Meta accepts the send but the response is truncated (network flake,
+  //      Vercel edge timeout, worker crash after POST). BullMQ marks the
+  //      job failed and retries; the retry re-sends.
+  //   2. Two workers claim the same job on rare Redis re-delivery.
+  // Atomic UPDATE claims the row: only proceeds if we transitioned
+  // pending → sending. If the row is already sent/sending, another attempt
+  // (or another worker) already handled it — bail out cleanly.
+  const { data: claimed, error: claimErr } = await db
+    .from("whatsapp_messages")
+    .update({ status: "sending" })
+    .eq("id", message_id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (claimErr) {
+    console.error(`[whatsapp] claim failed message_id=${message_id}`, claimErr);
+    throw claimErr;
+  }
+  if (!claimed) {
+    // Row is already sent, sending, or failed — someone else owns it.
+    // Return silently so BullMQ marks the job completed without retry.
+    console.log(`[whatsapp] skip duplicate delivery message_id=${message_id} (already claimed)`);
+    return;
+  }
+
   // Pull Meta credentials from crm_channel_configs (channel='whatsapp') at runtime
   // so they can be rotated in the CRM Settings UI without redeployment.
   const { data: channelCfg } = await db

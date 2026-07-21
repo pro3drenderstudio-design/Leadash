@@ -71,6 +71,7 @@ interface CrmMessage {
   attachments: CrmAttachment[]; location: CrmLocation|null; contacts: WaSharedContact[];
   ai_suggested?: boolean;
   reaction?: string | null;
+  is_internal_note?: boolean;
 }
 
 interface ContactProfile {
@@ -318,12 +319,15 @@ function ToolbarBtn({ children, title, onClick }: { children: React.ReactNode; t
 
 function MessageBubble({ msg }: { msg: CrmMessage }) {
   const isOutbound = msg.direction === "outbound";
-  const isNote     = msg.body?.startsWith("[NOTE] ");
+  // Two note conventions: `[NOTE] ` prefix from the legacy fallback, and
+  // the new is_internal_note flag from mig 20260722100000. Either renders
+  // as a centred internal-note pill instead of a chat bubble.
+  const isNote     = msg.is_internal_note === true || msg.body?.startsWith("[NOTE] ");
 
   if (isNote) return (
     <div className="flex justify-center my-2">
       <div className="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-lg px-3 py-2 max-w-sm text-xs text-yellow-800 dark:text-yellow-300">
-        <span className="font-semibold mr-1">Note:</span>{(msg.body ?? "").replace("[NOTE] ", "")}
+        <span className="font-semibold mr-1">Note:</span>{(msg.body ?? "").replace(/^\[NOTE\] /, "")}
       </div>
     </div>
   );
@@ -1050,6 +1054,14 @@ function CrmInboxContent() {
   const [channelFilter,  setChannelFilter]  = useState("all");
   const [dateFilter,     setDateFilter]     = useState(""); // "" | "today" | "7d" | "30d"
   const [tagFilter,      setTagFilter]      = useState<string | null>(null);
+  // Debounced free-text search across subject, channel identifier, and
+  // contact name/email/phone/whatsapp (see /api/crm/conversations route).
+  const [searchInput,    setSearchInput]    = useState("");
+  const [searchQuery,    setSearchQuery]    = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
   const [convoCursor,    setConvoCursor]    = useState<string | null>(null);
   const [hasMoreConvos,  setHasMoreConvos]  = useState(false);
   const [loadingMoreConvos, setLoadingMoreConvos] = useState(false);
@@ -1093,10 +1105,11 @@ function CrmInboxContent() {
     const params = new URLSearchParams({ status: statusFilter });
     if (channelFilter !== "all") params.set("channel", channelFilter);
     if (tagFilter) params.set("tag", tagFilter);
+    if (searchQuery) params.set("search", searchQuery);
     const from = dateFilterFrom(dateFilter);
     if (from) params.set("from", from);
     return params;
-  }, [statusFilter, channelFilter, tagFilter, dateFilter]);
+  }, [statusFilter, channelFilter, tagFilter, dateFilter, searchQuery]);
 
   // Full reset — fetches page 1 and replaces the list. Used on mount and
   // whenever a filter changes.
@@ -1571,6 +1584,32 @@ function CrmInboxContent() {
               </button>
               <a href="/admin/crm-settings" className="text-[10px] text-white/30 hover:text-white/60 transition-colors">⚙</a>
             </div>
+          </div>
+          {/* Contact / conversation search */}
+          <div className="relative mb-2">
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-white/30"
+            >
+              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.428 9.795l3.638 3.638a.75.75 0 1 0 1.06-1.06l-3.638-3.639A5.5 5.5 0 0 0 9 3.5Zm0 1.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z" clipRule="evenodd"/>
+            </svg>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search name, email, phone…"
+              className="w-full pl-7 pr-6 py-1.5 text-xs bg-slate-100 dark:bg-white/10 border-0 rounded-md text-slate-700 dark:text-white/80 placeholder-slate-400 dark:placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500/40"
+            />
+            {searchInput && (
+              <button
+                onClick={() => setSearchInput("")}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/70 text-xs px-1"
+              >
+                ×
+              </button>
+            )}
           </div>
           {/* Status filter */}
           <div className="flex gap-1 mb-2">

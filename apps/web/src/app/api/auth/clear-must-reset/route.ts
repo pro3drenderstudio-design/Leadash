@@ -25,9 +25,13 @@ export async function POST() {
     return NextResponse.json({ ok: true, cleared: false });
   }
 
-  const { must_change_password: _drop, ...rest } = existingMeta;
-  void _drop;
-  const { error } = await admin.auth.admin.updateUserById(user.id, { user_metadata: rest });
+  // Supabase's admin.updateUserById({ user_metadata }) MERGES the payload
+  // into existing metadata rather than replacing it, so we can't drop a key
+  // by omission — the DB just keeps the old value. Explicitly set the flag
+  // to false so the middleware's `=== true` check no longer trips.
+  const { error } = await admin.auth.admin.updateUserById(user.id, {
+    user_metadata: { ...existingMeta, must_change_password: false },
+  });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, cleared: true });

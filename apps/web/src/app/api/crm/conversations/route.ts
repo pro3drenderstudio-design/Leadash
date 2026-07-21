@@ -33,6 +33,27 @@ export async function GET(req: NextRequest) {
   const to       = sp.get("to")      ?? undefined; // ISO date/datetime, inclusive upper bound on last_message_at
   const limit    = Math.min(Number(sp.get("limit") ?? "25"), 100);
 
+  // If the user typed something, resolve matching contact IDs first so we
+  // can filter by contact name/email/whatsapp/phone in addition to the
+  // conversation's own subject + channel_identifier. Trigram indexes on
+  // crm_contacts (mig 20260722100000) keep this fast even at scale.
+  let matchingContactIds: string[] | null = null;
+  if (search) {
+    const s = search.trim();
+    if (s.length > 0) {
+      const { data: matches } = await db
+        .from("crm_contacts")
+        .select("id")
+        .or(`display_name.ilike.%${s}%,email.ilike.%${s}%,whatsapp_number.ilike.%${s}%,phone.ilike.%${s}%`)
+        .limit(500);
+      matchingContactIds = (matches ?? []).map((m: { id: string }) => m.id);
+    }
+  }
+
+  // Read the denormalised last_message_* columns instead of joining
+  // crm_messages. The list used to pull every message per conversation
+  // (5,000+ rows on a busy inbox) and throw all but the newest away
+  // client-side — that's what made the page load slow.
   let query = db
     .from("crm_conversations")
     .select(`
@@ -47,6 +68,8 @@ export async function GET(req: NextRequest) {
       unread_count,
       last_message_at,
       last_inbound_at,
+      last_message_snippet,
+      last_message_direction,
       created_at,
       tags,
       crm_contacts (
@@ -54,14 +77,8 @@ export async function GET(req: NextRequest) {
         display_name,
         email,
         whatsapp_number,
+        phone,
         user_id
-      ),
-      crm_messages (
-        id,
-        direction,
-        body,
-        channel,
-        created_at
       )
     `)
     .order("last_message_at", { ascending: false })
@@ -77,7 +94,17 @@ export async function GET(req: NextRequest) {
   if (to)      query = query.lte("last_message_at", to);
 
   if (search) {
-    query = query.or(`subject.ilike.%${search}%,channel_identifier.ilike.%${search}%`);
+    const s = search.trim();
+    // Match on subject/channel_identifier OR any conversation whose contact
+    // matched the earlier contact-search. Empty-contact-match array is
+    // encoded as a single impossible UUID so the .in clause returns no
+    // extra rows (Supabase treats an empty array as always-false).
+    const contactIdList = (matchingContactIds && matchingContactIds.length > 0)
+      ? matchingContactIds.join(",")
+      : "00000000-0000-0000-0000-000000000000";
+    query = query.or(
+      `subject.ilike.%${s}%,channel_identifier.ilike.%${s}%,contact_id.in.(${contactIdList})`,
+    );
   }
 
   const { data, error } = await query;
@@ -88,14 +115,19 @@ export async function GET(req: NextRequest) {
   const hasMore = rows.length > limit;
   const conversations = hasMore ? rows.slice(0, limit) : rows;
 
-  // Attach latest message to each conversation
-  const withLatest = conversations.map((c: Record<string, unknown>) => {
-    const msgs = (c.crm_messages as Array<Record<string, unknown>> | null) ?? [];
-    const sorted = [...msgs].sort((a, b) =>
-      new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime()
-    );
-    return { ...c, crm_messages: undefined, latest_message: sorted[0] ?? null };
-  });
+  // Shape the response so the client keeps the same latest_message shape it
+  // rendered before — cheaper than a client-side refactor.
+  const withLatest = conversations.map((c: Record<string, unknown>) => ({
+    ...c,
+    latest_message: c.last_message_snippet
+      ? {
+          body:      c.last_message_snippet as string,
+          direction: c.last_message_direction as string,
+          channel:   c.channel as string,
+          created_at: c.last_message_at as string,
+        }
+      : null,
+  }));
 
   const nextCursor = hasMore
     ? (conversations[conversations.length - 1] as Record<string, unknown>).last_message_at
