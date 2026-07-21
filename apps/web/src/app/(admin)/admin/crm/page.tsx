@@ -347,8 +347,15 @@ function MessageBubble({ msg }: { msg: CrmMessage }) {
           {isOutbound && msg.ai_suggested && (
             <span className="inline-flex items-center gap-0.5 px-1 py-px rounded bg-white/20 text-white text-[9px] font-bold uppercase tracking-wide" title="Drafted by the AI agent">✨ AI</span>
           )}
-          <span>
-            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <span title={new Date(msg.created_at).toLocaleString()}>
+            {(() => {
+              const d = new Date(msg.created_at);
+              const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+              // Prefix the date on anything not from today so the day is never ambiguous.
+              return d.toDateString() === new Date().toDateString()
+                ? time
+                : `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
+            })()}
             {isOutbound && msg.status === "read"      && " ✓✓"}
             {isOutbound && msg.status === "delivered" && " ✓✓"}
             {isOutbound && msg.status === "sent"      && " ✓"}
