@@ -14,7 +14,7 @@
  *     the middleware gate on the next navigation.
  */
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -27,7 +27,19 @@ import {
   CheckmarkCircle02Icon,
 } from "@/v2-app/icons";
 
+// Next.js 16 requires useSearchParams() to be wrapped in a Suspense
+// boundary so the shell can be statically prerendered while the search-
+// params-dependent body streams. Without this the whole route bails out
+// of static generation and the prod build fails.
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordInner />
+    </Suspense>
+  );
+}
+
+function ResetPasswordInner() {
   const [password, setPassword] = useState("");
   const [showPassword, setShow] = useState(false);
   const [error, setError]       = useState("");
