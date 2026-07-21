@@ -18,10 +18,20 @@ export async function resolveUserWorkspaceId(db: SupabaseClient, userId: string)
   return (data?.workspace_id as string | undefined) ?? null;
 }
 
-/** Every workspace the user belongs to. */
+/**
+ * Every workspace the user belongs to — as a MEMBER *or* as the OWNER. Owners
+ * usually also have a member row, but relying on membership alone is fragile
+ * (the owner is authoritative via workspaces.owner_id), so we union both.
+ */
 export async function userWorkspaceIds(db: SupabaseClient, userId: string): Promise<string[]> {
-  const { data } = await db.from("workspace_members").select("workspace_id").eq("user_id", userId);
-  return ((data ?? []) as { workspace_id: string }[]).map((r) => r.workspace_id);
+  const [members, owned] = await Promise.all([
+    db.from("workspace_members").select("workspace_id").eq("user_id", userId),
+    db.from("workspaces").select("id").eq("owner_id", userId),
+  ]);
+  const ids = new Set<string>();
+  for (const m of (members.data ?? []) as { workspace_id: string }[]) ids.add(m.workspace_id);
+  for (const w of (owned.data ?? []) as { id: string }[]) ids.add(w.id);
+  return [...ids];
 }
 
 /**
@@ -29,7 +39,8 @@ export async function userWorkspaceIds(db: SupabaseClient, userId: string): Prom
  * null. Checking every workspace (not just the "first" one) is what makes a
  * sponsored offer reachable regardless of which workspace the user is currently
  * in — the offer_target is attached to their challenge workspace, which may not
- * be their first membership.
+ * be their first membership. Active/expiry is evaluated in JS (rather than a
+ * chained PostgREST `.or()`) to keep it robust.
  */
 export async function activeTargetForUser(
   db: SupabaseClient,
@@ -38,17 +49,22 @@ export async function activeTargetForUser(
 ): Promise<{ starts_at: string | null; expires_at: string | null } | null> {
   const wsIds = await userWorkspaceIds(db, userId);
   if (wsIds.length === 0) return null;
-  const nowIso = new Date().toISOString();
   const { data } = await db
     .from("offer_targets")
     .select("starts_at, expires_at")
     .eq("offer_id", offerId)
-    .in("workspace_id", wsIds)
-    .or(`starts_at.is.null,starts_at.lte.${nowIso}`)
-    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-    .order("expires_at", { ascending: false, nullsFirst: true })
-    .limit(1);
-  return (data?.[0] as { starts_at: string | null; expires_at: string | null } | undefined) ?? null;
+    .in("workspace_id", wsIds);
+
+  const now = Date.now();
+  const active = ((data ?? []) as { starts_at: string | null; expires_at: string | null }[]).filter(
+    (t) =>
+      (!t.starts_at || new Date(t.starts_at).getTime() <= now) &&
+      (!t.expires_at || new Date(t.expires_at).getTime() > now),
+  );
+  if (active.length === 0) return null;
+  // Prefer the latest-expiring window.
+  active.sort((a, b) => (b.expires_at ? new Date(b.expires_at).getTime() : Infinity) - (a.expires_at ? new Date(a.expires_at).getTime() : Infinity));
+  return active[0];
 }
 
 /** True when any of the user's workspaces has an active target for the offer. */

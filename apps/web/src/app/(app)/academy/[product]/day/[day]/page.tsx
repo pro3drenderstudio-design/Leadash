@@ -34,6 +34,7 @@ interface ChallengeTask {
   metric_source?: string | null;
   cta_label?: string | null;
   cta_url?: string | null;
+  self_check_config?: { prompt?: string; cta_label?: string; cta_url?: string } | null;
   video_playback_id?: string | null;
   quiz_question_count?: number | null;
 }
@@ -211,9 +212,9 @@ function MetricCard({ task, done }: { task: ChallengeTask; done: boolean }) {
   const target = task.metric_target ?? 20;
   const pct = Math.min(current / target, 1);
   const remaining = Math.max(0, target - current);
-  // has_inbox / has_plan complete automatically the moment the action is done
-  // in Leadash — show a direct link to do it rather than a progress-farming bar.
-  const isAuto = task.metric_source === "has_inbox" || task.metric_source === "has_plan";
+  // Auto sources (has_inbox, has_icp, leads_count, …) complete the moment the
+  // action is done in Leadash — show a direct link rather than a progress bar.
+  const isAuto = !!task.metric_source && task.metric_source !== "leadash_outbox" && task.metric_source !== "manual";
   const trackLabel = isAuto ? "Detected automatically by Leadash" : "Auto-tracked from Leadash outbox";
 
   return (
@@ -257,23 +258,34 @@ function SelfCheckCard({ task, done, onComplete }: { task: ChallengeTask; done: 
     }
   }
 
+  const cfg = task.self_check_config ?? null;
+  const label = checked ? "Completed ✓" : (cfg?.prompt || "I completed this task today");
+
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: checked ? "default" : "pointer", userSelect: "none" }}>
-      <div onClick={toggle}
-        style={{
-          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-          background: checked ? color : "transparent",
-          border: `2px solid ${checked ? color : "rgba(255,255,255,0.2)"}`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "all 0.2s",
-          cursor: checked ? "default" : "pointer",
-        }}>
-        {checked && <span style={{ color: "#07070A", fontSize: 13, fontWeight: 700 }}>✓</span>}
-      </div>
-      <span style={{ fontSize: 13, color: checked ? color : "var(--app-text-muted)", fontWeight: checked ? 600 : 400 }}>
-        {checked ? "Completed ✓" : "I completed this task today"}
-      </span>
-    </label>
+    <div>
+      {cfg?.cta_url && (
+        <a href={cfg.cta_url} target="_blank" rel="noreferrer noopener"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: color, color: "#07070A", fontWeight: 700, fontSize: 13, padding: "9px 16px", borderRadius: "var(--app-radius)", textDecoration: "none", marginBottom: 14 }}>
+          {cfg.cta_label || "Open"} →
+        </a>
+      )}
+      <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: checked ? "default" : "pointer", userSelect: "none" }}>
+        <div onClick={toggle}
+          style={{
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+            background: checked ? color : "transparent",
+            border: `2px solid ${checked ? color : "rgba(255,255,255,0.2)"}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.2s",
+            cursor: checked ? "default" : "pointer",
+          }}>
+          {checked && <span style={{ color: "#07070A", fontSize: 13, fontWeight: 700 }}>✓</span>}
+        </div>
+        <span style={{ fontSize: 13, color: checked ? color : "var(--app-text-muted)", fontWeight: checked ? 600 : 400 }}>
+          {label}
+        </span>
+      </label>
+    </div>
   );
 }
 

@@ -176,24 +176,23 @@ export async function GET(req: NextRequest) {
     };
     await loadCompletions();
 
-    // Auto-detect: complete any unlocked metric task whose live workspace metric
-    // (inbox connected / plan chosen) now meets its target. finalizeTaskCompletion
-    // re-awards points on a later day if a done task is re-finalized, so only run
-    // it for tasks that are unlocked AND not already completed. Never let a
-    // detection failure break the read.
-    let didAutoComplete = false;
-    for (const task of tasks) {
-      if (task.task_type !== "metric") continue;
-      const source = task.metric_config?.source;
-      if (!isAutoMetricSource(source)) continue;
-      if (!isDayUnlocked(task.day, enrollment, cohort, challengeConfig)) continue;
+    // Lessons already watched to completion (drives lesson-task auto-completion).
+    const watchedLessons = new Set<string>();
+    {
+      const { data: prog } = await db
+        .from("academy_lesson_progress")
+        .select("lesson_id")
+        .eq("enrollment_id", enrollment.id)
+        .eq("status", "completed");
+      for (const p of (prog ?? []) as { lesson_id: string }[]) watchedLessons.add(p.lesson_id);
+    }
 
-      const value = await getAutoMetricValue(db, workspaceId, source);
-      autoMetricValue.set(task.id, value);
-      if (completionMap.has(task.id)) continue;
-
-      const target = task.metric_config?.target ?? 1;
-      if (value < target) continue;
+    // Auto-detect: complete any unlocked task Leadash can verify itself —
+    // metric tasks whose live workspace count meets the target, and lesson
+    // tasks whose linked video has been watched. finalizeTaskCompletion re-awards
+    // points if a done task is re-finalized, so only run it for tasks that are
+    // unlocked AND not already completed. Never let a detection failure break the read.
+    const finalize = async (task: TaskRow, metricValue?: number) => {
       try {
         await finalizeTaskCompletion(db, {
           taskRow: { id: task.id, product_id: resolvedProductId, day: task.day, points: task.points },
@@ -201,11 +200,33 @@ export async function GET(req: NextRequest) {
           userId: auth.userId,
           challengeConfig,
           completionThresholdPct: (product.completion_threshold_pct as number | undefined) ?? 100,
-          metricValue: value,
+          metricValue: metricValue ?? null,
         });
-        didAutoComplete = true;
+        return true;
       } catch (e) {
         console.error("[challenge] auto-complete failed:", e instanceof Error ? e.message : e);
+        return false;
+      }
+    };
+
+    let didAutoComplete = false;
+    for (const task of tasks) {
+      if (!isDayUnlocked(task.day, enrollment, cohort, challengeConfig)) continue;
+
+      if (task.task_type === "metric") {
+        const source = task.metric_config?.source;
+        if (!isAutoMetricSource(source)) continue;
+        const value = await getAutoMetricValue(db, workspaceId, source);
+        autoMetricValue.set(task.id, value);
+        if (completionMap.has(task.id)) continue;
+        const target = task.metric_config?.target ?? 1;
+        if (value < target) continue;
+        if (await finalize(task, value)) didAutoComplete = true;
+      } else if (task.task_type === "lesson") {
+        if (completionMap.has(task.id)) continue;
+        if (task.lesson_id && watchedLessons.has(task.lesson_id)) {
+          if (await finalize(task)) didAutoComplete = true;
+        }
       }
     }
     if (didAutoComplete) await loadCompletions();

@@ -3,7 +3,7 @@ import "@/v2-app/v2-app.css";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { wsGet, wsPost } from "@/lib/workspace/client";
+import { wsGet } from "@/lib/workspace/client";
 import type { SectionWithLessons, AcademyEnrollment, AcademyCohort } from "@/types/academy";
 import { lessonDuration } from "@/types/academy";
 
@@ -98,71 +98,11 @@ function Ring({ pct, size = 80, stroke = 7, color = "var(--app-accent)" }: { pct
   );
 }
 
-// ─── Revenue Modal ────────────────────────────────────────────────────────────
-
-function RevenueModal({ productId, onClose, onLogged }: { productId: string; onClose: () => void; onLogged: (cents: number) => void }) {
-  const [amount, setAmount] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit() {
-    const dollars = parseFloat(amount);
-    if (isNaN(dollars) || dollars <= 0) { setError("Enter a valid dollar amount"); return; }
-    setSubmitting(true);
-    setError("");
-    try {
-      await wsPost("/api/academy/report-earnings", { product_id: productId, amount_cents: Math.round(dollars * 100), notes });
-      onLogged(Math.round(dollars * 100));
-      onClose();
-    } catch {
-      setError("Failed to log revenue. Please try again.");
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(7,7,10,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-      <div style={{ background: "var(--app-bg-elevated)", border: "1px solid var(--app-border-strong)", borderRadius: "var(--app-radius-lg)", padding: "28px 24px", width: "100%", maxWidth: 400 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--app-text)", marginBottom: 6 }}>Log revenue</h3>
-        <p style={{ fontSize: 13, color: "var(--app-text-muted)", marginBottom: 20 }}>Report dollars you&apos;ve earned this challenge. All amounts are verified with proof.</p>
-        <label style={{ display: "block", fontSize: 12, color: "var(--app-text-muted)", marginBottom: 6 }}>Amount (USD $)</label>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          placeholder="e.g. 150"
-          style={{ width: "100%", background: "var(--app-surface)", border: "1px solid var(--app-border-strong)", borderRadius: "var(--app-radius)", padding: "10px 12px", color: "var(--app-text)", fontSize: 14, marginBottom: 14, boxSizing: "border-box" }}
-        />
-        <label style={{ display: "block", fontSize: 12, color: "var(--app-text-muted)", marginBottom: 6 }}>Notes (optional)</label>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="What did you close? Client type, deal details..."
-          rows={3}
-          style={{ width: "100%", background: "var(--app-surface)", border: "1px solid var(--app-border-strong)", borderRadius: "var(--app-radius)", padding: "10px 12px", color: "var(--app-text)", fontSize: 13, marginBottom: 16, resize: "vertical", boxSizing: "border-box" }}
-        />
-        {error && <p style={{ fontSize: 12, color: "var(--app-danger)", marginBottom: 12 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: "var(--app-radius)", padding: "10px", color: "var(--app-text-muted)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-          <button onClick={handleSubmit} disabled={submitting}
-            style={{ flex: 1, background: "var(--app-accent)", border: "none", borderRadius: "var(--app-radius)", padding: "10px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "Logging…" : "Log revenue"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Challenge Dashboard ──────────────────────────────────────────────────────
 
 function ChallengeDashboard({ slug }: { slug: string }) {
   const [state, setState] = useState<ChallengeState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showRevenueModal, setShowRevenueModal] = useState(false);
   const [launchDismissed, setLaunchDismissed] = useState(false);
 
   const load = useCallback(() => {
@@ -217,10 +157,6 @@ function ChallengeDashboard({ slug }: { slug: string }) {
   // Tasks for today
   const todayTasks = state.tasks.filter(t => t.day === cappedDay);
   const todayPoints = todayTasks.reduce((a, t) => a + t.points, 0);
-
-  // Reported earnings
-  const earnedDollars = (gam.reported_earnings_cents ?? 0) / 100;
-  const earnPct = Math.min((gam.reported_earnings_cents ?? 0) / 250000, 1);
 
   // Current week days (7 days starting from week start)
   const weekStart = (weekNum - 1) * 7 + 1;
@@ -374,27 +310,6 @@ function ChallengeDashboard({ slug }: { slug: string }) {
           </div>
         </div>
 
-        {/* Revenue reported */}
-        <div style={{ background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: "var(--app-radius-lg)", padding: "18px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <div style={{ width: 40, height: 40, borderRadius: "var(--app-radius)", background: "rgba(52,211,153,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💵</div>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 2 }}>Revenue reported</p>
-            <p style={{ fontSize: 11, color: "var(--app-text-muted)", marginBottom: 8 }}>Goal: $2,500 by Day {totalDays}</p>
-            <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 999, overflow: "hidden", marginBottom: 4 }}>
-              <div style={{ height: "100%", width: `${earnPct * 100}%`, background: "#34D399", borderRadius: 999, transition: "width 0.6s ease" }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "#34D399", fontWeight: 600 }}>${earnedDollars.toFixed(0)}</span>
-              <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>$2,500</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowRevenueModal(true)}
-            style={{ background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.25)", color: "#34D399", fontWeight: 600, fontSize: 12, padding: "8px 14px", borderRadius: "var(--app-radius)", cursor: "pointer", flexShrink: 0 }}>
-            + Log revenue
-          </button>
-        </div>
-
         {/* This week */}
         <div style={{ marginBottom: 20 }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--app-text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>This week · Week {weekNum}</p>
@@ -459,24 +374,6 @@ function ChallengeDashboard({ slug }: { slug: string }) {
           );
         })()}
       </div>
-
-      {/* Revenue modal */}
-      {showRevenueModal && (
-        <RevenueModal
-          productId={state.product.id}
-          onClose={() => setShowRevenueModal(false)}
-          onLogged={(cents) => {
-            setState(prev => {
-              if (!prev) return prev;
-              const prevGam = prev.gamification ?? { points: 0, streak_days: 0, last_active_date: null, reported_earnings_cents: 0, grace_days_used: 0 };
-              return {
-                ...prev,
-                gamification: { ...prevGam, reported_earnings_cents: (prevGam.reported_earnings_cents ?? 0) + cents },
-              };
-            });
-          }}
-        />
-      )}
 
       {/* Launch welcome — Day 1 kickoff / live session */}
       {showLaunchWelcome && (
