@@ -9,6 +9,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Ensure the signing-up user has a crm_contacts row so future inbound
+ * WhatsApp/email messages resolve to a named contact with tags. If a row
+ * exists on this email already (e.g. from a funnel or challenge signup),
+ * we link it to the auth user by setting user_id instead of duplicating.
+ * All failures are swallowed — never block signup on a CRM bookkeeping
+ * error.
+ */
+async function upsertCrmContactForUser(
+  admin: SupabaseClient,
+  userId: string,
+  email: string,
+  fullName: string | null,
+): Promise<void> {
+  try {
+    const displayName = fullName?.trim() || email.split("@")[0];
+    const { data: existing } = await admin
+      .from("crm_contacts").select("id").eq("email", email).limit(1).maybeSingle();
+    if (existing?.id) {
+      await admin.from("crm_contacts").update({
+        user_id: userId,
+        display_name: displayName,
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await admin.from("crm_contacts").insert({
+        user_id: userId,
+        email,
+        display_name: displayName,
+        lifecycle_stage: "lead",
+        status: "active",
+      });
+    }
+  } catch (e) {
+    console.error("[signup] crm upsert failed:", e);
+  }
+}
 
 const FROM    = process.env.RESEND_FROM_EMAIL ?? "notifications@leadash.io";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadash.io";
@@ -64,7 +103,7 @@ export async function POST(req: NextRequest) {
 
   // Dev mode: no RESEND_API_KEY set — create user with email pre-confirmed
   if (!API_KEY) {
-    const { error } = await admin.auth.admin.createUser({
+    const { data: created, error } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -80,6 +119,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not create account. Please try again." }, { status: 500 });
     }
 
+    if (created?.user?.id) await upsertCrmContactForUser(admin, created.user.id, email, full_name ?? null);
     return NextResponse.json({ ok: true, confirmed: true });
   }
 
@@ -108,6 +148,14 @@ export async function POST(req: NextRequest) {
   const confirmLink = data?.properties?.action_link;
   if (!confirmLink) {
     return NextResponse.json({ error: "Could not generate confirmation link." }, { status: 500 });
+  }
+
+  // generateLink also creates the auth user (unconfirmed). Upsert a CRM
+  // contact now so inbound WhatsApp resolves even before the user confirms
+  // their email. Failures here don't unwind the signup — the user still
+  // gets their confirmation email.
+  if (data?.user?.id) {
+    await upsertCrmContactForUser(admin, data.user.id, email, full_name ?? null);
   }
 
   const name = full_name ?? email.split("@")[0];

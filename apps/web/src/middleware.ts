@@ -194,6 +194,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // ── First-login forced password reset ──────────────────────────────────
+  // Users created by an admin (POST /api/admin/users) or reset by an admin
+  // (PATCH action=reset_password) carry user_metadata.must_change_password
+  // until they set a fresh password. Gate ALL app routes behind
+  // /reset-password until the flag clears. Auth flow endpoints, the reset
+  // page itself, the API that clears the flag, and logout must stay
+  // reachable or the user has no way to comply.
+  if (
+    user
+    && (user.user_metadata as Record<string, unknown> | null)?.must_change_password === true
+    && pathname !== "/reset-password"
+    && pathname !== "/forgot-password"
+    && pathname !== "/logout"
+    && !pathname.startsWith("/api/auth/")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/reset-password";
+    url.searchParams.set("reason", "first_login");
+    return NextResponse.redirect(url);
+  }
+
   return supabaseResponse;
 }
 

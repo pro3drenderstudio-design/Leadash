@@ -3,12 +3,20 @@
 /**
  * /reset-password — restyled to v2-app.
  *
- * Business logic preserved: supabase.auth.updateUser({ password }) and
- * the "Password updated" success state.
+ * Business logic:
+ *   - supabase.auth.updateUser({ password }) sets the new password.
+ *   - When arriving with ?reason=first_login (admin-created account or
+ *     admin-triggered reset), a blocking banner explains why. The page
+ *     hides the "back to sign in" link since middleware would just bounce
+ *     the user back here.
+ *   - After a successful password update we call /api/auth/clear-must-reset
+ *     which drops user_metadata.must_change_password server-side, unblocking
+ *     the middleware gate on the next navigation.
  */
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AuthShell from "../components/AuthShell";
 import { Button, Input, Field, Icon } from "@/v2-app";
@@ -26,14 +34,34 @@ export default function ResetPasswordPage() {
   const [loading, setLoading]   = useState(false);
   const [done, setDone]         = useState(false);
 
+  const search       = useSearchParams();
+  const router       = useRouter();
+  const forcedReason = search?.get("reason");
+  const isFirstLogin = forcedReason === "first_login";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) { setError(error.message); setLoading(false); }
-    else setDone(true);
+    if (error) { setError(error.message); setLoading(false); return; }
+
+    // Clear the must_change_password flag so middleware stops gating.
+    // Failure here isn't fatal — the flag will simply re-appear on the next
+    // request and the user will land back on this page. Report but proceed
+    // to the success state either way.
+    try {
+      await fetch("/api/auth/clear-must-reset", { method: "POST" });
+    } catch (e) {
+      console.error("[reset-password] clear-must-reset failed:", e);
+    }
+
+    setDone(true);
+    if (isFirstLogin) {
+      // For forced flow, drop into the app now that the gate is released.
+      setTimeout(() => router.replace("/dashboard"), 900);
+    }
   }
 
   if (done) {
@@ -53,14 +81,16 @@ export default function ResetPasswordPage() {
           </div>
           <h1 className="app-h1" style={{ marginBottom: 6 }}>Password updated</h1>
           <p style={{ color: "var(--app-text-muted)", fontSize: 14 }}>
-            You can sign in with your new password.
+            {isFirstLogin ? "Taking you to your dashboard…" : "You can sign in with your new password."}
           </p>
-          <Link
-            href="/login"
-            style={{ display: "inline-block", marginTop: 28, fontSize: 13, color: "var(--app-accent)" }}
-          >
-            Go to sign in →
-          </Link>
+          {!isFirstLogin && (
+            <Link
+              href="/login"
+              style={{ display: "inline-block", marginTop: 28, fontSize: 13, color: "var(--app-accent)" }}
+            >
+              Go to sign in →
+            </Link>
+          )}
         </div>
       </AuthShell>
     );
@@ -69,11 +99,33 @@ export default function ResetPasswordPage() {
   return (
     <AuthShell tone="minimal">
       <header style={{ marginBottom: 28 }}>
-        <h1 className="app-h1" style={{ marginBottom: 6 }}>Set new password</h1>
+        <h1 className="app-h1" style={{ marginBottom: 6 }}>
+          {isFirstLogin ? "Set your password" : "Set new password"}
+        </h1>
         <p style={{ color: "var(--app-text-muted)", fontSize: 14 }}>
           Eight characters minimum. Longer is better.
         </p>
       </header>
+
+      {isFirstLogin && (
+        <div
+          role="alert"
+          style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            padding: "12px 14px", borderRadius: "var(--app-radius-sm)",
+            background: "rgba(251, 191, 36, 0.10)",
+            border: "1px solid rgba(251, 191, 36, 0.30)",
+            color: "var(--app-warning, #d97706)", fontSize: 12.5, lineHeight: 1.5,
+            marginBottom: 18,
+          }}
+        >
+          <Icon icon={AlertCircleIcon} size={14} />
+          <span>
+            <strong>Choose a new password to continue.</strong><br />
+            Your account was set up with a temporary password. Pick something only you know — we won't ask again.
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label="New password" required>

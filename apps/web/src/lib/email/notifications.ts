@@ -1919,3 +1919,135 @@ export async function sendBundlePaymentFailedEmail(opts: {
   ].join("\n");
   await sendEmail({ to: opts.userEmail, subject, html, text });
 }
+
+// ─── Admin-created account: welcome with temp password ────────────────────
+//
+// Called when an admin creates a user account on their behalf. Includes the
+// plaintext temp password because the admin explicitly chose this flow — the
+// user MUST change it on first login (must_change_password gate in the app
+// layout enforces this). Kept in one place so the styling stays consistent
+// with the reset email below and the wording emphasises the change-on-login
+// requirement.
+
+export async function sendWelcomeAccountEmail(opts: {
+  userEmail:      string;
+  userName:       string | null;
+  tempPassword:   string;
+  createdByLabel?: string;   // e.g. "the Leadash team" or admin name
+}): Promise<void> {
+  const name = opts.userName?.trim() || "there";
+  const createdBy = opts.createdByLabel?.trim() || "the Leadash team";
+  const loginUrl = `${APP_URL}/login`;
+  const subject = "Your Leadash account is ready";
+
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `${createdBy} created a Leadash account for you.`,
+    ``,
+    `  Email:     ${opts.userEmail}`,
+    `  Password:  ${opts.tempPassword}`,
+    ``,
+    `Sign in here: ${loginUrl}`,
+    ``,
+    `For your security, you'll be asked to set a new password the first time`,
+    `you sign in. Choose something only you know.`,
+    ``,
+    `If you weren't expecting this account, reply to this email and we'll`,
+    `sort it out.`,
+    ``,
+    `— Leadash`,
+  ].join("\n");
+
+  const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;padding:40px 20px;margin:0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+    <h1 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px">Welcome to Leadash 👋</h1>
+    <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 20px">
+      Hi ${name},<br>${createdBy} created a Leadash account for you. Here's how to sign in.
+    </p>
+
+    <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:16px 20px;margin:0 0 20px">
+      <p style="margin:0 0 6px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em">Email</p>
+      <p style="margin:0 0 14px;font-size:14px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${opts.userEmail}</p>
+      <p style="margin:0 0 6px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em">Temporary password</p>
+      <p style="margin:0;font-size:16px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;letter-spacing:0.02em;background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;display:inline-block">${opts.tempPassword}</p>
+    </div>
+
+    <a href="${loginUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Sign in to Leadash →</a>
+
+    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin:24px 0 0">
+      <p style="margin:0;font-size:13px;color:#78350f">
+        <strong>You'll be asked to set a new password</strong> the first time you sign in — choose something only you know.
+      </p>
+    </div>
+
+    <p style="color:#6b7280;font-size:12px;margin:20px 0 0;line-height:1.6">
+      If you weren't expecting this account, just reply to this email and we'll sort it out.
+    </p>
+  </div>
+</div>`;
+
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}
+
+// ─── Admin-triggered password reset ───────────────────────────────────────
+//
+// Called when an admin resets a user's password from the users admin. Same
+// must-change-on-first-login gate applies. Distinct subject line so users
+// know an admin acted rather than assuming they triggered a reset flow.
+
+export async function sendAdminResetPasswordEmail(opts: {
+  userEmail:    string;
+  userName:     string | null;
+  tempPassword: string;
+}): Promise<void> {
+  const name = opts.userName?.trim() || "there";
+  const loginUrl = `${APP_URL}/login`;
+  const subject = "Your Leadash password has been reset";
+
+  const text = [
+    `Hi ${name},`,
+    ``,
+    `A Leadash admin reset your password. Your new temporary password is:`,
+    ``,
+    `  ${opts.tempPassword}`,
+    ``,
+    `Sign in: ${loginUrl}`,
+    ``,
+    `You'll be asked to set a new password the first time you sign in.`,
+    ``,
+    `If you didn't request this, contact support@leadash.com immediately.`,
+    ``,
+    `— Leadash`,
+  ].join("\n");
+
+  const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;padding:40px 20px;margin:0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+    <h1 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px">Your password was reset</h1>
+    <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 20px">
+      Hi ${name},<br>A Leadash admin reset your account password. Here's your new temporary password.
+    </p>
+
+    <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:16px 20px;margin:0 0 20px">
+      <p style="margin:0 0 6px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em">Temporary password</p>
+      <p style="margin:0;font-size:16px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;letter-spacing:0.02em;background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;display:inline-block">${opts.tempPassword}</p>
+    </div>
+
+    <a href="${loginUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Sign in to Leadash →</a>
+
+    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin:24px 0 0">
+      <p style="margin:0;font-size:13px;color:#78350f">
+        <strong>You'll be asked to set a new password</strong> the first time you sign in with this one.
+      </p>
+    </div>
+
+    <p style="color:#6b7280;font-size:12px;margin:20px 0 0;line-height:1.6">
+      If you didn't request this, contact <a href="mailto:support@leadash.com" style="color:#4f46e5">support@leadash.com</a> immediately.
+    </p>
+  </div>
+</div>`;
+
+  await sendEmail({ to: opts.userEmail, subject, html, text });
+}

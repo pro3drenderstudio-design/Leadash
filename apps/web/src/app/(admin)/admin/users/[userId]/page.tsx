@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { PasswordShownOnceModal } from "../page";
 
 interface Workspace {
   id: string; name: string; plan_id: string; plan_status: string;
@@ -62,6 +63,18 @@ export default function UserDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg]         = useState<string | null>(null);
   const [showMetadata, setShowMetadata]   = useState(false);
+  const [passwordShown, setPasswordShown] = useState<{
+    email: string; name: string | null; temp_password: string;
+    email_status: "sent" | "skipped" | "failed"; email_error: string | null;
+  } | null>(null);
+
+  // Editable profile draft — mirrors user + user_metadata.phone. Save is a
+  // separate PATCH action so we don't spam updates on every keystroke.
+  const [editName,  setEditName]  = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
   const [grantWsId, setGrantWsId]       = useState<string | null>(null);
   const [grantPlan, setGrantPlan]       = useState("starter");
@@ -79,6 +92,9 @@ export default function UserDetailPage() {
         setUser(d.user);
         setWorkspaces(d.workspaces ?? []);
         setTickets(d.tickets ?? []);
+        setEditName(d.user?.name ?? "");
+        setEditEmail(d.user?.email ?? "");
+        setEditPhone((d.user?.user_metadata?.phone as string | null | undefined) ?? "");
         setLoading(false);
       })
       .catch(() => { setError("Failed to load user"); setLoading(false); });
@@ -97,10 +113,43 @@ export default function UserDetailPage() {
     const data = await res.json();
     setActionLoading(null);
     if (data.ok) {
-      setActionMsg(action === "ban" ? "User banned." : action === "unban" ? "User unbanned." : action === "reset_password" ? "Password reset email sent." : "Done.");
+      // Reset password: show the plaintext once so the admin can copy it if
+      // the email delivery fails or the user's inbox is broken.
+      if (action === "reset_password" && data.temp_password) {
+        setPasswordShown({
+          email:         user?.email ?? "",
+          name:          user?.name ?? null,
+          temp_password: data.temp_password,
+          email_status:  data.email_status ?? "sent",
+          email_error:   data.email_error ?? null,
+        });
+      } else {
+        setActionMsg(action === "ban" ? "User banned." : action === "unban" ? "User unbanned." : "Done.");
+      }
       fetchUser();
     } else {
       setActionMsg(`Error: ${data.error}`);
+    }
+  }
+
+  async function saveProfile() {
+    setProfileSaving(true); setProfileMsg(null);
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_profile",
+        full_name: editName,
+        email:     editEmail,
+        phone:     editPhone,
+      }),
+    });
+    const data = await res.json();
+    setProfileSaving(false);
+    if (data.ok) {
+      setProfileMsg("Profile updated.");
+      fetchUser();
+    } else {
+      setProfileMsg(`Error: ${data.error}`);
     }
   }
 
@@ -179,6 +228,17 @@ export default function UserDetailPage() {
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
 
+      {passwordShown && (
+        <PasswordShownOnceModal
+          email={passwordShown.email}
+          name={passwordShown.name}
+          tempPassword={passwordShown.temp_password}
+          emailStatus={passwordShown.email_status}
+          emailError={passwordShown.email_error}
+          onClose={() => setPasswordShown(null)}
+        />
+      )}
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-white/30">
         <Link href="/admin/users" className="hover:text-orange-500 transition-colors">Users</Link>
@@ -223,7 +283,7 @@ export default function UserDetailPage() {
               disabled={!!actionLoading}
               className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-white/70 transition-colors disabled:opacity-50"
             >
-              {actionLoading === "reset_password" ? "Sending…" : "Send Password Reset"}
+              {actionLoading === "reset_password" ? "Resetting…" : "Reset Password"}
             </button>
             {isBanned ? (
               <button
@@ -257,6 +317,41 @@ export default function UserDetailPage() {
             {actionMsg}
           </div>
         )}
+
+        {/* Editable profile — name, email, phone/whatsapp */}
+        <div className="mt-6 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider">Profile</p>
+            {profileMsg && (
+              <span className={`text-[11px] ${profileMsg.startsWith("Error") ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                {profileMsg}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-1">Full name</label>
+              <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-1">Email</label>
+              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 dark:text-white/30 uppercase tracking-wider mb-1">Phone / WhatsApp</label>
+              <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+2348001234567"
+                className="w-full px-3 py-1.5 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button onClick={saveProfile} disabled={profileSaving}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 transition-colors">
+              {profileSaving ? "Saving…" : "Save profile"}
+            </button>
+          </div>
+        </div>
 
         {/* Info grid */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -305,6 +305,244 @@ function CreateTicketModal({ target, onClose }: { target: MessageTarget; onClose
   );
 }
 
+// ── Create User Modal ─────────────────────────────────────────────────────────
+
+interface CreatedResult {
+  email:         string;
+  name:          string | null;
+  temp_password: string;
+  email_status:  "sent" | "skipped" | "failed";
+  email_error:   string | null;
+}
+
+function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (r: CreatedResult) => void }) {
+  const [email, setEmail]         = useState("");
+  const [name,  setName]          = useState("");
+  const [phone, setPhone]         = useState("");
+  const [notes, setNotes]         = useState("");
+  const [tags,  setTags]          = useState<string[]>([]);
+  const [tagDraft, setTagDraft]   = useState("");
+  const [suggestions, setSug]     = useState<{ tag: string; count: number }[]>([]);
+  const [sendWelcome, setSend]    = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
+  const emailRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { emailRef.current?.focus(); }, []);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  useEffect(() => {
+    fetch("/api/admin/crm/tags").then(r => r.json())
+      .then(d => setSug((d.tags ?? []) as { tag: string; count: number }[]))
+      .catch(() => setSug([]));
+  }, []);
+
+  function addTag(t: string) {
+    const clean = t.trim();
+    if (!clean) return;
+    setTags(prev => prev.includes(clean) ? prev : [...prev, clean]);
+    setTagDraft("");
+  }
+  function removeTag(t: string) { setTags(prev => prev.filter(x => x !== t)); }
+
+  async function handleCreate() {
+    if (!email.trim() || !email.includes("@")) { setError("Enter a valid email"); return; }
+    setSaving(true); setError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          full_name: name.trim() || null,
+          phone: phone.trim() || null,
+          tags,
+          notes: notes.trim() || null,
+          send_welcome_email: sendWelcome,
+        }),
+      });
+      const data = await res.json() as { error?: string } & CreatedResult;
+      if (!res.ok) { setError(data.error ?? "Failed to create user"); return; }
+      onCreated({
+        email:         data.email,
+        name:          data.name,
+        temp_password: data.temp_password,
+        email_status:  data.email_status,
+        email_error:   data.email_error,
+      });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const remainingSuggestions = suggestions.filter(s => !tags.includes(s.tag)).slice(0, 12);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-white/10 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Create user</h2>
+            <p className="text-xs text-slate-400 dark:text-white/40 mt-0.5">The account gets a temp password and lands in CRM.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Email <span className="text-red-500">*</span></label>
+            <input ref={emailRef} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com"
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Full name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Doe"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Phone / WhatsApp</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+2348001234567"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Tags</label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {tags.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300 rounded">
+                    {t}
+                    <button onClick={() => removeTag(t)} className="hover:text-orange-900 dark:hover:text-orange-100" aria-label={`Remove ${t}`}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input type="text" value={tagDraft} onChange={e => setTagDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(tagDraft); } }}
+              placeholder="Type a tag and press Enter"
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            {remainingSuggestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {remainingSuggestions.map(s => (
+                  <button key={s.tag} type="button" onClick={() => addTag(s.tag)}
+                    className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-orange-500/20 dark:hover:text-orange-300 transition-colors">
+                    + {s.tag}<span className="text-slate-400 ml-1">{s.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-white/40 mb-1.5">Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Context that'll help support recognise them…"
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none" />
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-white/60 cursor-pointer">
+            <input type="checkbox" checked={sendWelcome} onChange={e => setSend(e.target.checked)} />
+            Email the temp password to the user
+          </label>
+
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-white/50 hover:text-slate-800 dark:hover:text-white/80 transition-colors">Cancel</button>
+            <button onClick={handleCreate} disabled={saving}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">
+              {saving ? "Creating…" : "Create user"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Password Shown Once Modal ─────────────────────────────────────────────────
+
+export function PasswordShownOnceModal({ email, name, tempPassword, emailStatus, emailError, onClose }: {
+  email: string; name: string | null; tempPassword: string;
+  emailStatus: "sent" | "skipped" | "failed"; emailError: string | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-white/10 px-6 py-6">
+        <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mb-3">
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-emerald-600 dark:text-emerald-400">
+            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+          </svg>
+        </div>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">Temporary password ready</h2>
+        <p className="text-xs text-slate-500 dark:text-white/50 mt-1">
+          {name ? `${name} <${email}>` : email} will be prompted to set a new password on first sign-in.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-3">
+          <p className="text-[10px] font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wider mb-1">Password</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 font-mono text-sm text-slate-800 dark:text-white/90 select-all break-all">{tempPassword}</code>
+            <button onClick={copy} className="text-xs px-2 py-1 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white/80 rounded transition-colors">
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          {emailStatus === "sent" && (
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-400">✓ Emailed to {email}.</p>
+          )}
+          {emailStatus === "skipped" && (
+            <p className="text-[11px] text-slate-500 dark:text-white/40">Email delivery skipped. Share the password another way.</p>
+          )}
+          {emailStatus === "failed" && (
+            <p className="text-[11px] text-red-500 dark:text-red-400">
+              ⚠ Email delivery failed{emailError ? ` — ${emailError}` : ""}. Copy the password above and share it.
+            </p>
+          )}
+        </div>
+
+        <p className="text-[11px] text-slate-400 dark:text-white/30 mt-4">
+          This password is shown once. Close this dialog to dismiss.
+        </p>
+
+        <div className="flex justify-end mt-4">
+          <button onClick={onClose} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Users Page ────────────────────────────────────────────────────────────────
 
 function UsersPageInner() {
@@ -315,6 +553,8 @@ function UsersPageInner() {
   const [loading, setLoading] = useState(true);
   const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(null);
   const [ticketTarget, setTicketTarget]   = useState<MessageTarget | null>(null);
+  const [createOpen,   setCreateOpen]     = useState(false);
+  const [passwordShown, setPasswordShown] = useState<CreatedResult | null>(null);
 
   const page   = parseInt(searchParams.get("page")   ?? "1");
   const search = searchParams.get("search") ?? "";
@@ -349,13 +589,36 @@ function UsersPageInner() {
       {ticketTarget && (
         <CreateTicketModal target={ticketTarget} onClose={() => setTicketTarget(null)} />
       )}
+      {createOpen && (
+        <CreateUserModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={r => { setCreateOpen(false); setPasswordShown(r); fetchUsers(); }}
+        />
+      )}
+      {passwordShown && (
+        <PasswordShownOnceModal
+          email={passwordShown.email}
+          name={passwordShown.name}
+          tempPassword={passwordShown.temp_password}
+          emailStatus={passwordShown.email_status}
+          emailError={passwordShown.email_error}
+          onClose={() => setPasswordShown(null)}
+        />
+      )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="app-h1">Users</h1>
           <p className="text-sm text-slate-500 dark:text-white/40 mt-0.5">{total.toLocaleString()} total accounts</p>
         </div>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v5.5h5.5a.75.75 0 0 1 0 1.5h-5.5v5.5a.75.75 0 0 1-1.5 0v-5.5h-5.5a.75.75 0 0 1 0-1.5h5.5v-5.5A.75.75 0 0 1 10 3Z" clipRule="evenodd"/></svg>
+          Create user
+        </button>
       </div>
 
       {/* Filters */}
