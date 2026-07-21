@@ -5,7 +5,7 @@
  *
  * Drag to intended monthly sends → derive the plan (a plan covers everything up
  * to its cap; the next plan starts one step past that cap), a recommended
- * managed-inbox count (~1,000 campaign sends / inbox / month, excl. warm-up),
+ * managed-inbox count (~500 campaign sends / inbox / month, excl. warm-up),
  * and an itemized monthly price. The inbox count is a helper, not a limit —
  * every paid plan allows unlimited inboxes.
  *
@@ -18,7 +18,7 @@ import { useMemo, useState } from "react";
 import type { PlanConfig } from "@/lib/billing/getActivePlans";
 import { formatLocalPrice, NGN_CONTEXT, type CurrencyContext } from "@/lib/currency/format";
 
-const SENDS_PER_INBOX = 1000; // ~1,000 campaign sends / inbox / month at full send
+const SENDS_PER_INBOX = 500; // ~500 campaign sends / inbox / month at full send
 const SENDS_STEP = 500;       // slider granularity
 const SENDS_FLOOR = 500;      // slider minimum
 
@@ -254,7 +254,7 @@ export default function PricingSlider({ plans, ngnPerUsd, onCheckout, checkoutLa
                   <button onClick={() => setManualInbox(inboxCount + 1)}
                     className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-lg leading-none">+</button>
                 </div>
-                <p className="text-[11px] text-white/35 mt-3">~{SENDS_PER_INBOX.toLocaleString()} sends per inbox / mo at full send (excludes warm-up ramp). Add as many as you like.</p>
+                <p className="text-[11px] text-white/35 mt-3">Plan on ~1 inbox per {SENDS_PER_INBOX.toLocaleString()} sends / mo at full send (excludes warm-up ramp). Add as many as you like.</p>
               </div>
             )}
           </div>

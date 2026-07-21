@@ -1,6 +1,7 @@
 "use client";
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
+import { FUNNEL_VARIABLES } from "@/lib/funnel-blocks/variables";
 
 interface EditableProps {
   tag?: keyof React.JSX.IntrinsicElements;
@@ -308,6 +309,22 @@ function RichToolbar({ el, onFormat }: { el: HTMLElement | null; onFormat: (cmd:
 
 export function Editable({ tag = "div", value, editable, richText, style, onCommit, onFocus }: EditableProps) {
   const ref = useRef<HTMLElement>(null);
+  // Right-click "Insert variable" menu (dynamic merge tags like {next_active_cohort_date}).
+  const [varMenu, setVarMenu] = useState<{ x: number; y: number } | null>(null);
+  const savedCaret = useRef<Range | null>(null);
+
+  const insertVariable = useCallback((key: string) => {
+    const el = ref.current;
+    if (!el) { setVarMenu(null); return; }
+    el.focus();
+    const sel = window.getSelection();
+    if (savedCaret.current && sel) { sel.removeAllRanges(); sel.addRange(savedCaret.current); }
+    document.execCommand("insertText", false, `{${key}}`);
+    setVarMenu(null);
+    setTimeout(() => {
+      if (ref.current) onCommit(richText ? ref.current.innerHTML : (ref.current.textContent ?? ""));
+    }, 10);
+  }, [onCommit, richText]);
 
   useEffect(() => {
     const el = ref.current;
@@ -360,6 +377,19 @@ export function Editable({ tag = "div", value, editable, richText, style, onComm
   if (editable) {
     props.onMouseDown = (e: React.MouseEvent) => { e.stopPropagation(); onFocus?.(); };
     props.onClick     = (e: React.MouseEvent) => e.stopPropagation();
+    props.onContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && ref.current?.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        savedCaret.current = sel.getRangeAt(0).cloneRange();
+      } else {
+        savedCaret.current = null;
+      }
+      const menuW = 270;
+      const x = Math.min(e.clientX, (typeof window !== "undefined" ? window.innerWidth : 1024) - menuW - 12);
+      setVarMenu({ x: Math.max(8, x), y: e.clientY });
+    };
     props.onBlur      = (e: React.FocusEvent<HTMLElement>) => {
       onCommit(richText ? (e.currentTarget.innerHTML ?? "") : (e.currentTarget.textContent ?? ""));
     };
@@ -379,6 +409,40 @@ export function Editable({ tag = "div", value, editable, richText, style, onComm
     <>
       {React.createElement(tag as string, props)}
       {editable && richText && <RichToolbar el={ref.current} onFormat={handleFormat} />}
+      {editable && varMenu && typeof document !== "undefined" && createPortal(
+        <>
+          <div onMouseDown={() => setVarMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 99998 }} />
+          <div
+            style={{
+              position: "fixed", top: varMenu.y, left: varMenu.x, zIndex: 99999, width: 270,
+              maxHeight: 340, overflowY: "auto", background: "#141824",
+              border: "1px solid rgba(255,255,255,0.13)", borderRadius: 10, padding: 6,
+              boxShadow: "0 12px 36px rgba(0,0,0,0.65)",
+            }}
+          >
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7e8794", padding: "5px 8px 7px" }}>
+              Insert variable
+            </div>
+            {FUNNEL_VARIABLES.map(v => (
+              <button
+                key={v.key}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => insertVariable(v.key)}
+                style={{
+                  display: "block", width: "100%", textAlign: "left", background: "transparent",
+                  border: "none", padding: "7px 8px", borderRadius: 6, cursor: "pointer",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >
+                <div style={{ fontFamily: "monospace", color: "#f0a868", fontSize: 12.5 }}>{`{${v.key}}`}</div>
+                <div style={{ fontSize: 11, color: "#7e8794", marginTop: 2 }}>{v.label} · e.g. {v.sample}</div>
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body,
+      )}
     </>
   );
 }
