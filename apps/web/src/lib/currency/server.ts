@@ -20,11 +20,33 @@ import { NGN_CONTEXT, type CurrencyContext } from "@/lib/currency/format";
 type RateRow = { currency_code: string; rate_to_ngn: number; symbol: string | null };
 
 /**
+ * Admin override — when `force_ngn_currency` is on, every visitor sees Naira
+ * regardless of their location (used e.g. to record a demo from abroad).
+ * Cached per-request. Value is stored as text ("true"/"false").
+ */
+const isForcedNgn = cache(async (): Promise<boolean> => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return false;
+  try {
+    const db = createClient(url, key, { auth: { persistSession: false } });
+    const { data } = await db.from("admin_settings").select("value").eq("key", "force_ngn_currency").maybeSingle();
+    const v = (data as { value?: unknown } | null)?.value;
+    return v === true || v === "true";
+  } catch {
+    return false;
+  }
+});
+
+/**
  * Resolve the visitor's currency context. Returns NGN_CONTEXT as a safe
  * fallback for any failure (missing header, DB miss, etc.) so the page
  * always renders.
  */
 export const getCurrencyContext = cache(async (): Promise<CurrencyContext> => {
+  // Global admin override wins over geo detection.
+  if (await isForcedNgn()) return { ...NGN_CONTEXT };
+
   let country: string | null = null;
   try {
     const h = await headers();

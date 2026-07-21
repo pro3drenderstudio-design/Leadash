@@ -23,6 +23,7 @@ interface Settings {
   domain_markup_type:     "none" | "flat" | "percent";
   domain_markup_value:    number;
   domain_registrar:       "namecheap" | "porkbun";
+  force_ngn_currency:     boolean;
 }
 
 interface Meta {
@@ -115,6 +116,7 @@ const DEFAULT_SETTINGS: Settings = {
   domain_markup_type:     "flat",
   domain_markup_value:    1,
   domain_registrar:       "namecheap",
+  force_ngn_currency:     false,
 };
 
 export default function SettingsPage() {
@@ -130,10 +132,14 @@ export default function SettingsPage() {
   function applyData(d: { settings?: Record<string, unknown>; meta?: Record<string, Meta>; error?: string }) {
     if (d.error) { setError(d.error); setLoading(false); return; }
     const raw = (d.settings ?? {}) as Partial<Settings>;
+    // admin_settings.value is stored as text — coerce the boolean toggles we
+    // read here so "false" doesn't become a truthy string.
+    const asBool = (v: unknown) => v === true || v === "true";
     setSettings({
       ...DEFAULT_SETTINGS,
       ...raw,
       announcement_banner: { ...DEFAULT_BANNER, ...(raw.announcement_banner ?? {}) },
+      force_ngn_currency: asBool(raw.force_ngn_currency),
     });
     setMeta(d.meta ?? {});
     setLoading(false);
@@ -241,6 +247,35 @@ export default function SettingsPage() {
               maintenance_mode: settings.maintenance_mode,
               signup_enabled:   settings.signup_enabled,
             })}
+          />
+        </div>
+      </div>
+
+      {/* ── Currency ── */}
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-6">
+        <SectionHeader
+          title="Currency"
+          description="Controls how prices are displayed across the site."
+        />
+        <FieldRow
+          label="Force Naira (₦) for everyone"
+          description="Ignore visitor location and always show prices in NGN. Handy when recording a demo from outside Nigeria. Off = auto-detect currency from location."
+        >
+          <div className="flex items-center gap-3">
+            {settings.force_ngn_currency && (
+              <span className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase">On</span>
+            )}
+            <Toggle checked={settings.force_ngn_currency} onChange={v => update("force_ngn_currency", v)} />
+          </div>
+        </FieldRow>
+        <div className="pt-4 flex justify-between items-center">
+          {lastUpdated("force_ngn_currency") && (
+            <p className="text-xs text-slate-400 dark:text-white/30">Last saved {lastUpdated("force_ngn_currency")}</p>
+          )}
+          <SaveButton
+            saving={savingSection === "currency"}
+            saved={savedSection === "currency"}
+            onClick={() => save("currency", { force_ngn_currency: settings.force_ngn_currency })}
           />
         </div>
       </div>

@@ -29,6 +29,8 @@ const ALLOWED_KEYS = [
   "domain_markup_type",
   "domain_markup_value",
   "domain_registrar",
+  // Currency
+  "force_ngn_currency",
   // CRM settings
   "crm_business_hours",
   "crm_canned_responses",
