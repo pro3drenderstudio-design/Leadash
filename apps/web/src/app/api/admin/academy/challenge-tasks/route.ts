@@ -96,6 +96,7 @@ export async function PATCH(req: NextRequest) {
     proof_config?: Record<string, unknown> | null;
     metric_config?: Record<string, unknown> | null;
     quiz_config?: Record<string, unknown> | null;
+    self_check_config?: Record<string, unknown> | null;
     lesson_id?: string | null;
     live_session_id?: string | null;
   };
@@ -108,7 +109,7 @@ export async function PATCH(req: NextRequest) {
   const allowed: Record<string, unknown> = {};
   const allowedKeys = [
     "task_type", "title", "points", "position", "is_published",
-    "proof_config", "metric_config", "quiz_config", "lesson_id", "live_session_id",
+    "proof_config", "metric_config", "quiz_config", "self_check_config", "lesson_id", "live_session_id",
   ];
   for (const key of allowedKeys) {
     if (key in updates) allowed[key] = (updates as Record<string, unknown>)[key];

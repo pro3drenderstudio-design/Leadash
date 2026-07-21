@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import LessonContentEditor from "./LessonContentEditor";
 import {
@@ -83,6 +83,24 @@ interface QuizConfig {
 
 interface SelfCheckConfig {
   prompt: string;
+  cta_label?: string;
+  cta_url?: string;
+}
+
+/** One editable task instance in the day editor. Multiple tasks of the same
+ *  type per day are allowed — each row is independent. */
+interface DayTask {
+  key: string;            // stable React key
+  id?: string;            // existing row id (undefined = new/unsaved)
+  task_type: ChallengeTask["task_type"];
+  title: string;
+  points: number;
+  lesson_id?: string | null;
+  proof_config?: ProofConfig | null;
+  metric_config?: MetricConfig | null;
+  live_session_id?: string | null;
+  quiz_config?: QuizConfig | null;
+  self_check_config?: SelfCheckConfig | null;
 }
 
 interface ChallengeTask {
@@ -381,31 +399,23 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   const [settingsCertificate, setSettingsCertificate] = useState(product.certificate_enabled ?? true);
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // Day editor state
-  const [dayTitle, setDayTitle] = useState("");
-  const [dayTaskTypes, setDayTaskTypes] = useState<string[]>([]);
-  const [dayPoints, setDayPoints] = useState(30);
+  // Day editor — a per-day LIST of tasks. Multiple tasks of the same type are
+  // allowed; each row carries its own title, points and type-specific config.
+  const [dayTasks, setDayTasks] = useState<DayTask[]>([]);
   const [savingDay, setSavingDay] = useState(false);
+  const [showLiveForKey, setShowLiveForKey] = useState<string | null>(null);
 
-  // Per-type detail config — re-synced from the matching task whenever selectedDay/tasks change
-  const [dayLessonId, setDayLessonId] = useState<string>("");
-  const [dayProofConfig, setDayProofConfig] = useState<ProofConfig>(DEFAULT_PROOF_CONFIG);
-  const [dayMetricConfig, setDayMetricConfig] = useState<MetricConfig>(DEFAULT_METRIC_CONFIG);
-  const [dayLiveSessionId, setDayLiveSessionId] = useState<string>("");
-  const [dayQuizConfig, setDayQuizConfig] = useState<QuizConfig>(DEFAULT_QUIZ_CONFIG);
-  const [daySelfCheckConfig, setDaySelfCheckConfig] = useState<SelfCheckConfig>(DEFAULT_SELF_CHECK_CONFIG);
-
-  // Video upload state for the lesson task panel
+  // Video upload state — one upload at a time; `uploadingKey` scopes the
+  // progress UI to the task card that triggered it.
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
-  const videoFileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   // Lessons + live sessions available to link from this product (for the lesson/live pickers)
   const [lessons, setLessons] = useState<AcademyLessonOption[]>([]);
   const [liveSessionOptions, setLiveSessionOptions] = useState<LiveSessionOption[]>([]);
   const [creatingLesson, setCreatingLesson] = useState(false);
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
-  const [showLiveForm, setShowLiveForm] = useState(false);
   const [liveForm, setLiveForm] = useState({ title: "", scheduled_at: "", duration_mins: 60, platform: "zoom", join_url: "" });
 
   // Load tasks on mount
@@ -433,53 +443,46 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   }, [product.id]);
   useEffect(() => { reloadLessons(); reloadLiveSessions(); }, [reloadLessons, reloadLiveSessions]);
 
-  // Sync day editor when day changes — reads each task's config by its OWN
-  // task_type (not array index), so a day with e.g. ["lesson","metric"] correctly
-  // restores the lesson_id on the lesson task and the metric_config on the metric task.
+  // Sync the day editor's task list whenever the day (or the saved tasks) change.
+  // Each saved row becomes an independent editable DayTask, preserving order.
   useEffect(() => {
-    const dayTasks = tasks.filter(t => t.day === selectedDay);
-    if (dayTasks.length > 0) {
-      setDayTitle(dayTasks[0].title || `Day ${selectedDay}`);
-      setDayTaskTypes(dayTasks.map(t => t.task_type));
-      setDayPoints(dayTasks.reduce((s, t) => s + t.points, 0));
-
-      const lessonTask = dayTasks.find(t => t.task_type === "lesson");
-      setDayLessonId(lessonTask?.lesson_id ?? "");
-
-      const proofTask = dayTasks.find(t => t.task_type === "proof");
-      setDayProofConfig(proofTask?.proof_config ?? DEFAULT_PROOF_CONFIG);
-
-      const metricTask = dayTasks.find(t => t.task_type === "metric");
-      setDayMetricConfig(metricTask?.metric_config ?? DEFAULT_METRIC_CONFIG);
-
-      const liveTask = dayTasks.find(t => t.task_type === "live");
-      setDayLiveSessionId(liveTask?.live_session_id ?? "");
-
-      const quizTask = dayTasks.find(t => t.task_type === "quiz");
-      setDayQuizConfig(quizTask?.quiz_config ?? DEFAULT_QUIZ_CONFIG);
-
-      const selfCheckTask = dayTasks.find(t => t.task_type === "self_check");
-      setDaySelfCheckConfig(selfCheckTask?.self_check_config ?? DEFAULT_SELF_CHECK_CONFIG);
-    } else {
-      // Use seed data (only for the legacy 30-day challenge)
-      const seed = (config.duration_days ?? 30) >= 30 ? SEED_DAYS[selectedDay - 1] : undefined;
-      setDayProofConfig(DEFAULT_PROOF_CONFIG);
-      setDayMetricConfig(DEFAULT_METRIC_CONFIG);
-      setDayLiveSessionId("");
-      setDayQuizConfig(DEFAULT_QUIZ_CONFIG);
-      setDaySelfCheckConfig(DEFAULT_SELF_CHECK_CONFIG);
-      setDayLessonId("");
-      if (seed) {
-        setDayTitle(seed.title);
-        setDayTaskTypes(seed.types);
-        setDayPoints(seed.pts);
-      } else {
-        setDayTitle(`Day ${selectedDay}`);
-        setDayTaskTypes(["lesson"]);
-        setDayPoints(30);
-      }
-    }
+    const existing = tasks
+      .filter(t => t.day === selectedDay)
+      .sort((a, b) => a.position - b.position);
+    setDayTasks(existing.map(t => ({
+      key: t.id,
+      id: t.id,
+      task_type: t.task_type,
+      title: t.title,
+      points: t.points,
+      lesson_id: t.lesson_id ?? null,
+      proof_config: t.proof_config ?? null,
+      metric_config: t.metric_config ?? null,
+      live_session_id: t.live_session_id ?? null,
+      quiz_config: t.quiz_config ?? null,
+      self_check_config: t.self_check_config ?? null,
+    })));
+    setShowLiveForKey(null);
   }, [selectedDay, tasks]);
+
+  // ── Day-task list helpers ───────────────────────────────────────────────────
+  function updateDayTask(key: string, patch: Partial<DayTask>) {
+    setDayTasks(prev => prev.map(t => (t.key === key ? { ...t, ...patch } : t)));
+  }
+  function removeDayTask(key: string) {
+    setDayTasks(prev => prev.filter(t => t.key !== key));
+  }
+  function addDayTask(type: ChallengeTask["task_type"]) {
+    const defaults: Partial<DayTask> =
+      type === "proof"      ? { proof_config: { ...DEFAULT_PROOF_CONFIG } } :
+      type === "metric"     ? { metric_config: { ...DEFAULT_METRIC_CONFIG } } :
+      type === "quiz"       ? { quiz_config: { questions: [{ q: "", a: "" }] } } :
+      type === "self_check" ? { self_check_config: { prompt: "" } } : {};
+    setDayTasks(prev => [
+      ...prev,
+      { key: `new-${Date.now()}-${prev.length}`, task_type: type, title: "", points: 30, ...defaults },
+    ]);
+  }
 
   const saveConfig = useCallback(async () => {
     setSaving(true);
@@ -510,68 +513,55 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
   }, [onSave, onToast, settingsPricingType, settingsPriceNgn, settingsCompareAtNgn, settingsCompletionPct, settingsCertificate, config]);
 
-  // Per-type config to persist for the currently selected day's task types.
-  function configFor(type: string): Record<string, unknown> {
-    if (type === "lesson") return { lesson_id: dayLessonId || null };
-    if (type === "proof") return { proof_config: dayProofConfig };
-    if (type === "metric") return { metric_config: dayMetricConfig };
-    if (type === "live") return { live_session_id: dayLiveSessionId || null };
-    if (type === "quiz") return { quiz_config: dayQuizConfig };
-    if (type === "self_check") return { self_check_config: daySelfCheckConfig };
-    return {};
+  // Type-specific config payload for a single task row.
+  function configForTask(t: DayTask): Record<string, unknown> {
+    switch (t.task_type) {
+      case "lesson":     return { lesson_id: t.lesson_id || null };
+      case "proof":      return { proof_config: t.proof_config ?? DEFAULT_PROOF_CONFIG };
+      case "metric":     return { metric_config: t.metric_config ?? DEFAULT_METRIC_CONFIG };
+      case "live":       return { live_session_id: t.live_session_id || null };
+      case "quiz":       return { quiz_config: t.quiz_config ?? DEFAULT_QUIZ_CONFIG };
+      case "self_check": return { self_check_config: t.self_check_config ?? DEFAULT_SELF_CHECK_CONFIG };
+      default:           return {};
+    }
   }
 
-  // Reconciles the day's tasks against `dayTaskTypes` by TYPE (not array index),
-  // so adding/removing a task type actually creates/deletes the right row instead
-  // of silently dropping the change and reverting on the next tasks-sync.
-  async function saveTask() {
+  // Saves the day's task LIST: deletes removed rows, updates existing ones and
+  // creates new ones, with position = list order. Multiple tasks of the same
+  // type are preserved because rows are diffed by id, not by type.
+  async function saveDay() {
     setSavingDay(true);
     try {
-      const dayTasks = tasks.filter(t => t.day === selectedDay);
-      const existingTypes = new Set<string>(dayTasks.map(t => t.task_type));
-      const wantedTypes = new Set(dayTaskTypes);
-      const ptsEach = Math.floor(dayPoints / (dayTaskTypes.length || 1));
+      const existing = tasks.filter(t => t.day === selectedDay);
+      const keptIds = new Set(dayTasks.filter(t => t.id).map(t => t.id));
+      const toDelete = existing.filter(t => !keptIds.has(t.id));
 
-      const toUpdate = dayTasks.filter(t => wantedTypes.has(t.task_type));
-      const toDelete = dayTasks.filter(t => !wantedTypes.has(t.task_type));
-      const toCreate = dayTaskTypes.filter(type => !existingTypes.has(type));
+      await Promise.all(toDelete.map(t =>
+        fetch(`/api/admin/academy/challenge-tasks?id=${t.id}`, { method: "DELETE" }),
+      ));
 
-      const [updated, , created] = await Promise.all([
-        Promise.all(toUpdate.map(t =>
-          fetch("/api/admin/academy/challenge-tasks", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: t.id, title: dayTitle, points: ptsEach, ...configFor(t.task_type) }),
-          }).then(r => r.json())
-        )),
-        Promise.all(toDelete.map(t =>
-          fetch(`/api/admin/academy/challenge-tasks?id=${t.id}`, { method: "DELETE" })
-        )),
-        Promise.all(toCreate.map((type, i) =>
-          fetch("/api/admin/academy/challenge-tasks", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              product_id: product.id,
-              day: selectedDay,
-              task_type: type,
-              title: dayTitle,
-              points: ptsEach,
-              position: toUpdate.length + i,
-              is_published: true,
-              ...configFor(type),
-            }),
-          }).then(r => r.json())
-        )),
-      ]);
+      const results = await Promise.all(dayTasks.map((t, i) => {
+        const common = {
+          task_type: t.task_type,
+          title: t.title.trim() || `Day ${selectedDay} task`,
+          points: t.points,
+          position: i,
+          is_published: true,
+          ...configForTask(t),
+        };
+        return fetch("/api/admin/academy/challenge-tasks", {
+          method: t.id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(t.id ? { id: t.id, ...common } : { product_id: product.id, day: selectedDay, ...common }),
+        }).then(r => r.json());
+      }));
 
+      const savedForDay = results.map(r => r.task).filter(Boolean) as ChallengeTask[];
       const deletedIds = new Set(toDelete.map(t => t.id));
-      setTasks(prev => {
-        let next = prev.filter(t => !deletedIds.has(t.id));
-        for (const r of updated) if (r.task) next = next.map(x => x.id === r.task.id ? r.task : x);
-        for (const r of created) if (r.task) next = [...next, r.task];
-        return next;
-      });
+      setTasks(prev => [
+        ...prev.filter(t => t.day !== selectedDay && !deletedIds.has(t.id)),
+        ...savedForDay,
+      ]);
       onToast(`Day ${selectedDay} saved`);
     } finally {
       setSavingDay(false);
@@ -579,9 +569,9 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   }
 
   async function deleteDay() {
-    const dayTasks = tasks.filter(t => t.day === selectedDay);
-    if (dayTasks.length === 0) return;
-    await Promise.all(dayTasks.map(t =>
+    const rows = tasks.filter(t => t.day === selectedDay);
+    if (rows.length === 0) return;
+    await Promise.all(rows.map(t =>
       fetch(`/api/admin/academy/challenge-tasks?id=${t.id}`, { method: "DELETE" })
     ));
     setTasks(prev => prev.filter(t => t.day !== selectedDay));
@@ -589,14 +579,14 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
   }
 
   async function duplicateDay() {
-    const dayTasks = tasks.filter(t => t.day === selectedDay);
-    if (dayTasks.length === 0) return;
+    const rows = tasks.filter(t => t.day === selectedDay).sort((a, b) => a.position - b.position);
+    if (rows.length === 0) return;
     // Find next empty day
     const existingDays = new Set(tasks.map(t => t.day));
     let nextDay = selectedDay + 1;
     while (existingDays.has(nextDay)) nextDay++;
-    for (let i = 0; i < dayTasks.length; i++) {
-      const t = dayTasks[i];
+    for (let i = 0; i < rows.length; i++) {
+      const t = rows[i];
       const res = await fetch("/api/admin/academy/challenge-tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -608,6 +598,12 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
           points: t.points,
           position: i,
           is_published: t.is_published,
+          lesson_id: t.lesson_id ?? null,
+          proof_config: t.proof_config ?? null,
+          metric_config: t.metric_config ?? null,
+          live_session_id: t.live_session_id ?? null,
+          quiz_config: t.quiz_config ?? null,
+          self_check_config: t.self_check_config ?? null,
         }),
       }).then(r => r.json());
       if (res.task) setTasks(prev => [...prev, res.task]);
@@ -616,7 +612,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     onToast(`Duplicated to Day ${nextDay}`);
   }
 
-  async function createLesson() {
+  async function createLesson(key: string, titleHint: string) {
     setCreatingLesson(true);
     try {
       let sectionId: string | undefined;
@@ -638,13 +634,13 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
         body: JSON.stringify({
           section_id: sectionId,
           product_id: product.id,
-          title: dayTitle || `Day ${selectedDay}`,
+          title: titleHint || `Day ${selectedDay}`,
           lesson_type: "video",
         }),
       }).then(r => r.json());
 
       if (res.lesson) {
-        setDayLessonId(res.lesson.id);
+        updateDayTask(key, { lesson_id: res.lesson.id });
         reloadLessons();
         onToast("Lesson created — upload its video below");
       } else {
@@ -655,7 +651,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
   }
 
-  async function createLiveSession(form: { title: string; scheduled_at: string; duration_mins: number; platform: string; join_url: string }) {
+  async function createLiveSession(form: { title: string; scheduled_at: string; duration_mins: number; platform: string; join_url: string }, key: string) {
     setCreatingLiveSession(true);
     try {
       const res = await fetch("/api/admin/academy/live-sessions", {
@@ -664,7 +660,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
         body: JSON.stringify({ product_id: product.id, ...form }),
       }).then(r => r.json());
       if (res.session) {
-        setDayLiveSessionId(res.session.id);
+        updateDayTask(key, { live_session_id: res.session.id });
         reloadLiveSessions();
         onToast("Live session created");
       } else {
@@ -675,7 +671,8 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
     }
   }
 
-  async function uploadVideoForLesson(lessonId: string, file: File) {
+  async function uploadVideoForLesson(lessonId: string, file: File, key: string) {
+    setUploadingKey(key);
     setVideoUploading(true);
     setVideoProgress(0);
     try {
@@ -722,6 +719,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
       onToast("Upload failed: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setVideoUploading(false);
+      setUploadingKey(null);
     }
   }
 
@@ -1089,333 +1087,275 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                 </span>
               </div>
 
-              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-                {/* Day title */}
-                <div>
-                  <label style={labelStyle}>Day title</label>
-                  <input
-                    style={inputStyle}
-                    value={dayTitle}
-                    onChange={e => setDayTitle(e.target.value)}
-                    placeholder="What happens today?"
-                  />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Day summary strip */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>
+                    {dayTasks.length} task{dayTasks.length === 1 ? "" : "s"} · {dayTasks.reduce((s, t) => s + (t.points || 0), 0)} pts total
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>
+                    Unlocks {selectedDay === 1 ? "on enrollment" : `after Day ${selectedDay - 1}`}
+                  </span>
                 </div>
 
-                {/* Task type picker */}
+                {dayTasks.length === 0 && (
+                  <div style={{ ...cardStyle, padding: "22px 16px", textAlign: "center", background: "var(--app-bg)" }}>
+                    <p style={{ fontSize: 13, color: "var(--app-text-muted)" }}>No tasks yet. Add one below — you can add several of the same kind.</p>
+                  </div>
+                )}
+
+                {/* Task rows — multiple of any type allowed */}
+                {dayTasks.map((t, idx) => {
+                  const Icon = TASK_ICONS[t.task_type];
+                  const color = TASK_COLORS[t.task_type];
+                  const mc = t.metric_config ?? DEFAULT_METRIC_CONFIG;
+                  const isAutoSrc = mc.source !== "leadash_outbox" && mc.source !== "manual";
+                  return (
+                    <div key={t.key} style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
+                      {/* Row header */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                        <span style={{ width: 26, height: 26, borderRadius: 7, background: `${color}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <HugeiconsIcon icon={Icon} size={14} strokeWidth={1.8} color={color} />
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>{TASK_LABELS[t.task_type]}</span>
+                        <span style={{ flex: 1 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <input type="number" min={0} value={t.points}
+                            onChange={e => updateDayTask(t.key, { points: parseInt(e.target.value) || 0 })}
+                            style={{ ...inputStyle, width: 66, padding: "6px 8px", textAlign: "right" }} />
+                          <span style={{ fontSize: 11, color: "var(--app-text-quiet)" }}>pts</span>
+                        </div>
+                        <button style={{ ...btnGhost, color: "var(--app-danger)", padding: "6px 8px" }} onClick={() => removeDayTask(t.key)} title="Remove task">
+                          <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
+                        </button>
+                      </div>
+
+                      {/* Task title */}
+                      <input style={{ ...inputStyle, marginBottom: 12 }} value={t.title}
+                        onChange={e => updateDayTask(t.key, { title: e.target.value })}
+                        placeholder="Task title (e.g. Set up your professional inboxes)" />
+
+                      {/* Lesson */}
+                      {t.task_type === "lesson" && (
+                        <div>
+                          <label style={{ ...labelStyle, marginBottom: 4 }}>Lesson video</label>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <select style={{ ...inputStyle, cursor: "pointer" }} value={t.lesson_id ?? ""}
+                              onChange={e => updateDayTask(t.key, { lesson_id: e.target.value || null })}>
+                              <option value="">Select a lesson…</option>
+                              {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                            </select>
+                            <button style={btnDefault} onClick={() => createLesson(t.key, t.title)} disabled={creatingLesson}>
+                              <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
+                              {creatingLesson ? "…" : "New"}
+                            </button>
+                          </div>
+                          {t.lesson_id && (() => {
+                            const sel = lessons.find(l => l.id === t.lesson_id);
+                            const uploading = uploadingKey === t.key && videoUploading;
+                            return (
+                              <div style={{ marginTop: 12 }}>
+                                <label style={{ ...labelStyle, marginBottom: 6 }}>Video</label>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  {sel?.mux_playback_id ? (
+                                    <span style={{ fontSize: 12, color: "#34D399", display: "flex", alignItems: "center", gap: 5 }}>
+                                      <HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={2} color="#34D399" />Video ready
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>No video uploaded yet</span>
+                                  )}
+                                  <label style={{ ...btnDefault, cursor: uploading ? "default" : "pointer" }}>
+                                    <HugeiconsIcon icon={Video01Icon} size={13} strokeWidth={1.8} />
+                                    {uploading ? `Uploading ${videoProgress}%` : sel?.mux_playback_id ? "Replace video" : "Upload video"}
+                                    <input type="file" accept="video/*" style={{ display: "none" }} disabled={uploading}
+                                      onChange={e => { const file = e.target.files?.[0]; if (file && t.lesson_id) uploadVideoForLesson(t.lesson_id, file, t.key); e.target.value = ""; }} />
+                                  </label>
+                                </div>
+                                {uploading && (
+                                  <div style={{ marginTop: 8, height: 4, background: "var(--app-border)", borderRadius: 2, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${videoProgress}%`, background: "var(--app-accent)", borderRadius: 2, transition: "width 0.3s ease" }} />
+                                  </div>
+                                )}
+                                <div style={{ marginTop: 14, borderTop: "1px solid var(--app-border)", paddingTop: 14 }}>
+                                  <LessonContentEditor lessonId={t.lesson_id} />
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Self-check */}
+                      {t.task_type === "self_check" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div>
+                            <label style={{ ...labelStyle, marginBottom: 4 }}>Prompt shown to learner</label>
+                            <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 54 }}
+                              value={t.self_check_config?.prompt ?? ""}
+                              onChange={e => updateDayTask(t.key, { self_check_config: { ...(t.self_check_config ?? { prompt: "" }), prompt: e.target.value } })}
+                              placeholder="e.g. I joined the live session" />
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 8 }}>
+                            <input style={inputStyle} placeholder="Button label (optional)"
+                              value={t.self_check_config?.cta_label ?? ""}
+                              onChange={e => updateDayTask(t.key, { self_check_config: { ...(t.self_check_config ?? { prompt: "" }), cta_label: e.target.value } })} />
+                            <input style={inputStyle} placeholder="Button link (e.g. https://leadash.com/go/day1-live)"
+                              value={t.self_check_config?.cta_url ?? ""}
+                              onChange={e => updateDayTask(t.key, { self_check_config: { ...(t.self_check_config ?? { prompt: "" }), cta_url: e.target.value } })} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Proof */}
+                      {t.task_type === "proof" && (() => {
+                        const pc = t.proof_config ?? DEFAULT_PROOF_CONFIG;
+                        return (
+                          <div>
+                            <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
+                              {(["image", "file", "link", "text"] as const).map(kind => {
+                                const checked = pc.accepts.includes(kind);
+                                return (
+                                  <label key={kind} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--app-text)", cursor: "pointer" }}>
+                                    <input type="checkbox" checked={checked}
+                                      onChange={() => updateDayTask(t.key, { proof_config: { ...pc, accepts: checked ? pc.accepts.filter(a => a !== kind) : [...pc.accepts, kind] } })} />
+                                    {kind[0].toUpperCase() + kind.slice(1)}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 54 }} value={pc.prompt}
+                              onChange={e => updateDayTask(t.key, { proof_config: { ...pc, prompt: e.target.value } })}
+                              placeholder="e.g. Upload a screenshot of your review" />
+                          </div>
+                        );
+                      })()}
+
+                      {/* Metric */}
+                      {t.task_type === "metric" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 0.7fr", gap: 8 }}>
+                            <div>
+                              <label style={{ ...labelStyle, marginBottom: 4 }}>Source</label>
+                              <select style={{ ...inputStyle, cursor: "pointer" }} value={mc.source}
+                                onChange={e => updateDayTask(t.key, { metric_config: { ...mc, source: e.target.value as MetricConfig["source"] } })}>
+                                <option value="leadash_outbox">Leadash outbox (auto)</option>
+                                <option value="has_inbox">Inboxes connected (auto)</option>
+                                <option value="has_plan">Plan selected (auto)</option>
+                                <option value="has_icp">ICP filled (auto)</option>
+                                <option value="has_offer">Offer filled (auto)</option>
+                                <option value="has_sequence">Sequence created (auto)</option>
+                                <option value="leads_count">Leads in pool (auto)</option>
+                                <option value="verified_leads">Leads verified (auto)</option>
+                                <option value="personalized_leads">Leads personalized (auto)</option>
+                                <option value="manual">Manual self-report</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ ...labelStyle, marginBottom: 4 }}>Metric key</label>
+                              <input style={inputStyle} value={mc.metric}
+                                onChange={e => updateDayTask(t.key, { metric_config: { ...mc, metric: e.target.value } })} placeholder="inboxes" />
+                            </div>
+                            <div>
+                              <label style={{ ...labelStyle, marginBottom: 4 }}>Target</label>
+                              <input type="number" min={1} style={inputStyle} value={mc.target}
+                                onChange={e => updateDayTask(t.key, { metric_config: { ...mc, target: parseInt(e.target.value) || 0 } })} />
+                            </div>
+                          </div>
+                          {isAutoSrc && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 8 }}>
+                              <input style={inputStyle} placeholder="Button label (optional)" value={mc.cta_label ?? ""}
+                                onChange={e => updateDayTask(t.key, { metric_config: { ...mc, cta_label: e.target.value } })} />
+                              <input style={inputStyle} placeholder="Button link (e.g. /inboxes)" value={mc.cta_url ?? ""}
+                                onChange={e => updateDayTask(t.key, { metric_config: { ...mc, cta_url: e.target.value } })} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Live */}
+                      {t.task_type === "live" && (
+                        <div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <select style={{ ...inputStyle, cursor: "pointer" }} value={t.live_session_id ?? ""}
+                              onChange={e => updateDayTask(t.key, { live_session_id: e.target.value || null })}>
+                              <option value="">Select a session…</option>
+                              {liveSessionOptions.map(s => (
+                                <option key={s.id} value={s.id}>{s.lesson_title || "Live session"} · {new Date(s.scheduled_at).toLocaleString()}</option>
+                              ))}
+                            </select>
+                            <button style={btnDefault} onClick={() => setShowLiveForKey(k => (k === t.key ? null : t.key))}>
+                              <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />New
+                            </button>
+                          </div>
+                          {showLiveForKey === t.key && (
+                            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--app-border)", paddingTop: 12 }}>
+                              <input style={inputStyle} placeholder="Session title" value={liveForm.title} onChange={e => setLiveForm(f => ({ ...f, title: e.target.value }))} />
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+                                <input type="datetime-local" style={inputStyle} value={liveForm.scheduled_at} onChange={e => setLiveForm(f => ({ ...f, scheduled_at: e.target.value }))} />
+                                <input type="number" style={inputStyle} placeholder="Mins" value={liveForm.duration_mins} onChange={e => setLiveForm(f => ({ ...f, duration_mins: parseInt(e.target.value) || 60 }))} />
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
+                                <select style={{ ...inputStyle, cursor: "pointer" }} value={liveForm.platform} onChange={e => setLiveForm(f => ({ ...f, platform: e.target.value }))}>
+                                  <option value="zoom">Zoom</option>
+                                  <option value="meet">Google Meet</option>
+                                  <option value="custom">Custom</option>
+                                </select>
+                                <input style={inputStyle} placeholder="Join URL" value={liveForm.join_url} onChange={e => setLiveForm(f => ({ ...f, join_url: e.target.value }))} />
+                              </div>
+                              <button style={btnPrimary} disabled={creatingLiveSession || !liveForm.title || !liveForm.scheduled_at || !liveForm.join_url}
+                                onClick={async () => { await createLiveSession(liveForm, t.key); setShowLiveForKey(null); }}>
+                                {creatingLiveSession ? "Creating…" : "Create session"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Quiz */}
+                      {t.task_type === "quiz" && (() => {
+                        const qc = t.quiz_config ?? { questions: [{ q: "", a: "" }] };
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {qc.questions.map((q, i) => (
+                              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                                  <input style={inputStyle} placeholder={`Question ${i + 1}`} value={q.q}
+                                    onChange={e => updateDayTask(t.key, { quiz_config: { questions: qc.questions.map((x, j) => j === i ? { ...x, q: e.target.value } : x) } })} />
+                                  <input style={inputStyle} placeholder="Answer" value={q.a}
+                                    onChange={e => updateDayTask(t.key, { quiz_config: { questions: qc.questions.map((x, j) => j === i ? { ...x, a: e.target.value } : x) } })} />
+                                </div>
+                                <button style={{ ...btnGhost, color: "var(--app-danger)", marginTop: 4 }}
+                                  onClick={() => updateDayTask(t.key, { quiz_config: { questions: qc.questions.filter((_, j) => j !== i) } })}>
+                                  <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                                </button>
+                              </div>
+                            ))}
+                            <button style={btnGhost} onClick={() => updateDayTask(t.key, { quiz_config: { questions: [...qc.questions, { q: "", a: "" }] } })}>
+                              <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />Add question
+                            </button>
+                          </div>
+                        );
+                      })()}
+
+                      {idx < dayTasks.length - 1 ? null : null}
+                    </div>
+                  );
+                })}
+
+                {/* Add-task picker */}
                 <div>
-                  <label style={labelStyle}>Task types</label>
+                  <label style={labelStyle}>Add a task</label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {(["lesson", "proof", "self_check", "metric", "live", "quiz"] as const).map(type => {
-                      const active = dayTaskTypes.includes(type);
                       const Icon = TASK_ICONS[type];
                       return (
-                        <button
-                          key={type}
-                          onClick={() => {
-                            setDayTaskTypes(prev =>
-                              prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-                            );
-                          }}
-                          style={{
-                            padding: "10px 8px",
-                            borderRadius: 8,
-                            border: `1.5px solid ${active ? TASK_COLORS[type] : "var(--app-border)"}`,
-                            background: active ? `${TASK_COLORS[type]}14` : "var(--app-surface)",
-                            cursor: "pointer",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 6,
-                            fontFamily: "inherit",
-                            transition: "all 0.12s ease",
-                          }}
-                        >
-                          <HugeiconsIcon icon={Icon} size={16} strokeWidth={1.8} color={active ? TASK_COLORS[type] : "var(--app-text-quiet)"} />
-                          <span style={{ fontSize: 11, fontWeight: 600, color: active ? TASK_COLORS[type] : "var(--app-text-quiet)" }}>
-                            {TASK_LABELS[type]}
-                          </span>
+                        <button key={type} onClick={() => addDayTask(type)}
+                          style={{ padding: "10px 8px", borderRadius: 8, border: "1.5px solid var(--app-border)", background: "var(--app-surface)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, fontFamily: "inherit" }}>
+                          <HugeiconsIcon icon={Icon} size={16} strokeWidth={1.8} color={TASK_COLORS[type]} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-quiet)" }}>{TASK_LABELS[type]}</span>
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-
-                {/* Per-type detail editors — what each enabled task type actually needs configured */}
-                {dayTaskTypes.includes("lesson") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Lesson video</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <select
-                        style={{ ...inputStyle, cursor: "pointer" }}
-                        value={dayLessonId}
-                        onChange={e => setDayLessonId(e.target.value)}
-                      >
-                        <option value="">Select a lesson…</option>
-                        {lessons.map(l => (
-                          <option key={l.id} value={l.id}>{l.title}</option>
-                        ))}
-                      </select>
-                      <button style={btnDefault} onClick={createLesson} disabled={creatingLesson}>
-                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
-                        {creatingLesson ? "Creating…" : "New"}
-                      </button>
-                    </div>
-                    {dayLessonId && (() => {
-                      const sel = lessons.find(l => l.id === dayLessonId);
-                      return (
-                        <div style={{ marginTop: 12 }}>
-                          <label style={{ ...labelStyle, marginBottom: 6 }}>Video</label>
-                          {sel?.mux_playback_id ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                              <span style={{ fontSize: 12, color: "#34D399", display: "flex", alignItems: "center", gap: 5 }}>
-                                <HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={2} color="#34D399" />
-                                Video ready
-                              </span>
-                              <button style={btnDefault} onClick={() => videoFileRef.current?.click()} disabled={videoUploading}>
-                                Replace video
-                              </button>
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                              <span style={{ fontSize: 12, color: "var(--app-text-muted)" }}>No video uploaded yet</span>
-                              <button style={btnDefault} onClick={() => videoFileRef.current?.click()} disabled={videoUploading}>
-                                <HugeiconsIcon icon={Video01Icon} size={13} strokeWidth={1.8} />
-                                {videoUploading ? `Uploading ${videoProgress}%` : "Upload video"}
-                              </button>
-                            </div>
-                          )}
-                          {videoUploading && (
-                            <div style={{ marginTop: 8, height: 4, background: "var(--app-border)", borderRadius: 2, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${videoProgress}%`, background: "var(--app-accent)", borderRadius: 2, transition: "width 0.3s ease" }} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                    <input
-                      ref={videoFileRef}
-                      type="file"
-                      accept="video/*"
-                      style={{ display: "none" }}
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file && dayLessonId) uploadVideoForLesson(dayLessonId, file);
-                        e.target.value = "";
-                      }}
-                    />
-                    {dayLessonId && (
-                      <div style={{ marginTop: 14, borderTop: "1px solid var(--app-border)", paddingTop: 14 }}>
-                        <LessonContentEditor lessonId={dayLessonId} />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {dayTaskTypes.includes("self_check") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Self-check</label>
-                    <label style={{ ...labelStyle, marginBottom: 4 }}>Prompt shown to learner</label>
-                    <textarea
-                      style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
-                      value={daySelfCheckConfig.prompt}
-                      onChange={e => setDaySelfCheckConfig({ prompt: e.target.value })}
-                      placeholder="e.g. Did you complete your practice session today? Reflect on what went well and what you'll do differently."
-                    />
-                    <p style={{ fontSize: 11, color: "var(--app-text-quiet)", marginTop: 6, lineHeight: 1.5 }}>
-                      The learner marks this complete themselves — no external validation required.
-                    </p>
-                  </div>
-                )}
-
-                {dayTaskTypes.includes("proof") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Proof submission</label>
-                    <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
-                      {(["image", "file", "link", "text"] as const).map(kind => {
-                        const checked = dayProofConfig.accepts.includes(kind);
-                        return (
-                          <label key={kind} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--app-text)", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => setDayProofConfig(prev => ({
-                                ...prev,
-                                accepts: checked ? prev.accepts.filter(a => a !== kind) : [...prev.accepts, kind],
-                              }))}
-                            />
-                            {kind[0].toUpperCase() + kind.slice(1)}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <label style={labelStyle}>Prompt shown to learner</label>
-                    <textarea
-                      style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
-                      value={dayProofConfig.prompt}
-                      onChange={e => setDayProofConfig(prev => ({ ...prev, prompt: e.target.value }))}
-                      placeholder="e.g. Screenshot proof that you sent your 20 messages"
-                    />
-                  </div>
-                )}
-
-                {dayTaskTypes.includes("metric") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Hit metric</label>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                      <div>
-                        <label style={{ ...labelStyle, marginBottom: 4 }}>Source</label>
-                        <select
-                          style={{ ...inputStyle, cursor: "pointer" }}
-                          value={dayMetricConfig.source}
-                          onChange={e => setDayMetricConfig(prev => ({ ...prev, source: e.target.value as MetricConfig["source"] }))}
-                        >
-                          <option value="leadash_outbox">Leadash outbox (auto)</option>
-                          <option value="has_inbox">Inbox connected (auto)</option>
-                          <option value="has_plan">Plan selected (auto)</option>
-                          <option value="manual">Manual self-report</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ ...labelStyle, marginBottom: 4 }}>Metric</label>
-                        <input
-                          style={inputStyle}
-                          value={dayMetricConfig.metric}
-                          onChange={e => setDayMetricConfig(prev => ({ ...prev, metric: e.target.value }))}
-                          placeholder="messages_sent"
-                        />
-                      </div>
-                      <div>
-                        <label style={{ ...labelStyle, marginBottom: 4 }}>Target</label>
-                        <input
-                          type="number"
-                          style={inputStyle}
-                          value={dayMetricConfig.target}
-                          onChange={e => setDayMetricConfig(prev => ({ ...prev, target: parseInt(e.target.value) || 0 }))}
-                          min={1}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {dayTaskTypes.includes("live") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Live session</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <select
-                        style={{ ...inputStyle, cursor: "pointer" }}
-                        value={dayLiveSessionId}
-                        onChange={e => setDayLiveSessionId(e.target.value)}
-                      >
-                        <option value="">Select a session…</option>
-                        {liveSessionOptions.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.lesson_title || "Live session"} · {new Date(s.scheduled_at).toLocaleString()}
-                          </option>
-                        ))}
-                      </select>
-                      <button style={btnDefault} onClick={() => setShowLiveForm(v => !v)}>
-                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
-                        New
-                      </button>
-                    </div>
-                    {showLiveForm && (
-                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--app-border)", paddingTop: 12 }}>
-                        <input style={inputStyle} placeholder="Session title" value={liveForm.title}
-                          onChange={e => setLiveForm(f => ({ ...f, title: e.target.value }))} />
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
-                          <input type="datetime-local" style={inputStyle} value={liveForm.scheduled_at}
-                            onChange={e => setLiveForm(f => ({ ...f, scheduled_at: e.target.value }))} />
-                          <input type="number" style={inputStyle} placeholder="Mins" value={liveForm.duration_mins}
-                            onChange={e => setLiveForm(f => ({ ...f, duration_mins: parseInt(e.target.value) || 60 }))} />
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
-                          <select style={{ ...inputStyle, cursor: "pointer" }} value={liveForm.platform}
-                            onChange={e => setLiveForm(f => ({ ...f, platform: e.target.value }))}>
-                            <option value="zoom">Zoom</option>
-                            <option value="meet">Google Meet</option>
-                            <option value="custom">Custom</option>
-                          </select>
-                          <input style={inputStyle} placeholder="Join URL" value={liveForm.join_url}
-                            onChange={e => setLiveForm(f => ({ ...f, join_url: e.target.value }))} />
-                        </div>
-                        <button
-                          style={btnPrimary}
-                          disabled={creatingLiveSession || !liveForm.title || !liveForm.scheduled_at || !liveForm.join_url}
-                          onClick={async () => { await createLiveSession(liveForm); setShowLiveForm(false); }}
-                        >
-                          {creatingLiveSession ? "Creating…" : "Create session"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {dayTaskTypes.includes("quiz") && (
-                  <div style={{ ...cardStyle, padding: 14, background: "var(--app-bg)" }}>
-                    <label style={labelStyle}>Quiz questions</label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {dayQuizConfig.questions.map((q, i) => (
-                        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                            <input
-                              style={inputStyle}
-                              placeholder={`Question ${i + 1}`}
-                              value={q.q}
-                              onChange={e => setDayQuizConfig(prev => ({
-                                questions: prev.questions.map((x, j) => j === i ? { ...x, q: e.target.value } : x),
-                              }))}
-                            />
-                            <input
-                              style={inputStyle}
-                              placeholder="Answer"
-                              value={q.a}
-                              onChange={e => setDayQuizConfig(prev => ({
-                                questions: prev.questions.map((x, j) => j === i ? { ...x, a: e.target.value } : x),
-                              }))}
-                            />
-                          </div>
-                          <button
-                            style={{ ...btnGhost, color: "var(--app-danger)", marginTop: 4 }}
-                            onClick={() => setDayQuizConfig(prev => ({ questions: prev.questions.filter((_, j) => j !== i) }))}
-                          >
-                            <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        style={btnGhost}
-                        onClick={() => setDayQuizConfig(prev => ({ questions: [...prev.questions, { q: "", a: "" }] }))}
-                      >
-                        <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
-                        Add question
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Points + unlocks */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <div>
-                    <label style={labelStyle}>Total points for this day</label>
-                    <input
-                      type="number"
-                      style={inputStyle}
-                      value={dayPoints}
-                      onChange={e => setDayPoints(parseInt(e.target.value) || 0)}
-                      min={0}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Unlocks</label>
-                    <div style={{
-                      ...inputStyle,
-                      background: "var(--app-surface)",
-                      color: "var(--app-text-muted)",
-                      cursor: "default",
-                    }}>
-                      {selectedDay === 1 ? "On enrollment" : `After Day ${selectedDay - 1}`}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1441,7 +1381,7 @@ export default function ChallengeBuilder({ product, onSave, onToast }: Challenge
                     Clear day
                   </button>
                 </div>
-                <button style={btnPrimary} onClick={saveTask} disabled={savingDay}>
+                <button style={btnPrimary} onClick={saveDay} disabled={savingDay}>
                   <HugeiconsIcon icon={FloppyDiskIcon} size={13} strokeWidth={2} />
                   {savingDay ? "Saving…" : "Save day"}
                 </button>
