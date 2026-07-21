@@ -64,6 +64,47 @@ function isPublic(path: string) {
     path.startsWith("/.well-known/");
 }
 
+// ── Redirect-loop circuit breaker ────────────────────────────────────────
+// A stale or partially-corrupted auth cookie (e.g. left over from a bug
+// that has since been fixed, or a multi-chunk @supabase/ssr cookie where
+// one chunk didn't clear) can make getSession() flip-flop between
+// "logged in" and "logged out" across the SAME redirect chain, which
+// bounces the browser between /login ↔ /dashboard ↔ /reset-password
+// forever — ERR_TOO_MANY_REDIRECTS, unrecoverable without the user
+// manually clearing cookies. This guard counts consecutive
+// middleware-issued redirects via a short-lived cookie; if too many stack
+// up within a few seconds (a real redirect chain never needs more than
+// 2-3 hops), it force-clears every Supabase auth cookie and sends the
+// user to a clean /login instead of redirecting again. Worst case: the
+// user has to sign back in. That's always recoverable, unlike the loop.
+const REDIRECT_GUARD_COOKIE = "ld_rc";
+const REDIRECT_GUARD_MAX    = 4;
+
+function guardedRedirect(request: NextRequest, target: URL): NextResponse {
+  const count = parseInt(request.cookies.get(REDIRECT_GUARD_COOKIE)?.value ?? "0", 10) || 0;
+
+  if (count >= REDIRECT_GUARD_MAX) {
+    // Break the loop: wipe every sb-* auth cookie and land on a clean
+    // /login. No ?redirect= param — we don't trust anything about the
+    // current chain enough to preserve it.
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("recovered", "1");
+    const res = NextResponse.redirect(loginUrl);
+    for (const c of request.cookies.getAll()) {
+      if (c.name.startsWith("sb-") || c.name === REDIRECT_GUARD_COOKIE) {
+        res.cookies.set(c.name, "", { maxAge: 0, path: "/" });
+      }
+    }
+    return res;
+  }
+
+  const res = NextResponse.redirect(target);
+  res.cookies.set(REDIRECT_GUARD_COOKIE, String(count + 1), { maxAge: 8, path: "/" });
+  return res;
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -184,14 +225,20 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(url);
+    return guardedRedirect(request, url);
   }
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages. Check the reset gate
+  // FIRST so a must-change-password user goes straight from /login to
+  // /reset-password in one hop instead of bouncing through /dashboard —
+  // fewer hops means less chance of ever tripping the loop guard for a
+  // legitimate multi-step navigation.
   if (user && (pathname === "/login" || pathname === "/signup")) {
+    const mustChange = (user.user_metadata as Record<string, unknown> | null)?.must_change_password === true;
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    url.pathname = mustChange ? "/reset-password" : "/dashboard";
+    if (mustChange) url.searchParams.set("reason", "first_login");
+    return guardedRedirect(request, url);
   }
 
   // ── First-login forced password reset ──────────────────────────────────
@@ -212,9 +259,12 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/reset-password";
     url.searchParams.set("reason", "first_login");
-    return NextResponse.redirect(url);
+    return guardedRedirect(request, url);
   }
 
+  // Any non-redirect response clears the loop-guard counter so it never
+  // accumulates across unrelated, legitimately-separate navigations.
+  supabaseResponse.cookies.set(REDIRECT_GUARD_COOKIE, "", { maxAge: 0, path: "/" });
   return supabaseResponse;
 }
 
