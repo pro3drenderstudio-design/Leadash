@@ -12,11 +12,18 @@ interface Icp {
   company_size: string | null;
   geography: string | null;
   roles: string | null;
+  customers: string | null;
   pains: string[];
   goals: string[];
   triggers: string[];
   objections: string[];
   tone: string | null;
+}
+
+interface IcpSuggestion {
+  name: string; industry: string; company_size: string; geography: string;
+  roles: string; customers: string; pains: string[]; goals: string[];
+  triggers: string[]; objections: string[]; tone: string;
 }
 
 function TagList({ items, onChange, placeholder }: { items: string[]; onChange: (items: string[]) => void; placeholder: string }) {
@@ -119,6 +126,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
   const [companySize, setCompanySize] = useState("");
   const [geography, setGeography] = useState("");
   const [roles, setRoles] = useState("");
+  const [customers, setCustomers] = useState("");
   const [pains, setPains] = useState<string[]>([]);
   const [goals, setGoals] = useState<string[]>([]);
   const [triggers, setTriggers] = useState<string[]>([]);
@@ -127,10 +135,12 @@ export default function IcpEditorClient({ id }: { id: string }) {
 
   // AI assistant
   const [aiOpen, setAiOpen]         = useState(false);
+  const [aiTab, setAiTab]           = useState<"create" | "refine">("create");
   const [aiIndustry, setAiIndustry] = useState("");
   const [aiService, setAiService]   = useState("");
   const [aiGeo, setAiGeo]           = useState("");
   const [aiSize, setAiSize]         = useState("");
+  const [aiInstruction, setAiInstruction] = useState("");
   const [aiLoading, setAiLoading]   = useState(false);
   const [aiError, setAiError]       = useState("");
 
@@ -144,6 +154,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
       setCompanySize(c.company_size ?? "");
       setGeography(c.geography ?? "");
       setRoles(c.roles ?? "");
+      setCustomers(c.customers ?? "");
       setPains(c.pains ?? []);
       setGoals(c.goals ?? []);
       setTriggers(c.triggers ?? []);
@@ -162,7 +173,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
     try {
       await wsFetch(`/api/playbook/icps/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ name, industry: industry || null, company_size: companySize || null, geography: geography || null, roles: roles || null, pains, goals, triggers, objections, tone: tone || null }),
+        body: JSON.stringify({ name, industry: industry || null, company_size: companySize || null, geography: geography || null, roles: roles || null, customers: customers || null, pains, goals, triggers, objections, tone: tone || null }),
       });
       showToast("Saved");
     } finally { setSaving(false); }
@@ -174,6 +185,22 @@ export default function IcpEditorClient({ id }: { id: string }) {
     router.push(icpToDiscoverUrl({ industry, company_size: companySize, geography, roles }));
   }
 
+  function applySuggestion(s: IcpSuggestion, toastMsg: string) {
+    setName(s.name);
+    setIndustry(s.industry);
+    setCompanySize(s.company_size);
+    setGeography(s.geography);
+    setRoles(s.roles);
+    setCustomers(s.customers);
+    setPains(s.pains);
+    setGoals(s.goals);
+    setTriggers(s.triggers);
+    setObjections(s.objections);
+    setTone(s.tone);
+    setAiOpen(false);
+    showToast(toastMsg);
+  }
+
   async function generateWithAi() {
     if (!aiIndustry || !aiService.trim()) { setAiError("Pick an industry and describe your service."); return; }
     setAiLoading(true);
@@ -183,23 +210,32 @@ export default function IcpEditorClient({ id }: { id: string }) {
         method: "POST",
         body: JSON.stringify({ industry: aiIndustry, service: aiService, geography: aiGeo || undefined, company_size: aiSize || undefined }),
       });
-      const data = await res.json() as { suggestion?: { name: string; industry: string; company_size: string; geography: string; roles: string; pains: string[]; goals: string[]; triggers: string[]; objections: string[]; tone: string }; error?: string };
+      const data = await res.json() as { suggestion?: IcpSuggestion; error?: string };
       if (!res.ok || !data.suggestion) throw new Error(data.error ?? "AI suggestion failed");
-      const s = data.suggestion;
-      setName(s.name);
-      setIndustry(s.industry);
-      setCompanySize(s.company_size);
-      setGeography(s.geography);
-      setRoles(s.roles);
-      setPains(s.pains);
-      setGoals(s.goals);
-      setTriggers(s.triggers);
-      setObjections(s.objections);
-      setTone(s.tone);
-      setAiOpen(false);
-      showToast("Draft ready — review, tweak, then Save");
+      applySuggestion(data.suggestion, "Draft ready — review, tweak, then Save");
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI suggestion failed");
+    } finally { setAiLoading(false); }
+  }
+
+  async function refineWithAi() {
+    if (!aiInstruction.trim()) { setAiError("Tell the AI what you'd like to change."); return; }
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await wsFetch("/api/playbook/icps/ai-suggest", {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: aiInstruction,
+          current: { name, industry, company_size: companySize, geography, roles, customers, pains, goals, triggers, objections, tone },
+        }),
+      });
+      const data = await res.json() as { suggestion?: IcpSuggestion; error?: string };
+      if (!res.ok || !data.suggestion) throw new Error(data.error ?? "AI refinement failed");
+      applySuggestion(data.suggestion, "Updated — review the changes, then Save");
+      setAiInstruction("");
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI refinement failed");
     } finally { setAiLoading(false); }
   }
 
@@ -231,7 +267,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {toast && <span style={{ fontSize: 12, color: "#34D399", alignSelf: "center" }}>{toast}</span>}
-          <button onClick={() => { setAiError(""); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ Create with AI</button>
+          <button onClick={() => { setAiError(""); setAiTab(industry || pains.length ? "refine" : "create"); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ AI Assistant</button>
           <button onClick={findLeadsInDiscover} disabled={saving} title="Opens Discover pre-filtered with this ICP's industry, roles, size and geography" style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}>🔍 Find leads in Discover</button>
           <button onClick={deleteIcp} disabled={deleting} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
@@ -263,6 +299,18 @@ export default function IcpEditorClient({ id }: { id: string }) {
               <input style={inputStyle} value={roles} onChange={e => setRoles(e.target.value)} placeholder="e.g. Founder, Marketing Manager" />
             </div>
           </div>
+        </div>
+
+        {/* Who they serve */}
+        <div style={cardStyle}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Who They Serve</h3>
+          <label style={labelStyle}>Their customers <span style={{ color: "#A78BFA", textTransform: "none" }}>(who pays your ICP — the AI builds offers around getting them more of these)</span></label>
+          <textarea
+            value={customers}
+            onChange={e => setCustomers(e.target.value)}
+            placeholder="e.g. Mid-size importers and manufacturers who need working-capital loans; salaried professionals looking for investment products"
+            style={{ ...inputStyle, minHeight: 72, resize: "vertical", lineHeight: 1.5 }}
+          />
         </div>
 
         {/* Pains & goals */}
@@ -314,7 +362,42 @@ export default function IcpEditorClient({ id }: { id: string }) {
       {aiOpen && (
         <div onClick={() => !aiLoading && setAiOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-bg, #16161a)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>✨ Create your ICP with AI</h3>
+            <div style={{ display: "flex", gap: 1, background: "var(--app-surface-strong)", borderRadius: 10, padding: 3, width: "fit-content", marginBottom: 16 }}>
+              {([["create", "✨ Start fresh"], ["refine", "🪄 Refine this ICP"]] as const).map(([tab, label]) => (
+                <button key={tab} onClick={() => { setAiTab(tab); setAiError(""); }}
+                  style={{ background: aiTab === tab ? "var(--app-bg, #16161a)" : "none", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, color: aiTab === tab ? "#A78BFA" : "var(--app-text-muted)", cursor: "pointer", fontFamily: "inherit" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {aiTab === "refine" ? (
+              <>
+                <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 14, lineHeight: 1.5 }}>
+                  Describe what to change and the AI rewrites the profile around it — everything else stays intact. You review before saving.
+                </p>
+                <label style={labelStyle}>What would you like to change?</label>
+                <textarea
+                  value={aiInstruction}
+                  onChange={e => setAiInstruction(e.target.value)}
+                  placeholder="e.g. Target smaller firms in Lagos only — and make the pains sharper around losing deals to bigger competitors"
+                  style={{ ...inputStyle, minHeight: 90, resize: "vertical", lineHeight: 1.5, marginBottom: 8 }}
+                />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+                  {["Make it more specific", "Focus on Nigeria only", "Target bigger companies", "Rewrite the pains sharper"].map(ex => (
+                    <button key={ex} onClick={() => setAiInstruction(ex)} style={{ fontSize: 11, background: "var(--app-surface-strong)", color: "var(--app-text-muted)", border: "1px solid var(--app-border)", borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>{ex}</button>
+                  ))}
+                </div>
+                {aiError && <p style={{ fontSize: 12, color: "var(--app-danger)", marginBottom: 12 }}>{aiError}</p>}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button onClick={() => setAiOpen(false)} disabled={aiLoading} style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text-muted)", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  <button onClick={refineWithAi} disabled={aiLoading} style={{ background: "#A78BFA", color: "#1a1025", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: aiLoading ? 0.6 : 1 }}>
+                    {aiLoading ? "Refining… (~20s)" : "Refine ICP"}
+                  </button>
+                </div>
+              </>
+            ) : (
+            <>
             <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
               Pick the industry you want to sell to and describe what you offer. The AI drafts a complete profile — you review and adjust before saving.
             </p>
@@ -360,6 +443,8 @@ export default function IcpEditorClient({ id }: { id: string }) {
                 {aiLoading ? "Thinking… (~20s)" : "Generate ICP"}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

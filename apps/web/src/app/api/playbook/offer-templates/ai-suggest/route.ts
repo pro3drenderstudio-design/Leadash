@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const { data: icp } = await db
     .from("workspace_icps")
-    .select("name, industry, company_size, geography, roles, pains, goals, objections")
+    .select("name, industry, company_size, geography, roles, customers, pains, goals, objections")
     .eq("id", body.icp_id)
     .eq("workspace_id", workspaceId)
     .single();
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         company_size: icp.company_size,
         geography:    icp.geography,
         roles:        icp.roles,
+        customers:    icp.customers ?? null,
         pains:        icp.pains ?? [],
         goals:        icp.goals ?? [],
         objections:   icp.objections ?? [],

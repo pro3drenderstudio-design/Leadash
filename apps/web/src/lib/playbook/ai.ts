@@ -40,6 +40,7 @@ export interface IcpSuggestion {
   company_size: string;
   geography:    string;
   roles:        string;
+  customers:    string;
   pains:        string[];
   goals:        string[];
   triggers:     string[];
@@ -58,13 +59,14 @@ const ICP_TOOL: Anthropic.Tool = {
       company_size: { type: "string", description: `One or two ranges from: ${COMPANY_SIZE_OPTIONS.join(", ")} — e.g. "11-50" or "11-50, 51-200"` },
       geography:    { type: "string", description: "Country/region, e.g. 'Nigeria', 'United States', 'UK & Europe'" },
       roles:        { type: "string", description: "2-4 comma-separated job titles of the decision makers, picked from common real-world titles" },
+      customers:    { type: "string", description: "2-3 sentences: who THIS ICP's own customers/clients are — the specific people or businesses that pay them, what those customers buy, and where they're found. E.g. for finance-firm CEOs: 'Mid-size importers and manufacturers needing working-capital loans; salaried professionals seeking investment products.'" },
       pains:        { type: "array", items: { type: "string" }, description: "4-5 specific pain points, each a short punchy sentence" },
       goals:        { type: "array", items: { type: "string" }, description: "3-4 concrete goals they want, each short and measurable where possible" },
       triggers:     { type: "array", items: { type: "string" }, description: "3-4 buying-trigger events that make them ready to buy now" },
       objections:   { type: "array", items: { type: "string" }, description: "3-4 likely objections to pre-empt in follow-ups" },
       tone:         { type: "string", description: "1-2 sentences of voice guidance for outreach copy to this audience" },
     },
-    required: ["name", "industry", "company_size", "geography", "roles", "pains", "goals", "triggers", "objections", "tone"],
+    required: ["name", "industry", "company_size", "geography", "roles", "customers", "pains", "goals", "triggers", "objections", "tone"],
   },
 };
 
@@ -83,12 +85,66 @@ Rules:
 - The ICP must be specific enough to write personal cold emails from — no generic filler like "wants to grow revenue".
 - Pains, goals, triggers and objections must be written from the BUYER's point of view, in their own words, grounded in that industry's day-to-day reality.
 - roles: choose titles close to these common ones so lead searches return results: ${COMMON_TITLES.join(", ")}.
+- customers: describe who the ICP themselves sells to — their paying clients. This is what makes offers land ("I'll get you in front of X"), so be concrete about who those end-customers are and what they buy.
 - If the seller gave a geography or company size, respect it; otherwise choose the most commercially sensible one for the service.
 Always call the record_icp tool with your answer.`,
     messages: [{
       role: "user",
       content: `Target industry: ${params.industry}
 Service I offer: ${params.service}${params.geography ? `\nTarget geography: ${params.geography}` : ""}${params.company_size ? `\nTarget company size: ${params.company_size}` : ""}`,
+    }],
+    tools: [ICP_TOOL],
+    tool_choice: { type: "tool", name: "record_icp" },
+  });
+
+  return toolInput<IcpSuggestion>(res, "record_icp");
+}
+
+export async function refineIcp(params: {
+  instruction: string;
+  current: {
+    name:         string;
+    industry:     string | null;
+    company_size: string | null;
+    geography:    string | null;
+    roles:        string | null;
+    customers:    string | null;
+    pains:        string[];
+    goals:        string[];
+    triggers:     string[];
+    objections:   string[];
+    tone:         string | null;
+  };
+}): Promise<IcpSuggestion> {
+  const c = params.current;
+  const res = await client().messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: `You are a B2B cold-outreach strategist refining an existing ideal customer profile (ICP) for a freelancer or agency.
+Apply the user's instruction to the current ICP and return the COMPLETE revised ICP.
+Rules:
+- Change what the instruction asks for (and anything that must change with it to stay coherent) — keep everything else as close to the original as possible.
+- Keep the same quality bar: buyer's-point-of-view pains/goals/triggers/objections, no generic filler.
+- industry must remain one of the allowed values; roles stay close to common real-world titles like: ${COMMON_TITLES.join(", ")}.
+- customers describes who the ICP themselves sells to — their paying clients.
+- If a field the instruction doesn't touch is empty in the original, you may fill it sensibly.
+Always call the record_icp tool with the full revised ICP.`,
+    messages: [{
+      role: "user",
+      content: `Current ICP:
+Name: ${c.name}
+Industry: ${c.industry ?? "—"}
+Company size: ${c.company_size ?? "—"}
+Geography: ${c.geography ?? "—"}
+Decision makers: ${c.roles ?? "—"}
+Their customers: ${c.customers ?? "—"}
+Pains: ${c.pains.length ? c.pains.join("; ") : "—"}
+Goals: ${c.goals.length ? c.goals.join("; ") : "—"}
+Buying triggers: ${c.triggers.length ? c.triggers.join("; ") : "—"}
+Objections: ${c.objections.length ? c.objections.join("; ") : "—"}
+Tone: ${c.tone ?? "—"}
+
+What I want changed: ${params.instruction}`,
     }],
     tools: [ICP_TOOL],
     tool_choice: { type: "tool", name: "record_icp" },
@@ -149,6 +205,7 @@ export async function suggestOffers(params: {
     company_size: string | null;
     geography:    string | null;
     roles:        string | null;
+    customers:    string | null;
     pains:        string[];
     goals:        string[];
     objections:   string[];
@@ -167,6 +224,7 @@ Produce EXACTLY 10 distinct offers for the given service and ICP. Spread them ac
 - 1 niche-authority angle (positioning as THE specialist for this exact ICP)
 - 1 low-ticket foot-in-the-door angle that upsells later
 Rules:
+- Use "who the ICP sells to" (their customers) as raw material: the strongest offers promise access to, or results with, those exact end-customers — e.g. "20 qualified importer leads on a call with you", not generic "more clients".
 - Every value_prop names a specific, believable outcome the ICP cares about — tie it to their stated pains/goals. Never vague ("grow your business").
 - For beginners without proof: the proof field should say how to create proof fast (portfolio piece, free pilot results, personal results) rather than inventing fake testimonials.
 - Never fabricate case studies, client names, or numbers as if they already happened.
@@ -182,6 +240,7 @@ Industry: ${icp.industry ?? "—"}
 Company size: ${icp.company_size ?? "—"}
 Geography: ${icp.geography ?? "—"}
 Decision makers: ${icp.roles ?? "—"}
+Who they sell to (their customers): ${icp.customers ?? "—"}
 Their pains: ${icp.pains.length ? icp.pains.join("; ") : "—"}
 Their goals: ${icp.goals.length ? icp.goals.join("; ") : "—"}
 Their objections: ${icp.objections.length ? icp.objections.join("; ") : "—"}`,
