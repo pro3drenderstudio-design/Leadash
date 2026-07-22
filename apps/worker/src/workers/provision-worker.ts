@@ -47,6 +47,12 @@ const WARMUP_DAYS    = 21;
 const MS_WARMUP_DAYS = 14;
 
 const OWNER_EMAIL = process.env.OWNER_ALERT_EMAIL ?? "leadash.official@gmail.com";
+
+// WHOIS registrant email used for ALL domain registrations. Leadash operationally
+// owns these domains (we buy, run DNS + host mailboxes), so the ICANN
+// registrant-verification email must land somewhere we monitor — customers miss
+// it and their domain gets suspended. Their name/address/phone stay intact.
+const REGISTRANT_EMAIL = process.env.DOMAIN_REGISTRANT_EMAIL ?? "leadash.official@gmail.com";
 const APP_URL_BASE = process.env.APP_URL ?? "https://leadash.com";
 
 async function sendProvisioningAlert(opts: {
@@ -174,7 +180,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
   await purchaseDomain(domainRecord.domain, {
     first_name: wsSettings.registrant_first_name,
     last_name:  wsSettings.registrant_last_name  ?? "",
-    email:      wsSettings.registrant_email,
+    email:      REGISTRANT_EMAIL,
     phone:      wsSettings.registrant_phone      ?? "",
     address:    wsSettings.registrant_address    ?? "",
     city:       wsSettings.registrant_city       ?? "",
@@ -354,7 +360,7 @@ async function processProvisionMicrosoft(
   await purchaseDomain(domain, {
     first_name: wsSettings.registrant_first_name,
     last_name:  wsSettings.registrant_last_name  ?? "",
-    email:      wsSettings.registrant_email,
+    email:      REGISTRANT_EMAIL,
     phone:      wsSettings.registrant_phone      ?? "",
     address:    wsSettings.registrant_address    ?? "",
     city:       wsSettings.registrant_city       ?? "",
