@@ -40,8 +40,8 @@ export async function POST(
   const { db } = auth;
   const { id: funnel_id } = await params;
 
-  const body = await req.json() as { name: string; slug: string; page_type?: string };
-  const { name, slug, page_type = "landing" } = body;
+  const body = await req.json() as { name: string; slug: string; page_type?: string; from_page_id?: string };
+  const { name, slug, page_type = "landing", from_page_id } = body;
   if (!name || !slug) return NextResponse.json({ error: "name and slug required" }, { status: 400 });
 
   // Get next step_order
@@ -54,9 +54,29 @@ export async function POST(
 
   const step_order = (existing?.[0]?.step_order ?? 0) + 1;
 
+  // Duplicate: copy the source page's content, not just its metadata.
+  let blocks: unknown = [];
+  let settings: unknown = {};
+  let connection: unknown = {};
+  let effectivePageType = page_type;
+  if (from_page_id) {
+    const { data: src } = await db
+      .from("funnel_pages")
+      .select("blocks, settings, connection, page_type")
+      .eq("id", from_page_id)
+      .eq("funnel_id", funnel_id)
+      .maybeSingle();
+    if (src) {
+      blocks = src.blocks ?? [];
+      settings = src.settings ?? {};
+      connection = src.connection ?? {};
+      effectivePageType = (src.page_type as string) ?? page_type;
+    }
+  }
+
   const { data, error } = await db
     .from("funnel_pages")
-    .insert({ funnel_id, name, slug, step_order, page_type, status: "draft", blocks: [], settings: {}, connection: {} })
+    .insert({ funnel_id, name, slug, step_order, page_type: effectivePageType, status: "draft", blocks, settings, connection })
     .select()
     .single();
 

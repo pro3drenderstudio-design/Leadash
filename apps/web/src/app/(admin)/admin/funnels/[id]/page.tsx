@@ -180,7 +180,14 @@ function PagesTab({
     await fetch(`/api/admin/funnels/${funnel.id}/pages`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ name: `${page.name} (Copy)`, slug: `${page.slug}-copy`, page_type: page.page_type }),
+      // from_page_id copies the source page's blocks/settings/connection — a
+      // duplicate without content is useless. Slug is suffixed to stay unique.
+      body:    JSON.stringify({
+        name: `${page.name} (Copy)`,
+        slug: `${page.slug}-copy-${Date.now().toString(36).slice(-4)}`,
+        page_type: page.page_type,
+        from_page_id: page.id,
+      }),
     });
     onReload();
   }

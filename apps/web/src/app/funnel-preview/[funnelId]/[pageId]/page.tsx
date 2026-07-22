@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { Block } from "@/lib/funnel-blocks/types";
+import { resolveFunnelVariableValues, interpolateFunnelVariables } from "@/lib/funnel-blocks/variables";
 import FunnelPageRenderer from "@/app/f/[funnelSlug]/[pageSlug]/FunnelPageRenderer";
 
 interface PreviewPageProps {
@@ -31,7 +32,10 @@ export default async function FunnelPreviewPage({ params }: PreviewPageProps) {
 
   const funnel = funnelRes.data;
   const page = pageRes.data;
-  const blocks = (page.blocks ?? []) as Block[];
+  // Resolve dynamic variables ({next_active_cohort_date}, …) so the preview
+  // matches exactly what the live page will render.
+  const varValues = await resolveFunnelVariableValues(db);
+  const blocks = interpolateFunnelVariables((page.blocks ?? []) as Block[], varValues);
   const isLive = funnel.status === "active" && page.status === "published";
 
   return (

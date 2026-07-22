@@ -22,6 +22,7 @@ import {
 } from "@/lib/funnel-blocks/tree";
 import { Icon, BlockIcon, LABELS, LIB_GROUPS } from "@/lib/funnel-blocks/render/icons";
 import { BlockTree } from "@/lib/funnel-blocks/render/BlockTree";
+import { interpolateFunnelVariables } from "@/lib/funnel-blocks/variables";
 import type { BlockRenderContext } from "@/lib/funnel-blocks/render/BlockRenderer";
 import { ICON_TYPE_LIST } from "@/lib/funnel-blocks/render/BlockRenderer";
 import { FunnelIcon, FUNNEL_ICON_LIST } from "@/lib/funnel-blocks/render/funnel-icons";
@@ -270,10 +271,19 @@ export default function BuilderPage() {
   const [toast,       setToastMsg]    = useState<string|null>(null);
   const [saveStatus,  setSaveStatus]  = useState<"idle"|"saved">("idle");
   const [activeDrag,  setActiveDrag]  = useState<{ label: string } | null>(null);
+  // Resolved merge-variable values ({next_active_cohort_date}, …) for the live preview.
+  const [varValues,   setVarValues]   = useState<Record<string, string>>({});
 
   const toastTimer       = useRef<ReturnType<typeof setTimeout>|null>(null);
   const previewSessionId = useRef(`preview_${genId()}`);
   void funnelSlug;
+
+  useEffect(() => {
+    fetch("/api/admin/funnels/variables")
+      .then(r => r.json())
+      .then(d => setVarValues(d.values ?? {}))
+      .catch(() => {});
+  }, []);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -723,7 +733,7 @@ export default function BuilderPage() {
                   minHeight: 400,
                 }}
               >
-                <BlockTree blocks={blocks} ctx={blockCtx} />
+                <BlockTree blocks={preview ? interpolateFunnelVariables(blocks, varValues) : blocks} ctx={blockCtx} />
               </div>
             </div>
           </div>
