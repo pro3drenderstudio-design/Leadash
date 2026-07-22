@@ -1354,6 +1354,48 @@ function DiscoverContent() {
     return data.ids ?? (data.results ?? []).map(r => r.id);
   }
 
+  // Safe wrapper around the ids-only fetch: shows a progress banner while the
+  // server collects matching ids (can take a minute+ on heavy filter combos)
+  // and surfaces failures as a visible message instead of an unhandled
+  // rejection that leaves modals stuck on their spinner forever.
+  // The server may take a few minutes on heavy filter combos (it collects ids
+  // in per-company batches); tick an estimated progress forward so the banner
+  // doesn't sit frozen at 0% — it caps at 95% until the response lands.
+  function startSelectionEstimate(n: number): () => void {
+    setBulkProgress({ current: 0, total: n, label: "Selecting" });
+    const timer = setInterval(() => {
+      setBulkProgress(p => p && p.label === "Selecting"
+        ? { ...p, current: Math.min(p.current + Math.max(1, Math.round(n / 240)), Math.round(n * 0.95)) }
+        : p);
+    }, 1000);
+    return () => { clearInterval(timer); setBulkProgress(null); };
+  }
+
+  async function collectSelectedPeopleIds(overrideIds?: string[]): Promise<string[] | null> {
+    if (overrideIds) return overrideIds;
+    if (selectNCount === null && !selectAllMode) return Array.from(selected);
+    const n = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    const stop = startSelectionEstimate(n);
+    try {
+      return selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : await fetchAllMatchingIds();
+    } catch (e) {
+      setExportMsg({ ok: false, text: `Couldn't select the matching leads — ${e instanceof Error ? e.message : "please retry"}. Try fewer filters or a smaller count.` });
+      return null;
+    } finally { stop(); }
+  }
+
+  async function collectSelectedCompanyIds(): Promise<string[] | null> {
+    if (selectNCount === null && !selectAllMode) return Array.from(selected);
+    const n = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    const stop = startSelectionEstimate(n);
+    try {
+      return selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : await fetchAllMatchingCompanyIds();
+    } catch (e) {
+      setExportMsg({ ok: false, text: `Couldn't select the matching companies — ${e instanceof Error ? e.message : "please retry"}. Try fewer filters or a smaller count.` });
+      return null;
+    } finally { stop(); }
+  }
+
   async function fetchAllMatchingCompanyIds(limitOverride?: number): Promise<string[]> {
     const f = companyFilters;
     const params = new URLSearchParams();
@@ -1388,7 +1430,8 @@ function DiscoverContent() {
   }
 
   async function handleFindPeopleAtSelected() {
-    const ids = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
+    const ids = await collectSelectedCompanyIds();
+    if (!ids) return;
     const names = companyResults.filter(c => ids.includes(c.id)).map(c => c.name).filter(Boolean);
     setSelectAllMode(false);
     setSelected(new Set());
@@ -1400,8 +1443,8 @@ function DiscoverContent() {
   }
 
   async function handleCompanyExport() {
-    const allIds = selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : selectAllMode ? await fetchAllMatchingCompanyIds() : Array.from(selected);
-    if (!allIds.length) return;
+    const allIds = await collectSelectedCompanyIds();
+    if (!allIds?.length) return;
     setExporting(true); setExportMsg(null);
     const COMPANY_BATCH = 5000;
     try {
@@ -1473,14 +1516,18 @@ function DiscoverContent() {
   }
 
   async function revealSelected() {
-    const ids = selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected);
+    const ids = await collectSelectedPeopleIds();
+    if (!ids?.length) return;
     await revealIds(ids);
   }
 
   async function handleExport(format: "csv" | "campaign", campaignId?: string | null, campaignName?: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
-    if (!allIds.length) return;
-    setExporting(true); setExportMsg(null); setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
+    // Close the pickers before the (possibly slow) id collection so their
+    // spinners never hang on a failure — the progress banner takes over.
+    setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
+    const allIds = await collectSelectedPeopleIds(overrideIds);
+    if (!allIds?.length) return;
+    setExporting(true); setExportMsg(null);
     const EXPORT_BATCH = 2500;
     try {
       if (format === "csv") {
@@ -1571,9 +1618,12 @@ function DiscoverContent() {
   }
 
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
-    const allIds = overrideIds ?? (selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : selectAllMode ? await fetchAllMatchingIds() : Array.from(selected));
-    if (!allIds.length) return;
-    setExporting(true); setExportMsg(null); setShowList(false); setListIds(null);
+    // Close the modal before the (possibly slow) id collection so it never
+    // hangs on "Adding…" — the progress banner takes over.
+    setShowList(false); setListIds(null);
+    const allIds = await collectSelectedPeopleIds(overrideIds);
+    if (!allIds?.length) return;
+    setExporting(true); setExportMsg(null);
     const EXPORT_BATCH = 2500;
     if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });
     let totalAdded = 0;

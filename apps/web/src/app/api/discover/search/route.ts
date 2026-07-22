@@ -8,7 +8,10 @@ import {
 } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
-export const maxDuration = 60;
+// ids_only bulk selection can legitimately run for minutes on heavy filter
+// combos (see the chunked company-driven collector below); normal searches
+// still bail at the DB statement_timeout long before this.
+export const maxDuration = 300;
 
 const CREDITS_PER_LEAD = 0.5;
 const DEFAULT_LIMIT    = 25;
@@ -237,6 +240,7 @@ export async function GET(req: NextRequest) {
     // times out and returns nothing").
     const NET_NEW_ARRAY_CAP = 20_000;
 
+    let netNewEmails: string[] = [];
     if (netNew) {
       // Cache the workspace's existing-email set for 60s (see discover-cache.ts).
       // Cuts a Supabase RPC round-trip on every filter tweak.
@@ -264,6 +268,7 @@ export async function GET(req: NextRequest) {
         conditions.push(`(p.email IS NULL OR lower(p.email) <> ALL($${i}::text[]))`);
         params.push(existingEmails);
         i++;
+        netNewEmails = existingEmails;
       }
     }
 
@@ -369,6 +374,160 @@ export async function GET(req: NextRequest) {
     // Lightweight ID-only path — used by the frontend's "select all" bulk operations.
     // Returns raw IDs without reveal lookups or email masking, supporting up to 50k.
     if (idsOnly) {
+      // ── Chunked company-driven collection ──
+      // When company-side filters are combined with people-side predicates, the
+      // flat query builds multi-million-row bitmaps (title trigram × country)
+      // that cannot early-terminate under LIMIT and hit statement_timeout.
+      // Instead: fetch the matching company ids first (cheap trigram/btree,
+      // ~1s even at 50k), then probe people in small company batches — each
+      // statement is a fast company_idx bitmap probe with LIMIT early-exit —
+      // until enough ids are collected or the time budget runs out. Text
+      // predicates use per-row ILIKE here (cheap on the small probed sets)
+      // rather than FTS, which is close enough for bulk selection.
+      if (hasCompanyFilter) {
+        const compConds: string[] = [];
+        const compParams: unknown[] = [];
+        let ci = 1;
+        if (industryIncludes.length) {
+          compConds.push(`(${industryIncludes.map(() => `c.industry ILIKE $${ci++}`).join(" OR ")})`);
+          compParams.push(...industryIncludes.map(v => `%${v}%`));
+        }
+        if (industryExcludes.length) {
+          compConds.push(`NOT (${industryExcludes.map(() => `c.industry ILIKE $${ci++}`).join(" OR ")})`);
+          compParams.push(...industryExcludes.map(v => `%${v}%`));
+        }
+        if (companySizes.length) {
+          compConds.push(`lower(c.size_range) = ANY($${ci++}::text[])`);
+          compParams.push(companySizes.map(s => s.toLowerCase()));
+        }
+        if (companyKeywordIncludes.length) {
+          compConds.push(`(${companyKeywordIncludes.map(() => `c.keywords ILIKE $${ci++}`).join(" OR ")})`);
+          compParams.push(...companyKeywordIncludes.map(v => `%${v}%`));
+        }
+        if (companyKeywordExcludes.length) {
+          compConds.push(`NOT (${companyKeywordExcludes.map(() => `c.keywords ILIKE $${ci++}`).join(" OR ")})`);
+          compParams.push(...companyKeywordExcludes.map(v => `%${v}%`));
+        }
+        const compRows = await leadsDb.unsafe<{ id: string }[]>(
+          `SELECT c.id FROM discover_companies c WHERE ${compConds.join(" AND ")} LIMIT 50000`,
+          compParams as never[],
+        );
+        const compIds = compRows.map(r => r.id);
+        if (!compIds.length) return NextResponse.json({ ids: [] });
+
+        // People-side WHERE — $1 is reserved for the per-chunk company-id array.
+        const pConds: string[] = [`p.company_id = ANY($1::uuid[])`];
+        const pParams: unknown[] = [];
+        let pi = 2;
+        if (keyword) {
+          pConds.push(`(p.title ILIKE $${pi} OR p.company_name ILIKE $${pi})`);
+          pParams.push(`%${keyword}%`); pi++;
+        }
+        if (titleIncludes.length) {
+          pConds.push(`p.title ILIKE ANY($${pi++}::text[])`);
+          pParams.push(titleIncludes.map(v => `%${v}%`));
+        }
+        if (titleExcludes.length) {
+          pConds.push(`NOT (p.title ILIKE ANY($${pi++}::text[]))`);
+          pParams.push(titleExcludes.map(v => `%${v}%`));
+        }
+        if (seniorities.length) {
+          pConds.push(`lower(p.seniority) = ANY($${pi++}::text[])`);
+          pParams.push(seniorities.map(s => s.toLowerCase()));
+        }
+        if (senioritiesExclude.length) {
+          pConds.push(`NOT (lower(p.seniority) = ANY($${pi++}::text[]))`);
+          pParams.push(senioritiesExclude.map(s => s.toLowerCase()));
+        }
+        if (departments.length) {
+          pConds.push(`p.department ILIKE ANY($${pi++}::text[])`);
+          pParams.push(departments.map(v => `%${v}%`));
+        }
+        if (departmentsExclude.length) {
+          pConds.push(`NOT (p.department ILIKE ANY($${pi++}::text[]))`);
+          pParams.push(departmentsExclude.map(v => `%${v}%`));
+        }
+        if (countryIncludes.length) {
+          pConds.push(`lower(p.country) = ANY($${pi++}::text[])`);
+          pParams.push(countryIncludes.map(c => c.toLowerCase()));
+        }
+        if (countryExcludes.length) {
+          pConds.push(`NOT (lower(p.country) = ANY($${pi++}::text[]))`);
+          pParams.push(countryExcludes.map(c => c.toLowerCase()));
+        }
+        for (const loc of locationIncludes) {
+          pConds.push(`(p.country ILIKE $${pi} OR p.state ILIKE $${pi} OR p.city ILIKE $${pi})`);
+          pParams.push(`%${loc}%`); pi++;
+        }
+        for (const loc of locationExcludes) {
+          pConds.push(`NOT (p.country ILIKE $${pi} OR p.state ILIKE $${pi} OR p.city ILIKE $${pi})`);
+          pParams.push(`%${loc}%`); pi++;
+        }
+        if (companyIncludes.length) {
+          pConds.push(`p.company_name ILIKE ANY($${pi++}::text[])`);
+          pParams.push(companyIncludes.map(v => `%${v}%`));
+        }
+        if (companyExcludes.length) {
+          pConds.push(`NOT (p.company_name ILIKE ANY($${pi++}::text[]))`);
+          pParams.push(companyExcludes.map(v => `%${v}%`));
+        }
+        if (emailStatus === "has_email") {
+          pConds.push(`p.email IS NOT NULL AND p.email <> ''`);
+        }
+        if (netNewEmails.length) {
+          pConds.push(`(p.email IS NULL OR lower(p.email) <> ALL($${pi++}::text[]))`);
+          pParams.push(netNewEmails);
+        }
+        const chunkSql = `
+          SELECT p.id FROM discover_people p
+          WHERE ${pConds.join(" AND ")}
+          LIMIT $${pi}
+        `;
+
+        // Chunk sizing is bounded by the pool's 25s statement_timeout: a
+        // 300-company probe measured ~11-18s cold on the heaviest real filter
+        // combo (large US companies, cold page cache). Chunks run sequentially —
+        // concurrent chunks compete for disk I/O and both breach the timeout.
+        // A chunk that times out is retried once at half size before being
+        // skipped, so a few oversized companies can't sink the whole selection.
+        const CHUNK = 300;
+        const BUDGET_MS = 240_000;
+        const started = Date.now();
+        const collected: string[] = [];
+        let failedChunks = 0;
+        for (let s = 0; s < compIds.length && collected.length < limit && Date.now() - started < BUDGET_MS; s += CHUNK) {
+          const batch = compIds.slice(s, s + CHUNK);
+          const remaining = limit - collected.length;
+          const firstTry = await leadsDb.unsafe<{ id: string }[]>(chunkSql, [batch, ...pParams, remaining] as never[])
+            .catch(() => null);
+          let rows: { id: string }[];
+          if (firstTry !== null) {
+            rows = firstTry;
+          } else {
+            // Retry in two half-size statements; skip whatever still fails.
+            const retryRows: { id: string }[] = [];
+            for (const half of [batch.slice(0, CHUNK / 2), batch.slice(CHUNK / 2)]) {
+              if (!half.length || retryRows.length >= remaining) continue;
+              const sub = await leadsDb.unsafe<{ id: string }[]>(
+                chunkSql, [half, ...pParams, remaining - retryRows.length] as never[],
+              ).catch(() => { failedChunks++; return [] as { id: string }[]; });
+              retryRows.push(...sub);
+            }
+            rows = retryRows;
+          }
+          for (const r of rows) {
+            if (collected.length >= limit) break;
+            collected.push(r.id);
+          }
+        }
+        if (!collected.length && failedChunks > 0) {
+          return NextResponse.json({
+            error: "This selection is too heavy for the current filters. Try fewer filters or a smaller count.",
+          }, { status: 500 });
+        }
+        return NextResponse.json({ ids: collected });
+      }
+
       const idSql = `
         SELECT p.id
         FROM discover_people p
