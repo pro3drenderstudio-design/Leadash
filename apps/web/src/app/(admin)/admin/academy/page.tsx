@@ -139,6 +139,7 @@ export default function AdminAcademyPage() {
   const [allWorkspaces, setAllWorkspaces]   = useState<WorkspaceOption[]>([]);
   const [wsSearch,     setWsSearch]         = useState("");
   const [accessSaving, setAccessSaving]     = useState(false);
+  const [enrollmentSearch, setEnrollmentSearch] = useState("");
 
   const notify = (text: string, ok = true) => {
     setMsg({ text, ok });
@@ -838,41 +839,62 @@ export default function AdminAcademyPage() {
           )}
 
           {/* ── ENROLLMENTS ───────────────────────────────────────────────── */}
-          {!openProduct && top === "enrollments" && (
-            <div className="ac-card" style={{ overflow: "hidden", maxWidth: 1100 }}>
-              <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", borderBottom: "1px solid var(--app-border)" }}>
-                <h3 style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>All enrollments</h3>
-                <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>{enrollments.length} total</span>
-              </div>
-              <div className="ac-table-scroll"><table className="ac-table">
-                <thead>
-                  <tr>
-                    <th>Workspace</th>
-                    <th>Course</th>
-                    <th>Cohort</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Enrolled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enrollments.map(e => (
-                    <tr key={e.id}>
-                      <td style={{ fontWeight: 500 }}>{e.workspaces?.name ?? e.workspace_id.slice(0, 8)}</td>
-                      <td style={{ color: "var(--app-text-muted)" }}>{products.find(p => p.id === e.product_id)?.name ?? e.product_id}</td>
-                      <td style={{ color: "var(--app-text-muted)" }}>{e.academy_cohorts?.name ?? "—"}</td>
-                      <td><span className={`ac-chip ${e.access_type === "paid" ? "success" : "warn"}`}>{e.access_type}</span></td>
-                      <td><span className={`ac-chip ${e.status === "active" ? "info" : e.status === "completed" ? "success" : ""}`}>{e.status}</span></td>
-                      <td style={{ color: "var(--app-text-quiet)", fontSize: 12 }}>{new Date(e.enrolled_at).toLocaleDateString()}</td>
+          {!openProduct && top === "enrollments" && (() => {
+            const q = enrollmentSearch.trim().toLowerCase();
+            const filteredEnrollments = !q ? enrollments : enrollments.filter(e => {
+              const wsName = (e.workspaces?.name ?? "").toLowerCase();
+              const courseName = (products.find(p => p.id === e.product_id)?.name ?? "").toLowerCase();
+              const cohortName = (e.academy_cohorts?.name ?? "").toLowerCase();
+              return wsName.includes(q) || e.workspace_id.toLowerCase().includes(q) ||
+                courseName.includes(q) || cohortName.includes(q);
+            });
+            return (
+              <div className="ac-card" style={{ overflow: "hidden", maxWidth: 1100 }}>
+                <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--app-border)" }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 600 }}>All enrollments</h3>
+                  <input
+                    value={enrollmentSearch}
+                    onChange={e => setEnrollmentSearch(e.target.value)}
+                    placeholder="Search by user, workspace, course, or cohort…"
+                    className="ac-input"
+                    style={{ flex: 1, maxWidth: 340, fontSize: 13 }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--app-text-quiet)" }}>
+                    {filteredEnrollments.length} {q ? `of ${enrollments.length}` : "total"}
+                  </span>
+                </div>
+                <div className="ac-table-scroll"><table className="ac-table">
+                  <thead>
+                    <tr>
+                      <th>Workspace</th>
+                      <th>Course</th>
+                      <th>Cohort</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Enrolled</th>
                     </tr>
-                  ))}
-                  {enrollments.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>No enrollments yet.</td></tr>
-                  )}
-                </tbody>
-              </table></div>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {filteredEnrollments.map(e => (
+                      <tr key={e.id}>
+                        <td style={{ fontWeight: 500 }}>{e.workspaces?.name ?? e.workspace_id.slice(0, 8)}</td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{products.find(p => p.id === e.product_id)?.name ?? e.product_id}</td>
+                        <td style={{ color: "var(--app-text-muted)" }}>{e.academy_cohorts?.name ?? "—"}</td>
+                        <td><span className={`ac-chip ${e.access_type === "paid" ? "success" : "warn"}`}>{e.access_type}</span></td>
+                        <td><span className={`ac-chip ${e.status === "active" ? "info" : e.status === "completed" ? "success" : ""}`}>{e.status}</span></td>
+                        <td style={{ color: "var(--app-text-quiet)", fontSize: 12 }}>{new Date(e.enrolled_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                    {filteredEnrollments.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--app-text-quiet)" }}>
+                        {enrollments.length === 0 ? "No enrollments yet." : "No enrollments match your search."}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table></div>
+              </div>
+            );
+          })()}
 
           {/* ── DISCOUNT CODES ────────────────────────────────────────────── */}
           {!openProduct && top === "codes" && (
@@ -1160,7 +1182,12 @@ export default function AdminAcademyPage() {
                   onToast={notify}
                 />
               ) : (
-                <ChallengeAnalytics productId={product.id} productName={product.name} onToast={notify} />
+                <ChallengeAnalytics
+                  productId={product.id}
+                  productName={product.name}
+                  cohorts={cohorts.filter(c => c.product_id === product.id).map(c => ({ id: c.id, name: c.name }))}
+                  onToast={notify}
+                />
               )}
             </div>
           )}

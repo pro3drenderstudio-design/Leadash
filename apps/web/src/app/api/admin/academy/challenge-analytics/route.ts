@@ -15,7 +15,10 @@ interface EnrollmentRow {
   workspace_id: string;
   status: string;
   completed_at: string | null;
+  cohort_id: string | null;
+  access_type: string;
   workspaces: { name: string } | null;
+  academy_cohorts: { name: string } | null;
 }
 
 interface GamificationRow {
@@ -52,7 +55,9 @@ export async function GET(req: NextRequest) {
   // 1. Fetch enrollments for the product
   let enrollmentQuery = db
     .from("academy_enrollments")
-    .select("id, workspace_id, status, completed_at, workspaces(name)")
+    // FK hint required — see api/admin/academy/enrollments/route.ts for why a bare
+    // academy_cohorts embed is ambiguous (PGRST201).
+    .select("id, workspace_id, status, completed_at, cohort_id, access_type, workspaces(name), academy_cohorts!academy_enrollments_cohort_id_fkey(name)")
     .eq("product_id", productId);
 
   if (cohortId) enrollmentQuery = enrollmentQuery.eq("cohort_id", cohortId);
@@ -187,6 +192,9 @@ export async function GET(req: NextRequest) {
       reported_earnings_cents: gam?.reported_earnings_cents ?? 0,
       status: participantStatus,
       completed_at: enrollment.completed_at,
+      cohort_id: enrollment.cohort_id,
+      cohort_name: enrollment.academy_cohorts?.name ?? null,
+      access_type: enrollment.access_type,
     };
   });
 

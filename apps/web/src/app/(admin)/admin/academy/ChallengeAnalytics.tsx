@@ -39,7 +39,12 @@ interface Participant {
   reported_earnings_cents: number;
   status: "active" | "at_risk" | "graduated";
   completed_at: string | null;
+  cohort_id: string | null;
+  cohort_name: string | null;
+  access_type: string;
 }
+
+interface CohortOption { id: string; name: string; }
 
 interface Winner {
   rank: number;
@@ -62,6 +67,7 @@ interface AnalyticsData {
 interface ChallengeAnalyticsProps {
   productId: string;
   productName: string;
+  cohorts: CohortOption[];
   onToast: (msg: string) => void;
 }
 
@@ -109,18 +115,24 @@ function statusColor(status: string): { bg: string; text: string; border: string
 
 // ── ChallengeAnalytics ────────────────────────────────────────────────────────
 
-export default function ChallengeAnalytics({ productId, productName, onToast }: ChallengeAnalyticsProps) {
+export default function ChallengeAnalytics({ productId, productName, cohorts, onToast }: ChallengeAnalyticsProps) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingWinners, setLoadingWinners] = useState(true);
   const [savingWinners, setSavingWinners] = useState(false);
   const [cohortFilter, setCohortFilter] = useState("all");
+  const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
+  const [editCohortId, setEditCohortId] = useState("");
+  const [editAccessType, setEditAccessType] = useState("");
+  const [savingAccess, setSavingAccess] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/academy/challenge-analytics?product_id=${productId}`);
+      const qs = new URLSearchParams({ product_id: productId });
+      if (cohortFilter !== "all") qs.set("cohort_id", cohortFilter);
+      const res = await fetch(`/api/admin/academy/challenge-analytics?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) { onToast(json.error ?? "Failed to load analytics"); return; }
       setData(json);
@@ -129,7 +141,7 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
     } finally {
       setLoading(false);
     }
-  }, [productId, onToast]);
+  }, [productId, cohortFilter, onToast]);
 
   const loadWinners = useCallback(async () => {
     setLoadingWinners(true);
@@ -170,6 +182,37 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
       await loadWinners();
     } finally {
       setSavingWinners(false);
+    }
+  }
+
+  function openEditAccess(p: Participant) {
+    setEditingParticipant(p);
+    setEditCohortId(p.cohort_id ?? "");
+    setEditAccessType(p.access_type);
+  }
+
+  async function saveAccess() {
+    if (!editingParticipant) return;
+    setSavingAccess(true);
+    try {
+      const res = await fetch("/api/admin/academy/enrollments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingParticipant.enrollment_id,
+          cohort_id: editCohortId || null,
+          access_type: editAccessType,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { onToast(json.error ?? "Failed to update access"); return; }
+      onToast("Access updated");
+      setEditingParticipant(null);
+      await loadData();
+    } catch {
+      onToast("Network error updating access");
+    } finally {
+      setSavingAccess(false);
     }
   }
 
@@ -420,6 +463,9 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
               }}
             >
               <option value="all">All cohorts</option>
+              {cohorts.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
             </select>
             <button
               style={{
@@ -452,7 +498,7 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Participant", "Progress", "Streak", "Points", "Reported $", "Status", ""].map(h => (
+                  {["Participant", "Cohort", "Progress", "Streak", "Points", "Reported $", "Status", ""].map(h => (
                     <th key={h} style={{
                       padding: "10px 16px",
                       textAlign: "left",
@@ -513,6 +559,13 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
                             {p.workspace_name || p.workspace_id.slice(0, 8)}
                           </span>
                         </div>
+                      </td>
+
+                      {/* Cohort */}
+                      <td style={{ padding: "12px 16px" }}>
+                        <span style={{ fontSize: 12.5, color: "var(--app-text-muted)" }}>
+                          {p.cohort_name ?? "—"}
+                        </span>
                       </td>
 
                       {/* Progress bar */}
@@ -598,16 +651,19 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
 
                       {/* Action */}
                       <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                        <button style={{
-                          background: "transparent",
-                          border: "none",
-                          color: "var(--app-text-quiet)",
-                          cursor: "pointer",
-                          padding: "4px 6px",
-                          borderRadius: 6,
-                          display: "inline-flex",
-                          alignItems: "center",
-                        }}>
+                        <button
+                          onClick={() => openEditAccess(p)}
+                          title="View / adjust access"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--app-text-quiet)",
+                            cursor: "pointer",
+                            padding: "4px 6px",
+                            borderRadius: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}>
                           <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
                         </button>
                       </td>
@@ -619,6 +675,89 @@ export default function ChallengeAnalytics({ productId, productName, onToast }: 
           </div>
         )}
       </div>
+
+      {editingParticipant && (
+        <div
+          onClick={() => !savingAccess && setEditingParticipant(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ ...cardStyle, width: 380, padding: 22, background: "var(--app-bg)" }}
+          >
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Adjust access</h3>
+            <p style={{ fontSize: 12, color: "var(--app-text-quiet)", marginBottom: 18 }}>
+              {editingParticipant.workspace_name || editingParticipant.workspace_id.slice(0, 8)}
+            </p>
+
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-quiet)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Cohort
+            </label>
+            <select
+              value={editCohortId}
+              onChange={e => setEditCohortId(e.target.value)}
+              style={{
+                width: "100%", marginTop: 6, marginBottom: 16,
+                background: "var(--app-bg)", border: "1px solid var(--app-border-strong)",
+                borderRadius: 8, padding: "8px 10px", color: "var(--app-text)",
+                fontSize: 13, fontFamily: "inherit", outline: "none",
+              }}
+            >
+              <option value="">No cohort</option>
+              {cohorts.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-quiet)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Access type
+            </label>
+            <select
+              value={editAccessType}
+              onChange={e => setEditAccessType(e.target.value)}
+              style={{
+                width: "100%", marginTop: 6, marginBottom: 20,
+                background: "var(--app-bg)", border: "1px solid var(--app-border-strong)",
+                borderRadius: 8, padding: "8px 10px", color: "var(--app-text)",
+                fontSize: 13, fontFamily: "inherit", outline: "none",
+              }}
+            >
+              <option value="paid">Paid</option>
+              <option value="admin_granted">Admin granted</option>
+              <option value="promo">Promo</option>
+            </select>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setEditingParticipant(null)}
+                disabled={savingAccess}
+                style={{
+                  background: "transparent", border: "1px solid var(--app-border-strong)",
+                  color: "var(--app-text)", borderRadius: 8, padding: "8px 14px",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveAccess}
+                disabled={savingAccess}
+                style={{
+                  background: "var(--app-accent)", border: "none", color: "#fff",
+                  borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                  cursor: savingAccess ? "not-allowed" : "pointer", fontFamily: "inherit",
+                  opacity: savingAccess ? 0.6 : 1,
+                }}
+              >
+                {savingAccess ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
