@@ -241,8 +241,13 @@ export async function GET(req: NextRequest) {
     // times out and returns nothing").
     const NET_NEW_ARRAY_CAP = 20_000;
 
+    // exclude_ws applies the same workspace-email exclusion as net-new without
+    // the user-facing toggle. The streaming add-to-list flow sets it so each
+    // collected batch skips leads already imported — including ones added by
+    // the immediately preceding batch — which makes cursor re-scans lossless.
+    const excludeWs = p.get("exclude_ws") === "1";
     let netNewEmails: string[] = [];
-    if (netNew) {
+    if (netNew || excludeWs) {
       // Cache the workspace's existing-email set for 60s (see discover-cache.ts).
       // Cuts a Supabase RPC round-trip on every filter tweak.
       let existingEmails = await getCachedWorkspaceEmails(workspaceId);
@@ -502,7 +507,7 @@ export async function GET(req: NextRequest) {
         const collected: string[] = [];
         let failedChunks = 0;
         let s = compOffset;
-        for (; s < compIds.length && collected.length < limit && Date.now() - started < BUDGET_MS; s += CHUNK) {
+        while (s < compIds.length && collected.length < limit && Date.now() - started < BUDGET_MS) {
           const batch = compIds.slice(s, s + CHUNK);
           const remaining = limit - collected.length;
           const firstTry = await leadsDb.unsafe<{ id: string }[]>(chunkSql, [batch, ...pParams, remaining] as never[])
@@ -526,6 +531,12 @@ export async function GET(req: NextRequest) {
             if (collected.length >= limit) break;
             collected.push(r.id);
           }
+          // If this chunk filled the remaining limit it may hold more matches —
+          // keep the cursor ON it so the next request re-scans it. With
+          // exclude_ws the already-taken rows drop out, so nothing is lost or
+          // duplicated; non-streaming callers stop at their target anyway.
+          if (rows.length >= remaining) break;
+          s += CHUNK;
         }
         // A first round where every chunk failed is systemic — surface it.
         // Later rounds return their cursor even when empty (normal during

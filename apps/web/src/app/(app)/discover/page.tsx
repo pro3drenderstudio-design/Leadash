@@ -1325,7 +1325,7 @@ function DiscoverContent() {
 
   const SELECT_ALL_CAP = 50_000;
 
-  async function fetchAllMatchingIds(limitOverride?: number, onProgress?: (collected: number) => void): Promise<string[]> {
+  function buildPeopleIdsParams(): URLSearchParams {
     const f = peopleFilters;
     const params = new URLSearchParams();
     if (f.keyword)                       params.set("q",               f.keyword);
@@ -1349,6 +1349,11 @@ function DiscoverContent() {
     params.set("email_status", f.emailStatus);
     if (f.netNew) params.set("net_new", "true");
     params.set("ids_only", "true");
+    return params;
+  }
+
+  async function fetchAllMatchingIds(limitOverride?: number, onProgress?: (collected: number) => void): Promise<string[]> {
+    const params = buildPeopleIdsParams();
 
     // The server sweeps matching companies for ~35s per request and returns a
     // resume cursor (next_comp_offset) — loop until we have enough ids or the
@@ -1642,10 +1647,91 @@ function DiscoverContent() {
     } finally { setExporting(false); setBulkProgress(null); }
   }
 
+  // Streaming add for bulk selections: collect ~100 ids at a time and add them
+  // to the list immediately, so the progress bar tracks leads actually added
+  // and a failure mid-way keeps everything added so far. exclude_ws makes each
+  // batch skip leads already in the workspace (including the previous batch),
+  // so resumed/re-scanned batches can't duplicate or double-charge.
+  async function streamAddToList(listId: string | null, listName: string | null) {
+    const target = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    setExporting(true); setExportMsg(null);
+    setBulkProgress({ current: 0, total: target, label: "Adding" });
+    let resolvedListId = listId;
+    let added = 0, existed = 0, offset = 0, done = false, noProgressRounds = 0;
+    const sent = new Set<string>(); // guards against stale-exclusion re-sends
+    // Batch small for chunked (company-filter) sweeps so each statement stays
+    // fast; if the server signals a non-resumable (simple) query, go big.
+    let batchSize = 100;
+    try {
+      for (let round = 0; round < 200 && added + existed < target; round++) {
+        const params = buildPeopleIdsParams();
+        params.set("exclude_ws", "1");
+        params.set("limit", String(Math.min(batchSize, target - added - existed)));
+        if (offset > 0) params.set("comp_offset", String(offset));
+        const data = await wsGet<{ ids?: string[]; next_comp_offset?: number; done?: boolean }>(`/api/discover/search?${params}`);
+        const ids = (data.ids ?? []).filter(id => !sent.has(id));
+        ids.forEach(id => sent.add(id));
+
+        if (ids.length) {
+          const result = await postBatchWithRetry("/api/discover/export", {
+            ids, format: "list", list_id: resolvedListId, list_name: resolvedListId ? null : listName,
+          });
+          if (!result.ok) {
+            setExportMsg({ ok: false, text: `${added.toLocaleString()} added, then failed: ${result.error}. Run the same add again to continue — already-added leads are skipped.` });
+            return;
+          }
+          const j = (result.json ?? {}) as { leads_added?: number; already_existed?: number; credits_used?: number; list_id?: string };
+          added   += j.leads_added     ?? 0;
+          existed += j.already_existed ?? 0;
+          if (!resolvedListId && j.list_id) resolvedListId = j.list_id;
+          if ((j.credits_used ?? 0) > 0) { setBalance(b => (b ?? 0) - (j.credits_used ?? 0)); emitCreditsChanged(); }
+          setBulkProgress(p => p ? { ...p, current: Math.min(added, target) } : p);
+          noProgressRounds = (j.leads_added ?? 0) > 0 ? 0 : noProgressRounds + 1;
+        } else {
+          noProgressRounds++;
+          // Give the workspace-email cache a moment to reflect the last batch
+          // before deciding the sweep is truly stalled.
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        // Exclusion caps at 20k workspace emails — beyond that, batches can
+        // return only already-imported leads forever. Bail after 4 stalls.
+        if (noProgressRounds >= 4) { done = true; break; }
+
+        const resumable = typeof data.next_comp_offset === "number";
+        if (!resumable) {
+          // Simple (non-chunked) query: exclusion alone paginates — switch to
+          // big batches and keep going until it returns nothing.
+          batchSize = 2500;
+          if (ids.length === 0) { done = true; break; }
+          continue;
+        }
+        if (data.done) { done = true; break; }
+        if (data.next_comp_offset! > offset) offset = data.next_comp_offset!;
+      }
+
+      let msg: string;
+      if (added > 0) {
+        msg = `${added.toLocaleString()} lead${added !== 1 ? "s" : ""} added`;
+        if (existed > 0) msg += ` · ${existed.toLocaleString()} already in your workspace`;
+        if (done && added + existed < target) msg += " — that's every available match for these filters";
+      } else {
+        msg = "No new leads found — everything matching these filters is already in your workspace.";
+      }
+      setExportMsg({ ok: added > 0, text: msg });
+      if (added > 0) { setSelected(new Set()); setSelectAllMode(false); setSelectNCount(null); }
+    } catch (e) {
+      setExportMsg({ ok: false, text: `${added.toLocaleString()} added, then failed: ${e instanceof Error ? e.message : "network error"}. Run the same add again to continue.` });
+    } finally { setExporting(false); setBulkProgress(null); }
+  }
+
   async function handleAddToList(listId: string | null, listName: string | null, overrideIds?: string[]) {
     // Close the modal before the (possibly slow) id collection so it never
     // hangs on "Adding…" — the progress banner takes over.
     setShowList(false); setListIds(null);
+    if (!overrideIds && (selectNCount !== null || selectAllMode)) {
+      await streamAddToList(listId, listName);
+      return;
+    }
     const allIds = await collectSelectedPeopleIds(overrideIds);
     if (allIds === null) return; // error already shown
     if (!allIds.length) {
