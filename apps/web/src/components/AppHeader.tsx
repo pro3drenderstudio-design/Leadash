@@ -90,7 +90,7 @@ export default function AppHeader({ userEmail, userName, workspaceName, plan, tr
 
   return (
     <header
-      className="flex-shrink-0 z-30 h-14 flex items-center px-4 lg:px-5 gap-3 lg:gap-4"
+      className="flex-shrink-0 z-50 h-14 flex items-center px-4 lg:px-5 gap-3 lg:gap-4"
       style={{
         backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
