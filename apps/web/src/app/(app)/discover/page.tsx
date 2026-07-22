@@ -1325,7 +1325,7 @@ function DiscoverContent() {
 
   const SELECT_ALL_CAP = 50_000;
 
-  async function fetchAllMatchingIds(limitOverride?: number): Promise<string[]> {
+  async function fetchAllMatchingIds(limitOverride?: number, onProgress?: (collected: number) => void): Promise<string[]> {
     const f = peopleFilters;
     const params = new URLSearchParams();
     if (f.keyword)                       params.set("q",               f.keyword);
@@ -1349,9 +1349,27 @@ function DiscoverContent() {
     params.set("email_status", f.emailStatus);
     if (f.netNew) params.set("net_new", "true");
     params.set("ids_only", "true");
-    params.set("limit", String(limitOverride ?? SELECT_ALL_CAP));
-    const data = await wsGet<{ ids?: string[]; results?: { id: string }[] }>(`/api/discover/search?${params}`);
-    return data.ids ?? (data.results ?? []).map(r => r.id);
+
+    // The server sweeps matching companies for ~35s per request and returns a
+    // resume cursor (next_comp_offset) — loop until we have enough ids or the
+    // sweep is done. Simple filter combos return everything in one round with
+    // done unset, which we treat as complete.
+    const target = limitOverride ?? SELECT_ALL_CAP;
+    const collected: string[] = [];
+    let compOffset = 0;
+    for (let round = 0; round < 60; round++) {
+      params.set("limit", String(target - collected.length));
+      if (compOffset > 0) params.set("comp_offset", String(compOffset));
+      const data = await wsGet<{ ids?: string[]; results?: { id: string }[]; next_comp_offset?: number; done?: boolean }>(`/api/discover/search?${params}`);
+      const ids = data.ids ?? (data.results ?? []).map(r => r.id);
+      collected.push(...ids);
+      onProgress?.(collected.length);
+      const resumable = typeof data.next_comp_offset === "number";
+      if (!resumable || data.done || collected.length >= target) break;
+      if (data.next_comp_offset! <= compOffset) break; // safety: no forward progress
+      compOffset = data.next_comp_offset!;
+    }
+    return collected;
   }
 
   // Safe wrapper around the ids-only fetch: shows a progress banner while the
@@ -1376,8 +1394,9 @@ function DiscoverContent() {
     if (selectNCount === null && !selectAllMode) return Array.from(selected);
     const n = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
     const stop = startSelectionEstimate(n);
+    const onProgress = (c: number) => setBulkProgress(p => p && p.label === "Selecting" ? { ...p, current: Math.max(p.current, c) } : p);
     try {
-      return selectNCount !== null ? await fetchAllMatchingIds(selectNCount) : await fetchAllMatchingIds();
+      return selectNCount !== null ? await fetchAllMatchingIds(selectNCount, onProgress) : await fetchAllMatchingIds(undefined, onProgress);
     } catch (e) {
       setExportMsg({ ok: false, text: `Couldn't select the matching leads — ${e instanceof Error ? e.message : "please retry"}. Try fewer filters or a smaller count.` });
       return null;
@@ -1526,7 +1545,13 @@ function DiscoverContent() {
     // spinners never hang on a failure — the progress banner takes over.
     setShowCampaign(false); setCampaignIds(null); setShowList(false); setListIds(null);
     const allIds = await collectSelectedPeopleIds(overrideIds);
-    if (!allIds?.length) return;
+    if (allIds === null) return; // error already shown
+    if (!allIds.length) {
+      setExportMsg({ ok: false, text: peopleFilters.netNew
+        ? "No new leads found — everything matching these filters is already in your lists."
+        : "No matching leads found for these filters." });
+      return;
+    }
     setExporting(true); setExportMsg(null);
     const EXPORT_BATCH = 2500;
     try {
@@ -1622,7 +1647,13 @@ function DiscoverContent() {
     // hangs on "Adding…" — the progress banner takes over.
     setShowList(false); setListIds(null);
     const allIds = await collectSelectedPeopleIds(overrideIds);
-    if (!allIds?.length) return;
+    if (allIds === null) return; // error already shown
+    if (!allIds.length) {
+      setExportMsg({ ok: false, text: peopleFilters.netNew
+        ? "No new leads found — everything matching these filters is already in your lists."
+        : "No matching leads found for these filters." });
+      return;
+    }
     setExporting(true); setExportMsg(null);
     const EXPORT_BATCH = 2500;
     if (allIds.length > EXPORT_BATCH) setBulkProgress({ current: 0, total: allIds.length, label: "Adding" });

@@ -8,10 +8,11 @@ import {
 } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
-// ids_only bulk selection can legitimately run for minutes on heavy filter
-// combos (see the chunked company-driven collector below); normal searches
-// still bail at the DB statement_timeout long before this.
-export const maxDuration = 300;
+// ids_only bulk selection sweeps companies for up to ~35s per request and
+// resumes via comp_offset (see the chunked collector below); 120 leaves
+// headroom for the final chunk + retries. Normal searches bail at the DB
+// statement_timeout long before this.
+export const maxDuration = 120;
 
 const CREDITS_PER_LEAD = 0.5;
 const DEFAULT_LIMIT    = 25;
@@ -380,11 +381,14 @@ export async function GET(req: NextRequest) {
       // that cannot early-terminate under LIMIT and hit statement_timeout.
       // Instead: fetch the matching company ids first (cheap trigram/btree,
       // ~1s even at 50k), then probe people in small company batches — each
-      // statement is a fast company_idx bitmap probe with LIMIT early-exit —
-      // until enough ids are collected or the time budget runs out. Text
-      // predicates use per-row ILIKE here (cheap on the small probed sets)
-      // rather than FTS, which is close enough for bulk selection.
+      // statement is a fast company_idx bitmap probe with LIMIT early-exit.
+      // The sweep is RESUMABLE: each request processes companies for at most
+      // ~35s from `comp_offset` and returns `next_comp_offset` + `done`, and
+      // the client loops until it has enough ids or every company was swept.
+      // Text predicates use per-row ILIKE here (cheap on the small probed
+      // sets) rather than FTS, which is close enough for bulk selection.
       if (hasCompanyFilter) {
+        const compOffset = Math.max(0, parseInt(p.get("comp_offset") || "0"));
         const compConds: string[] = [];
         const compParams: unknown[] = [];
         let ci = 1;
@@ -408,12 +412,14 @@ export async function GET(req: NextRequest) {
           compConds.push(`NOT (${companyKeywordExcludes.map(() => `c.keywords ILIKE $${ci++}`).join(" OR ")})`);
           compParams.push(...companyKeywordExcludes.map(v => `%${v}%`));
         }
+        // ORDER BY id keeps the sweep order deterministic across resumed
+        // requests — without it, comp_offset would index into a different set.
         const compRows = await leadsDb.unsafe<{ id: string }[]>(
-          `SELECT c.id FROM discover_companies c WHERE ${compConds.join(" AND ")} LIMIT 50000`,
+          `SELECT c.id FROM discover_companies c WHERE ${compConds.join(" AND ")} ORDER BY c.id LIMIT 50000`,
           compParams as never[],
         );
         const compIds = compRows.map(r => r.id);
-        if (!compIds.length) return NextResponse.json({ ids: [] });
+        if (compOffset >= compIds.length) return NextResponse.json({ ids: [], next_comp_offset: compIds.length, companies_total: compIds.length, done: true });
 
         // People-side WHERE — $1 is reserved for the per-chunk company-id array.
         const pConds: string[] = [`p.company_id = ANY($1::uuid[])`];
@@ -491,11 +497,12 @@ export async function GET(req: NextRequest) {
         // A chunk that times out is retried once at half size before being
         // skipped, so a few oversized companies can't sink the whole selection.
         const CHUNK = 300;
-        const BUDGET_MS = 240_000;
+        const BUDGET_MS = 35_000;
         const started = Date.now();
         const collected: string[] = [];
         let failedChunks = 0;
-        for (let s = 0; s < compIds.length && collected.length < limit && Date.now() - started < BUDGET_MS; s += CHUNK) {
+        let s = compOffset;
+        for (; s < compIds.length && collected.length < limit && Date.now() - started < BUDGET_MS; s += CHUNK) {
           const batch = compIds.slice(s, s + CHUNK);
           const remaining = limit - collected.length;
           const firstTry = await leadsDb.unsafe<{ id: string }[]>(chunkSql, [batch, ...pParams, remaining] as never[])
@@ -520,12 +527,20 @@ export async function GET(req: NextRequest) {
             collected.push(r.id);
           }
         }
-        if (!collected.length && failedChunks > 0) {
+        // A first round where every chunk failed is systemic — surface it.
+        // Later rounds return their cursor even when empty (normal during
+        // net-new sweeps over already-imported companies).
+        if (!collected.length && failedChunks > 0 && compOffset === 0) {
           return NextResponse.json({
             error: "This selection is too heavy for the current filters. Try fewer filters or a smaller count.",
           }, { status: 500 });
         }
-        return NextResponse.json({ ids: collected });
+        return NextResponse.json({
+          ids:              collected,
+          next_comp_offset: s,
+          companies_total:  compIds.length,
+          done:             s >= compIds.length,
+        });
       }
 
       const idSql = `
