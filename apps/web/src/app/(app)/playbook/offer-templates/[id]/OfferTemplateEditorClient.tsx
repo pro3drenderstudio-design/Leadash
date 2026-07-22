@@ -70,6 +70,26 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
   const [ctaKind, setCtaKind] = useState<"book_call" | "reply" | "link">("book_call");
   const [ctaLabel, setCtaLabel] = useState("");
 
+  // AI assistant
+  interface AiOffer { name: string; angle: string; what: string; value_prop: string; proof: string; guarantee: string; price_label: string; cta_kind: "book_call" | "reply" | "link"; cta_label: string }
+  const [aiOpen, setAiOpen]           = useState(false);
+  const [aiIcps, setAiIcps]           = useState<Array<{ id: string; name: string }>>([]);
+  const [aiIcpId, setAiIcpId]         = useState("");
+  const [aiService, setAiService]     = useState("");
+  const [aiPrice, setAiPrice]         = useState("");
+  const [aiLoading, setAiLoading]     = useState(false);
+  const [aiError, setAiError]         = useState("");
+  const [aiOffers, setAiOffers]       = useState<AiOffer[]>([]);
+
+  useEffect(() => {
+    if (!aiOpen || aiIcps.length) return;
+    wsFetch("/api/playbook/icps").then((r: Response) => r.json() as Promise<{ icps?: Array<{ id: string; name: string }> }>).then(d => {
+      const list = (d.icps ?? []).map(i => ({ id: i.id, name: i.name }));
+      setAiIcps(list);
+      if (list.length === 1) setAiIcpId(list[0].id);
+    }).catch(() => {});
+  }, [aiOpen, aiIcps.length]);
+
   useEffect(() => {
     wsFetch(`/api/playbook/offer-templates/${id}`).then((r: Response) => r.json() as Promise<{ offer_template?: OfferTemplate }>).then(d => {
       if (!d.offer_template) return;
@@ -100,6 +120,36 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
     } finally { setSaving(false); }
   }
 
+  async function generateOffers() {
+    if (!aiIcpId || !aiService.trim()) { setAiError("Pick an ICP and describe your service or skillset."); return; }
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await wsFetch("/api/playbook/offer-templates/ai-suggest", {
+        method: "POST",
+        body: JSON.stringify({ icp_id: aiIcpId, service: aiService, price_hint: aiPrice || undefined }),
+      });
+      const data = await res.json() as { offers?: AiOffer[]; error?: string };
+      if (!res.ok || !data.offers?.length) throw new Error(data.error ?? "AI suggestion failed");
+      setAiOffers(data.offers);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI suggestion failed");
+    } finally { setAiLoading(false); }
+  }
+
+  function applyAiOffer(o: AiOffer) {
+    setName(o.name);
+    setWhat(o.what);
+    setValueProp(o.value_prop);
+    setProof(o.proof);
+    setGuarantee(o.guarantee);
+    setPriceLabel(o.price_label);
+    setCtaKind(o.cta_kind);
+    setCtaLabel(o.cta_label);
+    setAiOpen(false);
+    showToast("Offer applied — review, tweak, then Save");
+  }
+
   async function deleteOffer() {
     if (!confirm("Delete this offer template?")) return;
     await wsFetch(`/api/playbook/offer-templates/${id}`, { method: "DELETE" });
@@ -121,6 +171,7 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {toast && <span style={{ fontSize: 12, color: "#34D399", alignSelf: "center" }}>{toast}</span>}
+          <button onClick={() => { setAiError(""); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ Suggest with AI</button>
           <button onClick={deleteOffer} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
             {saving ? "Saving…" : "Save"}
@@ -202,6 +253,78 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
           </button>
         </div>
       </div>
+
+      {/* AI assistant modal */}
+      {aiOpen && (
+        <div onClick={() => !aiLoading && setAiOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-bg, #16161a)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24, width: "100%", maxWidth: aiOffers.length ? 680 : 520, maxHeight: "90vh", overflowY: "auto" }}>
+            {aiOffers.length === 0 ? (
+              <>
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>✨ Suggest offers with AI</h3>
+                <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
+                  Choose which ICP this offer is for and describe your skillset. The AI suggests 10 offers across proven angles — pick one to start from.
+                </p>
+
+                <label style={labelStyle}>Which ICP is this for?</label>
+                {aiIcps.length === 0 ? (
+                  <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 14 }}>
+                    You don&apos;t have an ICP yet — <a href="/playbook" style={{ color: "#A78BFA" }}>create one first</a> (there&apos;s an AI helper there too).
+                  </p>
+                ) : (
+                  <select value={aiIcpId} onChange={e => setAiIcpId(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }}>
+                    <option value="">Select an ICP…</option>
+                    {aiIcps.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                )}
+
+                <label style={labelStyle}>Your skillset / service</label>
+                <textarea
+                  value={aiService}
+                  onChange={e => setAiService(e.target.value)}
+                  placeholder="e.g. I build websites and landing pages, comfortable with Figma and Framer"
+                  style={{ ...inputStyle, minHeight: 70, resize: "vertical", lineHeight: 1.5, marginBottom: 14 }}
+                />
+
+                <label style={labelStyle}>Pricing thoughts <span style={{ textTransform: "none" }}>(optional)</span></label>
+                <input style={{ ...inputStyle, marginBottom: 18 }} value={aiPrice} onChange={e => setAiPrice(e.target.value)} placeholder="e.g. Around ₦300k per project, open to retainers" />
+
+                {aiError && <p style={{ fontSize: 12, color: "var(--app-danger)", marginBottom: 12 }}>{aiError}</p>}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button onClick={() => setAiOpen(false)} disabled={aiLoading} style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text-muted)", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  <button onClick={generateOffers} disabled={aiLoading || aiIcps.length === 0} style={{ background: "#A78BFA", color: "#1a1025", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: aiLoading || aiIcps.length === 0 ? 0.6 : 1 }}>
+                    {aiLoading ? "Crafting 10 offers… (~30s)" : "Suggest 10 offers"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700 }}>Pick an offer to start from</h3>
+                  <button onClick={() => setAiOffers([])} style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text-muted)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>← Change inputs</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {aiOffers.map((o, i) => (
+                    <div key={i} style={{ border: "1px solid var(--app-border)", borderRadius: 10, padding: 14, background: "var(--app-surface)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.name}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#A78BFA", background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>{o.angle}</span>
+                        </div>
+                        <button onClick={() => applyAiOffer(o)} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Use this</button>
+                      </div>
+                      <p style={{ fontSize: 13, color: "var(--app-text)", lineHeight: 1.5, marginBottom: 6 }}>{o.value_prop}</p>
+                      <p style={{ fontSize: 11.5, color: "var(--app-text-muted)", lineHeight: 1.5 }}>
+                        {o.what} · <b>{o.price_label}</b>{o.guarantee ? <> · Guarantee: {o.guarantee}</> : null}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

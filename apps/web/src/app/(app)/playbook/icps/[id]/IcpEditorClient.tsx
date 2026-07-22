@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { wsFetch } from "@/lib/workspace/client";
+import { INDUSTRY_OPTIONS, COMPANY_SIZE_OPTIONS } from "@/types/discover";
 
 interface Icp {
   id: string;
@@ -123,6 +124,15 @@ export default function IcpEditorClient({ id }: { id: string }) {
   const [objections, setObjections] = useState<string[]>([]);
   const [tone, setTone] = useState("");
 
+  // AI assistant
+  const [aiOpen, setAiOpen]         = useState(false);
+  const [aiIndustry, setAiIndustry] = useState("");
+  const [aiService, setAiService]   = useState("");
+  const [aiGeo, setAiGeo]           = useState("");
+  const [aiSize, setAiSize]         = useState("");
+  const [aiLoading, setAiLoading]   = useState(false);
+  const [aiError, setAiError]       = useState("");
+
   useEffect(() => {
     wsFetch(`/api/playbook/icps/${id}`).then((r: Response) => r.json() as Promise<{ icp?: Icp }>).then(d => {
       if (!d.icp) return;
@@ -157,6 +167,35 @@ export default function IcpEditorClient({ id }: { id: string }) {
     } finally { setSaving(false); }
   }
 
+  async function generateWithAi() {
+    if (!aiIndustry || !aiService.trim()) { setAiError("Pick an industry and describe your service."); return; }
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await wsFetch("/api/playbook/icps/ai-suggest", {
+        method: "POST",
+        body: JSON.stringify({ industry: aiIndustry, service: aiService, geography: aiGeo || undefined, company_size: aiSize || undefined }),
+      });
+      const data = await res.json() as { suggestion?: { name: string; industry: string; company_size: string; geography: string; roles: string; pains: string[]; goals: string[]; triggers: string[]; objections: string[]; tone: string }; error?: string };
+      if (!res.ok || !data.suggestion) throw new Error(data.error ?? "AI suggestion failed");
+      const s = data.suggestion;
+      setName(s.name);
+      setIndustry(s.industry);
+      setCompanySize(s.company_size);
+      setGeography(s.geography);
+      setRoles(s.roles);
+      setPains(s.pains);
+      setGoals(s.goals);
+      setTriggers(s.triggers);
+      setObjections(s.objections);
+      setTone(s.tone);
+      setAiOpen(false);
+      showToast("Draft ready — review, tweak, then Save");
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI suggestion failed");
+    } finally { setAiLoading(false); }
+  }
+
   async function deleteIcp() {
     if (!confirm("Delete this ICP? This cannot be undone.")) return;
     setDeleting(true);
@@ -185,6 +224,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {toast && <span style={{ fontSize: 12, color: "#34D399", alignSelf: "center" }}>{toast}</span>}
+          <button onClick={() => { setAiError(""); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ Create with AI</button>
           <button onClick={deleteIcp} disabled={deleting} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
             {saving ? "Saving…" : "Save"}
@@ -261,6 +301,60 @@ export default function IcpEditorClient({ id }: { id: string }) {
           </button>
         </div>
       </div>
+
+      {/* AI assistant modal */}
+      {aiOpen && (
+        <div onClick={() => !aiLoading && setAiOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-bg, #16161a)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>✨ Create your ICP with AI</h3>
+            <p style={{ fontSize: 12, color: "var(--app-text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
+              Pick the industry you want to sell to and describe what you offer. The AI drafts a complete profile — you review and adjust before saving.
+            </p>
+
+            <label style={labelStyle}>Industry you&apos;re targeting</label>
+            <select value={aiIndustry} onChange={e => setAiIndustry(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }}>
+              <option value="">Select an industry…</option>
+              {INDUSTRY_OPTIONS.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+
+            <label style={labelStyle}>What service do you offer?</label>
+            <textarea
+              value={aiService}
+              onChange={e => setAiService(e.target.value)}
+              placeholder="e.g. I design and rebuild websites that turn visitors into booked calls"
+              style={{ ...inputStyle, minHeight: 70, resize: "vertical", lineHeight: 1.5, marginBottom: 8 }}
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              {["I design websites", "I run Facebook & Instagram ads", "I edit short-form videos", "I build cold-email systems"].map(ex => (
+                <button key={ex} onClick={() => setAiService(ex)} style={{ fontSize: 11, background: "var(--app-surface-strong)", color: "var(--app-text-muted)", border: "1px solid var(--app-border)", borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>{ex}</button>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={labelStyle}>Geography <span style={{ textTransform: "none" }}>(optional)</span></label>
+                <input style={inputStyle} value={aiGeo} onChange={e => setAiGeo(e.target.value)} placeholder="Let AI decide" />
+              </div>
+              <div>
+                <label style={labelStyle}>Company size <span style={{ textTransform: "none" }}>(optional)</span></label>
+                <select value={aiSize} onChange={e => setAiSize(e.target.value)} style={inputStyle}>
+                  <option value="">Let AI decide</option>
+                  {COMPANY_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} employees</option>)}
+                </select>
+              </div>
+            </div>
+
+            {aiError && <p style={{ fontSize: 12, color: "var(--app-danger)", marginBottom: 12 }}>{aiError}</p>}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setAiOpen(false)} disabled={aiLoading} style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text-muted)", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+              <button onClick={generateWithAi} disabled={aiLoading} style={{ background: "#A78BFA", color: "#1a1025", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: aiLoading ? 0.6 : 1 }}>
+                {aiLoading ? "Thinking… (~20s)" : "Generate ICP"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
