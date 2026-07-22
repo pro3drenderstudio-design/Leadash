@@ -495,7 +495,7 @@ export async function GET(req: NextRequest) {
           LIMIT $${pi}
         `;
 
-        // Chunk sizing is bounded by the pool's 25s statement_timeout: a
+        // Chunk sizing is bounded by the pool's statement_timeout (40s): a
         // 300-company probe measured ~11-18s cold on the heaviest real filter
         // combo (large US companies, cold page cache). Chunks run sequentially —
         // concurrent chunks compete for disk I/O and both breach the timeout.

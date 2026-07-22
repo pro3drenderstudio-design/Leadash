@@ -12,17 +12,18 @@ function client(): ReturnType<typeof postgres> {
     connect_timeout: 10,
     prepare:         false,
     ssl:             false,
-    // Startup parameters applied to every connection in this pool. The 25s
-    // statement_timeout means a runaway search on discover_people (559M rows)
-    // fails deterministically with SQLSTATE 57014 — which /discover/search
-    // now classifies as 504 "narrow your filters" — instead of hanging until
-    // PgBouncer eventually kills it and surfaces as a generic error. The row
-    // query races a 12s count in Promise.all, so 25s leaves comfortable
-    // headroom for the actual data pull.
-    // Cast to allow string GUC values ("25s") — postgres.js typings insist on
+    // Startup parameters applied to every connection in this pool. The
+    // statement_timeout means a runaway search on discover_people fails
+    // deterministically with SQLSTATE 57014 — which /discover/search classifies
+    // as 504 "narrow your filters" — instead of hanging until PgBouncer kills
+    // it. Raised 25s→40s: the working set (265GB) far exceeds RAM (47GB), so
+    // cold-cache searches that hit disk need more headroom to finish rather
+    // than false-fail. Once discover_people is slimmed to email-having rows
+    // (~90GB, fits cache) this can drop back down.
+    // Cast to allow string GUC values ("40s") — postgres.js typings insist on
     // number for the connection object, but Postgres itself accepts either.
     connection: {
-      statement_timeout:                   "25s",
+      statement_timeout:                   "40s",
       idle_in_transaction_session_timeout: "60s",
       application_name:                    "leadash-web",
     } as unknown as Record<string, number>,
