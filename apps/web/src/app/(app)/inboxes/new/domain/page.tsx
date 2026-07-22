@@ -4,10 +4,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceId } from "@/lib/workspace/client";
 import { useCurrency } from "@/lib/currency";
-import { countryOptions } from "@/lib/countries";
-
-const COUNTRY_OPTIONS = countryOptions();
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RegistrantStatus {
@@ -95,60 +91,8 @@ export default function BuyDomainPage() {
 
   const [step, setStep]   = useState<Step>(returnedIdList.length > 0 ? "provisioning" : "search");
 
-  // ── Registrant check ────────────────────────────────────────────────────────
-  const [registrantComplete, setRegistrantComplete] = useState<boolean | null>(null);
-  const [showRegistrantModal, setShowRegistrantModal] = useState(false);
-  const [registrant, setRegistrant] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (step === "provisioning") return; // don't block post-payment
-    const wsId = getWorkspaceId() ?? "";
-    fetch("/api/outreach/settings", { headers: { "x-workspace-id": wsId } })
-      .then(r => r.json())
-      .then((data: Record<string, string>) => {
-        const complete = !!(data.registrant_first_name && data.registrant_email && data.registrant_address);
-        setRegistrantComplete(complete);
-        setRegistrant({
-          registrant_first_name: data.registrant_first_name ?? "",
-          registrant_last_name:  data.registrant_last_name  ?? "",
-          registrant_email:      data.registrant_email      ?? "",
-          registrant_phone:      data.registrant_phone      ?? "",
-          registrant_address:    data.registrant_address    ?? "",
-          registrant_city:       data.registrant_city       ?? "",
-          registrant_state:      data.registrant_state      ?? "",
-          registrant_zip:        data.registrant_zip        ?? "",
-          registrant_country:    data.registrant_country    ?? "",
-        });
-      })
-      .catch(() => setRegistrantComplete(true)); // don't block on error
-  }, [step]);
-
-  const [savingRegistrant, setSavingRegistrant] = useState(false);
-  const [registrantError, setRegistrantError]   = useState<string | null>(null);
-  async function saveRegistrant() {
-    // Minimal required fields for ICANN registration.
-    const required = ["registrant_first_name", "registrant_last_name", "registrant_email", "registrant_phone", "registrant_address", "registrant_city", "registrant_country"];
-    for (const k of required) {
-      if (!registrant[k]?.trim()) { setRegistrantError("Please fill in all required fields."); return; }
-    }
-    setSavingRegistrant(true);
-    setRegistrantError(null);
-    try {
-      const wsId = getWorkspaceId() ?? "";
-      const res = await fetch("/api/outreach/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
-        body: JSON.stringify(registrant),
-      });
-      if (!res.ok) throw new Error("Could not save registrant details");
-      setRegistrantComplete(true);
-      setShowRegistrantModal(false);
-    } catch (e) {
-      setRegistrantError(e instanceof Error ? e.message : "Could not save");
-    } finally {
-      setSavingRegistrant(false);
-    }
-  }
+  // Registrant info is no longer collected from users — Leadash registers all
+  // domains under its own company WHOIS contact (see the provision worker).
 
   // ── Step 1: Search ──────────────────────────────────────────────────────────
   const [searchMode, setSearchMode]       = useState<"search" | "bulk">("search");
@@ -473,84 +417,6 @@ export default function BuyDomainPage() {
               {i < 2 && <div className="w-8 h-px bg-white/10" />}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ── Registrant info banner ───────────────────────────────────────────── */}
-      {step !== "provisioning" && registrantComplete === false && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/25 mb-6">
-          <span className="text-amber-400 text-lg flex-shrink-0 mt-0.5">⚠</span>
-          <div className="flex-1">
-            <p className="text-amber-300 text-sm font-medium">Registrant info required</p>
-            <p className="text-amber-300/60 text-xs mt-0.5">
-              You need to fill in your domain registrant contact details before purchasing a domain.
-              This is required by ICANN and used only once per workspace.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowRegistrantModal(true)}
-            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            Fill in now →
-          </button>
-        </div>
-      )}
-
-      {/* ── Registrant modal ─────────────────────────────────────────────────── */}
-      {showRegistrantModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowRegistrantModal(false)}>
-          <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-white/10">
-              <h2 className="text-white font-bold text-base">Domain registrant details</h2>
-              <p className="text-white/40 text-xs mt-0.5">Required by ICANN to register a domain. Saved once per workspace.</p>
-            </div>
-            <div className="p-5 grid grid-cols-2 gap-3">
-              {([
-                ["registrant_first_name", "First name", true],
-                ["registrant_last_name",  "Last name", true],
-                ["registrant_email",      "Email", true],
-                ["registrant_phone",      "Phone (e.g. +2348012345678)", true],
-                ["registrant_address",    "Address", true],
-                ["registrant_city",       "City", true],
-                ["registrant_state",      "State / Region", false],
-                ["registrant_zip",        "ZIP / Postal code", false],
-                ["registrant_country",    "Country", true],
-              ] as [string, string, boolean][]).map(([key, label, req], i) => (
-                <div key={key} className={key === "registrant_address" ? "col-span-2" : ""}>
-                  <label className="block text-[11px] text-white/50 mb-1">{label}{req && <span className="text-orange-400"> *</span>}</label>
-                  {key === "registrant_country" ? (
-                    // Store the ISO 3166-1 alpha-2 code — registrars reject full
-                    // country names (e.g. "Nigeria" → must be "NG").
-                    <select
-                      value={registrant[key] ?? ""}
-                      onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-orange-500/50"
-                    >
-                      <option value="">Select country…</option>
-                      {COUNTRY_OPTIONS.map(o => (
-                        <option key={o.code} value={o.code}>{o.name} ({o.code})</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={registrant[key] ?? ""}
-                      onChange={e => setRegistrant(r => ({ ...r, [key]: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-orange-500/50"
-                      autoFocus={i === 0}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-            {registrantError && <p className="px-5 text-xs text-red-400 -mt-1 mb-2">{registrantError}</p>}
-            <div className="p-5 pt-2 flex justify-end gap-2">
-              <button onClick={() => setShowRegistrantModal(false)} className="px-4 py-2 text-sm text-white/50 hover:text-white/80">Cancel</button>
-              <button onClick={saveRegistrant} disabled={savingRegistrant}
-                className="px-5 py-2 text-sm font-semibold bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-lg transition-colors">
-                {savingRegistrant ? "Saving…" : "Save details"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -963,8 +829,7 @@ export default function BuyDomainPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleCheckout}
-              disabled={paying || registrantComplete === false}
-              title={registrantComplete === false ? "Fill in registrant info in Settings → Outreach first" : undefined}
+              disabled={paying}
               className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
             >
               {paying && <Spinner />}
