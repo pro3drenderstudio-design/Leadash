@@ -429,7 +429,8 @@ export async function PATCH(
     });
   }
 
-  const smtpSettings = getSmtpSettings();
+  const nodeConn = await loadNodeConn(ctx.db, domainRecord.postal_node_id);
+  const smtpSettings = getSmtpSettings(nodeConn);
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes) && domainRecord.mailbox_prefixes.length > 0
@@ -438,7 +439,7 @@ export async function PATCH(
 
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
-    const cred = await createSmtpCredential(domainRecord.domain, email).catch(err => {
+    const cred = await createSmtpCredential(domainRecord.domain, email, nodeConn).catch(err => {
       throw new Error(`Postal createSmtpCredential(${email}): ${err.message}`);
     });
     await ctx.db.from("outreach_inboxes").insert({
@@ -461,13 +462,14 @@ export async function PATCH(
       warmup_ends_at:       warmupEndsAt,
       first_name:          domainRecord.first_name ?? null,
       last_name:           domainRecord.last_name  ?? null,
+      postal_node_id:      domainRecord.postal_node_id ?? null,
     });
   }
 
   // Set up Postal inbound HTTP route so replies are forwarded to the webhook
   const appUrl = process.env.POSTAL_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
   const webhookUrl = `${appUrl}/api/outreach/inbound`;
-  await createInboundRoute(domainRecord.domain, webhookUrl).catch(() => {
+  await createInboundRoute(domainRecord.domain, webhookUrl, nodeConn).catch(() => {
     // Non-fatal
   });
 
