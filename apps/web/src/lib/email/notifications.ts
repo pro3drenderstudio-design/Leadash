@@ -1593,6 +1593,58 @@ export async function sendInboxDnsAlertEmail(opts: {
   await sendEmail({ to: opts.to, subject, html, text });
 }
 
+/**
+ * Ops-facing alert for a LEADASH-MANAGED domain whose DNS drifted. These
+ * domains have their DNS in our Cloudflare zone — the customer can't and
+ * shouldn't touch it — so the health check auto-republishes the records and
+ * notifies us (never the customer). Goes only to the Leadash owner inbox.
+ */
+export async function sendManagedDnsOpsAlert(opts: {
+  domain:       string;
+  workspaceId:  string;
+  failures:     string[];
+  republished:  boolean;
+  cause?:       string;
+}): Promise<void> {
+  const subject = opts.cause
+    ? `[Leadash OPS] ${opts.domain} — registrar/DNS action needed`
+    : `[Leadash OPS] Managed-domain DNS drift: ${opts.domain}${opts.republished ? " (auto-republished)" : " (republish FAILED)"}`;
+  const causeBlock = opts.cause
+    ? `<p style="font-size:13px;font-weight:700;margin:0 0 8px;color:#dc2626">Diagnosed cause:</p>
+       <p style="font-size:13px;color:#4b5563;margin:0 0 16px;line-height:1.6">${opts.cause}</p>`
+    : "";
+  const failList = opts.failures.map(f => `<li style="font-family:monospace;font-size:13px;color:#991b1b;margin-bottom:4px">${f}</li>`).join("");
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#374151">
+  <div style="background:#1c1917;padding:20px 28px;border-radius:12px 12px 0 0">
+    <span style="font-size:18px;font-weight:800;color:#fff">Leadash</span>
+    <p style="color:#9ca3af;font-size:12px;margin:4px 0 0">Managed DNS — Ops Alert</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px">
+    <p style="font-size:15px;font-weight:700;margin:0 0 4px;color:${opts.republished ? "#b45309" : "#dc2626"}">
+      ${opts.republished ? "DNS drift auto-healed" : "DNS republish FAILED — needs manual fix"}
+    </p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 16px">
+      Leadash-managed domain <strong>${opts.domain}</strong> (workspace <code>${opts.workspaceId}</code>) failed its DNS health check.
+      ${opts.cause
+        ? "See the diagnosed cause below. The customer was NOT alerted and their inboxes were left running."
+        : opts.republished
+          ? "We re-published the stored records to Cloudflare automatically; it should recover on the next check. The customer was NOT alerted and inboxes were left running."
+          : "Auto-republish to Cloudflare failed — check the zone in Cloudflare (nameservers, zone status, expiry). The customer was NOT alerted."}
+    </p>
+    ${causeBlock}
+    <p style="font-size:13px;font-weight:600;margin:0 0 8px;color:#374151">Checks failing:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;line-height:1.8">${failList}</ul>
+  </div>
+</div>`;
+  const text = [
+    `Managed-domain DNS drift: ${opts.domain} (workspace ${opts.workspaceId})`,
+    opts.republished ? `Auto-republished to Cloudflare — customer NOT alerted.` : `REPUBLISH FAILED — manual Cloudflare fix needed. Customer NOT alerted.`,
+    ``, `Checks failing:`, ...opts.failures.map(f => `  • ${f}`),
+  ].join("\n");
+  await sendEmail({ to: OWNER_EMAIL, subject, html, text });
+}
+
 export async function sendInboxDnsAdvisoryEmail(opts: {
   to:       string;
   domain:   string;

@@ -58,6 +58,7 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
   const router = useRouter();
   const [offer, setOffer] = useState<OfferTemplate | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [toast, setToast] = useState("");
 
   const [name, setName] = useState("");
@@ -117,6 +118,8 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
         body: JSON.stringify({ name, price_label: priceLabel || null, what: what || null, value_prop: valueProp || null, proof: proof || null, guarantee: guarantee || null, case_snippets: caseSnippets, cta_kind: ctaKind, cta_label: ctaLabel || null }),
       });
       showToast("Saved");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } finally { setSaving(false); }
   }
 
@@ -174,7 +177,7 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
           <button onClick={() => { setAiError(""); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ Suggest with AI</button>
           <button onClick={deleteOffer} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         </div>
       </div>
@@ -249,7 +252,7 @@ export default function OfferTemplateEditorClient({ id }: { id: string }) {
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
-            {saving ? "Saving…" : "Save Offer Template"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save Offer Template"}
           </button>
         </div>
       </div>

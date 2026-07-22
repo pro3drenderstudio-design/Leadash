@@ -17,7 +17,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { findActiveSection, type NavTab } from "@/lib/nav/sections";
 
-const MAX_VISIBLE = 4;
+// Every section has at most 5 tabs (Outreach), so 5 keeps them all flat — no
+// nested "More" dropdown. Raise only if a section ever exceeds this.
+const MAX_VISIBLE = 5;
 
 function TabLabel({ tab, active }: { tab: NavTab; active: boolean }) {
   return (

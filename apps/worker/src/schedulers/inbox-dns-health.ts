@@ -1,4 +1,5 @@
 import { adminClient } from "../lib/supabase";
+import { publishDnsRecords } from "../lib/cloudflare";
 
 type DnsRecord = { name: string; type: string; value: string; priority?: number };
 
@@ -97,7 +98,7 @@ export async function runInboxDnsHealth(): Promise<void> {
 
   const { data: domains, error } = await db
     .from("outreach_domains")
-    .select("id, domain, workspace_id, dns_records, dns_ok, last_dns_alert_at")
+    .select("id, domain, workspace_id, dns_records, dns_ok, last_dns_alert_at, domain_source")
     .eq("status", "active")
     .not("dns_records", "is", null);
 
@@ -119,6 +120,54 @@ export async function runInboxDnsHealth(): Promise<void> {
     if (!ok) {
       const lastAlert = row.last_dns_alert_at ? new Date(row.last_dns_alert_at) : null;
       const shouldAlert = !lastAlert || lastAlert < new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // ── Leadash-MANAGED domain: WE own the DNS (Cloudflare zone). Never tell
+      //    the customer to fix it and never pause their inboxes over our own
+      //    infra. Auto-republish the stored records to Cloudflare (self-heal)
+      //    and alert ops instead. Recovers silently on the next check.
+      if (row.domain_source === "leadash") {
+        // Distinguish the real failure mode. When the registrar (Namecheap)
+        // suspends a domain for unverified WHOIS, it swaps the nameservers to
+        // its verification-hold servers and EVERY record disappears at once.
+        // Republishing to Cloudflare can't help — the domain isn't on our
+        // nameservers anymore. Detect it so ops gets the correct action.
+        const ns = await dohLookup(row.domain, "NS");
+        const whoisHold = ns.some(h => /whois|verify-contact|registrar-hold|suspend/i.test(h));
+
+        let republished = false;
+        if (whoisHold) {
+          console.error(`[dns-health] MANAGED ${row.domain} — REGISTRAR WHOIS HOLD (ns=${ns.join(",")}) — verify registrant email in Namecheap`);
+        } else {
+          try {
+            await publishDnsRecords(row.domain, expected as Parameters<typeof publishDnsRecords>[1]);
+            republished = true;
+            console.log(`[dns-health] MANAGED ${row.domain} — republished DNS to Cloudflare`);
+          } catch (e) {
+            console.error(`[dns-health] MANAGED ${row.domain} — republish FAILED:`, e instanceof Error ? e.message : e);
+          }
+        }
+        // Track drift internally; leave inboxes running (records re-propagating).
+        await db.from("outreach_domains")
+          .update({ dns_ok: false, ...(shouldAlert ? { last_dns_alert_at: new Date().toISOString() } : {}) })
+          .eq("id", row.id);
+        // Clear any stale customer-facing DNS error left on inboxes by older runs.
+        await db.from("outreach_inboxes")
+          .update({ status: "active", last_error: null })
+          .eq("workspace_id", row.workspace_id)
+          .ilike("email_address", `%@${row.domain}`)
+          .eq("status", "error");
+        if (shouldAlert) {
+          alerted++;
+          const { sendManagedDnsOpsAlert } = await import("../../../web/src/lib/email/notifications");
+          await sendManagedDnsOpsAlert({
+            domain: row.domain, workspaceId: row.workspace_id, failures, republished,
+            cause: whoisHold
+              ? `REGISTRAR WHOIS HOLD — Namecheap suspended the domain for unverified registrant email and moved its nameservers to ${ns.join(", ")}. Republishing DNS can't fix this. Action: verify the registrant email (leadash.official@gmail.com) via the Namecheap account, then the nameservers + records restore automatically.`
+              : undefined,
+          }).catch(e => console.error(`[dns-health] ops alert failed for ${row.domain}:`, e));
+        }
+        continue;
+      }
 
       await db
         .from("outreach_domains")
@@ -201,6 +250,13 @@ export async function runInboxDnsHealth(): Promise<void> {
         .eq("workspace_id", row.workspace_id)
         .ilike("email_address", `%@${row.domain}`)
         .eq("status", "error");
+
+      // Managed domains recover silently — the customer was never alerted, so a
+      // "recovered" email/push would only confuse them.
+      if (row.domain_source === "leadash") {
+        console.log(`[dns-health] MANAGED ${row.domain} — recovered silently`);
+        continue;
+      }
 
       const toEmail = await getWorkspaceEmail(db, row.workspace_id);
       if (toEmail) {

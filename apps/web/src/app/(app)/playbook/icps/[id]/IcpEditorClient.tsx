@@ -117,6 +117,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
   const router = useRouter();
   const [icp, setIcp] = useState<Icp | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState("");
 
@@ -176,6 +177,8 @@ export default function IcpEditorClient({ id }: { id: string }) {
         body: JSON.stringify({ name, industry: industry || null, company_size: companySize || null, geography: geography || null, roles: roles || null, customers: customers || null, pains, goals, triggers, objections, tone: tone || null }),
       });
       showToast("Saved");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } finally { setSaving(false); }
   }
 
@@ -271,7 +274,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
           <button onClick={findLeadsInDiscover} disabled={saving} title="Opens Discover pre-filtered with this ICP's industry, roles, size and geography" style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}>🔍 Find leads in Discover</button>
           <button onClick={deleteIcp} disabled={deleting} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         </div>
       </div>
@@ -353,7 +356,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
-            {saving ? "Saving…" : "Save ICP"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save ICP"}
           </button>
         </div>
       </div>
