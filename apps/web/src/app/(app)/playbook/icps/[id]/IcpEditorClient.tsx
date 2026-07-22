@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { wsFetch } from "@/lib/workspace/client";
 import { INDUSTRY_OPTIONS, COMPANY_SIZE_OPTIONS } from "@/types/discover";
+import { icpToDiscoverUrl } from "@/lib/playbook/discover-link";
 
 interface Icp {
   id: string;
@@ -167,6 +168,12 @@ export default function IcpEditorClient({ id }: { id: string }) {
     } finally { setSaving(false); }
   }
 
+  async function findLeadsInDiscover() {
+    // Persist current edits first so the ICP and the search stay in sync.
+    await save();
+    router.push(icpToDiscoverUrl({ industry, company_size: companySize, geography, roles }));
+  }
+
   async function generateWithAi() {
     if (!aiIndustry || !aiService.trim()) { setAiError("Pick an industry and describe your service."); return; }
     setAiLoading(true);
@@ -225,6 +232,7 @@ export default function IcpEditorClient({ id }: { id: string }) {
         <div style={{ display: "flex", gap: 8 }}>
           {toast && <span style={{ fontSize: 12, color: "#34D399", alignSelf: "center" }}>{toast}</span>}
           <button onClick={() => { setAiError(""); setAiOpen(true); }} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)", color: "#A78BFA", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>✨ Create with AI</button>
+          <button onClick={findLeadsInDiscover} disabled={saving} title="Opens Discover pre-filtered with this ICP's industry, roles, size and geography" style={{ background: "none", border: "1px solid var(--app-border)", color: "var(--app-text)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}>🔍 Find leads in Discover</button>
           <button onClick={deleteIcp} disabled={deleting} style={{ background: "none", border: "1px solid var(--app-danger)", color: "var(--app-danger)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           <button onClick={save} disabled={saving} style={{ background: "var(--app-accent)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.5 : 1 }}>
             {saving ? "Saving…" : "Save"}
