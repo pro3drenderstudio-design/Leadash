@@ -117,6 +117,18 @@ export default function ConnectDomainPage() {
   // subscription + BYO domain hosting are paid in a single checkout.
   const attachedPlan     = searchParams.get("plan");
   const attachedInterval = searchParams.get("interval") === "annual" ? "annual" : "monthly";
+  const [attachedPlanCfg, setAttachedPlanCfg] = useState<{ name: string; price_ngn: number; inbox_monthly_price_ngn: number } | null>(null);
+
+  useEffect(() => {
+    if (!attachedPlan) return;
+    fetch("/api/billing/plans")
+      .then(r => r.json())
+      .then((d: { plans?: Array<{ plan_id: string; name: string; price_ngn: number; inbox_monthly_price_ngn: number }> }) => {
+        const p = (d.plans ?? []).find(x => x.plan_id === attachedPlan);
+        if (p) setAttachedPlanCfg({ name: p.name, price_ngn: p.price_ngn, inbox_monthly_price_ngn: p.inbox_monthly_price_ngn });
+      })
+      .catch(() => {});
+  }, [attachedPlan]);
 
   useEffect(() => {
     const wsId = getWorkspaceId() ?? "";
@@ -161,6 +173,19 @@ export default function ConnectDomainPage() {
     const useCloudflare = searchParams.get("cf") === "1";
     const wsId          = getWorkspaceId() ?? "";
 
+    // Combined checkout (plan + BYO hosting): eager-activate the plan immediately
+    // on return so the user isn't left paywalled while the webhook catches up.
+    // Idempotent with the webhook. router.refresh() re-runs the (app) layout so
+    // its server-computed paywall reason clears now that the plan is active.
+    const returnedRef = searchParams.get("reference") || searchParams.get("trxref");
+    if (searchParams.get("combined") === "1" && returnedRef) {
+      fetch("/api/billing/combined-verify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
+        body:    JSON.stringify({ reference: returnedRef }),
+      }).then(() => router.refresh()).catch(() => {});
+    }
+
     setLoading(true);
     setError(null);
 
@@ -204,7 +229,13 @@ export default function ConnectDomainPage() {
     : [{ domain: domain.trim().toLowerCase(), price: 0 }];
 
   const totalInboxes   = activePrefixes.length * domainsForCheckout.length;
-  const monthlyNgn     = inboxPriceNgn * totalInboxes;
+  // With a plan attached, hosting is charged at the attached plan's inbox rate
+  // (the workspace's current — often free — plan rate would be wrong).
+  const effInboxPriceNgn = attachedPlan ? (attachedPlanCfg?.inbox_monthly_price_ngn ?? 2500) : inboxPriceNgn;
+  const monthlyNgn     = effInboxPriceNgn * totalInboxes;
+  // Mirrors combined-checkout: annual = 10× monthly (2 months free).
+  const planNgn        = attachedPlanCfg ? (attachedInterval === "annual" ? attachedPlanCfg.price_ngn * 10 : attachedPlanCfg.price_ngn) : 0;
+  const dueTodayNgn    = planNgn + monthlyNgn;
   const canConfigure   = activePrefixes.length > 0 &&
     (configMode === "single" ? !!domain.trim() : bulkDomains.length > 0);
 
@@ -623,13 +654,25 @@ export default function ConnectDomainPage() {
                 <span className="text-white text-sm">{totalInboxes}</span>
               </div>
             )}
+            {attachedPlan && (
+              <div className="border-t border-white/8 pt-3 flex justify-between items-center">
+                <span className="text-white/60 text-sm">{attachedPlanCfg?.name ?? attachedPlan} plan{attachedInterval === "annual" ? " (annual)" : ""}</span>
+                <span className="text-white text-sm font-semibold">{formatPrice(planNgn)}{attachedInterval === "annual" ? "/yr" : "/mo"}</span>
+              </div>
+            )}
             <div className="border-t border-white/8 pt-3 flex justify-between items-center">
-              <span className="text-white/60 text-sm">Monthly total</span>
+              <span className="text-white/60 text-sm">Inbox hosting</span>
               <div className="text-right">
                 <span className="text-white font-bold">{formatPrice(monthlyNgn)}/mo</span>
-                <p className="text-white/30 text-xs">{formatPrice(inboxPriceNgn)}/inbox × {totalInboxes} inbox{totalInboxes !== 1 ? "es" : ""}</p>
+                <p className="text-white/30 text-xs">{formatPrice(effInboxPriceNgn)}/inbox × {totalInboxes} inbox{totalInboxes !== 1 ? "es" : ""}</p>
               </div>
             </div>
+            {attachedPlan && (
+              <div className="border-t border-white/8 pt-3 flex justify-between items-center">
+                <span className="text-white/60 text-sm font-semibold">Due today</span>
+                <span className="text-orange-300 font-bold">{formatPrice(dueTodayNgn)}</span>
+              </div>
+            )}
             {(() => {
               const cap = domainCapacity(totalInboxes);
               return (
@@ -649,7 +692,7 @@ export default function ConnectDomainPage() {
 
           <div className="flex gap-3 p-4 rounded-xl bg-orange-500/8 border border-orange-500/20">
             <span className="text-orange-400 flex-shrink-0">ℹ</span>
-            <p className="text-orange-300/70 text-xs">No domain registration fee — you already own the domain{domainsForCheckout.length !== 1 ? "s" : ""}. This is only for the managed inbox subscription.</p>
+            <p className="text-orange-300/70 text-xs">No domain registration fee — you already own the domain{domainsForCheckout.length !== 1 ? "s" : ""}. {attachedPlan ? "One payment covers your plan and the managed inbox subscription." : "This is only for the managed inbox subscription."}</p>
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -660,7 +703,7 @@ export default function ConnectDomainPage() {
               disabled={loading}
               className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
             >
-              {loading ? "Redirecting…" : `Pay ₦${monthlyNgn.toLocaleString()}/mo →`}
+              {loading ? "Redirecting…" : attachedPlan ? `Pay ₦${dueTodayNgn.toLocaleString()} →` : `Pay ₦${monthlyNgn.toLocaleString()}/mo →`}
             </button>
             <button onClick={() => setStep("configure")} className="text-white/40 hover:text-white/70 text-sm transition-colors">Back</button>
           </div>
