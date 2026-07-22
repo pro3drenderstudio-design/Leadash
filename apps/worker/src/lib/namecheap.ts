@@ -157,6 +157,18 @@ function checkErrors(xml: string): void {
   }
 }
 
+/** True when the domain is already registered in OUR Namecheap account. */
+export async function isDomainOwned(domain: string): Promise<boolean> {
+  try {
+    const xml = await callApi("namecheap.domains.getinfo", { DomainName: domain });
+    // getinfo returns IsOwner="true" only for domains in our account; a domain
+    // we don't hold comes back Status="ERROR" with IsOwner="false".
+    return /IsOwner="true"/i.test(xml);
+  } catch {
+    return false;
+  }
+}
+
 export async function purchaseDomain(domain: string, registrant: RegistrantContact): Promise<void> {
   const [sld, ...tldParts] = domain.split(".");
   const tld = tldParts.join(".");
@@ -187,8 +199,21 @@ export async function purchaseDomain(domain: string, registrant: RegistrantConta
     }
   }
 
-  const xml = await callApi("namecheap.domains.create", extra);
-  checkErrors(xml);
+  try {
+    const xml = await callApi("namecheap.domains.create", extra);
+    checkErrors(xml);
+  } catch (err) {
+    // 3031166 "Domain name not available" also fires when a RETRY re-runs the
+    // purchase after a previous attempt already registered the domain for us
+    // (provisioning failed later in the pipeline). If we already own it, the
+    // purchase is done — continue instead of failing the whole provision.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("3031166") && await isDomainOwned(domain)) {
+      console.log(`[namecheap] ${domain} already registered in our account — skipping purchase`);
+      return;
+    }
+    throw err;
+  }
   console.log(`[namecheap] Registered ${domain}`);
 }
 
