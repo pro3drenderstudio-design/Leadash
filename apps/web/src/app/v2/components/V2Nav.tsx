@@ -146,7 +146,7 @@ export default function V2Nav() {
           <Link
             href="/login"
             style={{ fontSize: 13, color: "var(--v2-text-muted)" }}
-            className="hover:!text-white transition-colors hidden sm:inline-block"
+            className="hover:!text-white transition-colors inline-block whitespace-nowrap"
           >
             Sign in
           </Link>
