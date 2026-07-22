@@ -113,6 +113,11 @@ export default function ConnectDomainPage() {
   const searchParams = useSearchParams();
   const [inboxPriceNgn, setInboxPriceNgn] = useState(2500);
 
+  // When arriving from the billing pricing slider, a plan is attached so the
+  // subscription + BYO domain hosting are paid in a single checkout.
+  const attachedPlan     = searchParams.get("plan");
+  const attachedInterval = searchParams.get("interval") === "annual" ? "annual" : "monthly";
+
   useEffect(() => {
     const wsId = getWorkspaceId() ?? "";
     fetch("/api/outreach/pricing", { headers: { "x-workspace-id": wsId } })
@@ -218,18 +223,33 @@ export default function ConnectDomainPage() {
     const provider = "paystack";
     try {
       const wsId = getWorkspaceId() ?? "";
-      const res  = await fetch("/api/outreach/domains/checkout", {
+      // With a plan attached (from the billing slider), bundle the subscription +
+      // BYO domain hosting into one combined checkout so it's a single payment.
+      const endpoint = attachedPlan ? "/api/billing/combined-checkout" : "/api/outreach/domains/checkout";
+      const payload  = attachedPlan
+        ? {
+            plan_id:          attachedPlan,
+            interval:         attachedInterval,
+            domains:          domainsForCheckout,
+            mailbox_prefixes: activePrefixes,
+            first_name:       firstName || undefined,
+            last_name:        lastName  || undefined,
+            connect_only:     true,
+            cf_auto:          configMode === "single" && cfInAccount,
+          }
+        : {
+            domains:          domainsForCheckout,
+            mailbox_prefixes: activePrefixes,
+            first_name:       firstName || undefined,
+            last_name:        lastName  || undefined,
+            payment_provider: provider,
+            connect_only:     true,
+            cf_auto:          configMode === "single" && cfInAccount,
+          };
+      const res  = await fetch(endpoint, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "x-workspace-id": wsId },
-        body: JSON.stringify({
-          domains:          domainsForCheckout,
-          mailbox_prefixes: activePrefixes,
-          first_name:       firstName || undefined,
-          last_name:        lastName  || undefined,
-          payment_provider: provider,
-          connect_only:     true,
-          cf_auto:          configMode === "single" && cfInAccount,
-        }),
+        body:    JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Checkout failed");
@@ -326,6 +346,13 @@ export default function ConnectDomainPage() {
             <h1 className="text-xl font-bold text-white mb-1">Connect your domain</h1>
             <p className="text-white/40 text-sm">Already have a domain? Connect it and we&apos;ll configure email authentication for you.</p>
           </div>
+
+          {attachedPlan && (
+            <div className="px-4 py-3 bg-orange-500/10 border border-orange-500/25 rounded-xl">
+              <p className="text-sm text-orange-200 font-semibold">Your plan + inbox hosting are paid together in one checkout</p>
+              <p className="text-xs text-orange-200/60 mt-0.5">No domain purchase — you&apos;re bringing your own. We only charge your subscription and monthly inbox hosting.</p>
+            </div>
+          )}
 
           {/* Single / Bulk mode toggle */}
           <div className="flex gap-1 p-1 bg-white/5 border border-white/8 rounded-xl w-fit">

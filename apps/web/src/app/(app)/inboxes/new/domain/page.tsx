@@ -424,7 +424,30 @@ export default function BuyDomainPage() {
       {step === "search" && (
         <div>
           <h1 className="text-xl font-bold text-white mb-1">Find a sending domain</h1>
-          <p className="text-white/40 text-sm mb-6">Choose a domain dedicated to cold outreach — never use your main company domain.</p>
+          <p className="text-white/40 text-sm mb-4">Choose a domain dedicated to cold outreach — never use your main company domain.</p>
+
+          {/* Bring-your-own-domain — carries the attached plan so it's still one payment */}
+          {!isMicrosoft && (
+            <Link
+              href={`/inboxes/new/connect-domain${
+                (() => {
+                  const p = new URLSearchParams();
+                  if (attachedPlan) p.set("plan", attachedPlan);
+                  if (attachedPlan) p.set("interval", attachedInterval);
+                  if (attachedInboxes) p.set("inboxes", String(attachedInboxes));
+                  const s = p.toString();
+                  return s ? `?${s}` : "";
+                })()
+              }`}
+              className="mb-6 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/10 hover:border-white/25 bg-white/[0.03] hover:bg-white/[0.06] transition-colors group"
+            >
+              <span className="text-sm">
+                <span className="text-white/80 font-medium">Already own a domain? Connect it instead</span>
+                <span className="block text-xs text-white/40 mt-0.5">Skip the purchase — bring your own domain{attachedPlan ? " and still pay for everything in one checkout." : "."}</span>
+              </span>
+              <span className="text-white/30 group-hover:text-white/70 transition-colors flex-shrink-0">→</span>
+            </Link>
+          )}
 
           {/* Mode tabs */}
           <div className="flex gap-1 bg-white/6 rounded-lg p-0.5 mb-5 w-fit">

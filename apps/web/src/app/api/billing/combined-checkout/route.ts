@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
     last_name?:       string;
     redirect_url?:    string;
     reply_forward_to?: string;
+    connect_only?:    boolean; // BYO domain — user already owns it, no registration
+    cf_auto?:         boolean; // single-domain Cloudflare auto-config on return
   };
 
   const isAnnual = body.interval === "annual";
@@ -72,7 +74,9 @@ export async function POST(req: NextRequest) {
   let totalOneTimeUsd = 0;
 
   for (const d of body.domains) {
-    const regUsd = d.price > 0 ? d.price + await domainMarkupUsd(d.price) : 0;
+    // BYO/connect domains are never charged a registration fee.
+    const priceUsd = body.connect_only ? 0 : d.price;
+    const regUsd = priceUsd > 0 ? priceUsd + await domainMarkupUsd(priceUsd) : 0;
     totalOneTimeUsd += regUsd;
 
     const { data: existing } = await db.from("outreach_domains")
@@ -90,8 +94,8 @@ export async function POST(req: NextRequest) {
       last_name:        body.last_name ?? null,
       daily_send_limit: 30,
       payment_provider: "paystack",
-      domain_price_usd: d.price,
-      domain_source:    d.price > 0 ? "leadash" : "external",
+      domain_price_usd: priceUsd,
+      domain_source:    priceUsd > 0 ? "leadash" : "external",
       redirect_url:     body.redirect_url ?? null,
       reply_forward_to: body.reply_forward_to ?? null,
       error_message:    null,
@@ -121,8 +125,11 @@ export async function POST(req: NextRequest) {
 
   const { data: workspace } = await db.from("workspaces").select("billing_email").eq("id", workspaceId).single();
   const domainIdsParam = insertedIds.join(",");
-  // Callback lands on the existing domain provisioning UI (it polls + provisions per record).
-  const callbackUrl = `${appUrl}/inboxes/new/domain?domain_ids=${encodeURIComponent(domainIdsParam)}&combined=1`;
+  // BYO domains return to the connect UI (SES-register + show DNS records); purchased
+  // domains land on the buy/provision UI (it polls + provisions per record).
+  const callbackUrl = body.connect_only
+    ? `${appUrl}/inboxes/new/connect-domain?connect=1&domain_ids=${encodeURIComponent(domainIdsParam)}&combined=1${body.cf_auto ? "&cf=1" : ""}`
+    : `${appUrl}/inboxes/new/domain?domain_ids=${encodeURIComponent(domainIdsParam)}&combined=1`;
 
   try {
     const { authorizationUrl, reference } = await createPaystackCheckout({
