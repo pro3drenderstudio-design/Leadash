@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute, loadNodeConn } from "@/lib/outreach/postal";
 import { addZone, publishDnsRecords, buildPostalMailDnsRecords, setWebRedirect, setEmailForwarding } from "@/lib/outreach/cloudflare";
 import { purchaseDomain, updateNameservers } from "@/lib/outreach/porkbun";
 import { verifyPaystackPayment } from "@/lib/billing/paystack";
@@ -218,18 +218,19 @@ export async function PATCH(
       // Step 2: Purchase domain (idempotent)
       await purchaseDomain(domainRecord.domain, undefined, domainRecord.domain_price_usd ?? undefined);
 
-      // Step 3: Register with Postal
+      // Step 3: Register with Postal — route to the domain's assigned node
       await setStatus("dns_pending");
-      const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+      const nodeConn = await loadNodeConn(ctx.db, domainRecord.postal_node_id);
+      const postalIp = nodeConn?.ipAddress ?? process.env.POSTAL_SERVER_IP ?? "";
       if (!postalIp) throw new Error("POSTAL_SERVER_IP not configured");
-      const postalDomain = await registerDomain(domainRecord.domain);
+      const postalDomain = await registerDomain(domainRecord.domain, nodeConn);
 
       // Step 4: Add CF zone + update nameservers
       const { nameservers } = await addZone(domainRecord.domain);
       await updateNameservers(domainRecord.domain, nameservers);
 
       // Step 5: Publish DNS
-      const dnsRecords = buildPostalMailDnsRecords(domainRecord.domain, postalIp, postalDomain.dkim_public_key);
+      const dnsRecords = buildPostalMailDnsRecords(domainRecord.domain, postalIp, postalDomain.dkim_public_key, nodeConn?.smtpHost);
       await publishDnsRecords(domainRecord.domain, dnsRecords);
       await ctx.db.from("outreach_domains").update({ dns_records: dnsRecords }).eq("id", domain_record_id);
 
@@ -251,7 +252,7 @@ export async function PATCH(
       }
 
       // Step 7: Create inboxes
-      const smtpSettings = getSmtpSettings();
+      const smtpSettings = getSmtpSettings(nodeConn);
       const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
       const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes) && domainRecord.mailbox_prefixes.length > 0
         ? domainRecord.mailbox_prefixes as string[]
@@ -264,7 +265,7 @@ export async function PATCH(
       for (const login of logins) {
         const email = `${login}@${domainRecord.domain}`;
         if (existing.has(email)) continue;
-        const cred = await createSmtpCredential(domainRecord.domain, email);
+        const cred = await createSmtpCredential(domainRecord.domain, email, nodeConn);
         await ctx.db.from("outreach_inboxes").insert({
           workspace_id: workspaceId, domain_id: domain_record_id,
           label: email, email_address: email,
@@ -274,12 +275,13 @@ export async function PATCH(
           daily_send_limit: 1, warmup_current_daily: 1, warmup_enabled: true,
           warmup_target_daily: 30, warmup_ends_at: warmupEndsAt,
           first_name: domainRecord.first_name ?? null, last_name: domainRecord.last_name ?? null,
+          postal_node_id: domainRecord.postal_node_id ?? null,
         });
       }
 
       // Step 8: Inbound route
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-      await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`).catch(() => {});
+      await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`, nodeConn).catch(() => {});
 
       await ctx.db.from("outreach_domains").update({
         status: "active", warmup_ends_at: warmupEndsAt, updated_at: new Date().toISOString(),
@@ -298,7 +300,8 @@ export async function PATCH(
     const { new_prefixes } = body as { domain_record_id: string; action: string; new_prefixes: string[] };
     if (!new_prefixes?.length) return NextResponse.json({ error: "new_prefixes required" }, { status: 400 });
 
-    const smtpSettings = getSmtpSettings();
+    const nodeConn = await loadNodeConn(ctx.db, domainRecord.postal_node_id);
+    const smtpSettings = getSmtpSettings(nodeConn);
     const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data: existing } = await ctx.db.from("outreach_inboxes").select("email_address").eq("domain_id", domain_record_id);
     const existingEmails = new Set((existing ?? []).map((i: { email_address: string }) => i.email_address));
@@ -307,7 +310,7 @@ export async function PATCH(
     for (const prefix of new_prefixes) {
       const email = `${prefix}@${domainRecord.domain}`;
       if (existingEmails.has(email)) continue;
-      const cred = await createSmtpCredential(domainRecord.domain, email).catch(e => { throw new Error(`createSmtpCredential(${email}): ${e.message}`); });
+      const cred = await createSmtpCredential(domainRecord.domain, email, nodeConn).catch(e => { throw new Error(`createSmtpCredential(${email}): ${e.message}`); });
       await ctx.db.from("outreach_inboxes").insert({
         workspace_id: workspaceId, domain_id: domain_record_id,
         label: email, email_address: email,
@@ -317,6 +320,7 @@ export async function PATCH(
         daily_send_limit: 1, warmup_current_daily: 1, warmup_enabled: true,
         warmup_target_daily: 30, warmup_ends_at: warmupEndsAt,
         first_name: domainRecord.first_name ?? null, last_name: domainRecord.last_name ?? null,
+        postal_node_id: domainRecord.postal_node_id ?? null,
       });
       created.push(email);
     }

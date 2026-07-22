@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute } from "@/lib/outreach/postal";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute, loadNodeConn } from "@/lib/outreach/postal";
 import { buildPostalMailDnsRecords, publishDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
@@ -29,13 +29,15 @@ export async function POST(
 
   if (!domainRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+  // Route to the domain's assigned Postal node (falls back to env agent = node 1).
+  const nodeConn = await loadNodeConn(db, domainRecord.postal_node_id);
+  const postalIp = nodeConn?.ipAddress ?? process.env.POSTAL_SERVER_IP ?? "";
   if (!postalIp) return NextResponse.json({ error: "POSTAL_SERVER_IP is not configured" }, { status: 500 });
 
   // Register (or re-register) domain with Postal — idempotent
   let dkimPublicKey: string;
   try {
-    const postalDomain = await registerDomain(domainRecord.domain);
+    const postalDomain = await registerDomain(domainRecord.domain, nodeConn);
     dkimPublicKey = postalDomain.dkim_public_key;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -43,7 +45,7 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const dnsRecords = buildPostalMailDnsRecords(domainRecord.domain, postalIp, dkimPublicKey);
+  const dnsRecords = buildPostalMailDnsRecords(domainRecord.domain, postalIp, dkimPublicKey, nodeConn?.smtpHost);
 
   let auto_configured = false;
   if (use_cloudflare) {
@@ -71,12 +73,12 @@ export async function POST(
     .eq("domain_id", id)
     .eq("workspace_id", workspaceId);
 
-  const smtpSettings = getSmtpSettings();
+  const smtpSettings = getSmtpSettings(nodeConn);
   const credErrors: string[] = [];
 
   for (const inbox of inboxes ?? []) {
     try {
-      const cred = await createSmtpCredential(domainRecord.domain, inbox.email_address);
+      const cred = await createSmtpCredential(domainRecord.domain, inbox.email_address, nodeConn);
       await db.from("outreach_inboxes").update({
         smtp_host:           smtpSettings.host,
         smtp_port:           smtpSettings.port,
@@ -100,7 +102,7 @@ export async function POST(
   const inboundWebhook = process.env.POSTAL_INBOUND_RELAY_URL
     ?? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/outreach/inbound`;
   try {
-    await createInboundRoute(domainRecord.domain, inboundWebhook);
+    await createInboundRoute(domainRecord.domain, inboundWebhook, nodeConn);
   } catch (err) {
     console.warn(`[ses-register] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
   }

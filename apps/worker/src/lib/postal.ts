@@ -12,14 +12,28 @@
 
 import type { DnsRecord } from "./cloudflare";
 
-function agentUrl(): string {
-  const url = process.env.POSTAL_AGENT_URL;
+/**
+ * Connection details for a specific Postal node. When omitted (or its fields
+ * are null), calls fall back to the default env agent — i.e. node 1. A second
+ * node (separate VPS + IP) supplies its own agent URL/secret and mail host so
+ * provisioning talks to the right Postal install.
+ */
+export interface PostalNodeConn {
+  agentUrl?:    string | null;
+  agentSecret?: string | null;
+  smtpHost?:    string | null;
+  serverId?:    number | null;  // postal_server_id within that node's Postal
+  ipAddress?:   string | null;
+}
+
+function agentUrl(conn?: PostalNodeConn): string {
+  const url = conn?.agentUrl ?? process.env.POSTAL_AGENT_URL;
   if (!url) throw new Error("POSTAL_AGENT_URL is not configured");
   return url.replace(/\/$/, "");
 }
 
-function agentSecret(): string {
-  const s = process.env.POSTAL_AGENT_SECRET;
+function agentSecret(conn?: PostalNodeConn): string {
+  const s = conn?.agentSecret ?? process.env.POSTAL_AGENT_SECRET;
   if (!s) throw new Error("POSTAL_AGENT_SECRET is not configured");
   return s;
 }
@@ -28,12 +42,13 @@ async function agentFetch<T>(
   method: "GET" | "POST" | "DELETE",
   path: string,
   body?: unknown,
+  conn?: PostalNodeConn,
 ): Promise<T> {
-  const res = await fetch(`${agentUrl()}${path}`, {
+  const res = await fetch(`${agentUrl(conn)}${path}`, {
     method,
     headers: {
       "Content-Type":   "application/json",
-      "x-agent-secret": agentSecret(),
+      "x-agent-secret": agentSecret(conn),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -55,13 +70,13 @@ interface RegisterDomainResult {
  * Generates a 2048-bit DKIM keypair and writes it to Postal's MariaDB.
  * Returns the DKIM public key (to be published as a TXT record in DNS).
  */
-export async function registerDomain(domain: string): Promise<RegisterDomainResult> {
+export async function registerDomain(domain: string, conn?: PostalNodeConn): Promise<RegisterDomainResult> {
   const res = await agentFetch<RegisterDomainResult & { already_exists?: boolean }>(
-    "POST", "/domains", { domain },
+    "POST", "/domains", { domain }, conn,
   );
   if (res.already_exists) {
     // Already registered — fetch current config
-    return await agentFetch<RegisterDomainResult>("GET", `/domains/${domain}`);
+    return await agentFetch<RegisterDomainResult>("GET", `/domains/${domain}`, undefined, conn);
   }
   return res;
 }
@@ -108,16 +123,23 @@ interface SmtpCredential {
 export async function createSmtpCredential(
   _domain: string,
   login: string,
+  conn?: PostalNodeConn,
 ): Promise<SmtpCredential> {
   // The credential name is the full email address — makes it easy to trace in Postal's UI
-  return agentFetch<SmtpCredential>("POST", "/credentials", { name: login });
+  return agentFetch<SmtpCredential>("POST", "/credentials", {
+    name: login,
+    ...(conn?.serverId ? { server_id: conn.serverId } : {}),
+  }, conn);
 }
 
 /**
  * Remove an SMTP credential (e.g. when an inbox is deleted).
  */
-export async function deleteSmtpCredential(login: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("DELETE", "/credentials", { name: login });
+export async function deleteSmtpCredential(login: string, conn?: PostalNodeConn): Promise<void> {
+  await agentFetch<{ ok: boolean }>("DELETE", "/credentials", {
+    name: login,
+    ...(conn?.serverId ? { server_id: conn.serverId } : {}),
+  }, conn);
 }
 
 /**
@@ -137,8 +159,11 @@ export async function deleteSmtpCredential(login: string): Promise<void> {
  *           }
  *   Response: { ok: true }
  */
-export async function createInboundRoute(domain: string, webhookUrl: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("POST", "/routes", { domain, webhook_url: webhookUrl });
+export async function createInboundRoute(domain: string, webhookUrl: string, conn?: PostalNodeConn): Promise<void> {
+  await agentFetch<{ ok: boolean }>("POST", "/routes", {
+    domain, webhook_url: webhookUrl,
+    ...(conn?.serverId ? { server_id: conn.serverId } : {}),
+  }, conn);
 }
 
 /**
@@ -150,8 +175,11 @@ export async function createInboundRoute(domain: string, webhookUrl: string): Pr
  *   Action: remove the Postal HTTP endpoint route for the domain
  *   Response: { ok: true }
  */
-export async function deleteInboundRoute(domain: string): Promise<void> {
-  await agentFetch<{ ok: boolean }>("DELETE", "/routes", { domain });
+export async function deleteInboundRoute(domain: string, conn?: PostalNodeConn): Promise<void> {
+  await agentFetch<{ ok: boolean }>("DELETE", "/routes", {
+    domain,
+    ...(conn?.serverId ? { server_id: conn.serverId } : {}),
+  }, conn);
 }
 
 interface SmtpSettings {
@@ -166,8 +194,8 @@ interface SmtpSettings {
  * Postal handles both outbound (SMTP) and inbound (IMAP) mail.
  * Set POSTAL_IMAP_HOST to override; defaults to POSTAL_SMTP_HOST.
  */
-export function getSmtpSettings(): SmtpSettings {
-  const smtpHost = process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com";
+export function getSmtpSettings(conn?: PostalNodeConn): SmtpSettings {
+  const smtpHost = conn?.smtpHost ?? process.env.POSTAL_SMTP_HOST ?? "mail.yourdomain.com";
   const imapHost = process.env.POSTAL_IMAP_HOST ?? smtpHost;
   return {
     host:      smtpHost,

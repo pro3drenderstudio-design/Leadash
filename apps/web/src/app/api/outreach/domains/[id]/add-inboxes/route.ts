@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { createSmtpCredential, getSmtpSettings } from "@/lib/outreach/postal";
+import { createSmtpCredential, getSmtpSettings, loadNodeConn } from "@/lib/outreach/postal";
 import { createPaystackCheckout, verifyPaystackPayment } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { getUsdToNgn } from "@/lib/billing/exchangeRate";
@@ -220,14 +220,16 @@ export async function POST(
       return NextResponse.json({ error: "Domain is at inbox capacity" }, { status: 400 });
     }
 
-    const smtpSettings = getSmtpSettings();
+    // New inboxes must be created on the SAME node the domain lives on.
+    const nodeConn = await loadNodeConn(db, domainRecord.postal_node_id);
+    const smtpSettings = getSmtpSettings(nodeConn);
     const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const created: string[] = [];
 
     for (const prefix of new_prefixes) {
       const email = `${prefix}@${domainRecord.domain}`;
 
-      const cred = await createSmtpCredential(domainRecord.domain, email).catch(err => {
+      const cred = await createSmtpCredential(domainRecord.domain, email, nodeConn).catch(err => {
         throw new Error(`createSmtpCredential(${email}): ${err.message}`);
       });
 
@@ -251,6 +253,7 @@ export async function POST(
         warmup_ends_at:       warmupEndsAt,
         first_name:           first_name ?? domainRecord.first_name ?? null,
         last_name:            last_name  ?? domainRecord.last_name  ?? null,
+        postal_node_id:       domainRecord.postal_node_id ?? null,
       });
 
       if (inboxError) {

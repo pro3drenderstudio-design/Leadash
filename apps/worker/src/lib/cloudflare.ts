@@ -293,9 +293,11 @@ export function buildPostalMailDnsRecords(
   domain: string,
   postalIp: string,
   dkimPublicKey: string,
+  mxHostOverride?: string | null,
 ): DnsRecord[] {
-  // MX hostname: use POSTAL_MX_HOST if set, otherwise fall back to POSTAL_SMTP_HOST, then the IP directly
-  const mxHost = process.env.POSTAL_MX_HOST ?? process.env.POSTAL_SMTP_HOST ?? postalIp;
+  // MX hostname: prefer the node's own mail host, then POSTAL_MX_HOST, then
+  // POSTAL_SMTP_HOST, then the IP directly (node 1 keeps its env behaviour).
+  const mxHost = mxHostOverride ?? process.env.POSTAL_MX_HOST ?? process.env.POSTAL_SMTP_HOST ?? postalIp;
   return [
     // SPF — authorise Postal VPS IP
     {

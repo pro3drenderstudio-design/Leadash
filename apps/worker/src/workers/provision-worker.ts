@@ -32,6 +32,7 @@ import {
   createSmtpCredential,
   getSmtpSettings,
   createInboundRoute,
+  type PostalNodeConn,
 } from "../lib/postal";
 import {
   addZone,
@@ -149,6 +150,49 @@ export interface ProvisionJobData {
   workspace_id:     string;
 }
 
+interface PostalNodeRow {
+  id:               string;
+  ip_address:       string | null;
+  postal_server_id: number | null;
+  agent_url:        string | null;
+  agent_secret:     string | null;
+  smtp_host:        string | null;
+  inbox_limit:      number;
+}
+
+/**
+ * Pick the least-loaded active shared Postal node. Returns the full row so the
+ * caller can route Postal calls + DNS to that node. Throws when every shared
+ * node is at capacity. Returns null only when no shared nodes are configured
+ * at all (legacy single-agent setups fall back to the default env agent).
+ */
+async function pickSharedNode(db: SupabaseClient): Promise<PostalNodeRow | null> {
+  const { data: sharedNodes } = await db
+    .from("postal_nodes")
+    .select("id, ip_address, postal_server_id, agent_url, agent_secret, smtp_host, inbox_limit")
+    .eq("status", "active")
+    .eq("is_shared", true);
+  if (!sharedNodes?.length) return null;
+
+  const counts = await Promise.all(
+    (sharedNodes as PostalNodeRow[]).map(async (n) => {
+      const { count } = await db
+        .from("outreach_inboxes")
+        .select("id", { count: "exact", head: true })
+        .eq("postal_node_id", n.id)
+        .eq("status", "active");
+      return { node: n, used: count ?? 0 };
+    }),
+  );
+  const available = counts
+    .filter(c => c.used < c.node.inbox_limit)
+    .sort((a, b) => (a.used / a.node.inbox_limit) - (b.used / b.node.inbox_limit));
+  if (!available.length) {
+    throw new Error("All shared Postal nodes are at capacity. Add a new node before provisioning more inboxes.");
+  }
+  return available[0].node;
+}
+
 export async function processProvision(job: Job<ProvisionJobData>) {
   const { domain_record_id, workspace_id } = job.data;
   const db = adminClient();
@@ -178,13 +222,25 @@ export async function processProvision(job: Job<ProvisionJobData>) {
       .eq("id", domain_record_id);
   }
 
+  // ── Step 0: Pick the Postal node (least-loaded shared node) up front ──────
+  //  Everything downstream — Postal registration, DNS records, SMTP host —
+  //  must target this node, not the default env agent. Selecting before the
+  //  purchase also avoids buying a domain when there's no inbox capacity.
+  const assignedNode = await pickSharedNode(db);
+  const nodeConn: PostalNodeConn | undefined = assignedNode
+    ? { agentUrl: assignedNode.agent_url, agentSecret: assignedNode.agent_secret,
+        smtpHost: assignedNode.smtp_host, serverId: assignedNode.postal_server_id,
+        ipAddress: assignedNode.ip_address }
+    : undefined;
+  const assignedNodeId: string | null = assignedNode?.id ?? null;
+
   // ── Step 1: Purchase domain via Namecheap (VPS IP is whitelisted) ─────────
   //  Registered under Leadash's own company contact — no per-user info needed.
   await purchaseDomain(domainRecord.domain, LEADASH_REGISTRANT);
 
   // ── Step 2: Register domain with Postal + get DKIM public key ─────────────
   await setStatus("dns_pending");
-  const postalDomain = await registerDomain(domainRecord.domain)
+  const postalDomain = await registerDomain(domainRecord.domain, nodeConn)
     .catch(e => { throw new Error(`Postal registerDomain: ${e.message}`); });
 
   // ── Step 3: Add zone to Cloudflare + point Namecheap nameservers ──────────
@@ -195,12 +251,14 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     .catch(e => { throw new Error(`Namecheap updateNameservers: ${e.message}`); });
 
   // ── Step 4: Publish DNS records via Cloudflare ────────────────────────────
-  const postalIp = process.env.POSTAL_SERVER_IP ?? "";
+  //  SPF + MX must point at the ASSIGNED node's IP/host, not the default.
+  const postalIp = assignedNode?.ip_address ?? process.env.POSTAL_SERVER_IP ?? "";
   if (!postalIp) throw new Error("POSTAL_SERVER_IP env var is not set");
   const dnsRecords = buildPostalMailDnsRecords(
     domainRecord.domain,
     postalIp,
     postalDomain.dkim_public_key,
+    assignedNode?.smtp_host,
   );
   await publishDnsRecords(domainRecord.domain, dnsRecords)
     .catch(e => { throw new Error(`CF publishDnsRecords: ${e.message}`); });
@@ -232,34 +290,9 @@ export async function processProvision(job: Job<ProvisionJobData>) {
     console.warn(`[provision] DKIM not yet visible for ${domainRecord.domain} — continuing`);
   }
 
-  // ── Step 6: Pick Postal node + create SMTP credentials + inboxes ─────────
-  const smtpSettings = getSmtpSettings();
+  // ── Step 6: Create SMTP credentials + inboxes on the assigned node ────────
+  const smtpSettings = getSmtpSettings(nodeConn);
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data: sharedNodes } = await db
-    .from("postal_nodes")
-    .select("id, inbox_limit")
-    .eq("status", "active")
-    .eq("is_shared", true);
-
-  let assignedNodeId: string | null = null;
-  if (sharedNodes?.length) {
-    const counts = await Promise.all(
-      sharedNodes.map(async (n: { id: string; inbox_limit: number }) => {
-        const { count } = await db
-          .from("outreach_inboxes")
-          .select("id", { count: "exact", head: true })
-          .eq("postal_node_id", n.id)
-          .eq("status", "active");
-        return { id: n.id, used: count ?? 0, limit: n.inbox_limit };
-      }),
-    );
-    const available = counts.filter(n => n.used < n.limit).sort((a, b) => (a.used / a.limit) - (b.used / b.limit));
-    if (!available.length) {
-      throw new Error("All shared Postal nodes are at capacity. Add a new node before provisioning more inboxes.");
-    }
-    assignedNodeId = available[0].id;
-  }
 
   const explicitPrefixes: string[] | null = Array.isArray(domainRecord.mailbox_prefixes)
     ? domainRecord.mailbox_prefixes as string[]
@@ -269,7 +302,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
 
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
-    const cred = await createSmtpCredential(domainRecord.domain, email)
+    const cred = await createSmtpCredential(domainRecord.domain, email, nodeConn)
       .catch(e => { throw new Error(`Postal createSmtpCredential(${email}): ${e.message}`); });
 
     const { error: inboxError } = await db.from("outreach_inboxes").insert({
@@ -299,7 +332,7 @@ export async function processProvision(job: Job<ProvisionJobData>) {
 
   // ── Step 7: Register inbound route in Postal ─────────────────────────────
   const appUrl = process.env.APP_URL ?? "https://leadash.com";
-  await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`).catch(err => {
+  await createInboundRoute(domainRecord.domain, `${appUrl}/api/outreach/inbound`, nodeConn).catch(err => {
     console.warn(`[provision] createInboundRoute failed (non-fatal):`, err instanceof Error ? err.message : err);
   });
 

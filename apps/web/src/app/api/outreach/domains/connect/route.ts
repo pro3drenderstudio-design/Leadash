@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
-import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute, assignDomainToPool } from "@/lib/outreach/postal";
+import { registerDomain, isDomainVerified, createSmtpCredential, getSmtpSettings, createInboundRoute, assignDomainToPool, loadNodeConn } from "@/lib/outreach/postal";
 import { publishDnsRecords, buildPostalMailDnsRecords } from "@/lib/outreach/cloudflare";
 import { encrypt } from "@/lib/outreach/crypto";
 
@@ -173,8 +173,14 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
+  // Route to the domain's node; overlay the dedicated-IP server_id when present.
+  const baseConn = await loadNodeConn(db, domainRecord.postal_node_id);
+  const conn = dedicatedPostalServerId
+    ? { ...(baseConn ?? {}), serverId: dedicatedPostalServerId }
+    : baseConn;
+
   // Create per-mailbox Postal SMTP credentials + inboxes
-  const smtpSettings = getSmtpSettings();
+  const smtpSettings = getSmtpSettings(conn);
   const warmupEndsAt = new Date(Date.now() + WARMUP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const logins: string[] = Array.isArray(domainRecord.mailbox_prefixes) && domainRecord.mailbox_prefixes.length > 0
@@ -184,7 +190,7 @@ export async function PATCH(req: NextRequest) {
   for (const login of logins) {
     const email = `${login}@${domainRecord.domain}`;
 
-    const cred = await createSmtpCredential(domainRecord.domain, email, dedicatedPostalServerId).catch(err => {
+    const cred = await createSmtpCredential(domainRecord.domain, email, conn).catch(err => {
       throw new Error(`Postal createSmtpCredential(${email}): ${err.message}`);
     });
 
@@ -208,6 +214,7 @@ export async function PATCH(req: NextRequest) {
       warmup_ends_at:       warmupEndsAt,
       first_name:           domainRecord.first_name ?? null,
       last_name:            domainRecord.last_name  ?? null,
+      postal_node_id:       domainRecord.postal_node_id ?? null,
     });
     if (inboxError) {
       await db.from("outreach_domains").update({ status: "failed", error_message: inboxError.message }).eq("id", domain_record_id);
@@ -220,7 +227,7 @@ export async function PATCH(req: NextRequest) {
     "http://localhost:3001",
     process.env.POSTAL_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "",
   );
-  await createInboundRoute(domainRecord.domain, webhookUrl, dedicatedPostalServerId).catch(() => {
+  await createInboundRoute(domainRecord.domain, webhookUrl, conn).catch(() => {
     // Non-fatal — inbound forwarding won't work until route is created, but outbound is fine
   });
 
