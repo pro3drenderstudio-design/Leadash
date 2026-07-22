@@ -90,7 +90,8 @@ export async function GET(req: NextRequest) {
   let gamQuery = db
     .from("academy_gamification")
     .select("enrollment_id, points, streak_days, last_active_date, reported_earnings_cents, earnings_verified")
-    .eq("product_id", productId);
+    .eq("product_id", productId)
+    .eq("hidden_from_leaderboard", false);
 
   if (cohortEnrollmentIds) gamQuery = gamQuery.in("enrollment_id", cohortEnrollmentIds);
 
@@ -204,6 +205,7 @@ export async function GET(req: NextRequest) {
           .from("academy_gamification")
           .select("*", { count: "exact", head: true })
           .eq("product_id", productId)
+          .eq("hidden_from_leaderboard", false)
           .gt(scoreField, myScore);
         if (cohortEnrollmentIds) higherQuery = higherQuery.in("enrollment_id", cohortEnrollmentIds);
         const { count: higherCount } = await higherQuery;

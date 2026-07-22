@@ -9,6 +9,7 @@ import { getPoolQuotaStatus, pauseCampaignsForPoolOverage } from "@/lib/billing/
 import { downgradeWorkspaceToFree } from "@/lib/billing/downgrade";
 import { getDedicatedIpPrice } from "@/lib/billing/dedicatedIpPrice";
 import { getAffiliateConfig } from "@/lib/billing/affiliateConfig";
+import { awardChallengePoints } from "@/lib/academy/points";
 import {
   sendSubscriptionRenewalSuccessEmail,
   sendGracePeriodWarning,
@@ -211,6 +212,12 @@ export async function POST(req: NextRequest) {
               updated_at:              new Date().toISOString(),
             })
             .eq("id", workspaceId);
+          // Challenge gamification: higher plan tiers score more (no-op outside a live cohort).
+          await awardChallengePoints(db, {
+            workspaceId,
+            action: `plan_${plan.plan_id}`,
+            ref:    `plan:${workspaceId}:${plan.plan_id}`,
+          });
           // Record invoice
           await db.from("billing_invoices").insert({
             workspace_id:       workspaceId,

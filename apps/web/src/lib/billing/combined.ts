@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { createPaystackSubscription, disablePaystackSubscription } from "@/lib/billing/paystack";
 import { logActivity } from "@/lib/activity";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 export interface CombinedActivationInput {
   reference:         string;
@@ -70,6 +71,13 @@ export async function activateCombinedCheckout(
     ...(opts.customerCode      ? { paystack_customer_code: opts.customerCode }      : {}),
     updated_at:             new Date().toISOString(),
   }).eq("id", opts.workspaceId);
+
+  // Challenge gamification: higher plan tiers score more (no-op outside a live cohort).
+  await awardChallengePoints(db, {
+    workspaceId: opts.workspaceId,
+    action:      `plan_${plan.plan_id}`,
+    ref:         `plan:${opts.workspaceId}:${plan.plan_id}`,
+  });
 
   // Insert the plan invoice — this is the idempotency key.
   await db.from("billing_invoices").insert({

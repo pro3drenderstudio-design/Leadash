@@ -15,6 +15,7 @@ import type { createAdminClient } from "@/lib/supabase/server";
 import type { OfferGrant, GrantedItem } from "@/types/offers";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { enqueueAutomation } from "@/lib/queue/client";
+import { awardChallengePoints } from "@/lib/academy/points";
 
 export interface GrantContext {
   workspaceId: string;
@@ -50,6 +51,13 @@ export async function fulfillGrant(
           })
           .eq("id", ctx.workspaceId);
         if (error) throw error;
+
+        // Challenge gamification: higher plan tiers score more (no-op outside a live cohort).
+        await awardChallengePoints(db, {
+          workspaceId: ctx.workspaceId,
+          action:      `plan_${plan.plan_id}`,
+          ref:         `plan:${ctx.workspaceId}:${plan.plan_id}`,
+        });
 
         // Grant the plan's included credits, mirroring what the billing webhook does.
         if (plan.included_credits > 0) {
