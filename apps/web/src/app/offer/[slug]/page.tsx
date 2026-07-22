@@ -22,9 +22,19 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ slu
   if (o.is_targeted) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const target = user ? await activeTargetForUser(db, o.id, user.id) : null;
-    blocked = !target;
-    expiresAt = target?.expires_at ?? null;
+    let allowed = false;
+    if (user) {
+      // Admins can always preview a targeted offer (for QA / support).
+      const { data: admin } = await db.from("admins").select("role").eq("user_id", user.id).maybeSingle();
+      if (admin) {
+        allowed = true;
+      } else {
+        const target = await activeTargetForUser(db, o.id, user.id);
+        allowed = !!target;
+        expiresAt = target?.expires_at ?? null;
+      }
+    }
+    blocked = !allowed;
   }
 
   return <OfferSalesClient offer={o} slug={slug} blocked={blocked} expiresAt={expiresAt} />;
