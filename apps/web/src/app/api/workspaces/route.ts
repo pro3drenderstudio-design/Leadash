@@ -46,21 +46,27 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (existing) return NextResponse.json({ id: existing.workspace_id }, { status: 200 });
 
-  // Create workspace on the free plan with no trial. The trial program was
-  // discontinued — users now sign up directly to the free plan, pay for
-  // credits as they need them, and upgrade to a subscription when they want
-  // subscription-gated features (more inboxes, warmup, etc.).
+  // Every new workspace starts on a 14-day free trial: full page access, up to
+  // 2 inboxes, can build sequences (but not activate — that needs a plan), and
+  // up to 2,000 leads in the pool. The trial's limits come from the "free"
+  // plan_config; access.ts allows "free" while trial_ends_at is in the future
+  // and blocks it (pick-a-plan) once it lapses. A starter-sized credit grant
+  // makes the pool usable during the trial.
+  const TRIAL_DAYS = 14;
+  const TRIAL_CREDITS = 2000;
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data: workspace, error } = await db
     .from("workspaces")
     .insert({
-      name:          name.trim(),
-      slug:          `${slug}-${Date.now().toString(36)}`,
-      owner_id:      user.id,
-      plan_id:       "free",
-      plan_status:   "active",
-      max_inboxes:   3,
-      trial_ends_at: null,
-      billing_email: user.email ?? null,
+      name:                 name.trim(),
+      slug:                 `${slug}-${Date.now().toString(36)}`,
+      owner_id:             user.id,
+      plan_id:              "free",
+      plan_status:          "trial",
+      max_inboxes:          2,
+      trial_ends_at:        trialEndsAt,
+      lead_credits_balance: TRIAL_CREDITS,
+      billing_email:        user.email ?? null,
     })
     .select()
     .single();

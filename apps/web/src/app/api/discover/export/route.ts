@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPlanById } from "@/lib/billing/getActivePlans";
+import { getPoolQuotaStatus } from "@/lib/billing/pool-quota";
 import leadsDb from "@/lib/postgres/leads-db";
 import { invalidateWorkspaceEmails } from "@/lib/discover-cache";
 import type { DiscoverExportRequest } from "@/types/discover";
@@ -241,9 +242,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Enforce the plan's leads-pool cap (free trial = 2,000). Cap the batch to
+    // what fits; reject only if the pool is already full.
+    const quota = await getPoolQuotaStatus(adminDb, workspaceId);
+    let leadsToAdd = leads;
+    let poolCapped = false;
+    if (quota.max >= 0) {
+      const remaining = Math.max(0, quota.max - quota.used);
+      if (remaining <= 0) {
+        return NextResponse.json({
+          error: `Your leads pool is full (${quota.max.toLocaleString()} leads). Upgrade your plan or remove leads to add more.`,
+          upgrade_required: true,
+        }, { status: 402 });
+      }
+      if (leads.length > remaining) { leadsToAdd = leads.slice(0, remaining); poolCapped = true; }
+    }
+
     const { data: insertedLeads, error: insertError } = await adminDb
       .from("outreach_leads")
-      .upsert(leads, { onConflict: "workspace_id,email", ignoreDuplicates: true })
+      .upsert(leadsToAdd, { onConflict: "workspace_id,email", ignoreDuplicates: true })
       .select("id, email");
 
     if (insertError) {
@@ -255,7 +272,7 @@ export async function POST(req: NextRequest) {
     }
 
     const leadsAdded     = insertedLeads?.length ?? 0;
-    const alreadyExisted = Math.max(0, leads.length - leadsAdded);
+    const alreadyExisted = Math.max(0, leadsToAdd.length - leadsAdded);
 
     // Bust the NET NEW email cache so the next discover search excludes the
     // leads we just added instead of surfacing them for another 60s.
@@ -268,6 +285,8 @@ export async function POST(req: NextRequest) {
       skipped_no_email: skippedNoEmail,
       credits_used:    totalCost,
       list_id:         resolvedListId,
+      pool_capped:     poolCapped,
+      pool_max:        quota.max,
     });
   }
 

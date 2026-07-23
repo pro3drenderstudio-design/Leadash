@@ -15,7 +15,9 @@ import {
   getCampaignEnrollments, unenrollLead, getLists,
   checkInboxDns, getCampaignActivity,
 } from "@/lib/outreach/api";
+import type { ApiError } from "@/lib/outreach/api";
 import AddToSequenceModal from "@/components/AddToSequenceModal";
+import UpgradeModal from "@/components/UpgradeModal";
 import type {
   OutreachCampaign, OutreachSequenceStep, CampaignStatus,
   OutreachInboxSafe, OutreachTemplate, CampaignAnalytics,
@@ -122,6 +124,7 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
   const enrolled = searchParams.get("enrolled") === "1";
 
   const [tab, setTab]             = useState<Tab>("overview");
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [campaign, setCampaign]   = useState<OutreachCampaign | null>(null);
   const [steps, setSteps]         = useState<OutreachSequenceStep[]>([]);
   const [analytics, setAnalytics] = useState<CampaignAnalytics | null>(null);
@@ -381,9 +384,14 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
     if (!campaign) return;
     const next: CampaignStatus = campaign.status === "active" ? "paused" : "active";
     setSaving(true);
-    const updated = await updateCampaign(campaign.id, { status: next });
-    setCampaign(updated); setSaving(false);
-    setToast(`Campaign ${next === "active" ? "activated" : "paused"}`);
+    try {
+      const updated = await updateCampaign(campaign.id, { status: next });
+      setCampaign(updated);
+      setToast(`Campaign ${next === "active" ? "activated" : "paused"}`);
+    } catch (e) {
+      if ((e as ApiError)?.upgradeRequired) setUpgradeOpen(true);
+      else setToast((e as Error)?.message ?? "Failed to update campaign");
+    } finally { setSaving(false); }
   }
 
   async function handleAiGenerate() {
@@ -1761,6 +1769,8 @@ export default function CampaignDetailClient({ campaignId }: { campaignId: strin
           }}
         />
       )}
+      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)}
+        title="Pick a plan to activate" message="Your sequence is built and ready. Activating it to start sending needs a plan — pick one to launch." />
     </div>
   );
 }

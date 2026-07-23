@@ -35,8 +35,20 @@ export interface ConversationMessage {
 
 const base = "/api/outreach";
 
+/** Error carrying the API's status + upgrade_required flag (for plan gating). */
+export interface ApiError extends Error {
+  status?: number;
+  upgradeRequired?: boolean;
+}
+
 async function json<T>(r: Response): Promise<T> {
-  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error ?? r.statusText); }
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: r.statusText })) as { error?: string; upgrade_required?: boolean };
+    const err = new Error(e.error ?? r.statusText) as ApiError;
+    err.status = r.status;
+    err.upgradeRequired = !!e.upgrade_required;
+    throw err;
+  }
   return r.json();
 }
 const get  = <T>(p: string) => wsFetch(p).then(r => json<T>(r));

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { enqueueSend } from "@/lib/queue/client";
 import { getPoolQuotaStatus } from "@/lib/billing/pool-quota";
+import { getPlanById } from "@/lib/billing/getActivePlans";
 import { awardChallengePoints } from "@/lib/academy/points";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -59,6 +60,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Validate campaign state before activation
   if (update.status === "active" && before?.status !== "active") {
+    // Plan gate — trial/free users can BUILD sequences but must pick a plan to
+    // activate (start sending). Signal upgrade_required so the client shows the
+    // pick-a-plan popup instead of a generic error.
+    const { data: ws } = await db.from("workspaces").select("plan_id").eq("id", workspaceId).single();
+    const plan = await getPlanById((ws?.plan_id as string | null) ?? "free");
+    if (!plan.can_run_campaigns) {
+      return NextResponse.json(
+        { error: "Pick a plan to activate your sequence and start sending.", upgrade_required: true },
+        { status: 402 },
+      );
+    }
+
     const inboxIds = (before?.inbox_ids ?? []) as string[];
     if (!inboxIds.length) {
       return NextResponse.json(

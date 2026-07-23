@@ -3,12 +3,13 @@
  * now" — read by the paywall overlay (apps/web/src/components/BillingPaywall.tsx)
  * and the billing-reconcile cron (apps/web/src/app/api/cron/billing-reconcile/route.ts).
  *
- * Business rule: no free plan. Every workspace must be on a paid plan to use
- * the app — new signups land on plan_id "free" straight out of onboarding and
- * are expected to pick a plan immediately; there is no lingering free tier.
- * The one carve-out is the beta-tester perk (plan_id "starter" + a 30-day
- * trial_ends_at, no subscription_renews_at) — intentional, but still time-
- * boxed like everything else once the 30 days pass.
+ * Business rule: every new workspace gets a 14-day free trial on plan_id
+ * "free" — full page access with limits (2 inboxes, 2,000-lead pool, can build
+ * sequences but not activate them). The trial is allowed while trial_ends_at is
+ * in the future; once it lapses (or a workspace is on "free" with no trial),
+ * the paywall shows and they must pick a plan. Paid plans (with
+ * subscription_renews_at) are always allowed. The beta perk (a non-free plan +
+ * trial_ends_at, no subscription_renews_at) still works the same way.
  */
 
 export type AccessBlockReason = "past_due" | "canceled" | "trial_expired" | "no_plan" | null;
@@ -35,9 +36,13 @@ export function getBillingAccessStatus(ws: BillingWorkspace): BillingAccessStatu
     return { allowed: false, reason: "canceled" };
   }
 
-  // No free plan — must be on a real paid plan.
+  // Free plan = the 14-day trial. Allowed while the trial window is open; once
+  // it lapses (or there's no trial window at all), show the pick-a-plan wall.
   if (ws.plan_id === "free") {
-    return { allowed: false, reason: "no_plan" };
+    if (ws.trial_ends_at && new Date(ws.trial_ends_at) > new Date()) {
+      return { allowed: true, reason: null };
+    }
+    return { allowed: false, reason: ws.trial_ends_at ? "trial_expired" : "no_plan" };
   }
 
   // A beta enrollment grants plan_id "starter" + a 30-day trial_ends_at with no

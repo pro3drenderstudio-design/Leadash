@@ -21,7 +21,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { getCampaigns, updateCampaign, deleteCampaign, cloneCampaign } from "@/lib/outreach/api";
+import { getCampaigns, updateCampaign, deleteCampaign, cloneCampaign, type ApiError } from "@/lib/outreach/api";
+import UpgradeModal from "@/components/UpgradeModal";
 import type { OutreachCampaign, CampaignStatus } from "@/types/outreach";
 import {
   Button,
@@ -83,6 +84,7 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
   const [activeTab, setActiveTab] = useState<Tab>(() => (params.get("tab") === "templates" ? "templates" : "sequences"));
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all");
   const [cloning, setCloning]     = useState<string | null>(null);
@@ -98,8 +100,13 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
 
   async function toggleStatus(c: OutreachCampaign) {
     const next = c.status === "active" ? "paused" : c.status === "paused" ? "active" : "active";
-    await updateCampaign(c.id, { status: next as CampaignStatus });
-    void load();
+    try {
+      await updateCampaign(c.id, { status: next as CampaignStatus });
+      void load();
+    } catch (e) {
+      if ((e as ApiError)?.upgradeRequired) { setUpgradeOpen(true); return; }
+      throw e;
+    }
   }
 
   async function handleDelete(c: OutreachCampaign) {
@@ -390,6 +397,8 @@ export default function CampaignsClient({ canRunCampaigns = true }: { canRunCamp
           to   { transform: rotate(360deg); }
         }
       `}</style>
+      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)}
+        title="Pick a plan to activate" message="Your sequence is built and ready. Activating it to start sending needs a plan — pick one to launch." />
     </div>
   );
 }
