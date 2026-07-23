@@ -734,6 +734,19 @@ export default function ConnectDomainPage() {
             </div>
           )}
 
+          {!domainSetups.every(s => s.autoConfigured) && (
+            <div className="flex gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
+              <span className="text-amber-400 flex-shrink-0">⚠</span>
+              <p className="text-amber-300/70 text-xs leading-relaxed">
+                If your domain already has hosting or webmail (common with cPanel providers), it may already have
+                its own SPF and MX records. Having more than one SPF TXT record — or a leftover MX record pointing
+                at your domain itself — breaks mail authentication. <strong>Delete any existing SPF and MX records
+                at your domain&apos;s root (<code>@</code>) before adding the ones below</strong>, rather than adding
+                these alongside them.
+              </p>
+            </div>
+          )}
+
           {/* Per-domain DNS records */}
           <div className="space-y-6">
             {domainSetups.map(setup => {
