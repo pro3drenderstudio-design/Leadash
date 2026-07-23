@@ -19,8 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Prevent flash of wrong theme — runs synchronously before paint */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('ld-theme');if(t!=='light')document.documentElement.classList.add('dark');}catch(e){}})()` }} />
+        {/* The app shell (.v2-app) is dark-only — light mode has no shell tokens
+            and renders a broken hybrid on devices that had a stale 'light'
+            preference. Force dark before paint and clear any stale light. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('ld-theme')==='light')localStorage.removeItem('ld-theme');}catch(e){}document.documentElement.classList.add('dark');})()` }} />
       </head>
       <body className={`${geist.className} antialiased`}>
         <ThemeProvider>{children}</ThemeProvider>

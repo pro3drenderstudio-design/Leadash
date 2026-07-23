@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 
 type Theme = "dark" | "light";
 
@@ -9,33 +9,17 @@ const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-
+  // The in-app shell (.v2-app design tokens) is dark-only. Light mode has no
+  // shell tokens, so on any device that had a stale 'light' preference the
+  // chrome renders a broken hybrid (dark backgrounds + light-mode component
+  // styles) — the "weird top bar" / floating-card reports. Force dark and drop
+  // any stale light preference so every device renders the intended dark UI.
   useEffect(() => {
-    const stored = localStorage.getItem("ld-theme") as Theme | null;
-    const resolved = stored ?? "dark";
-    setTheme(resolved);
-    apply(resolved);
+    try { if (localStorage.getItem("ld-theme") === "light") localStorage.removeItem("ld-theme"); } catch { /* ignore */ }
+    document.documentElement.classList.add("dark");
   }, []);
 
-  function apply(t: Theme) {
-    if (t === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }
-
-  function toggle() {
-    setTheme(prev => {
-      const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem("ld-theme", next);
-      apply(next);
-      return next;
-    });
-  }
-
-  return <ThemeCtx.Provider value={{ theme, toggle }}>{children}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{ theme: "dark", toggle: () => {} }}>{children}</ThemeCtx.Provider>;
 }
 
 export function useTheme() {
