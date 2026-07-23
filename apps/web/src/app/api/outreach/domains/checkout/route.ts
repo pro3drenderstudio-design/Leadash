@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { checkDomains } from "@/lib/outreach/porkbun";
-import { createPaystackCheckout } from "@/lib/billing/paystack";
+import { createPaystackCheckout, verifyPaystackPayment } from "@/lib/billing/paystack";
 import { getPlanById } from "@/lib/billing/getActivePlans";
 import { getUsdToNgn } from "@/lib/billing/exchangeRate";
 import { createAdminClient } from "@/lib/supabase/server";
+import { enqueueProvision } from "@/lib/queue";
 
 async function getDomainMarkup(): Promise<{ type: "none" | "flat" | "percent"; value: number }> {
   try {
@@ -91,17 +92,21 @@ export async function POST(req: NextRequest) {
 
   // ── Upsert one record per domain (reuse failed/pending to avoid duplicates) ──
   const insertedIds: string[] = [];
+  // Domains whose PRIOR attempt already collected payment (record carries a real
+  // Paystack reference) but never got provisioned — e.g. the browser closed after
+  // paying, before the post-checkout callback fired. We must not charge these again.
+  const resumedIds: string[] = [];
+  const unpaidDomainNames: string[] = [];
   let totalOneTimeUsd = 0;
 
   for (const { domain, price: domainPrice } of domains) {
     const markupUsd = domainPrice > 0 ? applyMarkup(domainPrice, markup) : 0;
     const oneTimePriceUsd = domainPrice > 0 ? domainPrice + markupUsd : 0;
-    totalOneTimeUsd += oneTimePriceUsd;
 
     // Reuse existing failed or pending record for same domain to avoid duplicates
     const { data: existing } = await db
       .from("outreach_domains")
-      .select("id")
+      .select("id, payment_provider, paystack_reference")
       .eq("workspace_id", workspaceId)
       .eq("domain", domain)
       .in("status", ["pending", "failed"])
@@ -109,16 +114,24 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
 
+    let alreadyPaid = false;
+    if (existing?.payment_provider === "paystack" && existing.paystack_reference && existing.paystack_reference !== "free") {
+      const { paid } = await verifyPaystackPayment(existing.paystack_reference).catch(() => ({ paid: false }));
+      alreadyPaid = paid;
+    }
+
     let recId: string;
     if (existing) {
       await db.from("outreach_domains").update({
-        status:           "pending",
+        status:           alreadyPaid ? "purchasing" : "pending",
         mailbox_count:    mailboxCount,
         mailbox_prefix:   mailbox_prefixes[0],
         mailbox_prefixes: mailbox_prefixes,
         first_name:       first_name ?? null,
         last_name:        last_name  ?? null,
-        payment_provider,
+        // Already-paid domains keep their original payment_provider/reference —
+        // don't overwrite the proof of payment we're about to reuse.
+        ...(alreadyPaid ? {} : { payment_provider }),
         // Only set inbox_provider when microsoft365 — omitting it keeps the DB default ('postal')
         // so this is safe before migration 040 is applied.
         ...(inbox_provider === "microsoft365" ? { inbox_provider } : {}),
@@ -158,15 +171,35 @@ export async function POST(req: NextRequest) {
       }
       recId = rec.id;
     }
-    insertedIds.push(recId);
+
+    if (alreadyPaid) {
+      resumedIds.push(recId);
+      await enqueueProvision(recId, workspaceId).catch(err => {
+        console.error(`[checkout] resume enqueueProvision failed for ${recId}:`, err);
+      });
+    } else {
+      insertedIds.push(recId);
+      unpaidDomainNames.push(domain);
+      totalOneTimeUsd += oneTimePriceUsd;
+    }
+  }
+
+  const allIdsParam = [...resumedIds, ...insertedIds].join(",");
+
+  // Every domain in this submission was already paid for on a prior attempt —
+  // no new charge needed, just resume provisioning and send the user straight
+  // to the provisioning screen.
+  if (insertedIds.length === 0) {
+    const successUrl = `${successBase}?domain_ids=${encodeURIComponent(allIdsParam)}${connect_only ? "&connect=1" : ""}${cfSuffix}`;
+    return NextResponse.json({ domain_record_ids: resumedIds, checkout_url: successUrl, free: true, resumed: true });
   }
 
   // Use M365-specific price when inbox_provider=microsoft365
   const pricePerInboxNgn = inbox_provider === "microsoft365"
     ? ((workspacePlan as unknown as Record<string, unknown>).ms_inbox_monthly_price_ngn as number ?? 4200)
     : workspacePlan.inbox_monthly_price_ngn;
-  const inboxMonthlyNgn  = pricePerInboxNgn * mailboxCount * domains.length;
-  const domainIdsParam    = insertedIds.join(",");
+  const inboxMonthlyNgn  = pricePerInboxNgn * mailboxCount * insertedIds.length;
+  const domainIdsParam    = allIdsParam;
 
   // Check if workspace has active inbox entitlements that cover these inboxes.
   // If covered, inbox hosting is included in their offer — charge domain cost only.
@@ -180,7 +213,7 @@ export async function POST(req: NextRequest) {
     .eq("is_active", true)
     .gt("expires_at", new Date().toISOString());
   const coveredSlots           = (inboxEntitlements ?? []).reduce((s: number, e: { quantity: number | null }) => s + (e.quantity ?? 0), 0);
-  const requestedInboxes       = mailboxCount * domains.length;
+  const requestedInboxes       = mailboxCount * insertedIds.length;
   const uncoveredInboxes       = Math.max(0, requestedInboxes - coveredSlots);
   // Only charge for the inboxes not covered by the entitlement (e.g. 10 credits, 15 inboxes → charge 5)
   const chargedInboxMonthlyNgn = pricePerInboxNgn * uncoveredInboxes;
@@ -207,7 +240,7 @@ export async function POST(req: NextRequest) {
         await db.from("workspaces").update({ stripe_customer_id: customerId }).eq("id", workspaceId);
       }
 
-      const domainNames = domains.map(d => d.domain).join(", ");
+      const domainNames = unpaidDomainNames.join(", ");
 
       // Stripe subscription mode: non-recurring line items are billed once on the first invoice.
       type LineItem = { price_data: { currency: string; unit_amount: number; recurring?: { interval: "day" | "week" | "month" | "year" }; product_data: { name: string; description?: string } }; quantity: number };
@@ -218,8 +251,8 @@ export async function POST(req: NextRequest) {
             unit_amount: Math.round((inboxMonthlyNgn / ngnPerUsd) * 100),
             recurring:   { interval: "month" },
             product_data: {
-              name:        `${inbox_provider === "microsoft365" ? "Microsoft 365" : "Sending"} inboxes (${domains.length * mailboxCount} total)`,
-              description: `${domains.length} domain${domains.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""}/mo`,
+              name:        `${inbox_provider === "microsoft365" ? "Microsoft 365" : "Sending"} inboxes (${insertedIds.length * mailboxCount} total)`,
+              description: `${insertedIds.length} domain${insertedIds.length > 1 ? "s" : ""} × ${mailboxCount} inbox${mailboxCount > 1 ? "es" : ""}/mo`,
             },
           },
           quantity: 1,
@@ -252,7 +285,7 @@ export async function POST(req: NextRequest) {
         .update({ stripe_session_id: session.id })
         .in("id", insertedIds);
 
-      return NextResponse.json({ domain_record_ids: insertedIds, checkout_url: session.url });
+      return NextResponse.json({ domain_record_ids: [...resumedIds, ...insertedIds], checkout_url: session.url });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[checkout] Stripe error:", msg);
@@ -271,7 +304,7 @@ export async function POST(req: NextRequest) {
       // Mark records as paid (free provisioning) and redirect directly to provision
       await db.from("outreach_domains").update({ paystack_reference: "free" }).in("id", insertedIds);
       const successUrl = `${successBase}?domain_ids=${encodeURIComponent(domainIdsParam)}${connect_only ? "&connect=1" : ""}${cfSuffix}`;
-      return NextResponse.json({ domain_record_ids: insertedIds, checkout_url: successUrl, free: true });
+      return NextResponse.json({ domain_record_ids: [...resumedIds, ...insertedIds], checkout_url: successUrl, free: true });
     }
 
     const { data: workspace } = await db
@@ -282,7 +315,7 @@ export async function POST(req: NextRequest) {
 
     // Always store the FULL inbox monthly price on the domain so the billing cron
     // can charge the correct amount if entitlements ever expire.
-    const inboxMonthlyKoboPerDomain = Math.round((inboxMonthlyNgn / domains.length) * 100);
+    const inboxMonthlyKoboPerDomain = Math.round((inboxMonthlyNgn / insertedIds.length) * 100);
 
     const { authorizationUrl, reference } = await createPaystackCheckout({
       email:       workspace?.billing_email ?? `workspace-${workspaceId}@leadash.com`,
@@ -300,7 +333,7 @@ export async function POST(req: NextRequest) {
       .in("id", insertedIds);
 
     return NextResponse.json({
-      domain_record_ids: insertedIds,
+      domain_record_ids: [...resumedIds, ...insertedIds],
       checkout_url: authorizationUrl,
       reference,
     });
