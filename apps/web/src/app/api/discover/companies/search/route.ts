@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     industry:     "c.industry",
     size:         "c.employee_count",
     location:     "c.country",
-    people_count: "people_count",
+    people_count: "c.people_count",
     revenue:      "c.revenue_usd",
   };
   const sortRaw = p.get("sort") || "name";
@@ -152,7 +152,8 @@ export async function GET(req: NextRequest) {
     if (revenueMin  > 0) { conditions.push(`c.revenue_usd >= $${i}`);   params.push(revenueMin);  i++; }
     if (revenueMax  > 0) { conditions.push(`c.revenue_usd <= $${i}`);   params.push(revenueMax);  i++; }
     if (hasPeople) {
-      conditions.push(`EXISTS (SELECT 1 FROM discover_people p WHERE p.company_id = c.id)`);
+      // Precomputed count — avoids a subquery into the 192M-row people table.
+      conditions.push(`c.people_count > 0`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -174,8 +175,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: [], total: 0, page, limit }, { status: 200 });
     }
 
-    const needsPeopleCount = sortRaw === "people_count";
-
     const HARD_CAP = 50_000;
     const countPromise = skipCount
       ? Promise.resolve(null)
@@ -195,37 +194,22 @@ export async function GET(req: NextRequest) {
 
     const [countRows, rows] = await Promise.all([
       skipCount ? Promise.resolve(null) : countWithTimeout(),
-      needsPeopleCount
-        ? leadsDb.unsafe(`
-            SELECT
-              c.id, c.name, c.domain, c.website_url, c.linkedin_url,
-              c.industry, c.size_range, c.employee_count, c.revenue_usd,
-              c.funding_stage, c.funding_total,
-              c.country, c.state, c.city,
-              ${descSql}
-              ${kwSql}
-              COUNT(p.id)::int AS people_count
-            FROM discover_companies c
-            LEFT JOIN discover_people p ON p.company_id = c.id
-            ${where}
-            GROUP BY c.id
-            ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
-            LIMIT $${i} OFFSET $${i + 1}
-          `, [...params, limit, offset] as never[])
-        : leadsDb.unsafe(`
-            SELECT
-              c.id, c.name, c.domain, c.website_url, c.linkedin_url,
-              c.industry, c.size_range, c.employee_count, c.revenue_usd,
-              c.funding_stage, c.funding_total,
-              c.country, c.state, c.city,
-              ${descSql}
-              ${kwSql}
-              0::int AS people_count
-            FROM discover_companies c
-            ${where}
-            ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
-            LIMIT $${i} OFFSET $${i + 1}
-          `, [...params, limit, offset] as never[]),
+      // people_count is a precomputed column on discover_companies now — no join
+      // to the 192M-row people table, so sorting by contacts is index-fast.
+      leadsDb.unsafe(`
+        SELECT
+          c.id, c.name, c.domain, c.website_url, c.linkedin_url,
+          c.industry, c.size_range, c.employee_count, c.revenue_usd,
+          c.funding_stage, c.funding_total,
+          c.country, c.state, c.city,
+          ${descSql}
+          ${kwSql}
+          c.people_count
+        FROM discover_companies c
+        ${where}
+        ORDER BY ${sortCol} ${sortDir} NULLS LAST, c.name ASC
+        LIMIT $${i} OFFSET $${i + 1}
+      `, [...params, limit, offset] as never[]),
     ]);
 
     const total = skipCount ? -1 : (countRows ? parseInt((countRows[0] as unknown as { total: string }).total, 10) : HARD_CAP);
