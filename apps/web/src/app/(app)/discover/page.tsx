@@ -32,24 +32,36 @@ import {
  * whether to keep going with the next batch — we don't want one hiccup to
  * lose 5,000 already-selected leads.
  */
-// GET that surfaces Discover maintenance mode (503 { maintenance }) distinctly
-// so the client can show the "being updated" overlay instead of a generic error.
+// GET that surfaces Discover maintenance mode (503 { maintenance }) distinctly,
+// and (TEMPORARY, until the OpenSearch cutover) silently auto-retries on a 504
+// timeout instead of surfacing the "search took too long" error — the first
+// attempt warms the cache so the retry usually returns quickly. On exhausting
+// retries it throws with .timedOut so the caller can stop quietly (no banner).
 async function discoverGet<T>(url: string, onMaintenance: (msg: string) => void): Promise<T> {
-  const res = await wsFetch(url);
-  if (res.status === 503) {
-    const b = await res.json().catch(() => ({})) as { maintenance?: boolean; message?: string };
-    if (b?.maintenance) {
-      onMaintenance(b.message || "Leadash Discover is being updated. Check back in a few hours.");
-      const err = new Error("maintenance") as Error & { maintenance?: boolean };
-      err.maintenance = true;
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; ; attempt++) {
+    const res = await wsFetch(url);
+    if (res.status === 503) {
+      const b = await res.json().catch(() => ({})) as { maintenance?: boolean; message?: string };
+      if (b?.maintenance) {
+        onMaintenance(b.message || "Leadash Discover is being updated. Check back in a few hours.");
+        const err = new Error("maintenance") as Error & { maintenance?: boolean };
+        err.maintenance = true;
+        throw err;
+      }
+    }
+    if (res.status === 504) {
+      if (attempt < MAX_ATTEMPTS) continue; // silent auto-retry (warm cache)
+      const err = new Error("timeout") as Error & { timedOut?: boolean };
+      err.timedOut = true;
       throw err;
     }
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+      throw new Error(e.error ?? res.statusText);
+    }
+    return res.json() as Promise<T>;
   }
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new Error(e.error ?? res.statusText);
-  }
-  return res.json() as Promise<T>;
 }
 
 async function postBatchWithRetry(
@@ -1108,9 +1120,8 @@ function DiscoverContent() {
   const rawTotalPages = Math.max(1, Math.ceil(((resultsCapped || countUnavailable) ? SEARCH_CAP : total) / limit));
   const totalPages    = Math.min(rawTotalPages, MAX_NAV_PAGE);
   const pagesCapped   = rawTotalPages > MAX_NAV_PAGE;
-  // countUnavailable = the count query timed out on a heavy filter; showing a
-  // precise "50,000+" would mislead (real result can be tiny). Say so honestly.
-  const totalLabel = countUnavailable ? "many" : resultsCapped ? "50,000+" : total.toLocaleString();
+  // TEMP: the result-count label is hidden entirely until OpenSearch delivers
+  // exact counts, so totalLabel is intentionally unused for now.
 
   const activePeopleFilterCount =
     (peopleFilters.keyword ? 1 : 0) +
@@ -1216,6 +1227,7 @@ function DiscoverContent() {
       setPage(p);
     } catch (e) {
       if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
+      if ((e as { timedOut?: boolean })?.timedOut) return;       // TEMP: stop quietly, no error
       setError(e instanceof Error ? e.message : "Search failed");
     }
     finally { setLoading(false); }
@@ -1274,6 +1286,7 @@ function DiscoverContent() {
       setPage(p); setResultsCapped(false);
     } catch (e) {
       if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
+      if ((e as { timedOut?: boolean })?.timedOut) return;       // TEMP: stop quietly, no error
       setError(e instanceof Error ? e.message : "Search failed");
     }
     finally { setLoading(false); }
@@ -2019,9 +2032,8 @@ function DiscoverContent() {
                 </button>
               ))}
             </div>
-            {loading ? <Spinner sm /> : (
-              <span className="text-xs text-white/35 tabular-nums">{(total > 0 || countUnavailable) ? `${totalLabel} ${mode}` : ""}</span>
-            )}
+            {/* TEMP: result count hidden until OpenSearch gives exact counts */}
+            {loading ? <Spinner sm /> : <span className="text-xs text-white/35 tabular-nums" />}
             {hasSearched && total > 0 && !loading && (
               <div className="relative" ref={selectNRef}>
                 <button
@@ -2468,7 +2480,8 @@ function DiscoverContent() {
         {hasSearched && totalPages > 1 && (
           <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-t border-white/8 bg-[#0E0E13]">
             <span className="text-xs text-white/25">
-              Page {page} of {totalPages.toLocaleString()} · {totalLabel} total
+              {/* TEMP: total count hidden until OpenSearch gives exact counts */}
+              Page {page} of {totalPages.toLocaleString()}
               {pagesCapped && <span className="text-white/20"> · use Select all / Export for the rest</span>}
             </span>
             <div className="flex items-center gap-1">
