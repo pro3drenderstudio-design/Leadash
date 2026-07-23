@@ -11,7 +11,7 @@ export interface CreditRates {
 }
 
 const DEFAULTS: CreditRates = {
-  verify:             1.0,
+  verify:             0.5,
   discover:           0.5,
   first_line:         1.0,
   scrape:             1.0,

@@ -12,7 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const BULK_CHUNK      = 50_000; // max emails per Reoon bulk task
 const DB_CHUNK        = 100;    // rows per Supabase update batch
-const CREDITS_PER     = 0.5;
+const DEFAULT_CREDITS_PER = 0.5; // fallback if admin_settings.credit_rate_verify is unset
 const POLL_MS         = 15_000; // how often to poll Reoon for task progress
 const UNKNOWN_ABORT_PCT = 0.85; // abort if >85% of a batch comes back unknown
 
@@ -147,13 +147,31 @@ async function getVerifierProvider(db: ReturnType<typeof createClient>): Promise
   return "reoon";
 }
 
+// Resolve the per-lead verification rate from admin_settings — the SAME source
+// apps/web's getCreditRates() reads. Refunds must use whatever rate the charge
+// was actually made at; a hardcoded constant here drifted from the admin-set
+// rate before and silently under-refunded users.
+async function getVerifyCreditRate(db: ReturnType<typeof createClient>): Promise<number> {
+  try {
+    const { data } = await db
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "credit_rate_verify")
+      .maybeSingle();
+    const n = Number(data?.value);
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch { /* use default */ }
+  return DEFAULT_CREDITS_PER;
+}
+
 // ─── Main processor ───────────────────────────────────────────────────────────
 
 export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<void> {
   const { job_id, workspace_id } = job.data;
-  const db       = getDb();
-  const provider = await getVerifierProvider(db);
-  const apiKey   = process.env.REOON_API_KEY;
+  const db         = getDb();
+  const provider   = await getVerifierProvider(db);
+  const creditsPer = await getVerifyCreditRate(db);
+  const apiKey     = process.env.REOON_API_KEY;
 
   if (provider === "reoon" && !apiKey) {
     await db.from("lead_verification_jobs")
@@ -293,7 +311,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
         }
 
         // Refund unknowns (Reoon doesn't charge for these)
-        const batchRefund = Math.round(acc.batchUnknown * CREDITS_PER * 10) / 10;
+        const batchRefund = Math.round(acc.batchUnknown * creditsPer * 10) / 10;
         if (batchRefund > 0) {
           await Promise.all([
             db.rpc("refund_lead_credits", { p_workspace_id: workspace_id, p_amount: batchRefund }),
@@ -407,7 +425,7 @@ export async function processVerifyBulk(job: Job<VerifyBulkJobData>): Promise<vo
     // Refund unprocessed credits for list-mode jobs
     if (isListMode) {
       const deducted         = (jobRecord.credits_deducted as number) ?? 0;
-      const creditsProcessed = Math.round(processed * CREDITS_PER * 10) / 10;
+      const creditsProcessed = Math.round(processed * creditsPer * 10) / 10;
       const unprocessed      = Math.round(Math.max(0, deducted - creditsProcessed - totalRefunded) * 10) / 10;
       if (unprocessed > 0) {
         await db.rpc("refund_lead_credits", { p_workspace_id: workspace_id, p_amount: unprocessed });
