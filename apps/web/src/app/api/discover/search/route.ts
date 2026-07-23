@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
+import { isOpenSearchConfigured } from "@/lib/postgres/leads-os";
+import { osPeopleSearch, osPeopleIds } from "@/lib/discover/opensearch-people";
 import {
   searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit,
   getCachedWorkspaceEmails, setCachedWorkspaceEmails, getDiscoverMaintenance,
@@ -284,6 +286,76 @@ export async function GET(req: NextRequest) {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    // ── OpenSearch fast path ──────────────────────────────────────────────
+    // When the people index is live (env-gated so we can flip it on only after
+    // the bulk ingest completes), serve both search and bulk-id selection from
+    // OpenSearch: fast cold queries, exact counts, no join, and none of the
+    // multi-path Postgres query gymnastics below. Any error falls through to
+    // the Postgres implementation that follows.
+    const useOSPeople = isOpenSearchConfigured() && process.env.OPENSEARCH_PEOPLE_READY === "1";
+    if (useOSPeople) {
+      try {
+        if (idsOnly) {
+          const ids = await osPeopleIds(p, netNewEmails, limit);
+          return NextResponse.json({ ids });
+        }
+        const { total: osTotal, capped: osCapped, rows: osRows } = await osPeopleSearch(
+          p, netNewEmails,
+          { from: offset, size: limit, sort: sortRaw, order: sortDir === "ASC" ? "asc" : "desc" },
+        );
+        const osPersonIds = osRows.map(r => r.id);
+        const osAdminDb = createAdminClient();
+        const osRevealMap = new Map<string, { email: string | null; phone: string | null; email_status: string | null; exported: boolean }>();
+        if (osPersonIds.length > 0) {
+          const { data: revealRows } = await osAdminDb
+            .from("discover_reveals")
+            .select("person_id, email, phone, email_status, exported_at")
+            .eq("workspace_id", workspaceId)
+            .in("person_id", osPersonIds);
+          for (const r of (revealRows ?? [])) {
+            osRevealMap.set(r.person_id, { email: r.email, phone: r.phone, email_status: r.email_status, exported: !!r.exported_at });
+          }
+        }
+        const osResults: DiscoverResult[] = osRows.map((r) => {
+          const rev = osRevealMap.get(r.id);
+          const revealed = !!rev;
+          return {
+            id:               r.id,
+            company_id:       r.company_id,
+            first_name:       r.first_name,
+            last_name:        r.last_name,
+            title:            r.title,
+            seniority:        r.seniority,
+            department:       r.department,
+            linkedin_url:     r.linkedin_url,
+            email_status:     ((revealed ? rev!.email_status : r.email_status) as DiscoverResult["email_status"]) ?? "unverified",
+            country:          r.country,
+            state:            r.state,
+            city:             r.city,
+            company_name:     r.company_name,
+            company_domain:   r.company_domain,
+            company_industry: r.company_industry,
+            company_size:     r.company_size,
+            company_keywords: r.company_keywords,
+            email_preview:    revealed ? rev!.email : maskEmail(r.email),
+            phone_preview:    revealed ? rev!.phone : maskPhone(r.phone),
+            has_email:        !!r.email,
+            has_phone:        !!r.phone,
+            revealed,
+            exported:         rev?.exported ?? false,
+          };
+        });
+        const osResponse = {
+          results: osResults, total: osTotal, page, limit, credits_per_lead: CREDITS_PER_LEAD,
+          ...(osCapped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
+        } satisfies DiscoverSearchResponse;
+        if (cKey) void setCachedSearch(cKey, osResponse);
+        return NextResponse.json(osResponse);
+      } catch (e) {
+        console.error("[discover/search] OpenSearch path failed, falling back to Postgres:", e instanceof Error ? e.message : e);
+      }
+    }
 
     // Drop the created_at ordering (and route through the flat path) for any
     // filter that can make the result sparse among recent rows — otherwise the

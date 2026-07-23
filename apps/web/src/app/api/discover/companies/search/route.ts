@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import leadsDb from "@/lib/postgres/leads-db";
+import { isOpenSearchConfigured } from "@/lib/postgres/leads-os";
+import { osCompanySearch, osCompanyIds } from "@/lib/discover/opensearch-companies";
 import { getDiscoverMaintenance } from "@/lib/discover-cache";
 import type { DiscoverCompanySearchResponse, DiscoverCompanyResult } from "@/types/discover";
 
@@ -75,6 +77,44 @@ export async function GET(req: NextRequest) {
   const sortRaw = p.get("sort") || "name";
   const sortCol = CO_SORT_COLS[sortRaw] ?? "people_count";
   const sortDir = p.get("order") === "asc" ? "ASC" : "DESC";
+
+  // ── OpenSearch fast path ──────────────────────────────────────────────
+  // The companies index is fully populated; serve search + bulk-id selection
+  // from OpenSearch (fast cold queries, exact counts, no people-table join).
+  // Falls through to Postgres on any error.
+  if (isOpenSearchConfigured()) {
+    try {
+      if (idsOnly) {
+        const ids = await osCompanyIds(p, limit);
+        return NextResponse.json({ ids });
+      }
+      const { total, rows } = await osCompanySearch(
+        p, { from: offset, size: limit, sort: sortRaw, order: sortDir === "ASC" ? "asc" : "desc" },
+      );
+      const results: DiscoverCompanyResult[] = rows.map(r => ({
+        id:             r.id,
+        name:           r.name,
+        domain:         r.domain,
+        website_url:    r.website_url,
+        linkedin_url:   r.linkedin_url,
+        industry:       r.industry,
+        size_range:     r.size_range,
+        employee_count: r.employee_count,
+        revenue_usd:    r.revenue_usd,
+        funding_stage:  r.funding_stage,
+        funding_total:  r.funding_total,
+        country:        r.country,
+        state:          r.state,
+        city:           r.city,
+        description:    r.description,
+        keywords:       r.keywords,
+        people_count:   r.people_count,
+      }));
+      return NextResponse.json({ results, total, page, limit } satisfies DiscoverCompanySearchResponse);
+    } catch (e) {
+      console.error("[discover/companies/search] OpenSearch path failed, falling back to Postgres:", e instanceof Error ? e.message : e);
+    }
+  }
 
   try {
     const conditions: string[] = [];
