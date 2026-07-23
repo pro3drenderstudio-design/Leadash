@@ -1123,6 +1123,15 @@ function DiscoverContent() {
   // TEMP: the result-count label is hidden entirely until OpenSearch delivers
   // exact counts, so totalLabel is intentionally unused for now.
 
+  // Selection UI must not depend on the (now-hidden / often-unknown) total —
+  // drive it off the actual results instead. When the count is unknown, treat
+  // the select-all ceiling as SEARCH_CAP and assume "there may be more" on a
+  // full page.
+  const shownResultCount = mode === "people" ? results.length : companyResults.length;
+  const hasResults       = shownResultCount > 0;
+  const selectAllCeiling = total > 0 ? Math.min(total, SEARCH_CAP) : SEARCH_CAP;
+  const mayHaveMore      = total > 0 ? total > shownResultCount : shownResultCount >= limit;
+
   const activePeopleFilterCount =
     (peopleFilters.keyword ? 1 : 0) +
     peopleFilters.titleIncludes.length + peopleFilters.titleExcludes.length +
@@ -1440,7 +1449,7 @@ function DiscoverContent() {
   async function collectSelectedPeopleIds(overrideIds?: string[]): Promise<string[] | null> {
     if (overrideIds) return overrideIds;
     if (selectNCount === null && !selectAllMode) return Array.from(selected);
-    const n = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    const n = selectNCount ?? selectAllCeiling;
     const stop = startSelectionEstimate(n);
     const onProgress = (c: number) => setBulkProgress(p => p && p.label === "Selecting" ? { ...p, current: Math.max(p.current, c) } : p);
     try {
@@ -1453,7 +1462,7 @@ function DiscoverContent() {
 
   async function collectSelectedCompanyIds(): Promise<string[] | null> {
     if (selectNCount === null && !selectAllMode) return Array.from(selected);
-    const n = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    const n = selectNCount ?? selectAllCeiling;
     const stop = startSelectionEstimate(n);
     try {
       return selectNCount !== null ? await fetchAllMatchingCompanyIds(selectNCount) : await fetchAllMatchingCompanyIds();
@@ -1696,7 +1705,7 @@ function DiscoverContent() {
   // batch skip leads already in the workspace (including the previous batch),
   // so resumed/re-scanned batches can't duplicate or double-charge.
   async function streamAddToList(listId: string | null, listName: string | null) {
-    const target = selectNCount ?? Math.min(total, SELECT_ALL_CAP);
+    const target = selectNCount ?? selectAllCeiling;
     setExporting(true); setExportMsg(null);
     setBulkProgress({ current: 0, total: target, label: "Adding" });
     let resolvedListId = listId;
@@ -1864,7 +1873,7 @@ function DiscoverContent() {
   }
 
   const unrevealed    = results.filter(r => selected.has(r.id) && !r.revealed);
-  const selectedCount = selectNCount !== null ? selectNCount : selectAllMode ? Math.min(total, SELECT_ALL_CAP) : selected.size;
+  const selectedCount = selectNCount !== null ? selectNCount : selectAllMode ? selectAllCeiling : selected.size;
   const unrevealedCount = (selectNCount !== null || selectAllMode) ? selectedCount : unrevealed.length;
   const revealCost  = Math.ceil(unrevealedCount * discoverRate * 10) / 10;
 
@@ -2034,7 +2043,7 @@ function DiscoverContent() {
             </div>
             {/* TEMP: result count hidden until OpenSearch gives exact counts */}
             {loading ? <Spinner sm /> : <span className="text-xs text-white/35 tabular-nums" />}
-            {hasSearched && total > 0 && !loading && (
+            {hasSearched && hasResults && !loading && (
               <div className="relative" ref={selectNRef}>
                 <button
                   onClick={() => setShowSelectNPicker(s => !s)}
@@ -2188,33 +2197,33 @@ function DiscoverContent() {
           </div>
         )}
         {/* ── Select-all banner ── */}
-        {mode === "people" && !selectAllMode && selectNCount === null && selected.size === results.length && results.length > 0 && total > results.length && (
+        {mode === "people" && !selectAllMode && selectNCount === null && selected.size === results.length && results.length > 0 && mayHaveMore && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {results.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
-              Select all {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching leads
+              Select all matching leads
             </button>
           </div>
         )}
         {mode === "people" && selectAllMode && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
-            <span className="text-orange-300 font-semibold">All {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching leads selected.</span>
+            <span className="text-orange-300 font-semibold">All matching leads selected.</span>
             <button onClick={() => { setSelectAllMode(false); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
               Clear selection
             </button>
           </div>
         )}
-        {mode === "companies" && !selectAllMode && selectNCount === null && selected.size === companyResults.length && companyResults.length > 0 && total > companyResults.length && (
+        {mode === "companies" && !selectAllMode && selectNCount === null && selected.size === companyResults.length && companyResults.length > 0 && mayHaveMore && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
             <span className="text-white/50">All {companyResults.length} on this page selected.</span>
             <button onClick={() => setSelectAllMode(true)} className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
-              Select all {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching companies
+              Select all matching companies
             </button>
           </div>
         )}
         {mode === "companies" && selectAllMode && (
           <div className="flex-shrink-0 flex items-center justify-center gap-2 px-5 py-2 bg-orange-500/8 border-b border-orange-500/15 text-xs">
-            <span className="text-orange-300 font-semibold">All {Math.min(total, SELECT_ALL_CAP).toLocaleString()} matching companies selected.</span>
+            <span className="text-orange-300 font-semibold">All matching companies selected.</span>
             <button onClick={() => { setSelectAllMode(false); setSelected(new Set()); }} className="text-white/40 hover:text-white/60 underline transition-colors">
               Clear selection
             </button>
