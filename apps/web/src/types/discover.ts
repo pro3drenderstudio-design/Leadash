@@ -134,11 +134,12 @@ export interface DiscoverSearchParams {
 
 export interface DiscoverSearchResponse {
   results:          DiscoverResult[];
-  total:            number;
+  total:            number;   // -1 when count_unavailable (couldn't count in time)
   page:             number;
   limit:            number;
   credits_per_lead: number;
   message?:         string;
+  count_unavailable?: boolean;
 }
 
 export interface DiscoverCompanySearchResponse {

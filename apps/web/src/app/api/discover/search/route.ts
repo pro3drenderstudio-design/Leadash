@@ -574,10 +574,15 @@ export async function GET(req: NextRequest) {
     }
 
     const HARD_CAP = 50_000;
+    // Distinct sentinel for "we couldn't count in time" — kept separate from a
+    // genuine 50k+ so the UI doesn't claim "50,000+" when the real number is
+    // small but expensive to reach (broad company filter → tiny result set).
+    // Accurate counts for that shape need OpenSearch; here we're just honest.
+    const COUNT_UNKNOWN = -2;
 
-    // Count races against a 12s timer — if counting is slow (broad filter, index still
-    // building), the data still loads and the UI shows "50,000+" as the total.
-    // The abandoned DB query finishes in background; PgBouncer cleans it up within 120s.
+    // Count races against a 12s timer. If counting is too slow (broad filter),
+    // the data still loads and we report the count as unavailable rather than a
+    // misleading total. The abandoned DB query is cleaned up by PgBouncer.
     const countPromise = leadsDb.unsafe(`
         SELECT count(*) AS total
         FROM (
@@ -588,11 +593,11 @@ export async function GET(req: NextRequest) {
         ) cnt
       `, paramsForSimplePaths as never[])
       .then(rows => parseInt((rows[0] as unknown as { total: string }).total, 10))
-      .catch((): number => HARD_CAP);
+      .catch((): number => COUNT_UNKNOWN);
 
     const countWithTimeout = () => Promise.race([
       countPromise,
-      new Promise<number>(resolve => setTimeout(() => resolve(HARD_CAP), 12_000)),
+      new Promise<number>(resolve => setTimeout(() => resolve(COUNT_UNKNOWN), 12_000)),
     ]);
 
     // When title ILIKE filters are present alongside multiple seniorities, the GIN trigram
@@ -664,8 +669,9 @@ export async function GET(req: NextRequest) {
       dataWithTimeout(),
     ]);
 
-    const capped   = !skipCount && rawTotal >= HARD_CAP;
-    const total    = capped ? HARD_CAP : rawTotal;
+    const countUnavailable = !skipCount && rawTotal === COUNT_UNKNOWN;
+    const capped   = !skipCount && !countUnavailable && rawTotal >= HARD_CAP;
+    const total    = countUnavailable ? -1 : (capped ? HARD_CAP : rawTotal);
     const personIds = (rows as Record<string, unknown>[]).map(r => r.id as string);
 
     const adminDb = createAdminClient();
@@ -720,6 +726,7 @@ export async function GET(req: NextRequest) {
     const responseData = {
       results, total, page, limit, credits_per_lead: CREDITS_PER_LEAD,
       ...(capped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
+      ...(countUnavailable ? { count_unavailable: true } : {}),
     } satisfies DiscoverSearchResponse;
 
     // Store in cache (fire-and-forget — don't delay the response)

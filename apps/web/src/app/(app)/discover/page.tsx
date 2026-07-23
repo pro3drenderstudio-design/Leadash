@@ -1065,6 +1065,7 @@ function DiscoverContent() {
   );
   const [total,          setTotal]          = useState(initState.restored?.total ?? 0);
   const [resultsCapped,  setResultsCapped]  = useState(initState.restored?.capped ?? false);
+  const [countUnavailable, setCountUnavailable] = useState(false);
   const [page,           setPage]           = useState(initState.restored?.page ?? 1);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
@@ -1104,10 +1105,12 @@ function DiscoverContent() {
   // 2,000 phantom pages). Cap browsing to a range that always loads reliably;
   // bulk needs go through Select-all / Export (ids-only, up to 50k).
   const MAX_NAV_PAGE = 200;
-  const rawTotalPages = Math.max(1, Math.ceil((resultsCapped ? SEARCH_CAP : total) / limit));
+  const rawTotalPages = Math.max(1, Math.ceil(((resultsCapped || countUnavailable) ? SEARCH_CAP : total) / limit));
   const totalPages    = Math.min(rawTotalPages, MAX_NAV_PAGE);
   const pagesCapped   = rawTotalPages > MAX_NAV_PAGE;
-  const totalLabel = resultsCapped ? "50,000+" : total.toLocaleString();
+  // countUnavailable = the count query timed out on a heavy filter; showing a
+  // precise "50,000+" would mislead (real result can be tiny). Say so honestly.
+  const totalLabel = countUnavailable ? "many" : resultsCapped ? "50,000+" : total.toLocaleString();
 
   const activePeopleFilterCount =
     (peopleFilters.keyword ? 1 : 0) +
@@ -1209,7 +1212,7 @@ function DiscoverContent() {
 
       const data = await fetchPromise;
       setResults(data.results ?? []);
-      if (!skipCount) { setTotal(data.total ?? 0); setResultsCapped(!!data.message); }
+      if (!skipCount) { setTotal(data.total ?? 0); setResultsCapped(!!data.message); setCountUnavailable(!!data.count_unavailable); }
       setPage(p);
     } catch (e) {
       if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
@@ -1267,7 +1270,7 @@ function DiscoverContent() {
 
       const data = await fetchPromise;
       setCompanyResults(data.results ?? []);
-      if (!skipCount) setTotal(data.total ?? 0);
+      if (!skipCount) { setTotal(data.total ?? 0); setCountUnavailable(false); }
       setPage(p); setResultsCapped(false);
     } catch (e) {
       if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
@@ -2017,7 +2020,7 @@ function DiscoverContent() {
               ))}
             </div>
             {loading ? <Spinner sm /> : (
-              <span className="text-xs text-white/35 tabular-nums">{total > 0 ? `${totalLabel} ${mode}` : ""}</span>
+              <span className="text-xs text-white/35 tabular-nums">{(total > 0 || countUnavailable) ? `${totalLabel} ${mode}` : ""}</span>
             )}
             {hasSearched && total > 0 && !loading && (
               <div className="relative" ref={selectNRef}>
