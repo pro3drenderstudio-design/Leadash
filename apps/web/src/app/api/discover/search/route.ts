@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import leadsDb from "@/lib/postgres/leads-db";
 import {
   searchCacheKey, getCachedSearch, setCachedSearch, checkDiscoverRateLimit,
-  getCachedWorkspaceEmails, setCachedWorkspaceEmails,
+  getCachedWorkspaceEmails, setCachedWorkspaceEmails, getDiscoverMaintenance,
 } from "@/lib/discover-cache";
 import type { DiscoverSearchResponse, DiscoverResult } from "@/types/discover";
 
@@ -48,6 +48,11 @@ function csv(val: string | null | undefined, fallback: string[] = []): string[] 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
+
+  const maintenance = await getDiscoverMaintenance();
+  if (maintenance) {
+    return NextResponse.json({ maintenance: true, message: maintenance }, { status: 503 });
+  }
   const { workspaceId } = auth;
 
   // ── Rate limit: 60 searches/min per workspace ─────────────────────────────

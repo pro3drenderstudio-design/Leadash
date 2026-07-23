@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/api/workspace";
 import leadsDb from "@/lib/postgres/leads-db";
+import { getDiscoverMaintenance } from "@/lib/discover-cache";
 import type { DiscoverCompanySearchResponse, DiscoverCompanyResult } from "@/types/discover";
 
 export const maxDuration = 60;
@@ -30,6 +31,11 @@ function csv(val: string | null | undefined, fallback: string[] = []): string[] 
 export async function GET(req: NextRequest) {
   const auth = await requireWorkspace(req);
   if (!auth.ok) return auth.res;
+
+  const maintenance = await getDiscoverMaintenance();
+  if (maintenance) {
+    return NextResponse.json({ maintenance: true, message: maintenance }, { status: 503 });
+  }
 
   const p = new URL(req.url).searchParams;
 

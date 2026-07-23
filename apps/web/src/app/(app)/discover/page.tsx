@@ -32,6 +32,26 @@ import {
  * whether to keep going with the next batch — we don't want one hiccup to
  * lose 5,000 already-selected leads.
  */
+// GET that surfaces Discover maintenance mode (503 { maintenance }) distinctly
+// so the client can show the "being updated" overlay instead of a generic error.
+async function discoverGet<T>(url: string, onMaintenance: (msg: string) => void): Promise<T> {
+  const res = await wsFetch(url);
+  if (res.status === 503) {
+    const b = await res.json().catch(() => ({})) as { maintenance?: boolean; message?: string };
+    if (b?.maintenance) {
+      onMaintenance(b.message || "Leadash Discover is being updated. Check back in a few hours.");
+      const err = new Error("maintenance") as Error & { maintenance?: boolean };
+      err.maintenance = true;
+      throw err;
+    }
+  }
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    throw new Error(e.error ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 async function postBatchWithRetry(
   url: string,
   body: unknown,
@@ -1048,6 +1068,7 @@ function DiscoverContent() {
   const [page,           setPage]           = useState(initState.restored?.page ?? 1);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
+  const [maintenance,    setMaintenance]    = useState<string | null>(null);
   // When we restore from cache we already have results — block the debounced effect's first auto-fetch.
   const skipNextAutoSearch = useRef<boolean>(!!initState.restored);
 
@@ -1167,7 +1188,7 @@ function DiscoverContent() {
       // join it instead of issuing a duplicate.
       const existing = getInflight(ckey) as Promise<DiscoverSearchResponse> | undefined;
       const fetchPromise: Promise<DiscoverSearchResponse> = existing ?? (
-        wsGet<DiscoverSearchResponse>(`/api/discover/search?${params}`)
+        discoverGet<DiscoverSearchResponse>(`/api/discover/search?${params}`, setMaintenance)
           .then(data => {
             // Cache writes even if the React component unmounts mid-fetch
             if (p === 1 && !skipCount) {
@@ -1190,7 +1211,10 @@ function DiscoverContent() {
       setResults(data.results ?? []);
       if (!skipCount) { setTotal(data.total ?? 0); setResultsCapped(!!data.message); }
       setPage(p);
-    } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
+    } catch (e) {
+      if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
+      setError(e instanceof Error ? e.message : "Search failed");
+    }
     finally { setLoading(false); }
   }, [peopleFilters, peopleSortBy, peopleSortDir, companyFilters]);
 
@@ -1223,7 +1247,7 @@ function DiscoverContent() {
       const filterUrl = filtersToParams("companies", peopleFilters, f).toString();
       const existing = getInflight(ckey) as Promise<DiscoverCompanySearchResponse> | undefined;
       const fetchPromise: Promise<DiscoverCompanySearchResponse> = existing ?? (
-        wsGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`)
+        discoverGet<DiscoverCompanySearchResponse>(`/api/discover/companies/search?${params}`, setMaintenance)
           .then(data => {
             if (p === 1 && !skipCount) {
               setCachedResult(ckey, {
@@ -1245,7 +1269,10 @@ function DiscoverContent() {
       setCompanyResults(data.results ?? []);
       if (!skipCount) setTotal(data.total ?? 0);
       setPage(p); setResultsCapped(false);
-    } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
+    } catch (e) {
+      if ((e as { maintenance?: boolean })?.maintenance) return; // overlay shows instead
+      setError(e instanceof Error ? e.message : "Search failed");
+    }
     finally { setLoading(false); }
   }, [companyFilters, coSortBy, coSortDir, peopleFilters]);
 
@@ -1959,7 +1986,7 @@ function DiscoverContent() {
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 relative">
 
         {/* Toolbar */}
         <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-2 px-3 lg:px-5 py-2.5 border-b border-white/8">
@@ -2104,7 +2131,23 @@ function DiscoverContent() {
             <button onClick={() => setExportMsg(null)} className="opacity-60 hover:opacity-100"><XIcon sm /></button>
           </div>
         )}
-        {error && <div className="flex-shrink-0 px-5 py-2 bg-red-500/10 text-red-400 text-xs">{error}</div>}
+        {error && !maintenance && <div className="flex-shrink-0 px-5 py-2 bg-red-500/10 text-red-400 text-xs">{error}</div>}
+
+        {/* ── Maintenance overlay — covers results while the leads DB is rebuilt ── */}
+        {maintenance && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#0b0b0f]/95 backdrop-blur-sm px-6">
+            <div className="max-w-md text-center">
+              <div className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
+                <svg className="w-7 h-7 text-orange-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.36 6.36l-2.12-2.12M8.76 8.76L6.64 6.64m10.72 0l-2.12 2.12M8.76 15.24l-2.12 2.12" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-white mb-2">Leadash Discover is being upgraded</h2>
+              <p className="text-sm text-white/50 leading-relaxed">{maintenance}</p>
+              <p className="text-xs text-white/30 mt-4">We&apos;re making search faster and more reliable. Everything else in Leadash works normally.</p>
+            </div>
+          </div>
+        )}
 
         {/* ── Empty state ── */}
         {!hasSearched && (

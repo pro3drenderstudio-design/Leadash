@@ -56,6 +56,27 @@ export async function setCachedSearch(key: string, data: object): Promise<void> 
   }
 }
 
+// ── Discover maintenance mode ────────────────────────────────────────────────
+// Toggled from ops (Redis key) so the leads DB isn't queried during heavy
+// maintenance (e.g. rebuilding discover_people). Set: SET discover:maintenance
+// "<message>"; clear: DEL discover:maintenance. Short-cached to avoid a Redis
+// round-trip on every search.
+const MAINT_KEY = "discover:maintenance";
+let _maintCache: { at: number; msg: string | null } = { at: 0, msg: null };
+
+export async function getDiscoverMaintenance(): Promise<string | null> {
+  if (Date.now() - _maintCache.at < 15_000) return _maintCache.msg;
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const msg = await redis.get(MAINT_KEY);
+    _maintCache = { at: Date.now(), msg: msg || null };
+    return _maintCache.msg;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Cache the workspace's existing-email set (used by NET NEW filter on the
  * discover search endpoint). Refetching this from Supabase RPC on every
