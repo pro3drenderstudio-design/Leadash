@@ -1120,8 +1120,10 @@ function DiscoverContent() {
   const rawTotalPages = Math.max(1, Math.ceil(((resultsCapped || countUnavailable) ? SEARCH_CAP : total) / limit));
   const totalPages    = Math.min(rawTotalPages, MAX_NAV_PAGE);
   const pagesCapped   = rawTotalPages > MAX_NAV_PAGE;
-  // TEMP: the result-count label is hidden entirely until OpenSearch delivers
-  // exact counts, so totalLabel is intentionally unused for now.
+  // When the count query can't complete on a heavy filter (countUnavailable),
+  // showing a precise "50,000+" would mislead, so say "Many" instead. Never
+  // surface the raw -1 sentinel.
+  const totalLabel = countUnavailable ? "Many" : resultsCapped ? "50,000+" : total.toLocaleString();
 
   // Selection UI must not depend on the (now-hidden / often-unknown) total —
   // drive it off the actual results instead. When the count is unknown, treat
@@ -1502,7 +1504,7 @@ function DiscoverContent() {
     setSelectNCustom("");
     setSelectAllMode(false);
     setSelected(new Set());
-    setSelectNCount(Math.min(n, total));
+    setSelectNCount(total > 0 ? Math.min(n, total) : n);
   }
 
   async function handleFindPeopleAtSelected() {
@@ -2041,8 +2043,9 @@ function DiscoverContent() {
                 </button>
               ))}
             </div>
-            {/* TEMP: result count hidden until OpenSearch gives exact counts */}
-            {loading ? <Spinner sm /> : <span className="text-xs text-white/35 tabular-nums" />}
+            {loading ? <Spinner sm /> : (
+              <span className="text-xs text-white/35 tabular-nums">{(total > 0 || countUnavailable) ? `${totalLabel} ${mode}` : ""}</span>
+            )}
             {hasSearched && hasResults && !loading && (
               <div className="relative" ref={selectNRef}>
                 <button
@@ -2489,8 +2492,7 @@ function DiscoverContent() {
         {hasSearched && totalPages > 1 && (
           <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-t border-white/8 bg-[#0E0E13]">
             <span className="text-xs text-white/25">
-              {/* TEMP: total count hidden until OpenSearch gives exact counts */}
-              Page {page} of {totalPages.toLocaleString()}
+              Page {page} of {totalPages.toLocaleString()} · {totalLabel} total
               {pagesCapped && <span className="text-white/20"> · use Select all / Export for the rest</span>}
             </span>
             <div className="flex items-center gap-1">
