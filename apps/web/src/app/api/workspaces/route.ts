@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       slug:                 `${slug}-${Date.now().toString(36)}`,
       owner_id:             user.id,
       plan_id:              "free",
-      plan_status:          "trial",
+      plan_status:          "trialing",
       max_inboxes:          2,
       trial_ends_at:        trialEndsAt,
       lead_credits_balance: TRIAL_CREDITS,
