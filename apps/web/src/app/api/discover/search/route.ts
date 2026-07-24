@@ -300,7 +300,7 @@ export async function GET(req: NextRequest) {
           const ids = await osPeopleIds(p, netNewEmails, limit);
           return NextResponse.json({ ids });
         }
-        const { total: osTotal, capped: osCapped, rows: osRows } = await osPeopleSearch(
+        const { total: osTotal, rows: osRows } = await osPeopleSearch(
           p, netNewEmails,
           { from: offset, size: limit, sort: sortRaw, order: sortDir === "ASC" ? "asc" : "desc" },
         );
@@ -348,7 +348,6 @@ export async function GET(req: NextRequest) {
         });
         const osResponse = {
           results: osResults, total: osTotal, page, limit, credits_per_lead: CREDITS_PER_LEAD,
-          ...(osCapped ? { message: "Too many results. Please refine your filters to see accurate counts." } : {}),
         } satisfies DiscoverSearchResponse;
         if (cKey) void setCachedSearch(cKey, osResponse);
         return NextResponse.json(osResponse);

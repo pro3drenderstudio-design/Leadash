@@ -95,7 +95,7 @@ export function buildCompanyQuery(p: URLSearchParams, opts: OsCompanyQueryOpts):
   const body: Record<string, unknown> = {
     from: opts.from,
     size: opts.size,
-    track_total_hits: opts.trackTotal ?? 50_000,
+    track_total_hits: opts.trackTotal ?? true,
     query: { bool: { must, filter, must_not: mustNot } },
     sort,
   };

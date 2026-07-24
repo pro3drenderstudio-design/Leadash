@@ -154,20 +154,18 @@ export interface OsPersonRow {
   company_keywords: string | null;
 }
 
-const HARD_CAP = 50_000;
-
 export async function osPeopleSearch(
   p: URLSearchParams,
   netNewEmails: string[],
   opts: OsPeopleQueryOpts,
   timeoutMs = 30_000,
-): Promise<{ total: number; capped: boolean; rows: OsPersonRow[] }> {
-  const body = buildPeopleQuery(p, netNewEmails, { ...opts, trackTotal: HARD_CAP });
+): Promise<{ total: number; rows: OsPersonRow[] }> {
+  // Exact "Apollo-style" totals — OpenSearch counts even tens of millions of
+  // matches in a few ms, so surface the real number rather than a "50k+" cap.
+  const body = buildPeopleQuery(p, netNewEmails, { ...opts, trackTotal: true });
   const res = await osSearch<Omit<OsPersonRow, "id">>(INDEX, body, timeoutMs);
   const rows: OsPersonRow[] = res.hits.hits.map(h => ({ id: h._id, ...(h._source as Omit<OsPersonRow, "id">) }));
-  const totalVal = res.hits.total.value;
-  const capped   = res.hits.total.relation === "gte" || totalVal >= HARD_CAP;
-  return { total: capped ? HARD_CAP : totalVal, capped, rows };
+  return { total: res.hits.total.value, rows };
 }
 
 export async function osPeopleIds(
